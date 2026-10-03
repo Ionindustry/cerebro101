@@ -29,7 +29,8 @@ async def chat(asignacion: Asignacion, mensajes: list[dict], esquema: dict | Non
         "model": asignacion.modelo,
         "messages": mensajes,
         "stream": False,
-        "keep_alive": asignacion.mantener_cargado,
+        # Ollama rechaza "-1" como texto: sin unidad debe ir como número
+        "keep_alive": int(asignacion.mantener_cargado) if asignacion.mantener_cargado.lstrip("-").isdigit() else asignacion.mantener_cargado,
         "options": {"temperature": temperatura},
     }
     if esquema:
