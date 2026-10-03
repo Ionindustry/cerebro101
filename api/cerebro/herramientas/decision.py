@@ -6,13 +6,15 @@ Tres implementaciones intercambiables con la misma interfaz:
   - `jev`:   Jev en la nube de TypeSafe (solo datos de sensibilidad baja, o media con
              retención cero y anonimización).
 
-PENDIENTE: la API pública de Jev/jeff no está documentada en este repositorio. Cuando
-tengáis la documentación, completad `_llamar_api` con el formato real; mientras tanto,
-`jev` y `jeff` caen automáticamente en `local`.
+Jev y jeff hablan la misma API (`POST /v1/systemone`, https://docs.typesafe.ai/api): un `state`
+y un mapa de preguntas tipadas (noul / choice / score) y devuelven respuestas con probabilidades.
+Si la llamada falla (sin clave, red caída, límite de uso), se usa el modelo `local`.
 """
 from __future__ import annotations
 
 import logging
+
+import httpx
 
 from ..ajustes import ajustes
 from ..llm import chat
@@ -45,8 +47,43 @@ async def _local(texto: str, tipo: str, opciones: list[str] | None, rubrica: str
     return await chat(asignar(ficha), mensajes, esquema=esquema, temperatura=0)
 
 
-async def _llamar_api(base_url: str, clave: str, texto: str, tipo: str, opciones, rubrica) -> dict:
-    raise NotImplementedError("Completar con la API documentada de Jev/jeff")
+URL_JEV = "https://api.typesafe.ai"
+NIVELES_PUNTUACION = 11   # 0..10, igual que el modelo local
+
+
+def _pregunta(tipo: str, opciones: list[str] | None, rubrica: str | None) -> dict:
+    if tipo == "eleccion":
+        return {"type": "choice", "instructions": "Elige la opción que mejor encaja con el estado.",
+                "criteria": {o: None for o in opciones or []}}
+    if tipo == "puntuacion":
+        return {"type": "score", "instructions": f"Puntúa según esta rúbrica: {rubrica}",
+                "criteria": [str(i) + (" (mínimo)" if i == 0 else " (máximo)" if i == 10 else "")
+                             for i in range(NIVELES_PUNTUACION)]}
+    return {"type": "noul", "instructions": "¿Es cierto lo que se pregunta o se afirma en el estado?"}
+
+
+def _traducir(tipo: str, respuesta: dict) -> dict:
+    """Pasa la respuesta de Jev al mismo formato que devuelve `_local`."""
+    if tipo == "eleccion":
+        return {"eleccion": respuesta["choice"], "confianza": respuesta["confidence"],
+                "motivo": f"Jev: probabilidades {respuesta['probabilities']}"}
+    if tipo == "puntuacion":
+        return {"puntuacion": round(respuesta["score"], 2), "confianza": respuesta["confidence"],
+                "motivo": f"Jev: probabilidades {respuesta['probabilities']}"}
+    p = respuesta["noul"]
+    return {"si": p >= 0.5, "confianza": round(max(p, 1 - p), 3), "motivo": f"Jev: probabilidad de sí {p}"}
+
+
+async def _llamar_api(base_url: str, clave: str, texto: str, tipo: str, opciones, rubrica,
+                      transporte: httpx.AsyncBaseTransport | None = None) -> dict:
+    if tipo == "eleccion" and not opciones:
+        raise ValueError("La elección necesita opciones")
+    cuerpo = {"model": "jev-latest", "state": texto, "questions": {"q": _pregunta(tipo, opciones, rubrica)}}
+    cabeceras = {"Authorization": f"Bearer {clave}"} if clave else {}
+    async with httpx.AsyncClient(base_url=base_url or URL_JEV, timeout=30, transport=transporte) as c:
+        r = await c.post("/v1/systemone", json=cuerpo, headers=cabeceras)
+    r.raise_for_status()
+    return _traducir(tipo, r.json()["answers"]["q"])
 
 
 def _crear(proveedor: str):
@@ -56,9 +93,13 @@ def _crear(proveedor: str):
             log.info("Jev en la nube desactivado (USAR_JEV_NUBE=false): se usa el modelo local")
             return await _local(texto, tipo, opciones, rubrica)
         url, clave = (ajustes.jev_url, ajustes.jev_api_key) if proveedor == "jev" else (ajustes.jeff_url, "")
+        if proveedor == "jev" and not clave:
+            log.warning("Falta JEV_API_KEY: se usa el modelo local")
+            return await _local(texto, tipo, opciones, rubrica)
         try:
             return await _llamar_api(url, clave, texto, tipo, opciones, rubrica)
-        except NotImplementedError:
+        except (httpx.HTTPError, KeyError, ValueError) as e:
+            log.warning("%s no disponible (%s): se usa el modelo local", proveedor, e)
             return await _local(texto, tipo, opciones, rubrica)
     return decidir
 
