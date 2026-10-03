@@ -3,8 +3,9 @@ ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1
 WORKDIR /app/api
 COPY api/pyproject.toml ./
 COPY api/cerebro ./cerebro
-RUN pip install --no-cache-dir ".[investigacion,observabilidad]" \
- && playwright install --with-deps chromium || true
+RUN pip install --no-cache-dir ".[investigacion,observabilidad]"
+# Navegador opcional (investigación web): si falla no debe impedir la construcción
+RUN playwright install --with-deps chromium || true
 COPY config /app/config
 COPY scripts /app/scripts
 COPY api/tests ./tests
