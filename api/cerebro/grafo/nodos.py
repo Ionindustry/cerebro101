@@ -145,9 +145,12 @@ async def ejecutar_acciones(estado: Estado) -> Estado:
         if a.get("estado") != "aprobada":
             resultado.append(a)
             continue
+        args = dict(a.get("argumentos") or {})
+        if a["herramienta"] in INYECTAR_DEPARTAMENTO:
+            args.setdefault("departamento", ficha.departamento)
         try:
             r = await H.usar(ficha, a["herramienta"], a["operacion"], sensibilidad=estado.get("sensibilidad"),
-                             aprobada=True, **a.get("argumentos", {}))
+                             aprobada=True, **args)
             resultado.append({**a, "estado": "ejecutada", "resultado": r})
         except Exception as e:
             resultado.append({**a, "estado": "error", "resultado": str(e)})
