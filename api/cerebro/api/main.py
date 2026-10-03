@@ -14,7 +14,7 @@ from ..ajustes import ajustes
 from ..aprobaciones import bandeja
 from ..aprobaciones.logica import DecisionNoValida
 from ..cotizador import Solicitud, calcular
-from ..grafo import construir
+from ..grafo import construir, nodos
 from ..observabilidad import callbacks
 from ..red_instaladores import Oferta, puntuar
 from ..registro import registro
@@ -73,6 +73,15 @@ async def mensaje(m: Mensaje, usuario: Usuario = Depends(usuario_actual)):
     estado = await GRAFO["g"].ainvoke({"peticion": m.texto, "usuario": usuario.id, "origen": m.origen,
                                        "sensibilidad": m.sensibilidad}, config)
     return _salida(estado, hilo)
+
+
+@app.post("/jarvis/enrutar")
+async def enrutar_peticion(m: Mensaje, usuario: Usuario = Depends(usuario_actual)):
+    """Solo decide departamento y agente (sin ejecutar nada ni crear aprobaciones); sirve para medir el enrutado."""
+    estado = {"peticion": m.texto, "usuario": usuario.id, "origen": m.origen}
+    estado.update(await nodos.enrutar(estado))
+    estado.update(await nodos.elegir_agente(estado))
+    return {"departamento": estado["departamento"], "agente": estado["agente"]}
 
 
 @app.get("/aprobaciones")
