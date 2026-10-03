@@ -1,0 +1,151 @@
+# Generado por scripts/generar_fichas.py — edita allí y vuelve a generar.
+agentes:
+- id: director-comercial
+  nombre: Director Comercial / CRM
+  subarea: Gestión de clientes
+  tareas: Mantiene fichas y pipeline al día y detecta oportunidades paradas
+  modelo: principal
+  herramientas:
+  - conocimiento
+  - erpnext
+  aprobacion: libre
+  horario: 0 8 * * 1-5
+  sensibilidad: media
+  departamento: comercial
+  director: true
+- id: prospector
+  nombre: Prospector
+  subarea: Prospección
+  tareas: Construye listas de clientes potenciales según el perfil ideal y las puntúa
+  modelo: rapido
+  herramientas:
+  - conocimiento
+  - erpnext
+  - jev
+  aprobacion: libre
+  horario: null
+  sensibilidad: media
+  departamento: comercial
+  director: false
+- id: detector-intencion
+  nombre: Detector de Intención
+  subarea: Prospección
+  tareas: Busca señales públicas de interés (obras, aperturas, ofertas de empleo) y las convierte en leads
+  modelo: rapido
+  herramientas:
+  - conocimiento
+  - scrapegraph
+  - grok
+  - jev
+  aprobacion: libre
+  horario: 0 3 * * *
+  sensibilidad: baja
+  departamento: comercial
+  director: false
+- id: respuesta-leads
+  nombre: Respuesta a Leads
+  subarea: Prospección
+  tareas: Contesta cada consulta entrante en minutos y propone fechas de reunión
+  modelo: principal
+  herramientas:
+  - conocimiento
+  - correo
+  - calendario
+  - erpnext
+  aprobacion: simple
+  horario: null
+  sensibilidad: media
+  departamento: comercial
+  director: false
+- id: orquestador-campanas
+  nombre: Orquestador de Campañas
+  subarea: Captación multicanal
+  tareas: Diseña la secuencia por canal, reparte leads y detiene la secuencia cuando alguien responde
+  modelo: principal
+  herramientas:
+  - conocimiento
+  - erpnext
+  aprobacion: simple
+  horario: 0 9 * * 1-5
+  sensibilidad: media
+  departamento: comercial
+  director: false
+- id: canal-email
+  nombre: Email
+  subarea: Captación multicanal
+  tareas: Secuencias de email personalizadas respetando consentimientos y bajas
+  modelo: principal
+  herramientas:
+  - conocimiento
+  - correo
+  aprobacion: simple
+  horario: null
+  sensibilidad: media
+  departamento: comercial
+  director: false
+- id: canal-linkedin
+  nombre: LinkedIn
+  subarea: Captación multicanal
+  tareas: Prepara mensajes y contenido para que una persona los publique o envíe
+  modelo: principal
+  herramientas:
+  - conocimiento
+  aprobacion: simple
+  horario: null
+  sensibilidad: media
+  departamento: comercial
+  director: false
+- id: canal-telefono
+  nombre: Teléfono y WhatsApp
+  subarea: Captación multicanal
+  tareas: Guiones de llamada, agenda de llamadas y WhatsApp Business solo con autorización
+  modelo: principal
+  herramientas:
+  - conocimiento
+  - calendario
+  aprobacion: simple
+  horario: null
+  sensibilidad: media
+  departamento: comercial
+  director: false
+- id: analista-captacion
+  nombre: Analista de Captación
+  subarea: Captación multicanal
+  tareas: Coste por lead y conversión por canal y campaña
+  modelo: principal
+  herramientas:
+  - conocimiento
+  - erpnext
+  aprobacion: libre
+  horario: 0 7 * * 1
+  sensibilidad: media
+  departamento: comercial
+  director: false
+- id: propuestas
+  nombre: Propuestas y Presupuestos
+  subarea: Propuestas
+  tareas: Convierte notas de reunión en propuestas y presupuestos con precios históricos
+  modelo: principal
+  herramientas:
+  - conocimiento
+  - erpnext
+  - cotizador
+  aprobacion: doble
+  horario: null
+  sensibilidad: media
+  departamento: comercial
+  director: false
+- id: gestor-cuentas
+  nombre: Gestor de Cuentas
+  subarea: Postventa
+  tareas: Renovaciones, ventas adicionales y satisfacción de clientes clave
+  modelo: principal
+  herramientas:
+  - conocimiento
+  - erpnext
+  - correo
+  aprobacion: simple
+  horario: 0 9 * * 1
+  sensibilidad: media
+  departamento: comercial
+  director: false

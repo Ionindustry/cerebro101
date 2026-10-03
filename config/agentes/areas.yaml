@@ -1,0 +1,194 @@
+# Generado por scripts/generar_fichas.py — edita allí y vuelve a generar.
+agentes:
+- id: director-areas
+  nombre: Director de Áreas de Servicio
+  subarea: Coordinación
+  tareas: Coordina especialistas, prioriza áreas según la previsión y diseña paquetes combinados
+  modelo: principal
+  herramientas:
+  - conocimiento
+  - erpnext
+  aprobacion: simple
+  horario: 0 8 * * 1
+  sensibilidad: media
+  departamento: areas
+  director: true
+- id: esp-cctv
+  nombre: Especialista CCTV
+  subarea: Seguridad
+  tareas: Videovigilancia, lectura de matrículas y analítica; equipos y protección de datos
+  modelo: principal
+  herramientas:
+  - conocimiento
+  - erpnext
+  - cotizador
+  aprobacion: libre
+  horario: null
+  sensibilidad: media
+  departamento: areas
+  director: false
+- id: esp-incendios
+  nombre: Especialista Contra Incendios
+  subarea: Seguridad
+  tareas: Detección y extinción según reglamento y planes de mantenimiento obligatorio
+  modelo: principal
+  herramientas:
+  - conocimiento
+  - erpnext
+  - cotizador
+  aprobacion: libre
+  horario: null
+  sensibilidad: media
+  departamento: areas
+  director: false
+- id: esp-accesos
+  nombre: Especialista Control de Accesos
+  subarea: Seguridad
+  tareas: Accesos para comunidades, oficinas y aparcamientos; integración con videoportero
+  modelo: principal
+  herramientas:
+  - conocimiento
+  - erpnext
+  - cotizador
+  aprobacion: libre
+  horario: null
+  sensibilidad: media
+  departamento: areas
+  director: false
+- id: esp-redes
+  nombre: Especialista Redes
+  subarea: Conectividad e infraestructuras
+  tareas: Cableado estructurado, wifi, fibra interior y certificación
+  modelo: principal
+  herramientas:
+  - conocimiento
+  - erpnext
+  - cotizador
+  aprobacion: libre
+  horario: null
+  sensibilidad: media
+  departamento: areas
+  director: false
+- id: esp-television
+  nombre: Especialista Televisión e ICT
+  subarea: Conectividad e infraestructuras
+  tareas: Antenas e ICT en edificios, proyectos y boletines
+  modelo: principal
+  herramientas:
+  - conocimiento
+  - erpnext
+  - cotizador
+  aprobacion: libre
+  horario: null
+  sensibilidad: media
+  departamento: areas
+  director: false
+- id: esp-localizacion
+  nombre: Especialista Localización
+  subarea: Conectividad e infraestructuras
+  tareas: Seguimiento de flotas y activos con SIM M2M de Telecom
+  modelo: principal
+  herramientas:
+  - conocimiento
+  - erpnext
+  aprobacion: libre
+  horario: null
+  sensibilidad: media
+  departamento: areas
+  director: false
+- id: esp-renovables
+  nombre: Especialista Renovables
+  subarea: Energía y hogar
+  tareas: Autoconsumo, baterías y recarga; cálculo del ahorro
+  modelo: principal
+  herramientas:
+  - conocimiento
+  - erpnext
+  - cotizador
+  aprobacion: libre
+  horario: null
+  sensibilidad: media
+  departamento: areas
+  director: false
+- id: esp-domotica
+  nombre: Especialista Domótica
+  subarea: Energía y hogar
+  tareas: Hogar y edificio conectado, eficiencia e integración
+  modelo: principal
+  herramientas:
+  - conocimiento
+  - erpnext
+  - cotizador
+  aprobacion: libre
+  horario: null
+  sensibilidad: media
+  departamento: areas
+  director: false
+- id: esp-construccion
+  nombre: Especialista Construcción
+  subarea: Obra
+  tareas: 'Obra civil asociada: canalizaciones, zanjas y pequeñas reformas'
+  modelo: principal
+  herramientas:
+  - conocimiento
+  - erpnext
+  - cotizador
+  aprobacion: libre
+  horario: null
+  sensibilidad: media
+  departamento: areas
+  director: false
+- id: coordinacion-obra
+  nombre: Coordinación de Obra y Prevención
+  subarea: Obra
+  tareas: Plan de seguridad y salud, coordinación con instaladores y documentación de subcontratación
+  modelo: principal
+  herramientas:
+  - conocimiento
+  - ficheros
+  aprobacion: simple
+  horario: null
+  sensibilidad: alta
+  departamento: areas
+  director: false
+- id: mantenimientos
+  nombre: Mantenimientos Programados
+  subarea: Servicios recurrentes y tramitación
+  tareas: Contratos de mantenimiento, calendario de visitas, actas e ingresos recurrentes
+  modelo: rapido
+  herramientas:
+  - conocimiento
+  - erpnext
+  - calendario
+  aprobacion: simple
+  horario: 0 6 * * *
+  sensibilidad: media
+  departamento: areas
+  director: false
+- id: tramitacion
+  nombre: Tramitación y Legalizaciones
+  subarea: Servicios recurrentes y tramitación
+  tareas: Legalizaciones eléctricas y fotovoltaicas, boletines, ICT y licencias
+  modelo: principal
+  herramientas:
+  - conocimiento
+  - ficheros
+  aprobacion: doble
+  horario: null
+  sensibilidad: media
+  departamento: areas
+  director: false
+- id: ayudas
+  nombre: Ayudas y Subvenciones
+  subarea: Servicios recurrentes y tramitación
+  tareas: Detecta ayudas aplicables a cada cliente y prepara la solicitud
+  modelo: principal
+  herramientas:
+  - conocimiento
+  - scrapegraph
+  - agent_reach
+  aprobacion: simple
+  horario: 0 3 * * 2
+  sensibilidad: baja
+  departamento: areas
+  director: false

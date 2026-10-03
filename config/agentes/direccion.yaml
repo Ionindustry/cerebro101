@@ -1,0 +1,110 @@
+# Generado por scripts/generar_fichas.py — edita allí y vuelve a generar.
+agentes:
+- id: director-general
+  nombre: Director General
+  subarea: Coordinación
+  tareas: Recibe todas las peticiones, las enruta al departamento correcto, prioriza conflictos entre áreas y genera el resumen
+    diario
+  modelo: rapido
+  herramientas:
+  - conocimiento
+  - jev
+  aprobacion: libre
+  horario: 0 7 * * 1-5
+  sensibilidad: media
+  departamento: direccion
+  director: true
+- id: secretaria-direccion
+  nombre: Secretaría de Dirección
+  subarea: Coordinación
+  tareas: Agenda de dirección, actas de reuniones y seguimiento de acuerdos y fechas límite
+  modelo: principal
+  herramientas:
+  - conocimiento
+  - calendario
+  - correo
+  aprobacion: simple
+  horario: null
+  sensibilidad: media
+  departamento: direccion
+  director: false
+- id: estratega
+  nombre: Estratega
+  subarea: Estrategia
+  tareas: Objetivos trimestrales, análisis de escenarios y alertas de desviación
+  modelo: principal
+  herramientas:
+  - conocimiento
+  - erpnext
+  aprobacion: libre
+  horario: 0 8 * * 1
+  sensibilidad: media
+  departamento: direccion
+  director: false
+- id: analista-bi
+  nombre: Analista BI
+  subarea: Inteligencia de negocio
+  tareas: Consolida los KPI de todos los departamentos en el panel diario y semanal
+  modelo: principal
+  herramientas:
+  - conocimiento
+  - erpnext
+  aprobacion: libre
+  horario: 30 6 * * *
+  sensibilidad: media
+  departamento: direccion
+  director: false
+- id: prevision-demanda
+  nombre: Previsión de Demanda
+  subarea: Anticipación y lanzamiento
+  tareas: Prevé la demanda por área de servicio con histórico, tendencias, licitaciones, ayudas y estacionalidad
+  modelo: principal
+  herramientas:
+  - conocimiento
+  - erpnext
+  aprobacion: libre
+  horario: 0 5 * * 1
+  sensibilidad: media
+  departamento: direccion
+  director: false
+- id: paquetizador-servicios
+  nombre: Paquetizador de Servicios
+  subarea: Anticipación y lanzamiento
+  tareas: Convierte cada servicio en un paquete estándar con precio cerrado, kit de material, horas tipo y plantilla
+  modelo: principal
+  herramientas:
+  - conocimiento
+  - erpnext
+  - cotizador
+  aprobacion: simple
+  horario: null
+  sensibilidad: media
+  departamento: direccion
+  director: false
+- id: capacidad-planificacion
+  nombre: Capacidad y Planificación
+  subarea: Anticipación y lanzamiento
+  tareas: Cruza la previsión con stock, distribuidora e instaladores y reserva capacidad y material
+  modelo: principal
+  herramientas:
+  - conocimiento
+  - erpnext
+  aprobacion: simple
+  horario: 0 6 * * 1
+  sensibilidad: media
+  departamento: direccion
+  director: false
+- id: lanzamiento-rapido
+  nombre: Lanzamiento Rápido
+  subarea: Anticipación y lanzamiento
+  tareas: 'Lleva una oportunidad aprobada al mercado: oferta, material, instaladores, campaña y formación'
+  modelo: principal
+  herramientas:
+  - conocimiento
+  - erpnext
+  - correo
+  aprobacion: doble
+  horario: null
+  sensibilidad: media
+  departamento: direccion
+  director: false

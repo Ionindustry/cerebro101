@@ -1,0 +1,21 @@
+# Herramientas disponibles y sensibilidad máxima de datos que pueden recibir.
+# Un agente solo usa una herramienta si está en su ficha Y su sensibilidad lo permite.
+herramientas:
+  conocimiento:              {local: true,  sensibilidad_max: alta}
+  erpnext:                   {local: true,  sensibilidad_max: alta}
+  ficheros:                  {local: true,  sensibilidad_max: alta}
+  cotizador:                 {local: true,  sensibilidad_max: alta}
+  comparador_instaladores:   {local: true,  sensibilidad_max: alta}
+  correo:                    {local: false, sensibilidad_max: alta,  nota: "servidor de correo propio"}
+  calendario:                {local: false, sensibilidad_max: media}
+  scrapegraph:               {local: true,  sensibilidad_max: baja,  nota: "modelo local; solo salen visitas a webs públicas"}
+  agent_reach:               {local: false, sensibilidad_max: baja,  nota: "contenedor aislado, solo lectura de contenido público"}
+  grok:                      {local: false, sensibilidad_max: baja,  nota: "API de xAI; solo consultas sobre temas públicos"}
+  jev:                       {local: false, sensibilidad_max: media, nota: "nube de TypeSafe; media solo con retención cero y datos anonimizados"}
+  jeff:                      {local: true,  sensibilidad_max: alta,  nota: "sustituto local de Jev"}
+  plataformas_contratacion:  {local: false, sensibilidad_max: baja}
+  mayorista:                 {local: false, sensibilidad_max: alta,  nota: "portal o API del mayorista de telecom"}
+
+# Si una herramienta externa no admite la sensibilidad del agente, se usa esta alternativa local.
+alternativas_locales:
+  jev: jeff

@@ -1,0 +1,154 @@
+"""Nodos del grafo de orquestación."""
+from __future__ import annotations
+
+import json
+import logging
+
+from langgraph.types import interrupt
+
+from .. import herramientas as H
+from ..aprobaciones import bandeja
+from ..llm import ErrorModelo, chat
+from ..politicas import AccionProhibida, nivel_para
+from ..registro import registro
+from ..router_modelos import asignar
+from .estado import Estado
+from .prompts import sistema_agente, sistema_director_departamento, sistema_director_general
+
+log = logging.getLogger("cerebro.grafo")
+MAX_PASOS = 5
+INYECTAR_DEPARTAMENTO = {"erpnext", "conocimiento", "correo", "calendario"}
+
+ESQUEMA_AGENTE = {
+    "type": "object",
+    "properties": {
+        "tipo": {"type": "string", "enum": ["herramienta", "respuesta"]},
+        "herramienta": {"type": "string"},
+        "operacion": {"type": "string"},
+        "argumentos": {"type": "object"},
+        "respuesta": {"type": "string"},
+        "acciones": {"type": "array", "items": {"type": "object", "properties": {
+            "accion": {"type": "string"}, "herramienta": {"type": "string"}, "operacion": {"type": "string"},
+            "argumentos": {"type": "object"}, "resumen": {"type": "string"}},
+            "required": ["accion", "herramienta", "operacion", "resumen"]}},
+    },
+    "required": ["tipo"],
+}
+
+
+async def enrutar(estado: Estado) -> Estado:
+    if estado.get("agente"):
+        return {"departamento": registro().fichas[estado["agente"]].departamento}
+    r = registro()
+    ficha = r.fichas["director-general"]
+    esquema = {"type": "object", "properties": {
+        "departamento": {"type": "string", "enum": list(r.departamentos)}, "motivo": {"type": "string"}},
+        "required": ["departamento", "motivo"]}
+    mensajes = [{"role": "system", "content": sistema_director_general(r.departamentos)},
+                {"role": "user", "content": estado["peticion"]}]
+    try:
+        d = await chat(asignar(ficha, estado.get("origen", "peticion")), mensajes, esquema=esquema, temperatura=0)
+    except ErrorModelo:
+        d = await chat(asignar(ficha, estado.get("origen", "peticion"), dificil=True), mensajes,
+                       esquema=esquema, temperatura=0)
+    return {"departamento": d["departamento"]}
+
+
+async def elegir_agente(estado: Estado) -> Estado:
+    if estado.get("agente"):
+        return {}
+    r = registro()
+    dep = estado["departamento"]
+    fichas = r.del_departamento(dep)
+    director = r.director_de(dep)
+    esquema = {"type": "object", "properties": {
+        "agente": {"type": "string", "enum": [f.id for f in fichas]}, "motivo": {"type": "string"}},
+        "required": ["agente", "motivo"]}
+    mensajes = [{"role": "system", "content": sistema_director_departamento(r.departamentos[dep]["nombre"], fichas)},
+                {"role": "user", "content": estado["peticion"]}]
+    d = await chat(asignar(director, estado.get("origen", "peticion"), dificil=True), mensajes,
+                   esquema=esquema, temperatura=0)
+    return {"agente": d["agente"]}
+
+
+async def ejecutar_agente(estado: Estado) -> Estado:
+    ficha = registro().fichas[estado["agente"]]
+    disponibles = H.disponibles_para(ficha)
+    mensajes = [{"role": "system", "content": sistema_agente(ficha, disponibles)},
+                {"role": "user", "content": estado["peticion"]}]
+    pasos: list[dict] = []
+    for _ in range(MAX_PASOS):
+        try:
+            d = await chat(asignar(ficha, estado.get("origen", "peticion")), mensajes, esquema=ESQUEMA_AGENTE)
+        except ErrorModelo:
+            d = await chat(asignar(ficha, estado.get("origen", "peticion"), dificil=True), mensajes,
+                           esquema=ESQUEMA_AGENTE)
+        if d["tipo"] == "respuesta":
+            acciones = [{**a, "argumentos": a.get("argumentos", {}), "estado": "propuesta"}
+                        for a in d.get("acciones", [])]
+            return {"respuesta": d.get("respuesta", ""), "acciones": acciones, "pasos": pasos}
+        args = dict(d.get("argumentos") or {})
+        if d.get("herramienta") in INYECTAR_DEPARTAMENTO:
+            args.setdefault("departamento", ficha.departamento)
+        try:
+            resultado = await H.usar(ficha, d.get("herramienta", ""), d.get("operacion", ""),
+                                     sensibilidad=estado.get("sensibilidad"), **args)
+        except Exception as e:  # el error vuelve al modelo para que corrija o cambie de plan
+            resultado = {"error": str(e)}
+        pasos.append({"herramienta": d.get("herramienta"), "operacion": d.get("operacion"),
+                      "ok": not (isinstance(resultado, dict) and "error" in resultado)})
+        mensajes += [{"role": "assistant", "content": json.dumps(d, ensure_ascii=False)},
+                     {"role": "user", "content": "Resultado: " + json.dumps(resultado, ensure_ascii=False,
+                                                                            default=str)[:12000]}]
+    return {"respuesta": "No he podido terminar la tarea en el número máximo de pasos.", "pasos": pasos,
+            "acciones": []}
+
+
+async def registrar_aprobaciones(estado: Estado, config) -> Estado:
+    ficha = registro().fichas[estado["agente"]]
+    hilo = config["configurable"]["thread_id"]
+    acciones = []
+    for a in estado.get("acciones", []):
+        if a.get("solicitud_id"):
+            acciones.append(a)
+            continue
+        try:
+            d = nivel_para(ficha, a["accion"])
+        except AccionProhibida as e:
+            acciones.append({**a, "estado": "error", "resultado": str(e)})
+            continue
+        if not d.requiere:
+            acciones.append({**a, "estado": "aprobada"})
+            continue
+        sid = await bandeja.crear(hilo, ficha.id, ficha.departamento, a["accion"], d.nivel,
+                                  d.aprobadores, d.voz_permitida,
+                                  {"resumen": a["resumen"], "argumentos": a.get("argumentos", {})})
+        acciones.append({**a, "solicitud_id": sid, "estado": "pendiente"})
+    return {"acciones": acciones}
+
+
+def esperar_aprobaciones(estado: Estado) -> Estado:
+    pendientes = [a for a in estado.get("acciones", []) if a.get("estado") == "pendiente"]
+    if not pendientes:
+        return {}
+    # El grafo se detiene aquí hasta que la API lo reanude con las decisiones:
+    # {"<solicitud_id>": "aprobada" | "rechazada", ...}
+    decisiones = interrupt({"pendientes": [{"id": a["solicitud_id"], "resumen": a["resumen"]} for a in pendientes]})
+    return {"acciones": [{**a, "estado": decisiones.get(a.get("solicitud_id"), a["estado"])}
+                         for a in estado["acciones"]]}
+
+
+async def ejecutar_acciones(estado: Estado) -> Estado:
+    ficha = registro().fichas[estado["agente"]]
+    resultado = []
+    for a in estado.get("acciones", []):
+        if a.get("estado") != "aprobada":
+            resultado.append(a)
+            continue
+        try:
+            r = await H.usar(ficha, a["herramienta"], a["operacion"], sensibilidad=estado.get("sensibilidad"),
+                             aprobada=True, **a.get("argumentos", {}))
+            resultado.append({**a, "estado": "ejecutada", "resultado": r})
+        except Exception as e:
+            resultado.append({**a, "estado": "error", "resultado": str(e)})
+    return {"acciones": resultado}

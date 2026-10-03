@@ -1,0 +1,29 @@
+[project]
+name = "cerebro-101"
+version = "0.1.0"
+description = "Cerebro 101.cat: sistema multiagente local para la gestión de la empresa"
+requires-python = ">=3.11"
+dependencies = [
+  "fastapi>=0.115",
+  "uvicorn[standard]>=0.30",
+  "pydantic>=2.7",
+  "httpx>=0.27",
+  "pyyaml>=6.0",
+  "psycopg[binary]>=3.2",
+  "langgraph>=0.2",
+  "langgraph-checkpoint-postgres>=2.0",
+  "celery[redis]>=5.4",
+  "pyjwt[crypto]>=2.8",
+  "caldav>=1.3",
+]
+
+[project.optional-dependencies]
+investigacion = ["scrapegraphai>=1.30"]
+observabilidad = ["langfuse>=2.50,<3"]
+desarrollo = ["pytest>=8", "ruff>=0.5"]
+
+[tool.ruff]
+line-length = 120
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

@@ -1,0 +1,160 @@
+{
+  "realm": "cerebro",
+  "enabled": true,
+  "roles": {
+    "realm": [
+      {
+        "name": "direccion",
+        "description": "Segunda firma en aprobaciones dobles"
+      },
+      {
+        "name": "responsable",
+        "description": "Aprueba acciones de sus departamentos"
+      },
+      {
+        "name": "usuario",
+        "description": "Habla con Jarvis y consulta"
+      }
+    ]
+  },
+  "groups": [
+    {
+      "name": "direccion",
+      "attributes": {
+        "nombre": [
+          "Dirección General"
+        ]
+      }
+    },
+    {
+      "name": "finanzas",
+      "attributes": {
+        "nombre": [
+          "Finanzas y Contabilidad"
+        ]
+      }
+    },
+    {
+      "name": "comercial",
+      "attributes": {
+        "nombre": [
+          "Comercial y Ventas"
+        ]
+      }
+    },
+    {
+      "name": "marketing",
+      "attributes": {
+        "nombre": [
+          "Marketing"
+        ]
+      }
+    },
+    {
+      "name": "atencion",
+      "attributes": {
+        "nombre": [
+          "Atención al Cliente"
+        ]
+      }
+    },
+    {
+      "name": "operaciones",
+      "attributes": {
+        "nombre": [
+          "Operaciones y Servicio"
+        ]
+      }
+    },
+    {
+      "name": "personas",
+      "attributes": {
+        "nombre": [
+          "Personas (RRHH)"
+        ]
+      }
+    },
+    {
+      "name": "legal",
+      "attributes": {
+        "nombre": [
+          "Legal y Cumplimiento"
+        ]
+      }
+    },
+    {
+      "name": "tecnologia",
+      "attributes": {
+        "nombre": [
+          "Tecnología y Sistemas"
+        ]
+      }
+    },
+    {
+      "name": "conocimiento",
+      "attributes": {
+        "nombre": [
+          "Conocimiento y Supervisión"
+        ]
+      }
+    },
+    {
+      "name": "licitaciones",
+      "attributes": {
+        "nombre": [
+          "Licitaciones Públicas"
+        ]
+      }
+    },
+    {
+      "name": "telecom",
+      "attributes": {
+        "nombre": [
+          "Telecom mayorista"
+        ]
+      }
+    },
+    {
+      "name": "areas",
+      "attributes": {
+        "nombre": [
+          "Áreas de Servicio"
+        ]
+      }
+    }
+  ],
+  "clients": [
+    {
+      "clientId": "cerebro-panel",
+      "publicClient": true,
+      "standardFlowEnabled": true,
+      "redirectUris": [
+        "http://localhost:3000/*"
+      ],
+      "webOrigins": [
+        "http://localhost:3000"
+      ],
+      "protocolMappers": [
+        {
+          "name": "grupos",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-group-membership-mapper",
+          "config": {
+            "claim.name": "groups",
+            "full.path": "false",
+            "access.token.claim": "true"
+          }
+        },
+        {
+          "name": "audiencia",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-audience-mapper",
+          "config": {
+            "included.client.audience": "cerebro-panel",
+            "access.token.claim": "true"
+          }
+        }
+      ]
+    }
+  ]
+}

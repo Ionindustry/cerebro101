@@ -1,0 +1,38 @@
+# Generado por scripts/generar_fichas.py — edita allí y vuelve a generar.
+agentes:
+- id: bibliotecario
+  nombre: Bibliotecario
+  subarea: Base de conocimiento
+  tareas: Indexa documentos, correos y actas para todos los agentes
+  modelo: rapido
+  herramientas:
+  - conocimiento
+  - ficheros
+  aprobacion: libre
+  horario: 30 0 * * *
+  sensibilidad: media
+  departamento: conocimiento
+  director: true
+- id: procedimientos
+  nombre: Procedimientos
+  subarea: Procedimientos
+  tareas: Redacta y actualiza los procesos internos de cada departamento
+  modelo: principal
+  herramientas: &id001
+  - conocimiento
+  aprobacion: simple
+  horario: null
+  sensibilidad: media
+  departamento: conocimiento
+  director: false
+- id: auditor-cerebro
+  nombre: Auditor del Cerebro
+  subarea: Supervisión de agentes
+  tareas: Revisa una muestra de respuestas de cada agente y propone ajustes
+  modelo: juez
+  herramientas: *id001
+  aprobacion: libre
+  horario: 0 5 * * *
+  sensibilidad: media
+  departamento: conocimiento
+  director: false

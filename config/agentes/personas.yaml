@@ -1,0 +1,67 @@
+# Generado por scripts/generar_fichas.py — edita allí y vuelve a generar.
+agentes:
+- id: seleccion
+  nombre: Selección
+  subarea: Selección
+  tareas: Ofertas de empleo, cribado según criterios fijados y agenda de entrevistas (sin servicios externos)
+  modelo: principal
+  herramientas:
+  - conocimiento
+  - correo
+  - calendario
+  aprobacion: doble
+  horario: null
+  sensibilidad: alta
+  departamento: personas
+  director: true
+- id: onboarding
+  nombre: Onboarding
+  subarea: Incorporación
+  tareas: Checklist de primer día, accesos, documentación y plan de bienvenida
+  modelo: principal
+  herramientas:
+  - conocimiento
+  - erpnext
+  aprobacion: simple
+  horario: null
+  sensibilidad: alta
+  departamento: personas
+  director: false
+- id: administracion-personal
+  nombre: Administración de Personal
+  subarea: Administración de personal
+  tareas: Datos de nómina para la gestoría, vacaciones, bajas y registro horario
+  modelo: principal
+  herramientas:
+  - conocimiento
+  - erpnext
+  aprobacion: doble
+  horario: 0 8 25 * *
+  sensibilidad: alta
+  departamento: personas
+  director: false
+- id: formacion
+  nombre: Formación
+  subarea: Desarrollo
+  tareas: Plan de formación anual y seguimiento de cursos
+  modelo: principal
+  herramientas:
+  - conocimiento
+  - erpnext
+  aprobacion: simple
+  horario: 0 8 1 * *
+  sensibilidad: alta
+  departamento: personas
+  director: false
+- id: clima-laboral
+  nombre: Clima Laboral
+  subarea: Desarrollo
+  tareas: Encuestas internas periódicas y resumen para dirección
+  modelo: principal
+  herramientas:
+  - conocimiento
+  aprobacion: simple
+  horario: 0 9 1 */3 *
+  sensibilidad: alta
+  departamento: personas
+  director: false

@@ -1,0 +1,156 @@
+# Generado por scripts/generar_fichas.py — edita allí y vuelve a generar.
+agentes:
+- id: contratos
+  nombre: Contratos
+  subarea: Contratos
+  tareas: Revisa contratos, marca cláusulas de riesgo y mantiene plantillas
+  modelo: principal
+  herramientas:
+  - conocimiento
+  - ficheros
+  aprobacion: doble
+  horario: null
+  sensibilidad: alta
+  departamento: legal
+  director: true
+- id: rgpd
+  nombre: RGPD
+  subarea: Protección de datos
+  tareas: Registro de tratamientos, derechos y revisión legal de cada campaña
+  modelo: principal
+  herramientas: &id001
+  - conocimiento
+  aprobacion: simple
+  horario: null
+  sensibilidad: alta
+  departamento: legal
+  director: false
+- id: cumplimiento
+  nombre: Cumplimiento
+  subarea: Cumplimiento normativo
+  tareas: Calendario de obligaciones legales y requisitos por área de servicio
+  modelo: principal
+  herramientas: *id001
+  aprobacion: libre
+  horario: 0 8 * * 1
+  sensibilidad: media
+  departamento: legal
+  director: false
+- id: responsable-sig
+  nombre: Responsable del Sistema Integrado
+  subarea: Sistemas de gestión
+  tareas: Coordina ENS, 27001, 9001 y 14001 como un único sistema y prepara la revisión por la dirección
+  modelo: principal
+  herramientas:
+  - conocimiento
+  - ficheros
+  aprobacion: doble
+  horario: 0 8 1 * *
+  sensibilidad: media
+  departamento: legal
+  director: false
+- id: ens
+  nombre: ENS
+  subarea: Sistemas de gestión
+  tareas: Categorización, análisis de riesgos, declaración de aplicabilidad y plan de adecuación
+  modelo: principal
+  herramientas:
+  - conocimiento
+  - ficheros
+  aprobacion: doble
+  horario: null
+  sensibilidad: media
+  departamento: legal
+  director: false
+- id: iso27001
+  nombre: ISO 27001
+  subarea: Sistemas de gestión
+  tareas: SGSI, evaluación de riesgos, aplicabilidad de controles y plan de tratamiento
+  modelo: principal
+  herramientas:
+  - conocimiento
+  - ficheros
+  aprobacion: doble
+  horario: null
+  sensibilidad: media
+  departamento: legal
+  director: false
+- id: iso9001
+  nombre: ISO 9001
+  subarea: Sistemas de gestión
+  tareas: Procesos, indicadores, satisfacción, proveedores y competencia
+  modelo: principal
+  herramientas:
+  - conocimiento
+  - ficheros
+  - erpnext
+  aprobacion: doble
+  horario: null
+  sensibilidad: media
+  departamento: legal
+  director: false
+- id: iso14001
+  nombre: ISO 14001
+  subarea: Sistemas de gestión
+  tareas: Aspectos ambientales, requisitos legales, residuos y emergencias
+  modelo: principal
+  herramientas:
+  - conocimiento
+  - ficheros
+  aprobacion: doble
+  horario: null
+  sensibilidad: media
+  departamento: legal
+  director: false
+- id: documentacion-evidencias
+  nombre: Documentación y Evidencias
+  subarea: Auditoría y evidencias
+  tareas: Control documental y paquete de evidencias por requisito (solo hechos reales)
+  modelo: vision
+  herramientas:
+  - conocimiento
+  - ficheros
+  aprobacion: simple
+  horario: 0 3 * * 0
+  sensibilidad: media
+  departamento: legal
+  director: false
+- id: auditoria-interna
+  nombre: Auditoría Interna
+  subarea: Auditoría y evidencias
+  tareas: Programa anual, listas de comprobación y simulacros por norma
+  modelo: juez
+  herramientas:
+  - conocimiento
+  - ficheros
+  aprobacion: simple
+  horario: 0 3 1 * *
+  sensibilidad: media
+  departamento: legal
+  director: false
+- id: no-conformidades
+  nombre: No Conformidades y Mejora
+  subarea: Auditoría y evidencias
+  tareas: Registra no conformidades y sigue acciones correctivas hasta cerrarlas
+  modelo: principal
+  herramientas:
+  - conocimiento
+  - erpnext
+  aprobacion: simple
+  horario: 0 8 * * 1
+  sensibilidad: media
+  departamento: legal
+  director: false
+- id: despliegue-departamentos
+  nombre: Despliegue en Departamentos
+  subarea: Auditoría y evidencias
+  tareas: Convierte cada política en tareas, flujos y registros por departamento
+  modelo: principal
+  herramientas:
+  - conocimiento
+  - erpnext
+  aprobacion: simple
+  horario: null
+  sensibilidad: media
+  departamento: legal
+  director: false

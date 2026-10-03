@@ -1,0 +1,51 @@
+# Generado por scripts/generar_fichas.py — edita allí y vuelve a generar.
+agentes:
+- id: infraestructura
+  nombre: Infraestructura
+  subarea: Infraestructura
+  tareas: Monitoriza el servidor, copias de seguridad y actualizaciones
+  modelo: rapido
+  herramientas: &id001
+  - conocimiento
+  aprobacion: simple
+  horario: 0 * * * *
+  sensibilidad: alta
+  departamento: tecnologia
+  director: true
+- id: seguridad
+  nombre: Seguridad
+  subarea: Seguridad
+  tareas: Revisa accesos y registros y alerta de comportamientos anómalos
+  modelo: rapido
+  herramientas: *id001
+  aprobacion: simple
+  horario: '*/15 * * * *'
+  sensibilidad: alta
+  departamento: tecnologia
+  director: false
+- id: web
+  nombre: Web
+  subarea: Web y desarrollo
+  tareas: Mantenimiento de la web 101.cat e incidencias técnicas
+  modelo: principal
+  herramientas:
+  - conocimiento
+  - agent_reach
+  aprobacion: simple
+  horario: null
+  sensibilidad: baja
+  departamento: tecnologia
+  director: false
+- id: datos
+  nombre: Datos
+  subarea: Datos
+  tareas: Integra fuentes y vigila la calidad de los datos
+  modelo: principal
+  herramientas:
+  - conocimiento
+  - erpnext
+  aprobacion: libre
+  horario: 0 0 * * *
+  sensibilidad: alta
+  departamento: tecnologia
+  director: false

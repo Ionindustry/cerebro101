@@ -1,0 +1,33 @@
+# Modelos locales del Cerebro, servidos por Ollama (o vLLM cuando haya mucha concurrencia).
+# Elige el perfil según la tarjeta gráfica con PERFIL_HARDWARE en .env.
+# IMPORTANTE: comprueba la etiqueta exacta de cada modelo en https://ollama.com/library
+# antes de descargarlo; los nombres de versión cambian con frecuencia.
+
+perfil_por_defecto: pequena
+
+perfiles:
+  pequena:            # tarjeta de 12–16 GB de memoria
+    rapido:    {modelo: "ministral-3:3b",   siempre_cargado: true}
+    principal: {modelo: "qwen3.5:9b",       siempre_cargado: true, contexto: 32768}
+    vision:    {modelo: "qwen3.5:9b",       siempre_cargado: false}
+    juez:      {modelo: "prometheus2:7b",   siempre_cargado: false}
+  grande:             # tarjeta de 24 GB o más (incluida H200)
+    rapido:    {modelo: "ministral-3:3b",   siempre_cargado: true}
+    principal: {modelo: "qwen3.8:27b",      siempre_cargado: true, contexto: 65536}
+    vision:    {modelo: "qwen3.5:9b",       siempre_cargado: false}
+    juez:      {modelo: "qwen3.8:27b",      siempre_cargado: true}
+
+embeddings:   {modelo: "bge-m3", dimensiones: 1024}
+reordenador:  {modelo: "bge-reranker-v2-m3"}
+voz_a_texto:  {modelo: "large-v3-turbo", motor: "faster-whisper"}
+texto_a_voz:  {voces: {ca: "ca_ES-upc_ona-medium", es: "es_ES-davefx-medium"}, motor: "piper"}
+
+# Segundos que un modelo bajo demanda sigue cargado sin uso antes de liberar la tarjeta.
+mantener_cargado_segundos: 300
+
+# Prioridades de la cola de la tarjeta (menor número = antes).
+prioridades:
+  jarvis: 0          # conversación en directo
+  aprobacion: 1      # respuesta a una aprobación pendiente
+  peticion: 2        # tarea pedida por una persona
+  programada: 5      # tareas en lote (Radar, noticias, tarifas…)

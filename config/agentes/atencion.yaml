@@ -1,0 +1,58 @@
+# Generado por scripts/generar_fichas.py — edita allí y vuelve a generar.
+agentes:
+- id: soporte-n1
+  nombre: Soporte Nivel 1
+  subarea: Soporte
+  tareas: Responde consultas frecuentes por email y chat con la base de conocimiento
+  modelo: rapido
+  herramientas:
+  - conocimiento
+  - correo
+  - erpnext
+  aprobacion: simple
+  horario: null
+  sensibilidad: media
+  departamento: atencion
+  director: true
+- id: escalado
+  nombre: Escalado
+  subarea: Soporte
+  tareas: Clasifica incidencias complejas y las pasa a una persona con todo el contexto
+  modelo: rapido
+  herramientas:
+  - conocimiento
+  - erpnext
+  - jev
+  aprobacion: libre
+  horario: null
+  sensibilidad: media
+  departamento: atencion
+  director: false
+- id: resenas
+  nombre: Reseñas
+  subarea: Reputación
+  tareas: Vigila reseñas públicas y redacta respuestas para aprobar
+  modelo: rapido
+  herramientas:
+  - conocimiento
+  - scrapegraph
+  - jev
+  aprobacion: simple
+  horario: 0 10 * * *
+  sensibilidad: baja
+  departamento: atencion
+  director: false
+- id: reactivacion
+  nombre: Reactivación
+  subarea: Fidelización
+  tareas: Detecta clientes inactivos y prepara mensajes de recuperación
+  modelo: principal
+  herramientas:
+  - conocimiento
+  - erpnext
+  - correo
+  aprobacion: simple
+  horario: 0 9 * * 1
+  sensibilidad: media
+  departamento: atencion
+  director: false

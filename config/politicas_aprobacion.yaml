@@ -1,0 +1,29 @@
+# Niveles de autonomía (sección «Flujos, gobernanza y aprobaciones» del documento).
+niveles:
+  libre:
+    descripcion: "Analizar, resumir, clasificar y redactar borradores internos"
+    aprobadores: []
+  simple:
+    descripcion: "Enviar a clientes, publicar, responder reseñas, contactar terceros"
+    aprobadores: [responsable_departamento]
+    voz_permitida: true
+  doble:
+    descripcion: "Pagos, facturas, contratos, precios, ofertas, firma y presentación de licitaciones"
+    aprobadores: [responsable_departamento, direccion]
+    voz_permitida: false        # solo en el panel con usuario identificado
+
+# Acciones que ningún agente puede ejecutar nunca, sea cual sea su ficha.
+prohibidas:
+  - borrar_datos
+  - cambiar_permisos
+  - firmar_en_nombre_de_la_empresa
+  - validar_documento_erp      # los documentos del ERP los valida siempre una persona
+
+# Acciones con impacto externo: obligan a pasar por la bandeja aunque la ficha diga «libre».
+impacto_externo:
+  - enviar_correo
+  - publicar
+  - enviar_whatsapp
+  - presentar_licitacion       # la hace una persona; el agente solo prepara el paquete
+  - pedido_proveedor
+  - alta_mayorista

@@ -1,0 +1,104 @@
+# Cerebro 101.cat — todo en el servidor local. Arranque: ./scripts/iniciar.sh
+# ERPNext se instala aparte con frappe_docker (ver docs/INSTALACION.md) en la misma red «cerebro».
+name: cerebro-101
+
+x-api: &api
+  build: {context: ., dockerfile: api/Dockerfile}
+  env_file: .env
+  volumes: ["./config:/app/config:ro", "datos:/datos"]
+  depends_on: [postgres, redis, ollama]
+  networks: [cerebro]
+  restart: unless-stopped
+
+services:
+  postgres:
+    image: pgvector/pgvector:pg16
+    environment: {POSTGRES_USER: cerebro, POSTGRES_PASSWORD: "${POSTGRES_PASSWORD}", POSTGRES_DB: cerebro}
+    volumes: ["pgdata:/var/lib/postgresql/data", "./db/esquema.sql:/docker-entrypoint-initdb.d/01-esquema.sql:ro"]
+    networks: [cerebro]
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    networks: [cerebro]
+    restart: unless-stopped
+
+  ollama:
+    image: ollama/ollama:latest
+    volumes: ["ollama:/root/.ollama"]
+    environment: {OLLAMA_MAX_LOADED_MODELS: "3", OLLAMA_NUM_PARALLEL: "4"}
+    deploy:
+      resources:
+        reservations:
+          devices: [{driver: nvidia, count: all, capabilities: [gpu]}]
+    networks: [cerebro]
+    restart: unless-stopped
+
+  api:
+    <<: *api
+    ports: ["127.0.0.1:8000:8000"]
+
+  worker:                 # tareas pedidas y programadas; Jarvis lo atiende la API directamente
+    <<: *api
+    command: celery -A cerebro.tareas.celery_app worker -Q peticiones,lote -c 2 -n general@%h
+
+  beat:                   # calendario de tareas programadas (a partir de las fichas)
+    <<: *api
+    command: celery -A cerebro.tareas.celery_app beat
+
+  panel:
+    build: {context: ./panel}
+    environment: {CEREBRO_API: "http://api:8000", VOZ_API: "http://voz:8100"}
+    ports: ["127.0.0.1:3000:3000"]
+    depends_on: [api]
+    networks: [cerebro]
+    restart: unless-stopped
+
+  voz:
+    build: {context: ./servicios/voz}
+    volumes: ["./servicios/voz/voces:/voces:ro", "whisper:/root/.cache"]
+    deploy:
+      resources:
+        reservations:
+          devices: [{driver: nvidia, count: all, capabilities: [gpu]}]
+    networks: [cerebro]
+    restart: unless-stopped
+
+  agent-reach:            # contenedor aislado, solo lectura de contenido público
+    build: {context: ./servicios/agent-reach}
+    volumes: ["agent-reach:/root/.agent-reach"]
+    networks: [cerebro]
+    restart: unless-stopped
+
+  keycloak:
+    image: quay.io/keycloak/keycloak:latest
+    command: start-dev --import-realm
+    environment: {KC_BOOTSTRAP_ADMIN_USERNAME: admin, KC_BOOTSTRAP_ADMIN_PASSWORD: "${KEYCLOAK_ADMIN_PASSWORD}"}
+    volumes: ["./config/keycloak:/opt/keycloak/data/import:ro"]
+    ports: ["127.0.0.1:8080:8080"]
+    networks: [cerebro]
+    restart: unless-stopped
+
+  langfuse-db:
+    image: postgres:16-alpine
+    environment: {POSTGRES_USER: langfuse, POSTGRES_PASSWORD: "${LANGFUSE_DB_PASSWORD}", POSTGRES_DB: langfuse}
+    volumes: ["langfuse-db:/var/lib/postgresql/data"]
+    networks: [cerebro]
+    restart: unless-stopped
+
+  langfuse:               # versión 2: solo necesita PostgreSQL
+    image: langfuse/langfuse:2
+    environment:
+      DATABASE_URL: "postgresql://langfuse:${LANGFUSE_DB_PASSWORD}@langfuse-db:5432/langfuse"
+      NEXTAUTH_URL: http://localhost:3001
+      NEXTAUTH_SECRET: "${LANGFUSE_NEXTAUTH_SECRET}"
+      SALT: "${LANGFUSE_SALT}"
+    ports: ["127.0.0.1:3001:3000"]
+    depends_on: [langfuse-db]
+    networks: [cerebro]
+    restart: unless-stopped
+
+volumes: {pgdata: {}, ollama: {}, datos: {}, whisper: {}, agent-reach: {}, langfuse-db: {}}
+
+networks:
+  cerebro: {name: cerebro}

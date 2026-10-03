@@ -1,0 +1,23 @@
+# Integraciones directas (sin n8n). Las credenciales van en .env, nunca aquí.
+
+correo:                       # servidor de correo propio
+  imap: {host: "mail.101.cat", puerto: 993}        # IMAP con TLS
+  smtp: {host: "mail.101.cat", puerto: 587, starttls: true}
+  carpeta_borradores: "Drafts"                      # se ve en el cliente de correo de cada persona
+  # Pie obligatorio en comunicaciones comerciales (LSSI): forma sencilla y gratuita de darse de baja
+  pie_comercial: >-
+    Has recibido este mensaje porque nos diste tu consentimiento o eres cliente de 101.cat.
+    Si no quieres recibir más comunicaciones, responde con la palabra BAJA.
+
+calendario:                   # servidor CalDAV propio (el del servidor de correo o uno aparte)
+  url: "https://mail.101.cat/dav/"
+  jornada: {inicio: "08:00", fin: "18:00", dias: [0, 1, 2, 3, 4]}   # lunes a viernes
+
+contratacion:
+  # Fuentes de sindicación (ATOM) de las plataformas de contratación pública.
+  # Rellenar con las URL vigentes de la Plataforma de Contratación del Sector Público
+  # y de la plataforma de contratación de Cataluña.
+  feeds: []
+  # Prefijos CPV que interesan a las 10 áreas de servicio; los define Licitaciones.
+  cpv_interes: []
+  carpeta_paquetes: "licitaciones"     # dentro de /datos

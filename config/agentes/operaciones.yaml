@@ -1,0 +1,210 @@
+# Generado por scripts/generar_fichas.py — edita allí y vuelve a generar.
+agentes:
+- id: jefe-proyectos
+  nombre: Jefe de Proyectos
+  subarea: Gestión de proyectos
+  tareas: Planifica tareas, plazos y recursos de cada proyecto y avisa de retrasos
+  modelo: principal
+  herramientas:
+  - conocimiento
+  - erpnext
+  - calendario
+  aprobacion: libre
+  horario: 0 7 * * 1-5
+  sensibilidad: media
+  departamento: operaciones
+  director: true
+- id: entrega
+  nombre: Entrega
+  subarea: Entrega
+  tareas: Checklists de entrega al cliente y confirmación de cierre
+  modelo: rapido
+  herramientas:
+  - conocimiento
+  - erpnext
+  aprobacion: simple
+  horario: null
+  sensibilidad: media
+  departamento: operaciones
+  director: false
+- id: calidad
+  nombre: Calidad
+  subarea: Calidad
+  tareas: Registra incidencias, analiza causas y propone mejoras de proceso
+  modelo: principal
+  herramientas:
+  - conocimiento
+  - erpnext
+  aprobacion: libre
+  horario: null
+  sensibilidad: media
+  departamento: operaciones
+  director: false
+- id: compras
+  nombre: Compras
+  subarea: Compras y proveedores
+  tareas: Compara proveedores, prepara pedidos en borrador y controla plazos
+  modelo: principal
+  herramientas:
+  - conocimiento
+  - erpnext
+  aprobacion: doble
+  horario: null
+  sensibilidad: media
+  departamento: operaciones
+  director: false
+- id: catalogo-proveedores
+  nombre: Catálogo de Proveedores
+  subarea: Compras y proveedores
+  tareas: Importa tarifas (Visiotech, ETT, Asecur, Saltoki, distribuidora propia), cruza productos y avisa de cambios
+  modelo: rapido
+  herramientas:
+  - conocimiento
+  - erpnext
+  - ficheros
+  - jev
+  aprobacion: libre
+  horario: 0 1 * * *
+  sensibilidad: media
+  departamento: operaciones
+  director: false
+- id: explorador-fabricantes
+  nombre: Explorador de Fabricantes
+  subarea: Compras y proveedores
+  tareas: Busca y evalúa fabricantes nuevos; tarifas y acuerdos vía la distribuidora propia
+  modelo: principal
+  herramientas:
+  - conocimiento
+  - scrapegraph
+  - agent_reach
+  - grok
+  aprobacion: libre
+  horario: 0 2 * * 3
+  sensibilidad: baja
+  departamento: operaciones
+  director: false
+- id: inventario
+  nombre: Inventario y Recursos
+  subarea: Compras y proveedores
+  tareas: Control de stock, licencias y material
+  modelo: rapido
+  herramientas:
+  - conocimiento
+  - erpnext
+  aprobacion: libre
+  horario: 0 6 * * *
+  sensibilidad: media
+  departamento: operaciones
+  director: false
+- id: cotizador
+  nombre: Cotizador
+  subarea: Cotización de instalaciones
+  tareas: Aplica el motor del contador y deja el presupuesto en borrador en el ERP
+  modelo: principal
+  herramientas:
+  - conocimiento
+  - cotizador
+  - erpnext
+  aprobacion: doble
+  horario: null
+  sensibilidad: media
+  departamento: operaciones
+  director: false
+- id: medidor-tecnico
+  nombre: Medidor Técnico
+  subarea: Cotización de instalaciones
+  tareas: Saca cantidades de planos y fotos y ajusta las horas de cada partida al caso
+  modelo: vision
+  herramientas:
+  - conocimiento
+  - ficheros
+  - cotizador
+  aprobacion: simple
+  horario: null
+  sensibilidad: media
+  departamento: operaciones
+  director: false
+- id: tiempos-reales
+  nombre: Tiempos Reales
+  subarea: Cotización de instalaciones
+  tareas: Compara horas presupuestadas con partes reales y propone actualizar la tabla de tiempos
+  modelo: principal
+  herramientas:
+  - conocimiento
+  - erpnext
+  - cotizador
+  aprobacion: simple
+  horario: 0 3 * * 1
+  sensibilidad: media
+  departamento: operaciones
+  director: false
+- id: captador-instaladores
+  nombre: Captador de Instaladores
+  subarea: Red de instaladores
+  tareas: Busca empresas instaladoras por zona y especialidad y verifica habilitaciones
+  modelo: principal
+  herramientas:
+  - conocimiento
+  - scrapegraph
+  - erpnext
+  aprobacion: libre
+  horario: 0 2 * * 2
+  sensibilidad: baja
+  departamento: operaciones
+  director: false
+- id: negociador
+  nombre: Negociador
+  subarea: Red de instaladores
+  tareas: Contacta y negocia tarifa hora por categoría dentro del rango fijado por dirección
+  modelo: principal
+  herramientas:
+  - conocimiento
+  - correo
+  - erpnext
+  aprobacion: doble
+  horario: null
+  sensibilidad: media
+  departamento: operaciones
+  director: false
+- id: acuerdos-instaladores
+  nombre: Acuerdos y Documentación
+  subarea: Red de instaladores
+  tareas: Acuerdo marco y documentación obligatoria de cada instalador
+  modelo: principal
+  herramientas:
+  - conocimiento
+  - erpnext
+  - ficheros
+  aprobacion: doble
+  horario: null
+  sensibilidad: alta
+  departamento: operaciones
+  director: false
+- id: comparador-presupuestos
+  nombre: Comparador de Presupuestos
+  subarea: Red de instaladores
+  tareas: Pide presupuesto a instaladores con acuerdo y propone el mejor por precio, rapidez y eficiencia
+  modelo: juez
+  herramientas:
+  - conocimiento
+  - comparador_instaladores
+  - correo
+  - erpnext
+  aprobacion: doble
+  horario: null
+  sensibilidad: media
+  departamento: operaciones
+  director: false
+- id: evaluacion-instaladores
+  nombre: Evaluación de Instaladores
+  subarea: Red de instaladores
+  tareas: Puntúa cada trabajo terminado y mantiene el ranking
+  modelo: juez
+  herramientas:
+  - conocimiento
+  - erpnext
+  aprobacion: libre
+  horario: 0 4 * * 1
+  sensibilidad: media
+  departamento: operaciones
+  director: false

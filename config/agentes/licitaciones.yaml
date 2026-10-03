@@ -1,0 +1,165 @@
+# Generado por scripts/generar_fichas.py — edita allí y vuelve a generar.
+agentes:
+- id: director-licitaciones
+  nombre: Director de Licitaciones
+  subarea: Vigilancia de oportunidades
+  tareas: Coordina el ciclo completo de cada concurso y controla todos los plazos
+  modelo: principal
+  herramientas:
+  - conocimiento
+  - calendario
+  aprobacion: libre
+  horario: 0 7 * * 1-5
+  sensibilidad: baja
+  departamento: licitaciones
+  director: true
+- id: rastreador
+  nombre: Rastreador
+  subarea: Vigilancia de oportunidades
+  tareas: Revisa a diario las plataformas de contratación y filtra por CPV, importe y zona
+  modelo: rapido
+  herramientas:
+  - conocimiento
+  - plataformas_contratacion
+  - jev
+  aprobacion: libre
+  horario: 0 6 * * *
+  sensibilidad: baja
+  departamento: licitaciones
+  director: false
+- id: viabilidad
+  nombre: Viabilidad
+  subarea: Vigilancia de oportunidades
+  tareas: Puntúa solvencia, plazos, presupuesto, capacidad, competencia y certificaciones; informe ir/no ir
+  modelo: juez
+  herramientas:
+  - conocimiento
+  - jev
+  aprobacion: libre
+  horario: null
+  sensibilidad: baja
+  departamento: licitaciones
+  director: false
+- id: administrativo-licitaciones
+  nombre: Administrativo
+  subarea: Documentación administrativa
+  tareas: DEUC, declaraciones responsables, solvencia y certificados vigentes
+  modelo: principal
+  herramientas:
+  - conocimiento
+  - ficheros
+  aprobacion: doble
+  horario: null
+  sensibilidad: media
+  departamento: licitaciones
+  director: false
+- id: presentacion-requerimientos
+  nombre: Presentación y Requerimientos
+  subarea: Documentación administrativa
+  tareas: Calendario, aclaraciones, paquete de oferta listo para que una persona firme y presente, y subsanaciones
+  modelo: principal
+  herramientas:
+  - conocimiento
+  - plataformas_contratacion
+  - calendario
+  aprobacion: doble
+  horario: null
+  sensibilidad: media
+  departamento: licitaciones
+  director: false
+- id: analista-pliegos
+  nombre: Analista de Pliegos
+  subarea: Oferta técnica
+  tareas: Extrae requisitos, criterios, puntuación y formato; crea la matriz de cumplimiento
+  modelo: vision
+  herramientas:
+  - conocimiento
+  - ficheros
+  - scrapegraph
+  - jev
+  aprobacion: libre
+  horario: null
+  sensibilidad: baja
+  departamento: licitaciones
+  director: false
+- id: arquitecto-solucion
+  nombre: Arquitecto de Solución
+  subarea: Oferta técnica
+  tareas: Diseña la mejor solución criterio a criterio dentro del presupuesto
+  modelo: principal
+  herramientas:
+  - conocimiento
+  - erpnext
+  aprobacion: simple
+  horario: null
+  sensibilidad: media
+  departamento: licitaciones
+  director: false
+- id: redactor-memoria
+  nombre: Redactor de Memoria
+  subarea: Oferta técnica
+  tareas: Redacta la memoria con la estructura exacta del pliego, sin mezclar sobres
+  modelo: principal
+  herramientas:
+  - conocimiento
+  - ficheros
+  aprobacion: simple
+  horario: null
+  sensibilidad: media
+  departamento: licitaciones
+  director: false
+- id: evaluador-ofertas
+  nombre: Evaluador
+  subarea: Oferta técnica
+  tareas: Simula la puntuación de la mesa y detecta incumplimientos excluyentes
+  modelo: juez
+  herramientas:
+  - conocimiento
+  - jev
+  aprobacion: libre
+  horario: null
+  sensibilidad: media
+  departamento: licitaciones
+  director: false
+- id: costes-licitacion
+  nombre: Costes
+  subarea: Oferta económica
+  tareas: Coste real con convenio, subrogaciones, materiales, gastos generales y riesgos
+  modelo: principal
+  herramientas:
+  - conocimiento
+  - erpnext
+  - cotizador
+  aprobacion: simple
+  horario: null
+  sensibilidad: alta
+  departamento: licitaciones
+  director: false
+- id: precio-licitacion
+  nombre: Precio
+  subarea: Oferta económica
+  tareas: Simula la fórmula económica y el umbral de baja anormal y propone el precio
+  modelo: principal
+  herramientas:
+  - conocimiento
+  - erpnext
+  aprobacion: doble
+  horario: null
+  sensibilidad: alta
+  departamento: licitaciones
+  director: false
+- id: inteligencia-competitiva
+  nombre: Inteligencia Competitiva
+  subarea: Seguimiento
+  tareas: Actas de adjudicación, competidores y precios ganadores; plazos de recurso
+  modelo: principal
+  herramientas:
+  - conocimiento
+  - scrapegraph
+  - plataformas_contratacion
+  - jev
+  aprobacion: libre
+  horario: 0 4 * * *
+  sensibilidad: baja
+  departamento: licitaciones
+  director: false
