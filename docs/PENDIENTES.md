@@ -11,7 +11,7 @@
 | Mayorista de telecom | Elegir mayorista e implementar sus 5 operaciones con su API | `herramientas/mayorista.py` |
 | Plataformas de contratación | URL de sindicación vigentes, prefijos CPV de interés y prueba con un fichero real | `config/integraciones.yaml`, `herramientas/contratacion.py` |
 | Tarifas de proveedores | Formato que ofrece cada proveedor (API, BMEcat, Excel) | agente Catálogo de Proveedores |
-| Login | Keycloak en el panel (OIDC) | `panel/app/cerebro/[...ruta]/route.js` |
+| Login | Hecho. Falta producción: HTTPS, `PANEL_URL`/`KEYCLOAK_URL_PUBLICA` reales y sus URI en el cliente de Keycloak; sesiones en memoria (se pierden al reiniciar el panel; valorar Redis si hay varias réplicas) | `panel/lib/sesion.js`, `config/keycloak/realm-cerebro.json` |
 | OpenJarvis | Piloto como motor de la interfaz | Fase 1 |
 | Registro CNMC | Inscripción como operador antes de vender telecom | Cumplimiento Telecom |
 | Operaciones vinculadas | Precio de mercado y documentación de las compras a la distribuidora propia | asesor fiscal |

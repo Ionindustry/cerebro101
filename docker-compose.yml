@@ -48,7 +48,15 @@ services:
 
   panel:
     build: {context: ./panel}
-    environment: {CEREBRO_API: "http://api:8000", VOZ_API: "http://voz:8100"}
+    environment:
+      CEREBRO_API: "http://api:8000"
+      VOZ_API: "http://voz:8100"
+      KEYCLOAK_REALM: "${KEYCLOAK_REALM:-cerebro}"
+      KEYCLOAK_CLIENTE: "${KEYCLOAK_CLIENTE:-cerebro-panel}"
+      KEYCLOAK_URL_PUBLICA: "${KEYCLOAK_URL_PUBLICA:-http://localhost:8080}"   # la que abre el navegador
+      KEYCLOAK_URL_INTERNA: "http://keycloak:8080"                            # la que usa el panel por dentro
+      PANEL_URL: "${PANEL_URL:-http://localhost:3000}"
+      PANEL_USUARIO_DESARROLLO: "${PANEL_USUARIO_DESARROLLO:-}"               # solo con CEREBRO_MODO=desarrollo
     ports: ["127.0.0.1:3000:3000"]
     depends_on: [api]
     networks: [cerebro]
@@ -73,7 +81,12 @@ services:
   keycloak:
     image: quay.io/keycloak/keycloak:latest
     command: start-dev --import-realm
-    environment: {KC_BOOTSTRAP_ADMIN_USERNAME: admin, KC_BOOTSTRAP_ADMIN_PASSWORD: "${KEYCLOAK_ADMIN_PASSWORD}"}
+    environment:
+      KC_BOOTSTRAP_ADMIN_USERNAME: admin
+      KC_BOOTSTRAP_ADMIN_PASSWORD: "${KEYCLOAK_ADMIN_PASSWORD}"
+      # Emisor de los tokens fijo (la dirección que ve el navegador); el panel y la API lo usan también por dentro
+      KC_HOSTNAME: "${KEYCLOAK_URL_PUBLICA:-http://localhost:8080}"
+      KC_HOSTNAME_BACKCHANNEL_DYNAMIC: "true"
     volumes: ["./config/keycloak:/opt/keycloak/data/import:ro"]
     ports: ["127.0.0.1:8080:8080"]
     networks: [cerebro]

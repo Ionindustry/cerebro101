@@ -14,7 +14,7 @@ Cada fase dura unas 4 semanas y solo empieza si la anterior cumple su criterio d
 - [ ] Configurar el servidor de correo y las cuentas técnicas por departamento
 - [ ] Confirmar el modelo de tarjeta gráfica y fijar `PERFIL_HARDWARE`
 - [ ] Verificar las etiquetas exactas de los modelos en Ollama y descargarlos
-- [ ] Login del panel con Keycloak (OIDC) en lugar de las cabeceras de desarrollo
+- [x] Login del panel con Keycloak (OIDC, código + PKCE) en lugar de las cabeceras de desarrollo
 - [ ] Cargar la base de conocimiento con los documentos actuales de la empresa
 - [ ] Piloto de OpenJarvis como motor de la interfaz (validar multiusuario)
 - [ ] Batería de 50 preguntas reales para medir la calidad de enrutado y respuestas

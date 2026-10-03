@@ -154,7 +154,10 @@
             "access.token.claim": "true"
           }
         }
-      ]
+      ],
+      "attributes": {
+        "post.logout.redirect.uris": "http://localhost:3000/*"
+      }
     }
   ]
 }

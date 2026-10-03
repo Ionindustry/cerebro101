@@ -84,3 +84,10 @@ h1 { font-size: 30px; font-weight: 300; letter-spacing: -0.6px; margin: 0 0 20px
   .marca { display: none; }
   .principal { padding: 8px 12px 0; }
 }
+
+.sesion { margin-top: auto; padding: 12px; font-size: 14px; color: var(--secundario); display: flex; flex-direction: column; gap: 2px; }
+.sesion span { color: var(--tinta); font-weight: 500; overflow: hidden; text-overflow: ellipsis; }
+.rail .sesion a { padding: 0; background: none; font-size: 14px; }
+@media (max-width: 760px) {
+  .rail .sesion { margin: 0 0 0 auto; flex-direction: row; align-items: center; gap: 12px; padding: 0 8px; }
+}

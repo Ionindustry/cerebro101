@@ -12,8 +12,14 @@ const SECCIONES = [
 export default function Rail() {
   const ruta = usePathname();
   const [pendientes, setPendientes] = useState(0);
+  const [usuario, setUsuario] = useState("");
   useEffect(() => {
-    const cargar = () => fetch("/cerebro/aprobaciones").then((r) => (r.ok ? r.json() : [])).then((l) => setPendientes(l.length)).catch(() => {});
+    fetch("/auth/yo").then((r) => (r.ok ? r.json() : null)).then((d) => d && setUsuario(d.usuario)).catch(() => {});
+  }, []);
+  useEffect(() => {
+    const cargar = () => fetch("/cerebro/aprobaciones")
+      .then((r) => { if (r.status === 401) { window.location.href = "/auth/login"; return []; } return r.ok ? r.json() : []; })
+      .then((l) => setPendientes(l.length)).catch(() => {});
     cargar();
     const t = setInterval(cargar, 30000);
     return () => clearInterval(t);
@@ -27,6 +33,12 @@ export default function Rail() {
           {s.ruta === "/aprobaciones" && pendientes > 0 && <span className="contador" aria-label={`${pendientes} pendientes`}>{pendientes}</span>}
         </Link>
       ))}
+      {usuario && (
+        <div className="sesion">
+          <span>{usuario}</span>
+          <a href="/auth/logout">Salir</a>
+        </div>
+      )}
     </nav>
   );
 }
