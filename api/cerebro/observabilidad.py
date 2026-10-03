@@ -5,11 +5,16 @@ Uso: pasar `callbacks()` en la configuración al invocar el grafo.
 """
 from __future__ import annotations
 
+import logging
 import os
 
 
 def callbacks() -> list:
     if not os.environ.get("LANGFUSE_HOST"):
         return []
-    from langfuse.callback import CallbackHandler  # import diferido
-    return [CallbackHandler()]
+    try:
+        from langfuse.callback import CallbackHandler  # import diferido
+        return [CallbackHandler()]
+    except Exception as e:  # sin langchain<1 compatible o sin claves: seguir sin trazas
+        logging.getLogger(__name__).warning("Langfuse desactivado: %s", e)
+        return []
