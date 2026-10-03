@@ -44,7 +44,8 @@ async def enrutar(estado: Estado) -> Estado:
     esquema = {"type": "object", "properties": {
         "departamento": {"type": "string", "enum": list(r.departamentos)}, "motivo": {"type": "string"}},
         "required": ["departamento", "motivo"]}
-    mensajes = [{"role": "system", "content": sistema_director_general(r.departamentos)},
+    mensajes = [{"role": "system", "content": sistema_director_general(
+                    r.departamentos, {k: [f.nombre for f in r.del_departamento(k)] for k in r.departamentos})},
                 {"role": "user", "content": estado["peticion"]}]
     try:
         d = await chat(asignar(ficha, estado.get("origen", "peticion")), mensajes, esquema=esquema, temperatura=0)

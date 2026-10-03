@@ -17,7 +17,8 @@ Cada fase dura unas 4 semanas y solo empieza si la anterior cumple su criterio d
 - [x] Login del panel con Keycloak (OIDC, código + PKCE) en lugar de las cabeceras de desarrollo
 - [ ] Cargar la base de conocimiento con los documentos actuales de la empresa
 - [ ] Piloto de OpenJarvis como motor de la interfaz (validar multiusuario)
-- [ ] Batería de 50 preguntas reales para medir la calidad de enrutado y respuestas
+- [x] Batería de 50 preguntas para medir el enrutado (`evaluacion/bateria_enrutado.yaml`, `scripts/evaluar_enrutado.py`)
+- [ ] Alcanzar el 90 % de enrutado: con `ministral-3:3b` en CPU se mide 64 % (ver `evaluacion/resultados/`); repetir con los modelos del perfil real y sustituir/ampliar la batería con peticiones reales
 
 **Criterio de paso:** el Cerebro responde preguntas sobre la empresa con fuentes correctas y enruta bien al
 menos el 90 % de la batería de preguntas.

@@ -50,6 +50,14 @@ que todas las fichas son válidas.
 
 ## Pruebas
 
+Medir el enrutado (criterio de paso de la Fase 1, ≥ 90 %) con la batería de 50 preguntas:
+
+```bash
+python scripts/evaluar_enrutado.py --usuario tu-nombre   # con la API en marcha y CEREBRO_MODO=desarrollo
+```
+
+Unitarias:
+
 ```bash
 cd api && python -m pytest        # o: python -m unittest discover -s tests
 ```

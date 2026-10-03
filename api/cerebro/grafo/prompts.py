@@ -29,11 +29,19 @@ def sistema_agente(ficha: Ficha, herramientas: dict) -> str:
             "accion, herramienta, operacion, argumentos y resumen.")
 
 
-def sistema_director_general(departamentos: dict) -> str:
-    lista = "\n".join(f"- {k}: {v['nombre']} (subáreas: {', '.join(v['subareas'])})"
-                      for k, v in departamentos.items())
+def sistema_director_general(departamentos: dict, agentes: dict[str, list[str]] | None = None) -> str:
+    """`agentes`: departamento → nombres de sus agentes; ayuda a elegir bien cuando hay muchos departamentos."""
+    def linea(k: str, v: dict) -> str:
+        extra = f"; agentes: {', '.join(agentes[k])}" if agentes and k in agentes else ""
+        return f"- {k}: {v['nombre']} (subáreas: {', '.join(v['subareas'])}{extra})"
+    lista = "\n".join(linea(k, v) for k, v in departamentos.items())
     return (f"{CONTEXTO_EMPRESA}\n\nEres el Director General del Cerebro. Decide qué departamento debe "
-            f"atender la petición.\n\nDepartamentos:\n{lista}")
+            f"atender la petición, según la función del departamento y de sus agentes.\n\n"
+            "Aviso: «areas» (Áreas de Servicio) solo es para el diseño técnico de un servicio concreto "
+            "(cámaras, incendios, accesos, redes, renovables…), su obra, mantenimiento, legalizaciones o "
+            "ayudas. Presupuestos, clientes, proyectos, compras, personal, contratos, cobros, licitaciones "
+            "o telecomunicaciones de operador van a su propio departamento.\n\n"
+            f"Departamentos:\n{lista}")
 
 
 def sistema_director_departamento(nombre_dep: str, fichas: list[Ficha]) -> str:
