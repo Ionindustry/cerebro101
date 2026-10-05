@@ -146,6 +146,44 @@ class TestLlmRobusto(unittest.TestCase):
         self.assertIn("50 tokens", str(e.exception))
         self.assertEqual(self.chat(Servidor(corte)), '{"a": "tex')            # sin esquema, un texto cortado se devuelve
 
+    def test_siempre_se_envia_la_ventana_de_contexto(self):
+        srv = Servidor(respuesta(OK))
+        self.chat(srv)
+        self.assertEqual(srv.cuerpos[0]["options"]["num_ctx"], 8192)
+        with mock.patch.dict(os.environ, {"OLLAMA_NUM_CTX": "16384"}):
+            srv = Servidor(respuesta(OK))
+            self.chat(srv)
+        self.assertEqual(srv.cuerpos[0]["options"]["num_ctx"], 16384)
+
+    def test_entrada_que_llena_la_ventana_es_contexto_lleno_y_no_un_bucle(self):
+        # caso real: 4032 tokens de entrada con la ventana por defecto de 4096; el modelo se queda sin sitio tras 64 tokens
+        lleno = respuesta({**OK, "message": {"content": '{"tipo": "respuesta"'}, "done_reason": "length",
+                           "prompt_eval_count": 8100, "eval_count": 64})
+        with self.assertRaises(llm.ContextoLleno) as e:
+            self.chat(Servidor(lleno), esquema=ESQUEMA)
+        self.assertEqual(e.exception.codigo, "contexto_lleno")
+        self.assertIn("8192", str(e.exception))
+        self.assertIsInstance(e.exception, llm.RespuestaInvalida)
+
+    def test_prompt_recortado_por_ollama_tambien_se_detecta_sin_corte_de_salida(self):
+        # Ollama descarta el principio cuando no cabe: prompt_eval_count queda pegado a num_ctx aunque la salida termine bien
+        recortado = respuesta({**OK, "message": {"content": '{"a": "x"}'}, "prompt_eval_count": 8190, "eval_count": 10})
+        with self.assertRaises(llm.ContextoLleno):
+            self.chat(Servidor(recortado), esquema=ESQUEMA)
+
+    def test_una_entrada_grande_que_cabe_no_es_error(self):
+        bien = respuesta({**OK, "message": {"content": '{"a": "x"}'}, "prompt_eval_count": 6000, "eval_count": 300})
+        self.assertEqual(self.chat(Servidor(bien), esquema=ESQUEMA), {"a": "x"})
+
+    def test_el_tope_global_de_tokens_manda_sobre_el_de_cada_paso(self):
+        srv = Servidor(respuesta(OK))
+        with mock.patch.dict(os.environ, {"OLLAMA_MAX_TOKENS": "300"}):
+            self.chat(srv, max_tokens=1500)
+        self.assertEqual(srv.cuerpos[0]["options"]["num_predict"], 300)
+        srv = Servidor(respuesta(OK))
+        self.chat(srv, max_tokens=1500)
+        self.assertEqual(srv.cuerpos[0]["options"]["num_predict"], 1500)
+
     # --- cortacircuitos
     def test_el_cortacircuitos_responde_al_instante_y_se_recupera(self):
         reloj = [100.0]

@@ -41,9 +41,10 @@ class ErrorModelo(RuntimeError):
     codigo = "error_modelo"
     http = 502
 
-    def __init__(self, mensaje: str, reintentar_en: int | None = None):
+    def __init__(self, mensaje: str, reintentar_en: int | None = None, parcial: str | None = None):
         super().__init__(mensaje)
         self.reintentar_en = reintentar_en
+        self.parcial = parcial           # lo que alcanzó a generar el modelo (diagnóstico; no se muestra a la persona)
 
 
 class ModeloNoDisponible(ErrorModelo):
@@ -64,6 +65,12 @@ class ModeloNoEncontrado(ErrorModelo):
 
 class RespuestaInvalida(ErrorModelo):
     codigo, http = "respuesta_invalida", 502
+
+
+class ContextoLleno(RespuestaInvalida):
+    """La conversación no cabe en la ventana de contexto del modelo: Ollama la recorta por el principio (perdiendo las
+    instrucciones del sistema) o se queda sin sitio para responder. Cambiar de modelo no lo arregla: hay que recortar la entrada."""
+    codigo = "contexto_lleno"
 
 
 # --------------------------------------------------------------------------- ajustes (se leen al usarlos: se pueden cambiar sin reiniciar pruebas)
@@ -176,10 +183,13 @@ async def chat(asignacion: Asignacion, mensajes: list[dict], esquema: dict | Non
     """Llama a /api/chat de Ollama. Con `esquema`, devuelve el JSON ya validado como dict.
 
     `timeout`: segundos máximos esperando respuesta (por defecto OLLAMA_TIMEOUT). `max_tokens`: tope de salida
-    (por defecto OLLAMA_MAX_TOKENS: sin él, un modelo en bucle genera hasta agotar el tiempo).
+    (nunca mayor que OLLAMA_MAX_TOKENS: sin él, un modelo en bucle genera hasta agotar el tiempo). La ventana de
+    contexto se fija con OLLAMA_NUM_CTX (Ollama usaría 4096 y recortaría en silencio las instrucciones del sistema).
     """
     timeout = timeout or _num("OLLAMA_TIMEOUT", 300)
-    max_tokens = max_tokens or int(_num("OLLAMA_MAX_TOKENS", 4096))
+    tope = int(_num("OLLAMA_MAX_TOKENS", 4096))
+    max_tokens = min(max_tokens, tope) if max_tokens else tope       # el tope global manda sobre el que pida cada paso
+    num_ctx = int(_num("OLLAMA_NUM_CTX", 8192))
     if imagenes:
         mensajes = [*mensajes[:-1], {**mensajes[-1], "images": imagenes}]
     cuerpo: dict[str, Any] = {
@@ -188,7 +198,7 @@ async def chat(asignacion: Asignacion, mensajes: list[dict], esquema: dict | Non
         "stream": False,
         # Ollama rechaza "-1" como texto: sin unidad debe ir como número
         "keep_alive": int(asignacion.mantener_cargado) if asignacion.mantener_cargado.lstrip("-").isdigit() else asignacion.mantener_cargado,
-        "options": {"temperature": temperatura, "num_predict": max_tokens},
+        "options": {"temperature": temperatura, "num_predict": max_tokens, "num_ctx": num_ctx},   # sin num_ctx Ollama usa 4096
     }
     if esquema:
         cuerpo["format"] = esquema
@@ -205,12 +215,21 @@ async def chat(asignacion: Asignacion, mensajes: list[dict], esquema: dict | Non
                metadata={**meta, "duracion_total_ms": round(resp.get("total_duration", 0) / 1e6),
                          "fin": resp.get("done_reason")})
         cortada = resp.get("done_reason") == "length"
+        usados = resp.get("prompt_eval_count", 0) + resp.get("eval_count", 0)
+        if usados >= num_ctx * 0.98 and (cortada or resp.get("prompt_eval_count", 0) >= num_ctx * 0.95):
+            # La entrada ocupa (casi) toda la ventana: Ollama habrá recortado el principio, donde están las instrucciones
+            log.warning("Contexto lleno en %s: %d tokens de entrada + %d de salida con una ventana de %d",
+                        asignacion.modelo, resp.get("prompt_eval_count", 0), resp.get("eval_count", 0), num_ctx)
+            raise ContextoLleno(f"La conversación no cabe en la ventana de contexto de {asignacion.modelo} ({num_ctx} tokens). "
+                                "Pide algo más concreto o sube OLLAMA_NUM_CTX.", parcial=contenido)
         if not esquema:
             if cortada:
                 log.warning("Respuesta de %s cortada por el límite de %d tokens", asignacion.modelo, max_tokens)
             return contenido
         if cortada:
-            raise RespuestaInvalida(f"La respuesta del modelo {asignacion.modelo} se cortó al llegar al límite de {max_tokens} tokens.")
+            log.warning("Respuesta de %s cortada en %d tokens (%d caracteres, %d en blanco); final: %r", asignacion.modelo, max_tokens, len(contenido), sum(c.isspace() for c in contenido), contenido[-150:])
+            raise RespuestaInvalida(f"La respuesta del modelo {asignacion.modelo} se cortó al llegar al límite de {max_tokens} tokens.",
+                                    parcial=contenido)
         try:
             datos = json.loads(contenido)
         except json.JSONDecodeError as e:

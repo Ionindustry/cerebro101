@@ -3,13 +3,15 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 
 from langgraph.types import interrupt
 
 from .. import herramientas as H
 from ..aprobaciones import bandeja
 from ..constancia import dejar_constancia
-from ..llm import RespuestaInvalida, chat
+from ..llm import ContextoLleno, RespuestaInvalida, chat
+from .contexto import limite_resultado, recortar
 from ..politicas import AccionProhibida, nivel_para
 from ..registro import registro
 from ..router_modelos import asignar
@@ -57,10 +59,12 @@ async def enrutar(estado: Estado) -> Estado:
                     r.departamentos, {k: [f.nombre for f in r.del_departamento(k)] for k in r.departamentos})},
                 {"role": "user", "content": estado["peticion"]}]
     try:
-        d = await chat(asignar(ficha, estado.get("origen", "peticion")), mensajes, esquema=esquema, temperatura=0)
+        d = await chat(asignar(ficha, estado.get("origen", "peticion")), mensajes, esquema=esquema, temperatura=0, max_tokens=400)
+    except ContextoLleno:
+        raise
     except RespuestaInvalida:
         d = await chat(asignar(ficha, estado.get("origen", "peticion"), dificil=True), mensajes,
-                       esquema=esquema, temperatura=0)
+                       esquema=esquema, temperatura=0, max_tokens=400)
     return {"departamento": d["departamento"]}
 
 
@@ -77,8 +81,30 @@ async def elegir_agente(estado: Estado) -> Estado:
     mensajes = [{"role": "system", "content": sistema_director_departamento(r.departamentos[dep]["nombre"], fichas)},
                 {"role": "user", "content": estado["peticion"]}]
     d = await chat(asignar(director, estado.get("origen", "peticion"), dificil=True), mensajes,
-                   esquema=esquema, temperatura=0)
+                   esquema=esquema, temperatura=0, max_tokens=400)
     return {"agente": d["agente"]}
+
+
+PASO_MAX_TOKENS = 1500          # un paso del agente es una llamada a herramienta o una respuesta: no necesita más
+
+
+async def _paso_del_agente(ficha, estado: dict, mensajes: list[dict]) -> dict:
+    """Una llamada al modelo con el contexto bajo control: recorta lo antiguo si no cabe y, si aun así el modelo dice que no
+    cabe, lo recorta más y reintenta una vez. Si el modelo no da una respuesta válida, sube al modelo principal."""
+    ctx = int(os.environ.get("OLLAMA_NUM_CTX") or 8192)
+    presupuesto = ctx - PASO_MAX_TOKENS - 300
+    origen = estado.get("origen", "peticion")
+    entrada = recortar(mensajes, presupuesto)
+    try:
+        try:
+            return await chat(asignar(ficha, origen), entrada, esquema=ESQUEMA_AGENTE, max_tokens=PASO_MAX_TOKENS)
+        except ContextoLleno:
+            return await chat(asignar(ficha, origen), recortar(mensajes, presupuesto // 2, minimo=500),
+                              esquema=ESQUEMA_AGENTE, max_tokens=PASO_MAX_TOKENS)
+    except ContextoLleno:
+        raise
+    except RespuestaInvalida:
+        return await chat(asignar(ficha, origen, dificil=True), entrada, esquema=ESQUEMA_AGENTE, max_tokens=PASO_MAX_TOKENS)
 
 
 async def ejecutar_agente(estado: Estado) -> Estado:
@@ -88,11 +114,7 @@ async def ejecutar_agente(estado: Estado) -> Estado:
                 {"role": "user", "content": estado["peticion"]}]
     pasos: list[dict] = []
     for _ in range(MAX_PASOS):
-        try:
-            d = await chat(asignar(ficha, estado.get("origen", "peticion")), mensajes, esquema=ESQUEMA_AGENTE)
-        except RespuestaInvalida:
-            d = await chat(asignar(ficha, estado.get("origen", "peticion"), dificil=True), mensajes,
-                           esquema=ESQUEMA_AGENTE)
+        d = await _paso_del_agente(ficha, estado, mensajes)
         if d["tipo"] == "respuesta":
             acciones = [{**a, "argumentos": a.get("argumentos", {}), "estado": "propuesta"}
                         for a in d.get("acciones", [])]
@@ -107,7 +129,7 @@ async def ejecutar_agente(estado: Estado) -> Estado:
                       "ok": not (isinstance(resultado, dict) and "error" in resultado)})
         mensajes += [{"role": "assistant", "content": json.dumps(d, ensure_ascii=False)},
                      {"role": "user", "content": "Resultado: " + json.dumps(resultado, ensure_ascii=False,
-                                                                            default=str)[:12000]}]
+                                                                            default=str)[:limite_resultado()]}]
     return {"respuesta": "No he podido terminar la tarea en el número máximo de pasos.", "pasos": pasos,
             "acciones": []}
 

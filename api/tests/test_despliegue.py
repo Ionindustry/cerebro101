@@ -7,6 +7,8 @@ from pathlib import Path
 import yaml
 
 RAIZ = Path(__file__).resolve().parents[2]
+if not (RAIZ / "despliegue").exists():             # dentro de la imagen de la API no están los ficheros del despliegue
+    raise unittest.SkipTest("se ejecuta desde el repositorio, no desde la imagen")
 sys.path[:0] = [str(RAIZ / "despliegue"), str(RAIZ / "scripts")]
 
 import configurar_keycloak as kc  # noqa: E402

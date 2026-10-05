@@ -6,6 +6,8 @@ from pathlib import Path
 import yaml
 
 RAIZ = Path(__file__).resolve().parents[2]
+if not (RAIZ / "docker-compose.yml").exists():      # dentro de la imagen de la API no están los ficheros del despliegue
+    raise unittest.SkipTest("se ejecuta desde el repositorio, no desde la imagen")
 COMPOSE = yaml.safe_load((RAIZ / "docker-compose.yml").read_text(encoding="utf-8"))
 EJEMPLO = (RAIZ / ".env.example").read_text(encoding="utf-8")
 

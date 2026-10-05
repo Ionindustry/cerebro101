@@ -71,6 +71,7 @@ class TestRegistroDeAcciones(unittest.TestCase):
 
         async def registrar(*a):
             guardado.append(a)
+            return "ok"
 
         async def usar(ficha, herramienta, operacion, **k):
             if operacion == "mala":
@@ -81,17 +82,18 @@ class TestRegistroDeAcciones(unittest.TestCase):
             {"herramienta": "h", "operacion": "buena", "estado": "aprobada", "solicitud_id": "s1", "argumentos": {}},
             {"herramienta": "h", "operacion": "mala", "estado": "aprobada", "solicitud_id": "s2", "argumentos": {}},
             {"herramienta": "h", "operacion": "buena", "estado": "rechazada", "solicitud_id": "s3", "argumentos": {}}]}
-        with mock.patch.object(n.bandeja, "registrar_accion", registrar), mock.patch.object(n.H, "usar", usar):
+        with mock.patch.object(n, "dejar_constancia", registrar), mock.patch.object(n.H, "usar", usar):
             r = asyncio.run(n.ejecutar_acciones(estado, {"configurable": {"thread_id": "hilo-1"}}))
         self.assertEqual([a["estado"] for a in r["acciones"]], ["ejecutada", "error", "rechazada"])
         self.assertEqual([g[4] for g in guardado], ["s1", "s2"])           # aprobación de cada acción registrada
         self.assertTrue(guardado[0][5].startswith("OK:"))
         self.assertTrue(guardado[1][5].startswith("ERROR: LookupError"))
+        self.assertNotIn("aviso", r["acciones"][0])                        # con constancia correcta no hay aviso
 
     def test_si_falla_el_registro_no_se_pierde_el_resultado(self):
         n = self.nodos
 
-        async def registrar(*a):
+        async def insertar(*a):
             raise RuntimeError("base de datos caída")
 
         async def usar(*a, **k):
@@ -99,10 +101,13 @@ class TestRegistroDeAcciones(unittest.TestCase):
 
         estado = {"agente": self.ficha.id, "acciones": [
             {"herramienta": "h", "operacion": "buena", "estado": "aprobada", "solicitud_id": "s1", "argumentos": {}}]}
-        with mock.patch.object(n.bandeja, "registrar_accion", registrar), mock.patch.object(n.H, "usar", usar), \
-                self.assertLogs("cerebro.grafo", level="ERROR"):
+        from cerebro import constancia
+        with mock.patch.object(constancia, "_insertar", insertar), mock.patch.object(constancia, "REINTENTOS", (0, 0)), \
+                mock.patch.object(constancia, "_guardar_local", return_value=False), mock.patch.object(n.H, "usar", usar), \
+                self.assertLogs("cerebro.constancia", level="CRITICAL"):
             r = asyncio.run(n.ejecutar_acciones(estado, {"configurable": {"thread_id": "h"}}))
-        self.assertEqual(r["acciones"][0]["estado"], "ejecutada")
+        self.assertEqual(r["acciones"][0]["estado"], "ejecutada")          # la acción no se pierde
+        self.assertIn("no se ha podido guardar", r["acciones"][0]["aviso"])  # y la persona sabe que falta la constancia
 
 
 if __name__ == "__main__":
