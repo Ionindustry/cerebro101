@@ -16,6 +16,7 @@ from pydantic import BaseModel
 from ..ajustes import ajustes
 from ..aprobaciones import bandeja
 from ..aprobaciones.logica import DecisionNoValida
+from .. import constancia
 from ..cotizador import Solicitud, calcular
 from ..grafo import construir, nodos
 from ..llm import ErrorModelo, circuito, estado_modelos
@@ -38,6 +39,10 @@ async def ciclo_de_vida(app: FastAPI):
             # Con el rol de la aplicación (sin permiso para crear tablas) las migraciones las hace el servicio «migraciones»
             log.info("Sin permiso para crear tablas: se usan las que dejó el servicio «migraciones»")
         GRAFO["g"] = construir(checkpointer)
+        try:
+            await constancia.volcar_pendientes()          # filas que no se pudieron escribir antes de un reinicio
+        except Exception:  # noqa: BLE001
+            log.exception("No se pudo volcar la constancia pendiente")
         yield
 
 
@@ -83,6 +88,15 @@ async def salud():
     r = registro()
     return {"estado": "ok", "agentes": len(r.fichas), "departamentos": len(r.departamentos),
             "perfil_hardware": ajustes.perfil_hardware, "modo": os.environ.get("CEREBRO_MODO", "produccion")}
+
+
+@app.get("/salud/constancia")
+async def salud_constancia():
+    """503 mientras haya acciones ejecutadas sin constancia en la base: es lo que debe vigilar la monitorización."""
+    n = constancia.pendientes()
+    cuerpo = {"pendientes": n, "fallos_desde_el_arranque": constancia.ESTADO["fallos"],
+              "ultimo_fallo": constancia.ESTADO["ultimo_fallo"]}
+    return JSONResponse(status_code=503 if n else 200, content=cuerpo)
 
 
 @app.get("/salud/modelos")

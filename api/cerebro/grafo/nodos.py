@@ -8,6 +8,7 @@ from langgraph.types import interrupt
 
 from .. import herramientas as H
 from ..aprobaciones import bandeja
+from ..constancia import dejar_constancia
 from ..llm import RespuestaInvalida, chat
 from ..politicas import AccionProhibida, nivel_para
 from ..registro import registro
@@ -150,14 +151,14 @@ def esperar_aprobaciones(estado: Estado) -> Estado:
                          for a in estado["acciones"]]}
 
 
-async def _dejar_constancia(hilo: str, ficha, a: dict, resultado: str) -> None:
-    """Escribe en registro_acciones. Si falla, se grita en el log pero no se pierde el resultado de la acción."""
-    try:
-        await bandeja.registrar_accion(hilo, ficha.id, a["herramienta"], a["operacion"],
-                                       a.get("solicitud_id"), resultado)
-    except Exception:  # noqa: BLE001
-        log.exception("NO SE PUDO REGISTRAR la acción ejecutada %s.%s (aprobación %s)",
-                      a["herramienta"], a["operacion"], a.get("solicitud_id"))
+async def _dejar_constancia(hilo: str, ficha, a: dict, resultado: str) -> dict:
+    """Escribe en registro_acciones con reintentos y cola local (ver constancia.py). Si no queda constancia en la base,
+    devuelve un aviso para la persona; la acción ya se ejecutó y su resultado no se pierde."""
+    estado = await dejar_constancia(hilo, ficha.id, a["herramienta"], a["operacion"], a.get("solicitud_id"), resultado)
+    if estado == "ok":
+        return {}
+    return {"aviso": "La acción se ha ejecutado pero no ha podido quedar registrada en el registro de acciones" +
+                     (" (queda en cola y se volcará sola)." if estado == "en_cola" else " y no se ha podido guardar: avisa a un administrador.")}
 
 
 async def ejecutar_acciones(estado: Estado, config) -> Estado:
@@ -172,9 +173,9 @@ async def ejecutar_acciones(estado: Estado, config) -> Estado:
         try:
             r = await H.usar(ficha, a["herramienta"], a["operacion"], sensibilidad=estado.get("sensibilidad"),
                              aprobada=True, **args)
-            resultado.append({**a, "estado": "ejecutada", "resultado": r})
-            await _dejar_constancia(hilo, ficha, a, "OK: " + json.dumps(r, ensure_ascii=False, default=str))
+            aviso = await _dejar_constancia(hilo, ficha, a, "OK: " + json.dumps(r, ensure_ascii=False, default=str))
+            resultado.append({**a, "estado": "ejecutada", "resultado": r, **aviso})
         except Exception as e:
-            resultado.append({**a, "estado": "error", "resultado": str(e)})
-            await _dejar_constancia(hilo, ficha, a, f"ERROR: {type(e).__name__}: {e}")
+            aviso = await _dejar_constancia(hilo, ficha, a, f"ERROR: {type(e).__name__}: {e}")
+            resultado.append({**a, "estado": "error", "resultado": str(e), **aviso})
     return {"acciones": resultado}

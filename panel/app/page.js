@@ -89,6 +89,7 @@ export default function Jarvis() {
                 <div key={j} className={`accion ${a.estado}`}>
                   {a.estado === "pendiente" ? "Espera tu aprobación: " : a.estado === "ejecutada" ? "Hecho: " : ""}
                   {a.resumen}
+                  {a.aviso && <div className="aviso">{a.aviso}</div>}
                 </div>
               ))}
             </div>

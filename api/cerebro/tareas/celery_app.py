@@ -20,7 +20,8 @@ from ..registro import registro
 
 app = Celery("cerebro", broker=ajustes.redis_url, backend=ajustes.redis_url)
 app.conf.timezone = ajustes.zona_horaria
-app.conf.task_routes = {"cerebro.tareas.celery_app.ejecutar_programada": {"queue": "lote"}}
+app.conf.task_routes = {"cerebro.tareas.celery_app.ejecutar_programada": {"queue": "lote"},
+                        "cerebro.tareas.celery_app.volcar_constancia": {"queue": "peticiones"}}
 
 
 def _calendario() -> dict:
@@ -36,7 +37,8 @@ def _calendario() -> dict:
     return tareas
 
 
-app.conf.beat_schedule = _calendario()
+app.conf.beat_schedule = {**_calendario(),
+                          "constancia-pendiente": {"task": "cerebro.tareas.celery_app.volcar_constancia", "schedule": 300.0}}
 
 
 async def _ejecutar(agente_id: str) -> dict:
@@ -53,6 +55,13 @@ async def _ejecutar(agente_id: str) -> dict:
                                 "agente": agente_id, "origen": "programada"},
                                {"configurable": {"thread_id": hilo}, "callbacks": callbacks(),
                                 "metadata": metadatos(hilo, f"agente:{agente_id}")})
+
+
+@app.task(name="cerebro.tareas.celery_app.volcar_constancia")
+def volcar_constancia() -> dict:
+    """Vuelca a registro_acciones las filas que quedaron en el fichero local cuando la base no respondía."""
+    from ..constancia import volcar_pendientes
+    return asyncio.run(volcar_pendientes())
 
 
 @app.task(name="cerebro.tareas.celery_app.ejecutar_programada",

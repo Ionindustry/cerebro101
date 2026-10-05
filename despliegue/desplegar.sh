@@ -90,6 +90,12 @@ verificar() {
 import json, urllib.request as u
 d = json.load(u.urlopen('http://localhost:8000/salud/modelos', timeout=15))
 print('Modelos de IA:', 'todos descargados' if d['ollama'] == 'ok' and not d['faltan'] else ('faltan ' + ', '.join(d['faltan']) + ' (docker compose exec ollama ollama pull …)' if d['ollama'] == 'ok' else 'Ollama no responde'))" 2>/dev/null | sed 's/^/  /' || aviso "No se pudo comprobar los modelos de IA"
+  "${COMPOSE[@]}" exec -T api python -c "
+import json, urllib.request as u, urllib.error as e
+try:
+    u.urlopen('http://localhost:8000/salud/constancia', timeout=10); print('Registro de acciones: sin filas pendientes')
+except e.HTTPError as x:
+    print('✗ Registro de acciones: ' + str(json.load(x)['pendientes']) + ' fila(s) sin volcar a la base (revisa los logs de la API)')" 2>/dev/null | sed 's/^/  /' || aviso "No se pudo comprobar la constancia de acciones"
   "${COMPOSE[@]}" exec -T api python /app/scripts/comprobar_permisos.py 2>/dev/null | tail -1 | sed 's/^/  Base de datos: /' || aviso "No se pudo ejecutar comprobar_permisos.py"
 }
 
