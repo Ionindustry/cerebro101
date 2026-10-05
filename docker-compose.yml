@@ -154,9 +154,21 @@ services:
       REDIS_URL: "${REDIS_URL:-redis://redis:6379/0}"
     command: celery -A cerebro.tareas.celery_app beat
 
+  redis-panel:            # sesiones del panel: Redis propio con contraseña y persistencia (la API y el worker no la tienen)
+    image: redis:7-alpine
+    command: ["sh", "-c", "exec redis-server --requirepass \"$$PANEL_REDIS_PASSWORD\" --appendonly yes --save ''"]
+    environment: {PANEL_REDIS_PASSWORD: "${PANEL_REDIS_PASSWORD:-}"}
+    volumes: ["redis-panel:/data"]
+    networks: [cerebro]
+    restart: unless-stopped
+
   panel:
     build: {context: ./panel}
     environment:
+      # Con contraseña definida las sesiones van a redis-panel (cifradas con PANEL_SESION_SECRET) y sobreviven a reinicios;
+      # sin ella, en memoria (desarrollo)
+      REDIS_PANEL_URL: "${PANEL_REDIS_PASSWORD:+redis://:${PANEL_REDIS_PASSWORD}@redis-panel:6379}"
+      PANEL_SESION_SECRET: "${PANEL_SESION_SECRET:-}"
       CEREBRO_API: "http://api:8000"
       VOZ_API: "http://voz:8100"
       KEYCLOAK_REALM: "${KEYCLOAK_REALM:-cerebro}"
@@ -166,7 +178,7 @@ services:
       PANEL_URL: "${PANEL_URL:-http://localhost:3000}"
       PANEL_USUARIO_DESARROLLO: "${PANEL_USUARIO_DESARROLLO:-}"               # solo con CEREBRO_MODO=desarrollo
     ports: ["127.0.0.1:3000:3000"]
-    depends_on: [api]
+    depends_on: [api, redis-panel]
     networks: [cerebro]
     restart: unless-stopped
 
@@ -270,7 +282,7 @@ services:
     restart: unless-stopped
 
 volumes: {pgdata: {}, ollama: {}, datos: {}, whisper: {}, agent-reach: {}, langfuse-db: {}, langfuse-clickhouse: {},
-  langfuse-clickhouse-logs: {}, langfuse-minio: {}, langfuse-redis: {}}
+  langfuse-clickhouse-logs: {}, langfuse-minio: {}, langfuse-redis: {}, redis-panel: {}}
 
 networks:
   cerebro: {name: cerebro}

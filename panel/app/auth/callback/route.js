@@ -11,9 +11,12 @@ export async function GET(req) {
   let tokens;
   try { tokens = await canjearCodigo(q.get("code"), verificador); }
   catch { return new Response("Keycloak no ha aceptado el inicio de sesión.", { status: 502 }); }
+  let id;
+  try { id = await crearSesion(tokens); }
+  catch { return new Response("No se ha podido guardar la sesión. Inténtalo de nuevo en un momento.", { status: 503 }); }
   const r = new Response(null, { status: 302, headers: { Location: urlPanel("/") } });
   const o = opcionesCookie(8 * 3600);
-  r.headers.append("Set-Cookie", `${COOKIE}=${crearSesion(tokens)}; Path=/; Max-Age=${o.maxAge}; HttpOnly; SameSite=Lax${o.secure ? "; Secure" : ""}`);
+  r.headers.append("Set-Cookie", `${COOKIE}=${id}; Path=/; Max-Age=${o.maxAge}; HttpOnly; SameSite=Lax${o.secure ? "; Secure" : ""}`);
   r.headers.append("Set-Cookie", `${COOKIE_PKCE}=; Path=/; Max-Age=0`);
   return r;
 }

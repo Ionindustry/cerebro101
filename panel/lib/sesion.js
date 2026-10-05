@@ -1,7 +1,9 @@
 // Sesión del panel con Keycloak (OIDC, código de autorización + PKCE, cliente público).
-// El navegador solo guarda un identificador opaco (cookie httpOnly); los tokens viven en el servidor
-// del panel. Si el panel se reinicia, las sesiones se pierden y hay que volver a entrar.
+// El navegador solo guarda un identificador opaco (cookie httpOnly); los tokens viven en el servidor del panel:
+// en Redis (cifrados, ver almacen.js) si hay REDIS_PANEL_URL, de modo que sobreviven a reiniciar el panel y sirven con varias
+// réplicas; en memoria en desarrollo.
 import crypto from "node:crypto";
+import { borrarSesion, guardarSesion, leerSesion, soltarTurno, tomarTurno } from "./almacen";
 
 const PUBLICA = process.env.KEYCLOAK_URL_PUBLICA || "http://localhost:8080";   // la que ve el navegador
 const INTERNA = process.env.KEYCLOAK_URL_INTERNA || PUBLICA;                  // la que usa el servidor del panel
@@ -14,7 +16,6 @@ export const COOKIE_PKCE = "cerebro_pkce";
 export const modoDesarrollo = () => Boolean(process.env.PANEL_USUARIO_DESARROLLO);
 export const urlPanel = (ruta = "") => PANEL + ruta;
 
-const sesiones = (globalThis.__cerebroSesiones ??= new Map());
 const base = (url) => `${url}/realms/${REALM}/protocol/openid-connect`;
 
 export function opcionesCookie(maxAge) {
@@ -57,34 +58,53 @@ export function claims(token) {
   try { return JSON.parse(Buffer.from(token.split(".")[1], "base64url").toString()); } catch { return {}; }
 }
 
-function guardar(id, t) {
+async function guardar(id, t) {
   const c = claims(t.access_token);
-  sesiones.set(id, {
+  const caducaRefresco = Date.now() + (t.refresh_expires_in || 1800) * 1000;
+  const sesion = {
     acceso: t.access_token, refresco: t.refresh_token, idToken: t.id_token,
-    caduca: (c.exp || 0) * 1000, caducaRefresco: Date.now() + (t.refresh_expires_in || 1800) * 1000,
+    caduca: (c.exp || 0) * 1000, caducaRefresco,
     usuario: c.preferred_username || c.sub, roles: c.realm_access?.roles || [], grupos: c.groups || [],
-  });
+  };
+  await guardarSesion(id, sesion, (caducaRefresco - Date.now()) / 1000);
+  return sesion;
 }
 
-export function crearSesion(tokens) {
+export async function crearSesion(tokens) {
   const id = b64(crypto.randomBytes(32));
-  guardar(id, tokens);
+  await guardar(id, tokens);
   return id;
 }
 
-export const cerrarSesion = (id) => { const s = sesiones.get(id); sesiones.delete(id); return s; };
+export async function cerrarSesion(id) {
+  if (!id) return null;
+  const s = await leerSesion(id).catch(() => null);
+  await borrarSesion(id).catch(() => {});
+  return s;
+}
 
-/** Devuelve la sesión con un token de acceso vigente (lo renueva si le queda poco), o null. */
+/** Devuelve la sesión con un token de acceso vigente (lo renueva si le queda poco), o null. Si el almacén falla: sin sesión. */
 export async function obtenerSesion(id) {
-  const s = id && sesiones.get(id);
-  if (!s) return null;
-  if (s.caduca - Date.now() > 30_000) return s;
-  if (!s.refresco || s.caducaRefresco < Date.now()) { sesiones.delete(id); return null; }
+  if (!id) return null;
   try {
-    guardar(id, await pedirTokens({ grant_type: "refresh_token", refresh_token: s.refresco }));
-    return sesiones.get(id);
+    let s = await leerSesion(id);
+    if (!s) return null;
+    if (s.caduca - Date.now() > 30_000) return s;
+    if (!s.refresco || s.caducaRefresco < Date.now()) { await borrarSesion(id); return null; }
+    if (!(await tomarTurno(id))) {                       // otra petición (u otra réplica) la está renovando: esperar y releer
+      await new Promise((r) => setTimeout(r, 400));
+      s = await leerSesion(id);
+      return s && s.caduca - Date.now() > 0 ? s : null;
+    }
+    try {
+      return await guardar(id, await pedirTokens({ grant_type: "refresh_token", refresh_token: s.refresco }));
+    } catch {
+      await borrarSesion(id);
+      return null;
+    } finally {
+      await soltarTurno(id);
+    }
   } catch {
-    sesiones.delete(id);
     return null;
   }
 }
