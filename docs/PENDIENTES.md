@@ -6,7 +6,7 @@
 | Etiquetas de modelos | Verificar en ollama.com/library las de `config/modelos.yaml` | `config/modelos.yaml` |
 | Jev / jeff | Jev funciona y ahora se anonimiza antes de salir (`docs/SEGURIDAD.md`). Falta: contrato de encargado de tratamiento y retención cero con TypeSafe, validar con vuestro asesor, ampliar `evaluacion/anonimizacion_*.yaml` con casos reales, ERPNext para la lista de entidades, y desplegar jeff (autoalojado) | `.env`, `herramientas/decision.py`, `anonimizacion.py` |
 | Grok | Verificar modelo y formato de búsqueda en docs.x.ai | `herramientas/grok.py` |
-| ERPNext | Instalación y tokens por departamento | `.env`, `herramientas/erpnext.py` |
+| ERPNext | Instalado (`erpnext/docker-compose.yml`) y conectado. Falta: completar el asistente inicial (empresa, plan contable), crear un usuario técnico por departamento con sus roles, cargar los datos reales (clientes, proveedores, empleados, artículos) y definir las copias de seguridad de su base de datos | `erpnext/`, `scripts/erpnext_usuario_tecnico.py`, `.env` |
 | Correo y calendario | Servidor IMAP/SMTP, URL CalDAV y cuentas técnicas por departamento | `config/integraciones.yaml`, `.env` |
 | Mayorista de telecom | Elegir mayorista e implementar sus 5 operaciones con su API | `herramientas/mayorista.py` |
 | Plataformas de contratación | URL de sindicación vigentes, prefijos CPV de interés y prueba con un fichero real | `config/integraciones.yaml`, `herramientas/contratacion.py` |
