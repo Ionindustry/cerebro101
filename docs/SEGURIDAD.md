@@ -52,15 +52,45 @@ Correspondencia orientativa con ISO/IEC 27001:2022 (confirmar con el auditor): 8
 Cómo se usa como evidencia: en Langfuse, filtrar por fecha, persona, sesión o por observaciones con error
 (`level = ERROR`); un rechazo de «operación que exige aprobación» demuestra que el control funciona.
 
-Configuración y límites:
+### Protección de las evidencias
 
-- `LANGFUSE_REGISTRAR_CONTENIDO=false` guarda solo metadatos (modelo, tokens, duración, agente) y sustituye los
-  textos por «[contenido no registrado]»; útil si los prompts pueden llevar datos personales que no deben
-  conservarse. Por defecto se guarda todo.
-- La retención se fija por proyecto en Langfuse (Ajustes → Retención de datos). Hay que alinearla con la política
-  de conservación de registros y con la normativa de protección de datos.
-- Langfuse no es un registro inalterable: quien tenga acceso de administración puede borrar trazas. Restringid
-  esos accesos, haced copia de seguridad de los volúmenes `langfuse-db`, `langfuse-clickhouse` y `langfuse-minio`,
-  y exportad periódicamente lo que deba conservarse.
-- Si Langfuse está parado, el Cerebro sigue funcionando pero sin trazas; conviene vigilar su disponibilidad como
-  parte de la monitorización (agente Tecnología).
+| Medida | Qué hace | Dónde |
+| --- | --- | --- |
+| `registro_acciones` de solo anexado | Cada acción aprobada que se ejecuta (también las que fallan) deja una fila; no se puede modificar, borrar ni vaciar | Disparadores en `db/esquema.sql`; escritura en `grafo/nodos.py` |
+| `aprobaciones` con historial | No se borran, no se pueden quitar decisiones y una aprobación ya resuelta no cambia de estado | `db/esquema.sql` |
+| Registro libre desactivado | Nadie se da de alta solo en Langfuse (`AUTH_DISABLE_SIGNUP`); los usuarios los crea un administrador | `docker-compose.yml` |
+| Roles en Langfuse | Auditores e inspectores: rol **Viewer** (solo lectura, no pueden borrar trazas). Administración, solo a quien deba gestionarlo | Langfuse → Ajustes → Miembros |
+| Exportación con huellas | `scripts/exportar_evidencias.py` genera un paquete por periodo con `manifiesto.json` y `SHA256SUMS`; `--verificar` demuestra que no ha cambiado | `scripts/` |
+| Copias de seguridad | `scripts/copia_seguridad.sh` copia las dos bases PostgreSQL y los volúmenes de Langfuse con sumas de control | `scripts/` |
+
+Paquete para una auditoría:
+
+```bash
+docker compose exec api python /app/scripts/exportar_evidencias.py --desde 2026-10-01 --hasta 2026-10-31 --salida /tmp/ev
+docker compose cp api:/tmp/ev ./evidencias/2026-10
+python scripts/exportar_evidencias.py --verificar evidencias/2026-10     # «Integridad correcta»
+```
+
+Guardad el `manifiesto.json` (o su huella) en un sitio distinto del servidor, por ejemplo un correo firmado o el
+gestor documental: así se puede demostrar después que los ficheros no se han tocado.
+
+### Límites y tareas que quedan a vuestro cargo
+
+- **Retención de Langfuse.** La retención configurable por proyecto es una función de la licencia Enterprise de
+  Langfuse; sin ella, las trazas se conservan indefinidamente. Si la política de conservación o la protección de
+  datos exigen borrar a partir de cierta fecha, hay que adquirir esa licencia o borrar periódicamente (tras
+  exportar el periodo). `LANGFUSE_REGISTRAR_CONTENIDO=false` reduce el riesgo si los textos pueden llevar datos
+  personales: guarda solo metadatos (modelo, tokens, duración, agente).
+- **Los disparadores no frenan al propietario de la base de datos.** La aplicación se conecta con el usuario
+  propietario de las tablas, que podría desactivarlos. Para blindarlo, conectad la aplicación con un rol sin
+  permiso para alterar tablas ni disparadores (solo SELECT, INSERT y, donde haga falta, UPDATE) y reservad el
+  usuario propietario a las migraciones. No está hecho.
+- **Langfuse no es inalterable.** Un administrador puede borrar trazas. Por eso se exporta cada periodo con
+  huellas y se guardan copias fuera del servidor.
+- **Copias.** Probad la restauración cada cierto tiempo (volcado: `zcat cerebro.sql.gz | psql`). La copia de
+  ClickHouse y MinIO solo es consistente con `--parar`. El volumen `ollama` (modelos) no se copia: se vuelve a
+  descargar.
+- Si el registro de una acción falla (base de datos caída), la acción ya se ha ejecutado: queda un error
+  `NO SE PUDO REGISTRAR…` en el log de la API. Conviene alertar sobre ese texto.
+- Si Langfuse está parado, el Cerebro sigue funcionando pero sin trazas; vigilad su disponibilidad
+  (agente Tecnología).

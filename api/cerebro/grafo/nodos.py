@@ -139,8 +139,19 @@ def esperar_aprobaciones(estado: Estado) -> Estado:
                          for a in estado["acciones"]]}
 
 
-async def ejecutar_acciones(estado: Estado) -> Estado:
+async def _dejar_constancia(hilo: str, ficha, a: dict, resultado: str) -> None:
+    """Escribe en registro_acciones. Si falla, se grita en el log pero no se pierde el resultado de la acción."""
+    try:
+        await bandeja.registrar_accion(hilo, ficha.id, a["herramienta"], a["operacion"],
+                                       a.get("solicitud_id"), resultado)
+    except Exception:  # noqa: BLE001
+        log.exception("NO SE PUDO REGISTRAR la acción ejecutada %s.%s (aprobación %s)",
+                      a["herramienta"], a["operacion"], a.get("solicitud_id"))
+
+
+async def ejecutar_acciones(estado: Estado, config) -> Estado:
     ficha = registro().fichas[estado["agente"]]
+    hilo = config["configurable"]["thread_id"]
     resultado = []
     for a in estado.get("acciones", []):
         if a.get("estado") != "aprobada":
@@ -153,6 +164,8 @@ async def ejecutar_acciones(estado: Estado) -> Estado:
             r = await H.usar(ficha, a["herramienta"], a["operacion"], sensibilidad=estado.get("sensibilidad"),
                              aprobada=True, **args)
             resultado.append({**a, "estado": "ejecutada", "resultado": r})
+            await _dejar_constancia(hilo, ficha, a, "OK: " + json.dumps(r, ensure_ascii=False, default=str))
         except Exception as e:
             resultado.append({**a, "estado": "error", "resultado": str(e)})
+            await _dejar_constancia(hilo, ficha, a, f"ERROR: {type(e).__name__}: {e}")
     return {"acciones": resultado}

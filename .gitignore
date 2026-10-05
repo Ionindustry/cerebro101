@@ -5,3 +5,5 @@ __pycache__/
 panel/node_modules/
 panel/.next/
 servicios/voz/voces/*.onnx*
+copias/
+evidencias/

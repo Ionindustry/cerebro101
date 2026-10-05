@@ -180,6 +180,7 @@ services:
       <<: *langfuse-env
       NEXTAUTH_URL: "${LANGFUSE_URL_PUBLICA:-http://localhost:3001}"
       NEXTAUTH_SECRET: "${LANGFUSE_NEXTAUTH_SECRET}"
+      AUTH_DISABLE_SIGNUP: "true"      # nadie se da de alta solo: los usuarios los crea un administrador (rol Viewer para auditores)
       # Alta automática de organización, proyecto, claves y usuario administrador (vacío = hacerlo a mano en la web)
       LANGFUSE_INIT_ORG_ID: "${LANGFUSE_INIT_ORG_ID:-101cat}"
       LANGFUSE_INIT_ORG_NAME: "${LANGFUSE_INIT_ORG_NAME:-101.cat}"

@@ -33,7 +33,7 @@ La guía completa está en [docs/INSTALACION.md](docs/INSTALACION.md).
 | `servicios/voz/` | Voz a texto (Whisper) y texto a voz (Piper), en local |
 | `servicios/agent-reach/` | Agent Reach aislado, solo lectura de contenido público |
 | `db/` | Esquema de PostgreSQL + pgvector |
-| `scripts/` | Arranque, descarga de modelos, carga de conocimiento y generador de fichas |
+| `scripts/` | Arranque, descarga de modelos, carga de conocimiento, generador de fichas, evaluación del enrutado, exportación de evidencias y copias de seguridad |
 | `docs/` | Arquitectura, fases de desarrollo, seguridad, índice de agentes y pendientes |
 
 ## Cómo se añade o cambia un agente

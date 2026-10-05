@@ -48,6 +48,40 @@ CREATE TABLE IF NOT EXISTS registro_acciones (
   creado       timestamptz NOT NULL DEFAULT now()
 );
 
+-- Protección de las evidencias (ISO 27001): el registro de acciones es de solo anexado y las aprobaciones
+-- no se borran ni pierden decisiones. Quien sea propietario o superusuario de la base de datos podría quitar
+-- estos disparadores: la aplicación debería conectarse con un rol sin ese permiso (ver docs/SEGURIDAD.md).
+CREATE OR REPLACE FUNCTION evidencia_solo_anexar() RETURNS trigger LANGUAGE plpgsql AS $f$
+BEGIN
+  RAISE EXCEPTION '% no permitido en %: es un registro de evidencias de solo anexado', TG_OP, TG_TABLE_NAME
+    USING ERRCODE = 'integrity_constraint_violation';
+END $f$;
+
+DROP TRIGGER IF EXISTS registro_acciones_solo_anexar ON registro_acciones;
+CREATE TRIGGER registro_acciones_solo_anexar BEFORE UPDATE OR DELETE ON registro_acciones
+  FOR EACH ROW EXECUTE FUNCTION evidencia_solo_anexar();
+DROP TRIGGER IF EXISTS registro_acciones_sin_vaciar ON registro_acciones;
+CREATE TRIGGER registro_acciones_sin_vaciar BEFORE TRUNCATE ON registro_acciones
+  FOR EACH STATEMENT EXECUTE FUNCTION evidencia_solo_anexar();
+
+CREATE OR REPLACE FUNCTION aprobaciones_conservar_historial() RETURNS trigger LANGUAGE plpgsql AS $f$
+BEGIN
+  IF TG_OP = 'DELETE' THEN
+    RAISE EXCEPTION 'Las aprobaciones no se borran' USING ERRCODE = 'integrity_constraint_violation';
+  END IF;
+  IF jsonb_array_length(NEW.decisiones) < jsonb_array_length(OLD.decisiones) THEN
+    RAISE EXCEPTION 'No se pueden quitar decisiones de una aprobación' USING ERRCODE = 'integrity_constraint_violation';
+  END IF;
+  IF (OLD.estado <> 'pendiente' AND NEW.estado <> OLD.estado) THEN
+    RAISE EXCEPTION 'Una aprobación ya resuelta no puede cambiar de estado' USING ERRCODE = 'integrity_constraint_violation';
+  END IF;
+  RETURN NEW;
+END $f$;
+
+DROP TRIGGER IF EXISTS aprobaciones_historial ON aprobaciones;
+CREATE TRIGGER aprobaciones_historial BEFORE UPDATE OR DELETE ON aprobaciones
+  FOR EACH ROW EXECUTE FUNCTION aprobaciones_conservar_historial();
+
 -- Red de instaladores
 CREATE TABLE IF NOT EXISTS instaladores (
   id              bigserial PRIMARY KEY,

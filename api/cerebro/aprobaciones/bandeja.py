@@ -56,3 +56,13 @@ async def estados_del_hilo(hilo: str) -> dict[str, str]:
     async with await psycopg.AsyncConnection.connect(ajustes.database_url) as conn:
         cur = await conn.execute("SELECT id, estado FROM aprobaciones WHERE hilo=%s", (hilo,))
         return {str(i): e for i, e in await cur.fetchall()}
+
+
+async def registrar_accion(hilo: str | None, agente: str, herramienta: str, operacion: str,
+                           aprobacion: str | None, resultado: str) -> None:
+    """Deja constancia de una acción ejecutada (evidencia ENS / ISO 27001). La tabla es de solo anexado."""
+    async with await psycopg.AsyncConnection.connect(ajustes.database_url) as conn:
+        await conn.execute(
+            """INSERT INTO registro_acciones (hilo, agente, herramienta, operacion, aprobacion, resultado)
+               VALUES (%s,%s,%s,%s,%s,%s)""",
+            (hilo, agente, herramienta, operacion, aprobacion, resultado[:4000]))
