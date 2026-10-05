@@ -15,7 +15,7 @@ from ..aprobaciones import bandeja
 from ..aprobaciones.logica import DecisionNoValida
 from ..cotizador import Solicitud, calcular
 from ..grafo import construir, nodos
-from ..observabilidad import callbacks
+from ..observabilidad import callbacks, metadatos
 from ..red_instaladores import Oferta, puntuar
 from ..registro import registro
 from .auth import Usuario, usuario_actual
@@ -69,7 +69,7 @@ async def salud():
 @app.post("/jarvis/mensaje")
 async def mensaje(m: Mensaje, usuario: Usuario = Depends(usuario_actual)):
     hilo = m.hilo or str(uuid.uuid4())
-    config = {"configurable": {"thread_id": hilo}, "callbacks": callbacks()}
+    config = {"configurable": {"thread_id": hilo}, "callbacks": callbacks(), "metadata": metadatos(hilo, usuario.id)}
     estado = await GRAFO["g"].ainvoke({"peticion": m.texto, "usuario": usuario.id, "origen": m.origen,
                                        "sensibilidad": m.sensibilidad}, config)
     return _salida(estado, hilo)
@@ -104,7 +104,7 @@ async def decidir(sid: str, d: Decision, usuario: Usuario = Depends(usuario_actu
     estados = await bandeja.estados_del_hilo(hilo)
     if any(e == "pendiente" for e in estados.values()):
         return {"estado": s.estado, "mensaje": "Decisión guardada; quedan otras acciones de esta petición por decidir"}
-    config = {"configurable": {"thread_id": hilo}, "callbacks": callbacks()}
+    config = {"configurable": {"thread_id": hilo}, "callbacks": callbacks(), "metadata": metadatos(hilo, usuario.id)}
     estado = await GRAFO["g"].ainvoke(Command(resume=estados), config)
     return {"estado": s.estado, **_salida(estado, hilo)}
 

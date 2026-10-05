@@ -10,6 +10,41 @@ x-api: &api
   networks: [cerebro]
   restart: unless-stopped
 
+x-langfuse-depende: &langfuse-depende
+  langfuse-db: {condition: service_healthy}
+  langfuse-clickhouse: {condition: service_healthy}
+  langfuse-minio: {condition: service_healthy}
+  langfuse-redis: {condition: service_healthy}
+
+x-langfuse-env: &langfuse-env
+  DATABASE_URL: "postgresql://langfuse:${LANGFUSE_DB_PASSWORD}@langfuse-db:5432/langfuse"
+  SALT: "${LANGFUSE_SALT}"
+  ENCRYPTION_KEY: "${LANGFUSE_ENCRYPTION_KEY}"          # 64 caracteres hexadecimales: openssl rand -hex 32
+  TELEMETRY_ENABLED: "false"
+  CLICKHOUSE_URL: http://langfuse-clickhouse:8123
+  CLICKHOUSE_MIGRATION_URL: clickhouse://langfuse-clickhouse:9000
+  CLICKHOUSE_USER: langfuse
+  CLICKHOUSE_PASSWORD: "${LANGFUSE_CLICKHOUSE_PASSWORD}"
+  CLICKHOUSE_CLUSTER_ENABLED: "false"
+  LANGFUSE_USE_AZURE_BLOB: "false"
+  LANGFUSE_S3_EVENT_UPLOAD_BUCKET: langfuse
+  LANGFUSE_S3_EVENT_UPLOAD_REGION: auto
+  LANGFUSE_S3_EVENT_UPLOAD_ACCESS_KEY_ID: minio
+  LANGFUSE_S3_EVENT_UPLOAD_SECRET_ACCESS_KEY: "${LANGFUSE_MINIO_PASSWORD}"
+  LANGFUSE_S3_EVENT_UPLOAD_ENDPOINT: http://langfuse-minio:9000
+  LANGFUSE_S3_EVENT_UPLOAD_FORCE_PATH_STYLE: "true"
+  LANGFUSE_S3_EVENT_UPLOAD_PREFIX: events/
+  LANGFUSE_S3_MEDIA_UPLOAD_BUCKET: langfuse
+  LANGFUSE_S3_MEDIA_UPLOAD_REGION: auto
+  LANGFUSE_S3_MEDIA_UPLOAD_ACCESS_KEY_ID: minio
+  LANGFUSE_S3_MEDIA_UPLOAD_SECRET_ACCESS_KEY: "${LANGFUSE_MINIO_PASSWORD}"
+  LANGFUSE_S3_MEDIA_UPLOAD_ENDPOINT: http://langfuse-minio:9000
+  LANGFUSE_S3_MEDIA_UPLOAD_FORCE_PATH_STYLE: "true"
+  LANGFUSE_S3_MEDIA_UPLOAD_PREFIX: media/
+  REDIS_HOST: langfuse-redis
+  REDIS_PORT: "6379"
+  REDIS_AUTH: "${LANGFUSE_REDIS_PASSWORD}"
+
 services:
   postgres:
     image: pgvector/pgvector:pg16
@@ -92,26 +127,76 @@ services:
     networks: [cerebro]
     restart: unless-stopped
 
+  # --- Langfuse v3 (registro de decisiones). Necesita PostgreSQL, ClickHouse, Redis y almacenamiento S3 (MinIO).
   langfuse-db:
     image: postgres:16-alpine
     environment: {POSTGRES_USER: langfuse, POSTGRES_PASSWORD: "${LANGFUSE_DB_PASSWORD}", POSTGRES_DB: langfuse}
     volumes: ["langfuse-db:/var/lib/postgresql/data"]
+    healthcheck: {test: ["CMD-SHELL", "pg_isready -U langfuse"], interval: 3s, timeout: 3s, retries: 10}
     networks: [cerebro]
     restart: unless-stopped
 
-  langfuse:               # versión 2: solo necesita PostgreSQL
-    image: langfuse/langfuse:2
+  langfuse-clickhouse:
+    image: clickhouse/clickhouse-server:24.12
+    user: "101:101"
+    environment: {CLICKHOUSE_DB: default, CLICKHOUSE_USER: langfuse, CLICKHOUSE_PASSWORD: "${LANGFUSE_CLICKHOUSE_PASSWORD}"}
+    volumes: ["langfuse-clickhouse:/var/lib/clickhouse", "langfuse-clickhouse-logs:/var/log/clickhouse-server"]
+    healthcheck:
+      test: ["CMD-SHELL", "clickhouse-client --user langfuse --password \"$$CLICKHOUSE_PASSWORD\" -q 'SELECT 1'"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    networks: [cerebro]
+    restart: unless-stopped
+
+  langfuse-minio:           # almacenamiento S3 de Langfuse. minio/minio ya no se publica en Docker Hub:
+    # imagen congelada de Bitnami (sin parches); en producción apuntad a vuestro S3/MinIO (LANGFUSE_MINIO_IMAGEN o S3_*)
+    image: "${LANGFUSE_MINIO_IMAGEN:-bitnamilegacy/minio:2025.5.24}"
+    environment: {MINIO_ROOT_USER: minio, MINIO_ROOT_PASSWORD: "${LANGFUSE_MINIO_PASSWORD}", MINIO_DEFAULT_BUCKETS: langfuse}
+    volumes: ["langfuse-minio:/bitnami/minio/data"]
+    healthcheck: {test: ["CMD-SHELL", "bash -c 'echo > /dev/tcp/127.0.0.1/9000'"], interval: 3s, timeout: 5s, retries: 20}
+    networks: [cerebro]
+    restart: unless-stopped
+
+  langfuse-redis:           # propio: Langfuse exige contraseña y política noeviction
+    image: redis:7
+    command: --requirepass ${LANGFUSE_REDIS_PASSWORD} --maxmemory-policy noeviction
+    environment: {LANGFUSE_REDIS_PASSWORD: "${LANGFUSE_REDIS_PASSWORD}"}
+    volumes: ["langfuse-redis:/data"]
+    healthcheck: {test: ["CMD-SHELL", "redis-cli -a \"$$LANGFUSE_REDIS_PASSWORD\" ping | grep -q PONG"], interval: 3s, timeout: 5s, retries: 10}
+    networks: [cerebro]
+    restart: unless-stopped
+
+  langfuse-worker:
+    image: langfuse/langfuse-worker:3
+    environment: *langfuse-env
+    depends_on: *langfuse-depende
+    networks: [cerebro]
+    restart: unless-stopped
+
+  langfuse:                 # web y API de ingesta
+    image: langfuse/langfuse:3
     environment:
-      DATABASE_URL: "postgresql://langfuse:${LANGFUSE_DB_PASSWORD}@langfuse-db:5432/langfuse"
-      NEXTAUTH_URL: http://localhost:3001
+      <<: *langfuse-env
+      NEXTAUTH_URL: "${LANGFUSE_URL_PUBLICA:-http://localhost:3001}"
       NEXTAUTH_SECRET: "${LANGFUSE_NEXTAUTH_SECRET}"
-      SALT: "${LANGFUSE_SALT}"
+      # Alta automática de organización, proyecto, claves y usuario administrador (vacío = hacerlo a mano en la web)
+      LANGFUSE_INIT_ORG_ID: "${LANGFUSE_INIT_ORG_ID:-101cat}"
+      LANGFUSE_INIT_ORG_NAME: "${LANGFUSE_INIT_ORG_NAME:-101.cat}"
+      LANGFUSE_INIT_PROJECT_ID: "${LANGFUSE_INIT_PROJECT_ID:-cerebro}"
+      LANGFUSE_INIT_PROJECT_NAME: "${LANGFUSE_INIT_PROJECT_NAME:-Cerebro}"
+      LANGFUSE_INIT_PROJECT_PUBLIC_KEY: "${LANGFUSE_PUBLIC_KEY:-}"
+      LANGFUSE_INIT_PROJECT_SECRET_KEY: "${LANGFUSE_SECRET_KEY:-}"
+      LANGFUSE_INIT_USER_EMAIL: "${LANGFUSE_INIT_USER_EMAIL:-}"
+      LANGFUSE_INIT_USER_NAME: "${LANGFUSE_INIT_USER_NAME:-Administración}"
+      LANGFUSE_INIT_USER_PASSWORD: "${LANGFUSE_INIT_USER_PASSWORD:-}"
     ports: ["127.0.0.1:3001:3000"]
-    depends_on: [langfuse-db]
+    depends_on: *langfuse-depende
     networks: [cerebro]
     restart: unless-stopped
 
-volumes: {pgdata: {}, ollama: {}, datos: {}, whisper: {}, agent-reach: {}, langfuse-db: {}}
+volumes: {pgdata: {}, ollama: {}, datos: {}, whisper: {}, agent-reach: {}, langfuse-db: {}, langfuse-clickhouse: {},
+  langfuse-clickhouse-logs: {}, langfuse-minio: {}, langfuse-redis: {}}
 
 networks:
   cerebro: {name: cerebro}

@@ -42,7 +42,7 @@ async def _ejecutar(agente_id: str) -> dict:
     from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
 
     from ..grafo import construir
-    from ..observabilidad import callbacks
+    from ..observabilidad import callbacks, metadatos
     ficha = registro().fichas[agente_id]
     async with AsyncPostgresSaver.from_conn_string(ajustes.database_url) as cp:
         g = construir(cp)
@@ -50,7 +50,8 @@ async def _ejecutar(agente_id: str) -> dict:
         return await g.ainvoke({"peticion": f"Tarea programada. Haz tu trabajo periódico: {ficha.tareas}. "
                                             "Resume lo encontrado y propone acciones si hacen falta.",
                                 "agente": agente_id, "origen": "programada"},
-                               {"configurable": {"thread_id": hilo}, "callbacks": callbacks()})
+                               {"configurable": {"thread_id": hilo}, "callbacks": callbacks(),
+                                "metadata": metadatos(hilo, f"agente:{agente_id}")})
 
 
 @app.task(name="cerebro.tareas.celery_app.ejecutar_programada")
