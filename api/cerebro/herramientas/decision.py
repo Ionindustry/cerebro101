@@ -48,7 +48,7 @@ async def _local(texto: str, tipo: str, opciones: list[str] | None, rubrica: str
 
 
 URL_JEV = "https://api.typesafe.ai"
-NIVELES_PUNTUACION = 11   # 0..10, igual que el modelo local
+NIVELES_PUNTUACION = 10   # Jev admite como máximo 10 niveles (0..9); se reescala a 0..10, como el modelo local
 
 
 def _pregunta(tipo: str, opciones: list[str] | None, rubrica: str | None) -> dict:
@@ -56,8 +56,9 @@ def _pregunta(tipo: str, opciones: list[str] | None, rubrica: str | None) -> dic
         return {"type": "choice", "instructions": "Elige la opción que mejor encaja con el estado.",
                 "criteria": {o: None for o in opciones or []}}
     if tipo == "puntuacion":
+        ultimo = NIVELES_PUNTUACION - 1
         return {"type": "score", "instructions": f"Puntúa según esta rúbrica: {rubrica}",
-                "criteria": [str(i) + (" (mínimo)" if i == 0 else " (máximo)" if i == 10 else "")
+                "criteria": [f"Nivel {i} de {ultimo}" + (" (mínimo)" if i == 0 else " (máximo)" if i == ultimo else "")
                              for i in range(NIVELES_PUNTUACION)]}
     return {"type": "noul", "instructions": "¿Es cierto lo que se pregunta o se afirma en el estado?"}
 
@@ -68,7 +69,7 @@ def _traducir(tipo: str, respuesta: dict) -> dict:
         return {"eleccion": respuesta["choice"], "confianza": respuesta["confidence"],
                 "motivo": f"Jev: probabilidades {respuesta['probabilities']}"}
     if tipo == "puntuacion":
-        return {"puntuacion": round(respuesta["score"], 2), "confianza": respuesta["confidence"],
+        return {"puntuacion": round(respuesta["score"] * 10 / (NIVELES_PUNTUACION - 1), 2), "confianza": respuesta["confidence"],
                 "motivo": f"Jev: probabilidades {respuesta['probabilities']}"}
     p = respuesta["noul"]
     return {"si": p >= 0.5, "confianza": round(max(p, 1 - p), 3), "motivo": f"Jev: probabilidad de sí {p}"}

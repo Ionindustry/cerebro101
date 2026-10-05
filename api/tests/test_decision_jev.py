@@ -35,11 +35,11 @@ class TestJev(unittest.TestCase):
         self.assertEqual(cuerpo["model"], "jev-latest")
         self.assertEqual(cuerpo["questions"]["q"]["criteria"], {"a": None, "b": None})
 
-    def test_puntuacion_usa_once_niveles(self):
-        r, (_, _, cuerpo) = llamar("puntuacion", {"type": "score", "score": 7.456, "confidence": 0.8,
+    def test_puntuacion_usa_diez_niveles_y_reescala_a_diez(self):
+        r, (_, _, cuerpo) = llamar("puntuacion", {"type": "score", "score": 4.5, "confidence": 0.8,
                                                   "probabilities": {}}, rubrica="urgencia")
-        self.assertEqual(r["puntuacion"], 7.46)
-        self.assertEqual(len(cuerpo["questions"]["q"]["criteria"]), 11)
+        self.assertEqual(r["puntuacion"], 5.0)               # 4,5 de 9 → 5,0 de 10
+        self.assertEqual(len(cuerpo["questions"]["q"]["criteria"]), 10)   # Jev admite como máximo 10
 
     def test_si_no(self):
         r, _ = llamar("si_no", {"type": "noul", "noul": 0.2}, clave="")
