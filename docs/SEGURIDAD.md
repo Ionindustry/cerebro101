@@ -74,6 +74,28 @@ python scripts/exportar_evidencias.py --verificar evidencias/2026-10     # «Int
 Guardad el `manifiesto.json` (o su huella) en un sitio distinto del servidor, por ejemplo un correo firmado o el
 gestor documental: así se puede demostrar después que los ficheros no se han tocado.
 
+### Roles de la base de datos
+
+| Rol | Quién lo usa | Puede |
+| --- | --- | --- |
+| `cerebro` (propietario, superusuario) | Solo el servicio de un solo uso `migraciones` y las copias de seguridad | Crear el esquema, las tablas del grafo, el rol y los permisos |
+| `cerebro_app` | API, worker y beat | Leer y escribir datos de trabajo. Sobre `registro_acciones`, solo leer y anexar. Sobre `aprobaciones`, no borrar |
+
+`cerebro_app` no es superusuario, no puede crear ni borrar tablas, ni quitar o desactivar disparadores, ni crear
+roles, ni vaciar (`TRUNCATE`) las tablas de evidencias. `docker compose up` ejecuta `migraciones` antes que la
+API en cada arranque (es idempotente: aplica el esquema, crea las tablas del grafo y concede los permisos,
+incluidas las tablas nuevas). La API no recibe `POSTGRES_PASSWORD`; su `DATABASE_URL` se construye con
+`CEREBRO_APP_PASSWORD`.
+
+Comprobación (sale con código 1 si algún permiso no es el esperado; no deja datos):
+
+```bash
+docker compose exec api python /app/scripts/comprobar_permisos.py
+```
+
+Límite: el contenedor de la API sigue recibiendo el resto de variables de `.env` (claves de Langfuse, de ERPNext,
+etc.). Para afinar más, sustituid `env_file` por una lista explícita de variables por servicio.
+
 ### Límites y tareas que quedan a vuestro cargo
 
 - **Retención de Langfuse.** La retención configurable por proyecto es una función de la licencia Enterprise de
@@ -81,10 +103,9 @@ gestor documental: así se puede demostrar después que los ficheros no se han t
   datos exigen borrar a partir de cierta fecha, hay que adquirir esa licencia o borrar periódicamente (tras
   exportar el periodo). `LANGFUSE_REGISTRAR_CONTENIDO=false` reduce el riesgo si los textos pueden llevar datos
   personales: guarda solo metadatos (modelo, tokens, duración, agente).
-- **Los disparadores no frenan al propietario de la base de datos.** La aplicación se conecta con el usuario
-  propietario de las tablas, que podría desactivarlos. Para blindarlo, conectad la aplicación con un rol sin
-  permiso para alterar tablas ni disparadores (solo SELECT, INSERT y, donde haga falta, UPDATE) y reservad el
-  usuario propietario a las migraciones. No está hecho.
+- **El propietario de la base de datos puede saltarse los disparadores** (`cerebro`, superusuario). Por eso la
+  aplicación no lo usa: ver «Roles de la base de datos». Quien tenga la contraseña de `POSTGRES_PASSWORD` sigue
+  pudiendo alterar las evidencias, así que guardadla fuera del servidor de aplicación y limitad quién la conoce.
 - **Langfuse no es inalterable.** Un administrador puede borrar trazas. Por eso se exporta cada periodo con
   huellas y se guardan copias fuera del servidor.
 - **Copias.** Probad la restauración cada cierto tiempo (volcado: `zcat cerebro.sql.gz | psql`). La copia de

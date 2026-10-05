@@ -8,6 +8,7 @@ RUN pip install --no-cache-dir ".[investigacion,observabilidad]"
 RUN playwright install --with-deps chromium || true
 COPY config /app/config
 COPY scripts /app/scripts
+COPY db /app/db
 COPY api/tests ./tests
 ENV CEREBRO_CONFIG=/app/config
 EXPOSE 8000

@@ -8,7 +8,8 @@
 
 ## Pasos
 
-1. `cp .env.example .env` y rellenar contraseñas. Elegir `PERFIL_HARDWARE` según la memoria de la tarjeta.
+1. `cp .env.example .env` y rellenar contraseñas (`POSTGRES_PASSWORD` es del propietario de la base de datos y
+   `CEREBRO_APP_PASSWORD` la del rol con el que trabaja la aplicación: usad dos distintas). Elegir `PERFIL_HARDWARE` según la memoria de la tarjeta.
 2. Descargar las voces de Piper en catalán y castellano en `servicios/voz/voces/`
    (https://huggingface.co/rhasspy/piper-voices).
 3. `./scripts/iniciar.sh`

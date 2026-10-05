@@ -1,10 +1,12 @@
 """API del Cerebro: la usan el panel, Jarvis (voz) y las tareas programadas."""
 from __future__ import annotations
 
+import logging
 import os
 import uuid
 from contextlib import asynccontextmanager
 
+import psycopg
 from fastapi import Depends, FastAPI, HTTPException
 from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
 from langgraph.types import Command
@@ -21,12 +23,17 @@ from ..registro import registro
 from .auth import Usuario, usuario_actual
 
 GRAFO = {}
+log = logging.getLogger("cerebro.api")
 
 
 @asynccontextmanager
 async def ciclo_de_vida(app: FastAPI):
     async with AsyncPostgresSaver.from_conn_string(ajustes.database_url) as checkpointer:
-        await checkpointer.setup()
+        try:
+            await checkpointer.setup()
+        except psycopg.errors.InsufficientPrivilege:
+            # Con el rol de la aplicación (sin permiso para crear tablas) las migraciones las hace el servicio «migraciones»
+            log.info("Sin permiso para crear tablas: se usan las que dejó el servicio «migraciones»")
         GRAFO["g"] = construir(checkpointer)
         yield
 

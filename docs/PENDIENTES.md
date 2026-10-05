@@ -15,4 +15,4 @@
 | OpenJarvis | Piloto como motor de la interfaz | Fase 1 |
 | Registro CNMC | Inscripción como operador antes de vender telecom | Cumplimiento Telecom |
 | Operaciones vinculadas | Precio de mercado y documentación de las compras a la distribuidora propia | asesor fiscal |
-| Evidencias ISO 27001 | Rol de base de datos sin permiso para quitar disparadores; decidir retención de trazas (licencia Enterprise de Langfuse o borrado periódico tras exportar); programar copias y exportaciones mensuales y probar la restauración | `docs/SEGURIDAD.md`, `scripts/` |
+| Evidencias ISO 27001 | Decidir retención de trazas (licencia Enterprise de Langfuse o borrado periódico tras exportar); limitar las variables de `.env` que recibe cada servicio; programar copias y exportaciones mensuales y probar la restauración | `docs/SEGURIDAD.md`, `scripts/` |

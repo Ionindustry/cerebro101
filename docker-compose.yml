@@ -5,8 +5,16 @@ name: cerebro-101
 x-api: &api
   build: {context: ., dockerfile: api/Dockerfile}
   env_file: .env
+  environment:
+    # La aplicación entra con el rol de mínimo privilegio (db/roles.sql), no como propietario de la base de datos.
+    DATABASE_URL: "postgresql://cerebro_app:${CEREBRO_APP_PASSWORD}@postgres:5432/cerebro"
+    POSTGRES_PASSWORD: ""      # la contraseña del propietario no debe estar en el entorno de la API (viene de .env)
   volumes: ["./config:/app/config:ro", "datos:/datos"]
-  depends_on: [postgres, redis, ollama]
+  depends_on:
+    postgres: {condition: service_started}
+    redis: {condition: service_started}
+    ollama: {condition: service_started}
+    migraciones: {condition: service_completed_successfully}
   networks: [cerebro]
   restart: unless-stopped
 
@@ -50,8 +58,20 @@ services:
     image: pgvector/pgvector:pg16
     environment: {POSTGRES_USER: cerebro, POSTGRES_PASSWORD: "${POSTGRES_PASSWORD}", POSTGRES_DB: cerebro}
     volumes: ["pgdata:/var/lib/postgresql/data", "./db/esquema.sql:/docker-entrypoint-initdb.d/01-esquema.sql:ro"]
+    healthcheck: {test: ["CMD-SHELL", "pg_isready -U cerebro -d cerebro"], interval: 3s, timeout: 3s, retries: 20}
     networks: [cerebro]
     restart: unless-stopped
+
+  migraciones:              # un solo uso en cada arranque: esquema, tablas del grafo, rol y permisos (único con la clave del propietario)
+    build: {context: ., dockerfile: api/Dockerfile}
+    command: python -m cerebro.migrar
+    environment:
+      DATABASE_URL_ADMIN: "postgresql://cerebro:${POSTGRES_PASSWORD}@postgres:5432/cerebro"
+      CEREBRO_APP_PASSWORD: "${CEREBRO_APP_PASSWORD}"
+    depends_on:
+      postgres: {condition: service_healthy}
+    networks: [cerebro]
+    restart: "no"
 
   redis:
     image: redis:7-alpine
