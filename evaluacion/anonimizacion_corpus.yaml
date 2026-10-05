@@ -1,0 +1,62 @@
+# Textos sintéticos (ningún dato es real) para medir la anonimización que precede a Jev en la nube.
+# Cada texto indica qué NO debe sobrevivir (`ocultar`), qué SÍ debe conservarse para que la decisión tenga sentido
+# (`conservar`) y si el texto entero debe quedar bloqueado (`bloquear`). `limite: true` marca un caso que se sabe
+# que el detector heurístico no cubre: se informa aparte y no cuenta para el umbral.
+# Capas: formato (datos con formato), erp (entidades conocidas), libre (nombres que no están en ningún sitio).
+entidades:
+  personas: [Marta Puig, Jordi Casals, Àngels Ferrer]
+  organizaciones: [Comunitat Vilanova SL, Hoteles Costa Brava SA, Instal·lacions Roca SL]
+
+casos:
+  # ---- datos con formato
+  - {id: F01, capa: formato, texto: "El cliente identificado con DNI 12345678Z pide el presupuesto de las cámaras.", ocultar: ["12345678Z"], conservar: [presupuesto, cámaras]}
+  - {id: F02, capa: formato, texto: "Su NIE es X1234567L y quiere contratar la fibra.", ocultar: ["X1234567L"], conservar: [fibra]}
+  - {id: F03, capa: formato, texto: "Factura a nombre de la sociedad con CIF A58818501, importe 1.250 euros.", ocultar: ["A58818501"], conservar: [Factura, "1.250 euros"]}
+  - {id: F04, capa: formato, texto: "Cobrad por transferencia a ES91 2100 0418 4502 0005 1332, concepto mantenimiento.", ocultar: ["ES91 2100 0418 4502 0005 1332"], conservar: [mantenimiento]}
+  - {id: F05, capa: formato, texto: "Pago con tarjeta 4539 1488 0343 6467 rechazado dos veces.", ocultar: ["4539 1488 0343 6467"], conservar: [rechazado]}
+  - {id: F06, capa: formato, texto: "Llamad al 612 345 678 o al +34 933 456 789 por la avería del grabador.", ocultar: ["612 345 678", "933 456 789"], conservar: [avería, grabador]}
+  - {id: F07, capa: formato, texto: "Escribe a laia.ferrer@exemple.cat para confirmar la visita.", ocultar: ["laia.ferrer@exemple.cat"], conservar: [visita]}
+  - {id: F08, capa: formato, texto: "La furgoneta 1234 BCD y la B-1234-XY están en la obra del polígono.", ocultar: ["1234 BCD", "B-1234-XY"], conservar: [obra, polígono]}
+  - {id: F09, capa: formato, texto: "Instalación en Carrer de Provença 245, 08008 Barcelona, tres cámaras exteriores.", ocultar: ["Provença 245", "08008"], conservar: [cámaras, exteriores]}
+  - {id: F10, capa: formato, texto: "El router 10.20.30.40 no responde y la web https://portal.exemple.cat/clients/77 tampoco.", ocultar: ["10.20.30.40", "portal.exemple.cat"], conservar: [router]}
+  - {id: F11, capa: formato, texto: "Nº de afiliación 08/12345678/90 del instalador contratado.", ocultar: ["08/12345678/90"], conservar: [instalador]}
+  - {id: F12, capa: formato, texto: "Persona nacida el 14/03/1985 solicita acceso al aparcamiento.", ocultar: ["14/03/1985"], conservar: [aparcamiento]}
+  - {id: F13, capa: formato, texto: "Avinguda Diagonal 600 y Passeig de Gràcia 12 tienen cobertura de fibra.", ocultar: ["Diagonal 600", "Gràcia 12"], conservar: [cobertura, fibra]}
+  - {id: F14, capa: formato, texto: "Datos: DNI 87654321X, tel 699 111 222, correo a.ruiz@exemple.es.", ocultar: ["87654321X", "699 111 222", "a.ruiz@exemple.es"], conservar: [Datos]}
+
+  # ---- entidades conocidas (clientes, proveedores y empleados del ERP)
+  - {id: E01, capa: erp, texto: "Marta Puig pide ampliar el contrato de mantenimiento.", ocultar: ["Marta Puig"], conservar: [ampliar, mantenimiento]}
+  - {id: E02, capa: erp, texto: "Ha llamado la Comunitat Vilanova SL por la puerta del parking.", ocultar: ["Vilanova"], conservar: [puerta, parking]}
+  - {id: E03, capa: erp, texto: "HOTELES COSTA BRAVA SA renueva el servicio de CCTV.", ocultar: ["COSTA BRAVA"], conservar: [CCTV, renueva]}
+  - {id: E04, capa: erp, texto: "Avisa a Jordi Casals; Casals sabe dónde está el armario.", ocultar: ["Jordi", "Casals"], conservar: [armario]}
+  - {id: E05, capa: erp, texto: "L'Àngels Ferrer vol canviar la cambra del vestíbul.", ocultar: ["Àngels", "Ferrer"], conservar: [cambra, vestíbul]}
+  - {id: E06, capa: erp, texto: "instal·lacions roca sl entrega el material el lunes.", ocultar: ["roca"], conservar: [material, lunes]}
+  - {id: E07, capa: erp, texto: "Marta Puig, de Comunitat Vilanova SL, dice que Hoteles Costa Brava SA le recomendó el servicio.", ocultar: ["Marta Puig", "Vilanova", "Costa Brava"], conservar: [servicio]}
+  - {id: E08, capa: erp, texto: "marta puig escribió desde su casa pidiendo cobertura.", ocultar: ["marta puig"], conservar: [cobertura]}
+
+  # ---- nombres libres (no están en ERPNext)
+  - {id: L01, capa: libre, texto: "El Sr. Ferran Roca pregunta cuándo vienen a instalar la alarma.", ocultar: ["Ferran Roca"], conservar: [alarma]}
+  - {id: L02, capa: libre, texto: "Hola, em dic Laia Serra i tinc una incidència amb la fibra.", ocultar: ["Laia Serra"], conservar: [incidència, fibra]}
+  - {id: L03, capa: libre, texto: "La Sra. Carme Vidal Pons solicita un presupuesto para domótica.", ocultar: ["Carme Vidal"], conservar: [presupuesto, domótica]}
+  - {id: L04, capa: libre, texto: "Soy Pau Costa Mir, administrador de la finca, y necesito control de accesos.", ocultar: ["Pau Costa"], conservar: [administrador, accesos]}
+  - {id: L05, capa: libre, texto: "Contacto en la obra: Enric Bosch Vila. Llegará a las ocho.", ocultar: ["Enric Bosch"], conservar: [obra, ocho]}
+  - {id: L06, capa: libre, texto: "Dña. Rosa Mª Pons quiere cancelar la línea de telefonía.", ocultar: ["Pons"], conservar: [cancelar, telefonía]}
+  - {id: L07, capa: libre, texto: "El senyor Oriol Prat va quedar d'avisar quan el quadre estigui llest.", ocultar: ["Oriol Prat"], conservar: [quadre]}
+  - {id: L08, capa: libre, texto: "Según Vicenç Grau Soler, la cámara del garaje no graba de noche.", ocultar: ["Vicenç Grau"], conservar: [cámara, garaje]}
+  - {id: L09, capa: libre, limite: true, texto: "Ayer habló con josep y le dijo que la fibra va lenta.", ocultar: ["josep"], conservar: [fibra]}
+  - {id: L10, capa: libre, texto: "Lo vio el Sr. Aranda en la visita de ayer.", ocultar: ["Aranda"], conservar: [visita]}
+  - {id: L11, capa: libre, texto: "Pregunta por J. Martínez de contabilidad.", ocultar: ["Martínez"], conservar: [contabilidad]}
+
+  # ---- categorías especiales y textos que no deben salir de ninguna forma
+  - {id: B01, capa: bloqueo, texto: "El técnico lleva tres semanas de baja médica por una operación.", bloquear: true}
+  - {id: B02, capa: bloqueo, texto: "L'empleat té un diagnòstic i necessita adaptar el lloc de treball.", bloquear: true}
+  - {id: B03, capa: bloqueo, texto: "Este candidato tiene antecedentes penales por un delito anterior.", bloquear: true}
+  - {id: B04, capa: bloqueo, texto: "Pregunta si puede afiliarse a un sindicato sin que lo sepa la empresa (afiliación sindical).", bloquear: true}
+  - {id: B05, capa: bloqueo, texto: "El cliente es un menor de edad y su tutor firma el contrato.", bloquear: true}
+
+  # ---- sin datos personales: deben salir intactos
+  - {id: U01, capa: utilidad, texto: "El grabador de las cámaras lleva tres días sin grabar y nadie ha revisado el disco.", conservar: ["El grabador de las cámaras lleva tres días sin grabar y nadie ha revisado el disco."]}
+  - {id: U02, capa: utilidad, texto: "Necesitamos 45 cámaras IP, 300 metros de cable y un switch PoE de 24 puertos por 12000 euros.", conservar: ["Necesitamos 45 cámaras IP, 300 metros de cable y un switch PoE de 24 puertos por 12000 euros."]}
+  - {id: U03, capa: utilidad, texto: "Control de Accesos y Contra Incendios para el parking de 101.cat, plazo de ocho semanas.", conservar: ["Control de Accesos y Contra Incendios para el parking de 101.cat, plazo de ocho semanas."]}
+  - {id: U04, capa: utilidad, texto: "La fibra del polígono cae cada tarde; el mayorista dice que revisará la central.", conservar: ["La fibra del polígono cae cada tarde; el mayorista dice que revisará la central."]}
+  - {id: U05, capa: utilidad, texto: "Quin és el termini per instal·lar la domòtica a una casa de 120 metres quadrats?", conservar: ["Quin és el termini per instal·lar la domòtica a una casa de 120 metres quadrats?"]}

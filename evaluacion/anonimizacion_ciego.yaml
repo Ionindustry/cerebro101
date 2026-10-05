@@ -1,0 +1,33 @@
+# Conjunto «a ciegas»: escrito después de ajustar el detector y sin ajustarlo contra estos textos. Más sucio y variado que
+# el corpus principal. Sirve para saber cuánto se generaliza. Mismo formato que anonimizacion_corpus.yaml.
+entidades:
+  personas: [Marta Puig]
+  organizaciones: [Comunitat Vilanova SL, Hoteles Costa Brava SA]
+
+casos:
+  - {id: C01, capa: formato, texto: "Mi DNI es 12345678-Z, lo necesitáis para el contrato de fibra.", ocultar: ["12345678-Z"], conservar: [contrato, fibra]}
+  - {id: C02, capa: formato, texto: "iban es91 2100 0418 4502 0005 1332 (minúsculas) para domiciliar el recibo", ocultar: ["2100 0418 4502 0005 1332"], conservar: [recibo]}
+  - {id: C03, capa: formato, texto: "Tel. (+34) 93 123 45 67 / móvil 6.12.34.56.78 si no contestan", ocultar: ["93 123 45 67", "6.12.34.56.78"], conservar: [contestan]}
+  - {id: C04, capa: formato, texto: "Nif de la empresa: B-12345674. Factura nº 2026/0143 por 980 €.", ocultar: ["B-12345674"], conservar: ["980 €", Factura]}
+  - {id: C05, capa: formato, texto: "Escrito a JOAN.PUIG@EXEMPLE.CAT dos veces sin respuesta sobre la alarma", ocultar: ["JOAN.PUIG@EXEMPLE.CAT"], conservar: [alarma]}
+  - {id: C06, capa: formato, texto: "Obra en C/Gran Via de les Corts Catalanes, 612, 3r 2a, para instalar un videoportero.", ocultar: ["Gran Via", "612"], conservar: [videoportero]}
+  - {id: C07, capa: formato, texto: "Av. Meridiana, 45 y Pol. Ind. Can Bernades nave 4 piden presupuesto de CCTV", ocultar: ["Meridiana", "Bernades"], conservar: [CCTV]}
+  - {id: C08, capa: formato, texto: "Nascut el 3 de març de 1990, demana la targeta d'accés del garatge", ocultar: ["3 de març de 1990"], conservar: [garatge]}
+  - {id: C09, capa: formato, texto: "El portal portal.exemple.cat/clientes/accesos no carga desde la oficina", ocultar: ["portal.exemple.cat"], conservar: [oficina]}
+  - {id: C10, capa: formato, texto: "Código postal 43001 Tarragona, instalación de 12 detectores", ocultar: ["43001"], conservar: [detectores]}
+  - {id: N01, capa: libre, texto: "La reunió la porta Ramon Casas i Vila amb en Salvador Dalmau.", ocultar: ["Ramon Casas", "Salvador Dalmau"], conservar: [reunió]}
+  - {id: N02, capa: libre, texto: "Mª Carmen López Ruiz dice que el videoportero hace ruido", ocultar: ["López Ruiz", "Carmen"], conservar: [videoportero]}
+  - {id: N03, capa: libre, texto: "Atiende JOAN MARTÍ SOLER, jefe de obra, de lunes a viernes", ocultar: ["MARTÍ", "SOLER"], conservar: ["jefe de obra"]}
+  - {id: N04, capa: libre, texto: "John Smith from the hotel asked for a quote on the cameras", ocultar: ["John Smith"], conservar: [quote, cameras]}
+  - {id: N05, capa: libre, texto: "Mohamed El Amrani necesita permiso de acceso al almacén", ocultar: ["Mohamed", "Amrani"], conservar: [almacén]}
+  - {id: N06, capa: libre, texto: "Su vecina Maria-Rosa Ferrer escuchó la alarma toda la noche", ocultar: ["Maria-Rosa", "Ferrer"], conservar: [alarma]}
+  - {id: N07, capa: libre, texto: "Cordialmente,\nElena Navarro\nResponsable de compras\nElectrosur", ocultar: ["Elena Navarro"], conservar: ["Responsable de compras"]}
+  - {id: N08, capa: libre, texto: "gracias, saludos de laura gómez desde el almacén", ocultar: ["laura gómez"], conservar: [almacén]}
+  - {id: N09, capa: libre, texto: "Ing. Salvador Dalmau revisa los planos del cuadro eléctrico", ocultar: ["Dalmau"], conservar: [planos]}
+  - {id: M01, capa: erp, texto: "Segons la Marta (Puig) la comunitat Vilanova vol dos lectors més.", ocultar: ["Marta", "Puig", "Vilanova"], conservar: [lectors]}
+  - {id: M02, capa: erp, texto: "Costa Brava Hoteles SA pregunta por el mantenimiento", ocultar: ["Costa Brava"], conservar: [mantenimiento]}
+  - {id: Z01, capa: bloqueo, texto: "El instalador está en tratamiento médico y no puede subir a la torre.", bloquear: true}
+  - {id: Z02, capa: bloqueo, texto: "Este empleado es ateo y no quiere participar en la comida de empresa (religión).", bloquear: true}
+  - {id: Z03, capa: bloqueo, texto: "El comercial pidió la baja por depresión, hay que cubrir su cartera.", bloquear: true}
+  - {id: U01, capa: utilidad, texto: "Ocho cámaras exteriores, dos grabadores y 120 metros de canalización por 7.800 euros.", conservar: ["Ocho cámaras exteriores, dos grabadores y 120 metros de canalización por 7.800 euros."]}
+  - {id: U02, capa: utilidad, texto: "Cap de setmana sense servei de fibra a la zona alta; l'operador no dona terminis.", conservar: ["Cap de setmana sense servei de fibra a la zona alta; l'operador no dona terminis."]}

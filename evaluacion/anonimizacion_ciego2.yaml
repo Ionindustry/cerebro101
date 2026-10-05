@@ -1,0 +1,35 @@
+# Segundo conjunto «a ciegas»: escrito DESPUÉS de ajustar contra los dos anteriores y ejecutado una sola vez antes de
+# tocar el detector. Su primera medición está en evaluacion/README.md.
+entidades:
+  personas: [Marta Puig]
+  organizaciones: [Comunitat Vilanova SL]
+
+casos:
+  - {id: D01, capa: formato, texto: "DNI 12.345.678-Z y teléfono 934567890 de la propietaria del local.", ocultar: ["12.345.678-Z", "934567890"], conservar: [propietaria, local]}
+  - {id: D02, capa: formato, texto: "Transferir a ES7620770024003102575766 antes del viernes por el mantenimiento.", ocultar: ["ES7620770024003102575766"], conservar: [mantenimiento]}
+  - {id: D03, capa: formato, texto: "Tarjeta 4539148803436467 caducada, pide cambiar el método de pago.", ocultar: ["4539148803436467"], conservar: ["método de pago"]}
+  - {id: D04, capa: formato, texto: "Contacto: <rosa.mir@exemple.cat> o WhatsApp 667 89 01 23 de 9 a 14 h.", ocultar: ["rosa.mir@exemple.cat", "667 89 01 23"], conservar: ["de 9 a 14 h"]}
+  - {id: D05, capa: formato, texto: "Instalar un lector en Rambla Catalunya 33 y otro en Plaça Major, s/n.", ocultar: ["Rambla Catalunya", "Plaça Major"], conservar: [lector]}
+  - {id: D06, capa: formato, texto: "La nave está en la Ctra. de Vic km 12, junto a la rotonda.", ocultar: ["Ctra. de Vic"], conservar: [rotonda]}
+  - {id: D07, capa: formato, texto: "Matrícula del camión 5678-FGH y remolque R-4321-BDF en la entrada.", ocultar: ["5678-FGH", "R-4321-BDF"], conservar: [entrada]}
+  - {id: D08, capa: formato, texto: "Perfil @marta_puig_bcn sigue nuestra página; el cliente lo menciona en el chat.", ocultar: ["@marta_puig_bcn"], conservar: [chat]}
+  - {id: D09, capa: formato, texto: "DOB 1990-03-03, solicita acceso a la zona restringida.", ocultar: ["1990-03-03"], conservar: [restringida]}
+  - {id: D10, capa: formato, texto: "Travessera de Gràcia 100 àtic: avería del videoportero desde el lunes.", ocultar: ["Travessera de Gràcia"], conservar: [videoportero]}
+  - {id: P01, capa: libre, texto: "Núria Vila-Abadal confirma que la zanja estará lista el martes.", ocultar: ["Vila-Abadal", "Núria"], conservar: [zanja]}
+  - {id: P02, capa: libre, texto: "Bernat d'Alòs va trucar per saber el preu del control d'accés.", ocultar: ["Alòs", "Bernat"], conservar: [preu]}
+  - {id: P03, capa: libre, texto: "Ayer vino el Dr. García a revisar el sistema de detección de incendios.", ocultar: ["García"], conservar: [sistema]}
+  - {id: P04, capa: libre, texto: "El Sr. De la Torre autoriza el cambio de proveedor de fibra.", ocultar: ["De la Torre"], conservar: [fibra]}
+  - {id: P05, capa: libre, texto: "Ref: Lluís-Maria Pujol (administrador). Pide factura detallada de la domótica.", ocultar: ["Lluís-Maria", "Pujol"], conservar: [factura, domótica]}
+  - {id: P06, capa: libre, texto: "Hola buenas, soy Ainhoa y llamo por la alarma que suena sola.", ocultar: ["Ainhoa"], conservar: [alarma]}
+  - {id: P07, capa: libre, texto: "Reenviado por Victor Hugo Salas: el cliente quiere cancelar la línea.", ocultar: ["Victor Hugo Salas"], conservar: [cancelar]}
+  - {id: P08, capa: libre, texto: "Atentamente,\nClàudia Roig\nCoordinadora\n93 000 11 22", ocultar: ["Clàudia Roig", "93 000 11 22"], conservar: [Coordinadora]}
+  - {id: P09, capa: libre, limite: true, texto: "el cliente se llama pepe y vive cerca de la plaza", ocultar: ["pepe"], conservar: [cliente]}
+  - {id: Q01, capa: erp, texto: "Marta Puig ha dejado un mensaje: que la llamen mañana.", ocultar: ["Marta Puig"], conservar: ["mensaje"]}
+  - {id: Q02, capa: erp, texto: "Vilanova (comunitat) quiere cambiar el cierre de la puerta.", ocultar: ["Vilanova"], conservar: ["cierre de la puerta"]}
+  - {id: S01, capa: bloqueo, texto: "La encargada está embarazada y no puede subir a la escalera.", bloquear: true}
+  - {id: S02, capa: bloqueo, texto: "Tiene diabetes y necesita adaptar el turno.", bloquear: true}
+  - {id: S03, capa: bloqueo, texto: "El instalador es homosexual y pide no compartir habitación en el viaje.", bloquear: true}
+  - {id: S04, capa: bloqueo, texto: "Es musulmán y no puede trabajar los viernes por la tarde.", bloquear: true}
+  - {id: S05, capa: bloqueo, texto: "Lleva un año de quimioterapia y reduce su jornada.", bloquear: true}
+  - {id: V01, capa: utilidad, texto: "Hay 12 puertas con lector y 3 barreras; el cliente quiere integrarlo con el aparcamiento.", conservar: ["Hay 12 puertas con lector y 3 barreras; el cliente quiere integrarlo con el aparcamiento."]}
+  - {id: V02, capa: utilidad, texto: "Revisar el contrato de mantenimiento: renovación anual, IPC más 2 %, penalización por retraso.", conservar: ["Revisar el contrato de mantenimiento: renovación anual, IPC más 2 %, penalización por retraso."]}

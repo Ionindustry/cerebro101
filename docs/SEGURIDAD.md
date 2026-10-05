@@ -22,6 +22,47 @@ Cualquier acción con impacto externo pasa por la bandeja aunque la ficha del ag
 
 Personas (RRHH) no usa ningún servicio externo.
 
+## Anonimización antes de enviar a Jev (nube)
+
+Nada sale hacia Jev sin pasar por `cerebro/anonimizacion.py`. Jev solo devuelve una elección, una puntuación o un
+sí/no (nunca texto libre), así que no hace falta deshacer la sustitución y la tabla de equivalencias no se conserva.
+
+| Capa | Qué hace | Fiabilidad medida |
+| --- | --- | --- |
+| 1. Entidades conocidas | Clientes, proveedores y empleados de ERPNext (más `config/anonimizacion.yaml`), sin tildes ni mayúsculas, con el nombre y los apellidos sueltos y sin la forma jurídica (SL, SA) | Alta, si la lista está al día |
+| 2. Datos con formato | DNI/NIE, CIF, IBAN, tarjeta (Luhn), Seguridad Social, correo, teléfono, matrícula, código postal, IP, URL y dominios, direcciones, fecha de nacimiento | Alta |
+| 3. Nombres libres | Tratamientos (Sr., Dña.), presentaciones («me llamo…»), iniciales, secuencias de mayúsculas. Opcional: spaCy (`ANONIMIZACION_NER=spacy`) | Media: falla con nombres en minúsculas y sin ninguna pista |
+| 4. Verificación | Se vuelve a analizar el resultado; si queda algo reconocible, no se envía | — |
+
+Cada dato se sustituye por una etiqueta coherente dentro del texto: `[PERSONA_1]`, `[IBAN_1]`, `[DIRECCION_1]`…
+
+**Se bloquea (no sale nada y decide el modelo local)** cuando: falta la lista del ERP estando ERPNext configurado,
+el texto supera `max_caracteres`, aparece una categoría especial del RGPD (salud, ideología y creencias, datos
+penales, menores; palabras y prefijos en `config/anonimizacion.yaml`), quedan datos reconocibles tras sustituir, o
+las opciones llevan datos personales. El resultado de la herramienta indica `via`: `jev (anonimizado)` o
+`local (no apto para la nube)`.
+
+**Auditoría.** En Langfuse queda el texto ya anonimizado que se envió, con su huella SHA-256, el número de
+sustituciones por tipo y los motivos de cada bloqueo (observaciones `jev.decidir` y `jev.decidir:bloqueado`).
+Nunca se guarda el texto original ni los datos sustituidos.
+
+**Medición.** `python scripts/evaluar_anonimizacion.py --corpus evaluacion/<conjunto>.yaml` mide la cobertura con
+textos sintéticos en castellano y catalán. Los resultados, incluida la **primera medición honesta** de cada
+conjunto antes de ajustar el detector, están en `evaluacion/README.md`. La cobertura sobre textos nuevos fue
+claramente inferior a la del conjunto con el que se desarrolló el detector: medid siempre con textos que no hayáis
+usado para ajustarlo, y ampliad los conjuntos con casos reales (sin datos reales en el repositorio).
+
+**Límites.**
+- Seudonimizar no es anonimizar. El contexto puede identificar a alguien aunque se quite el nombre. Esto reduce el
+  riesgo; no sustituye al contrato de encargado de tratamiento con TypeSafe, a la retención cero confirmada por
+  escrito ni a la evaluación de vuestro asesor de protección de datos.
+- No detecta nombres en minúsculas sin ninguna pista («habló con pepe»), ni referencias indirectas («el alcalde de
+  un pueblo de 300 habitantes»). Las categorías especiales se detectan por palabras: una redacción distinta puede
+  escaparse. Para más cobertura, activad spaCy o pasad una segunda lectura con el modelo local.
+- La lista de entidades depende de ERPNext: sin ERPNext solo se usan las de `config/anonimizacion.yaml`.
+- Los datos de Personas (RRHH) y todo lo de sensibilidad alta no deben ir nunca a Jev: la política ya los desvía a
+  Jeff o al modelo local, y la anonimización es una segunda barrera.
+
 ## Integraciones
 
 Correo, calendario y contratación pública se conectan directamente desde el Cerebro, sin plataformas

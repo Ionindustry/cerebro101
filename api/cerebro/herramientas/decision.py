@@ -12,11 +12,17 @@ Si la llamada falla (sin clave, red caída, límite de uso), se usa el modelo `l
 """
 from __future__ import annotations
 
+import json
 import logging
+import os
+from functools import lru_cache
 
 import httpx
 
+from .. import anonimizacion as anon
 from ..ajustes import ajustes
+from ..entidades import cargar_entidades
+from ..observabilidad import anotar, generacion
 from ..llm import chat
 from ..registro import registro
 from ..router_modelos import asignar
@@ -87,6 +93,35 @@ async def _llamar_api(base_url: str, clave: str, texto: str, tipo: str, opciones
     return _traducir(tipo, r.json()["answers"]["q"])
 
 
+@lru_cache(maxsize=1)
+def _detector():
+    """ANONIMIZACION_NER=spacy usa spaCy (si está instalado con su modelo); por defecto, el detector heurístico."""
+    cfg = anon.configuracion(str(ajustes.dir_config))
+    if os.environ.get("ANONIMIZACION_NER", "heuristico").lower() == "spacy":
+        d = anon.detector_spacy(os.environ.get("ANONIMIZACION_MODELO_SPACY", "es_core_news_md"))
+        if d:
+            return d
+        log.warning("ANONIMIZACION_NER=spacy pero spaCy o su modelo no están instalados: se usa el heurístico")
+    return anon.detector_heuristico(cfg.get("no_son_nombres", []))
+
+
+async def preparar_para_la_nube(texto: str, opciones, rubrica) -> tuple[anon.Resultado, str | None, list[str]]:
+    """Anonimiza lo que va a salir. Devuelve (resultado del texto, rúbrica anonimizada, motivos de bloqueo)."""
+    cfg = anon.configuracion(str(ajustes.dir_config))
+    ent = await cargar_entidades(cfg)
+    res = anon.anonimizar(texto, ent, _detector(), cfg)
+    motivos = list(res.motivos)
+    rub = None
+    if rubrica:
+        r2 = anon.anonimizar(rubrica, ent, _detector(), cfg)
+        rub, motivos = r2.texto, motivos + r2.motivos
+    for o in opciones or []:       # las opciones las fija el código, pero no pueden llevar datos personales
+        if anon.detectar_con_formato(o) or anon.detectar_entidades(o, ent):
+            motivos.append("las opciones contienen datos personales")
+            break
+    return res, rub, motivos
+
+
 def _crear(proveedor: str):
     async def decidir(texto: str, tipo: str = "si_no", opciones: list[str] | None = None,
                       rubrica: str | None = None) -> dict:
@@ -97,8 +132,27 @@ def _crear(proveedor: str):
         if proveedor == "jev" and not clave:
             log.warning("Falta JEV_API_KEY: se usa el modelo local")
             return await _local(texto, tipo, opciones, rubrica)
+        if proveedor == "jev":
+            # Nada sale a la nube sin anonimizar; si no se puede garantizar, decide el modelo local
+            res, rub, motivos = await preparar_para_la_nube(texto, opciones, rubrica)
+            if motivos:
+                log.info("Jev no recibe esta petición (%s): se usa el modelo local", "; ".join(motivos))
+                with generacion("jev.decidir:bloqueado", None, "[no enviado]", tipo="tool",
+                                **{**res.resumen(), "apto": False, "motivos": motivos}):
+                    pass
+                r = await _local(texto, tipo, opciones, rubrica)
+                return {**r, "via": "local (no apto para la nube)"}
+            texto, rubrica = res.texto, rub
+            extra = {"via": "jev (anonimizado)"}
+            audit = res.resumen()
+        else:
+            extra, audit = {}, {}
         try:
-            return await _llamar_api(url, clave, texto, tipo, opciones, rubrica)
+            with generacion("jev.decidir" if proveedor == "jev" else "jeff.decidir", "jev-latest", texto,
+                            tipo="generation", tipo_decision=tipo, **audit) as obs:
+                r = await _llamar_api(url, clave, texto, tipo, opciones, rubrica)
+                anotar(obs, output=json.dumps(r, ensure_ascii=False))
+                return {**r, **extra}
         except (httpx.HTTPError, KeyError, ValueError) as e:
             log.warning("%s no disponible (%s): se usa el modelo local", proveedor, e)
             return await _local(texto, tipo, opciones, rubrica)
