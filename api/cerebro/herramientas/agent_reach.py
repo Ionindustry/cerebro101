@@ -29,7 +29,8 @@ async def transcripcion_youtube(url: str) -> dict:
 
 registrar(Herramienta(
     nombre="agent_reach",
-    descripcion="Lectura de contenido público de YouTube (transcripciones). "
-                "Operaciones: estado(), transcripcion_youtube(url).",
+    descripcion="Lectura de contenido público de YouTube (transcripciones).",
     operaciones={"estado": estado, "transcripcion_youtube": transcripcion_youtube},
+    ayuda={"estado": "comprueba que el servicio funciona", "transcripcion_youtube": "transcripción de un vídeo público"},
+    ejemplos={"transcripcion_youtube": {"url": "https://www.youtube.com/watch?v=XXXXXXXXXXX"}},
 ))

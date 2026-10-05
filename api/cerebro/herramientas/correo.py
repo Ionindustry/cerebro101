@@ -124,9 +124,11 @@ async def enviar(departamento: str, para: list[str] | str, asunto: str, cuerpo: 
 
 registrar(Herramienta(
     nombre="correo",
-    descripcion="Correo de la empresa (servidor propio). Operaciones: leer_bandeja(carpeta, no_leidos, limite), "
-                "preparar_borrador(para, asunto, cuerpo, comercial), enviar(para, asunto, cuerpo, comercial) — "
-                "enviar requiere aprobación. Marca comercial=true en cualquier mensaje promocional.",
+    descripcion="Correo de la empresa (servidor propio). Marca comercial=true en cualquier mensaje promocional.",
     operaciones={"leer_bandeja": leer_bandeja, "preparar_borrador": preparar_borrador, "enviar": enviar},
     externas=frozenset({"enviar"}),
+    ayuda={"leer_bandeja": "lee los correos (solo lectura; no los marca como leídos)",
+           "preparar_borrador": "guarda un borrador en la carpeta de borradores; no envía nada",
+           "enviar": "envía el correo"},
+    ejemplos={"leer_bandeja": {"no_leidos": True, "limite": 10}},
 ))

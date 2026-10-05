@@ -63,6 +63,17 @@ usado para ajustarlo, y ampliad los conjuntos con casos reales (sin datos reales
 - Los datos de Personas (RRHH) y todo lo de sensibilidad alta no deben ir nunca a Jev: la política ya los desvía a
   Jeff o al modelo local, y la anonimización es una segunda barrera.
 
+## Lo que decide el sistema y no el modelo
+
+El modelo de cada agente propone la herramienta y sus argumentos, pero hay dos valores que nunca puede fijar él:
+- **El departamento** con el que se usan ERPNext, correo, calendario y conocimiento: sale de la ficha del agente. Antes se
+  usaba `setdefault`, así que un modelo que pasase `departamento="finanzas"` habría usado el token de Finanzas.
+- **La sensibilidad** de los documentos que lee `conocimiento.buscar`: es la de la petición o, si no consta, la de la ficha.
+  Antes el modelo podía pedir «alta» y ver documentos más sensibles de los que le corresponden.
+
+Además, cada llamada se valida contra el esquema de la herramienta antes de ejecutarla, y una acción mal formada propuesta
+para aprobación se rechaza sin molestar a la persona que aprueba.
+
 ## Integraciones
 
 Correo, calendario y contratación pública se conectan directamente desde el Cerebro, sin plataformas

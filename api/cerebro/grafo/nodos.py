@@ -19,6 +19,14 @@ log = logging.getLogger("cerebro.grafo")
 MAX_PASOS = 5
 INYECTAR_DEPARTAMENTO = {"erpnext", "conocimiento", "correo", "calendario"}
 
+def inyectar(ficha, estado: dict, herramienta: str, args: dict) -> dict:
+    """Lo que decide el sistema (no el modelo): el departamento y la sensibilidad. Si el modelo los pasa, se pisan."""
+    args = {k: v for k, v in args.items() if k != "sensibilidad"}    # la sensibilidad la fija `usar()`
+    if herramienta in INYECTAR_DEPARTAMENTO:
+        args["departamento"] = ficha.departamento
+    return args
+
+
 ESQUEMA_AGENTE = {
     "type": "object",
     "properties": {
@@ -88,9 +96,7 @@ async def ejecutar_agente(estado: Estado) -> Estado:
             acciones = [{**a, "argumentos": a.get("argumentos", {}), "estado": "propuesta"}
                         for a in d.get("acciones", [])]
             return {"respuesta": d.get("respuesta", ""), "acciones": acciones, "pasos": pasos}
-        args = dict(d.get("argumentos") or {})
-        if d.get("herramienta") in INYECTAR_DEPARTAMENTO:
-            args.setdefault("departamento", ficha.departamento)
+        args = inyectar(ficha, estado, d.get("herramienta", ""), d.get("argumentos") or {})
         try:
             resultado = await H.usar(ficha, d.get("herramienta", ""), d.get("operacion", ""),
                                      sensibilidad=estado.get("sensibilidad"), **args)
@@ -118,6 +124,11 @@ async def registrar_aprobaciones(estado: Estado, config) -> Estado:
         except AccionProhibida as e:
             acciones.append({**a, "estado": "error", "resultado": str(e)})
             continue
+        if a.get("herramienta") and a.get("operacion"):       # no se pide aprobar algo que va a fallar al ejecutarse
+            motivo = H.validar_llamada(ficha, a["herramienta"], a["operacion"], a.get("argumentos") or {}, estado.get("sensibilidad"))
+            if motivo:
+                acciones.append({**a, "estado": "error", "resultado": f"Acción no válida, no se envía a aprobación: {motivo}"})
+                continue
         if not d.requiere:
             acciones.append({**a, "estado": "aprobada"})
             continue
@@ -157,9 +168,7 @@ async def ejecutar_acciones(estado: Estado, config) -> Estado:
         if a.get("estado") != "aprobada":
             resultado.append(a)
             continue
-        args = dict(a.get("argumentos") or {})
-        if a["herramienta"] in INYECTAR_DEPARTAMENTO:
-            args.setdefault("departamento", ficha.departamento)
+        args = inyectar(ficha, estado, a["herramienta"], a.get("argumentos") or {})
         try:
             r = await H.usar(ficha, a["herramienta"], a["operacion"], sensibilidad=estado.get("sensibilidad"),
                              aprobada=True, **args)

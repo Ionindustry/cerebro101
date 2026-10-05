@@ -39,7 +39,8 @@ async def buscar(consulta: str, en_x: bool = True, en_web: bool = True, max_resu
 
 registrar(Herramienta(
     nombre="grok",
-    descripcion="Tendencias y noticias en tiempo real en X y la web. Operación: buscar(consulta). "
-                "Solo temas públicos, nunca datos de clientes o internos.",
+    descripcion="Tendencias y noticias en tiempo real en X y la web. Solo temas públicos, nunca datos de clientes o internos.",
     operaciones={"buscar": buscar},
+    ayuda={"buscar": "busca en X y en la web; devuelve un resumen con enlaces"},
+    ejemplos={"buscar": {"consulta": "cámaras de videovigilancia con inteligencia artificial", "en_x": True, "en_web": True}},
 ))

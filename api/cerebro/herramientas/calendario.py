@@ -85,9 +85,10 @@ async def crear_cita(departamento: str, titulo: str, inicio: str, fin: str, desc
 
 registrar(Herramienta(
     nombre="calendario",
-    descripcion="Calendario (CalDAV propio). Operaciones: huecos(desde, hasta, duracion_min), "
-                "proponer_cita(desde, hasta, duracion_min, opciones), crear_cita(titulo, inicio, fin, descripcion, "
-                "invitados) — crear_cita requiere aprobación. Fechas en formato ISO.",
+    descripcion="Calendario (CalDAV propio). Las fechas van en formato ISO 8601 (AAAA-MM-DDThh:mm).",
     operaciones={"huecos": huecos, "proponer_cita": proponer_cita, "crear_cita": crear_cita},
     externas=frozenset({"crear_cita"}),
+    ayuda={"huecos": "huecos libres entre dos fechas", "proponer_cita": "propone varias franjas libres sin reservar nada",
+           "crear_cita": "reserva la cita y avisa a los invitados"},
+    ejemplos={"proponer_cita": {"desde": "2026-10-08T09:00", "hasta": "2026-10-08T14:00", "duracion_min": 60, "opciones": 3}},
 ))

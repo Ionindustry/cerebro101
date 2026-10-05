@@ -48,9 +48,24 @@ async def crear_borrador(doctype: str, datos: dict[str, Any], departamento: str)
     return r.json()["data"]
 
 
+AYUDA_DOCUMENTOS = (
+    "Documentos habituales (doctype: campos; los campos pueden variar con la versión): "
+    "Customer(customer_name, customer_type, customer_group, territory, email_id); Supplier(supplier_name, supplier_group); "
+    "Item(item_code, item_name, item_group, stock_uom, standard_rate); Bin = existencias(item_code, warehouse, actual_qty); "
+    "Quotation(party_name, transaction_date, items); Sales Order(customer, transaction_date, delivery_date, items); "
+    "Sales Invoice(customer, posting_date, due_date, items); Purchase Order(supplier, transaction_date, schedule_date, items); "
+    "Purchase Invoice(supplier, bill_date, items); Project(project_name, status, expected_start_date, expected_end_date); "
+    "Task(subject, status, project); Lead(lead_name, company_name, email_id, status); Employee(employee_name, department, status). "
+    "En «items» va una lista de {item_code, qty, rate}.")
+
 registrar(Herramienta(
     nombre="erpnext",
-    descripcion="ERP de la empresa: clientes, proyectos, artículos, precios, facturas, compras. "
-                "Operaciones: listar, leer, crear_borrador (nunca valida documentos).",
+    descripcion="ERP de la empresa: clientes, proyectos, artículos, precios, facturas, compras. Nunca valida documentos: "
+                "solo los lee o los deja en borrador para que una persona los valide.",
     operaciones={"listar": listar, "leer": leer, "crear_borrador": crear_borrador},
+    ayuda={"listar": "lista documentos. filtros = lista de [campo, operador, valor], p. ej. [[\"status\", \"=\", \"Open\"]]. " + AYUDA_DOCUMENTOS,
+           "leer": "un documento completo por su nombre (doctype y nombre exactos, p. ej. Customer + «Comunitat Vilanova SL»)",
+           "crear_borrador": "crea un documento en BORRADOR; «datos» lleva los campos del documento"},
+    ejemplos={"listar": {"doctype": "Customer", "campos": ["customer_name"], "limite": 10},
+              "crear_borrador": {"doctype": "Sales Invoice", "datos": {"customer": "Comunitat Vilanova SL", "items": [{"item_code": "ART-001", "qty": 2, "rate": 150}]}}},
 ))

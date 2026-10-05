@@ -1,0 +1,19 @@
+# Peticiones que obligan a usar una herramienta concreta. Mide si el modelo elige bien la herramienta y la operación y si
+# rellena los argumentos sin inventar nada (scripts/evaluar_herramientas.py). `aceptar` lista las respuestas correctas.
+casos:
+  - {id: H01, agente: inventario, peticion: "¿Cuántos detectores de humo hay en existencias en el almacén?", aceptar: [erpnext.listar]}
+  - {id: H02, agente: propuestas, peticion: "Dame la lista de clientes que tenemos dados de alta, solo sus nombres", aceptar: [erpnext.listar]}
+  - {id: H03, agente: respuesta-leads, peticion: "Cuéntame todo lo que consta del cliente «Comunitat Vilanova SL» en el ERP", aceptar: [erpnext.leer, erpnext.listar]}
+  - {id: H04, agente: respuesta-leads, peticion: "Propón tres franjas de una hora el jueves 8 de octubre de 2026 por la mañana para una reunión", aceptar: [calendario.proponer_cita, calendario.huecos]}
+  - {id: H05, agente: cotizador, peticion: "¿Cuánto cuesta instalar 2 cámaras exteriores con un técnico?", aceptar: [cotizador.cotizar]}
+  - {id: H06, agente: cotizador, peticion: "Presupuesto de 300 metros de corrugado y 100 de tubo rígido con una pareja de lampistas", aceptar: [cotizador.cotizar]}
+  - {id: H07, agente: rastreador, peticion: "¿Hay licitaciones nuevas con CPV 35125000 por más de 10.000 euros?", aceptar: [plataformas_contratacion.novedades]}
+  - {id: H08, agente: radar-tendencias, peticion: "¿Qué se comenta hoy en X sobre cámaras de videovigilancia con IA?", aceptar: [grok.buscar]}
+  - {id: H09, agente: analista-competencia, peticion: "Extrae los productos y precios de https://www.ejemplo.com/tarifas", aceptar: [scrapegraph.extraer]}
+  - {id: H10, agente: cobertura-ahorro, peticion: "¿Hay cobertura de fibra en Calle Mayor 12 de Reus?", aceptar: [mayorista.cobertura]}
+  - {id: H11, agente: respuesta-leads, peticion: "Lee los correos no leídos de la bandeja de entrada", aceptar: [correo.leer_bandeja]}
+  - {id: H12, agente: comparador-presupuestos, peticion: "Compara estas ofertas: Roca SL 1000 euros, empieza en 5 días, responde en 4 horas, ratio 1.0, sin incidencias, calidad 4.5; Vila SL 900 euros, empieza en 10 días, responde en 12 horas, ratio 1.2, 2 incidencias, calidad 3.8", aceptar: [comparador_instaladores.comparar]}
+  - {id: H13, agente: director-comercial, peticion: "Busca en la base de conocimiento cómo se da de alta a un cliente de mantenimiento", aceptar: [conocimiento.buscar]}
+  - {id: H14, agente: viabilidad, peticion: "Decide si este concurso merece que presentemos oferta: «Suministro de 20 cámaras IP, presupuesto 30.000 euros, plazo 4 semanas». Opciones: presentar, no_presentar", aceptar: [jev.decidir]}
+  - {id: H15, agente: analista-noticias, peticion: "Dame la transcripción de https://www.youtube.com/watch?v=dQw4w9WgXcQ", aceptar: [agent_reach.transcripcion_youtube]}
+  - {id: H16, agente: catalogo-proveedores, peticion: "Enumera los ficheros que hay en la carpeta de tarifas", aceptar: [ficheros.listar]}

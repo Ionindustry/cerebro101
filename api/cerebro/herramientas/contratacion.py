@@ -109,9 +109,11 @@ async def preparar_paquete(expediente: str, sobres: dict[str, list[str]], compro
 
 registrar(Herramienta(
     nombre="plataformas_contratacion",
-    descripcion="Contratación pública. Operaciones: novedades(cpv, importe_min, importe_max), "
-                "descargar_documento(expediente, url, nombre), preparar_paquete(expediente, sobres, comprobaciones). "
-                "La presentación la firma y hace siempre una persona.",
+    descripcion="Contratación pública. La presentación de ofertas la firma y hace siempre una persona.",
     operaciones={"novedades": novedades, "descargar_documento": descargar_documento,
                  "preparar_paquete": preparar_paquete},
+    ayuda={"novedades": "licitaciones nuevas filtradas por CPV (códigos de 8 cifras, como texto) e importe",
+           "descargar_documento": "descarga un pliego u otro documento del expediente",
+           "preparar_paquete": "ordena los documentos ya generados por sobre y deja la lista de comprobación"},
+    ejemplos={"novedades": {"cpv": ["35125000"], "importe_min": 10000}},
 ))

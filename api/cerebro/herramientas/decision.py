@@ -163,6 +163,8 @@ for _p, _desc in (("jev", "Jev en la nube (solo datos públicos o anonimizados)"
                   ("jeff", "Sustituto local de Jev")):
     registrar(Herramienta(
         nombre=_p,
-        descripcion=f"{_desc}. Operación: decidir(texto, tipo='eleccion'|'puntuacion'|'si_no', opciones, rubrica).",
+        descripcion=f"{_desc}. Para decisiones cerradas: elegir entre opciones, puntuar de 0 a 10 o responder sí/no.",
         operaciones={"decidir": _crear(_p)},
+        ayuda={"decidir": "tipo «eleccion» necesita opciones; «puntuacion» necesita rubrica; «si_no» es una afirmación o pregunta en texto"},
+        ejemplos={"decidir": {"texto": "El grabador lleva tres días sin grabar", "tipo": "eleccion", "opciones": ["soporte", "ventas"]}},
     ))

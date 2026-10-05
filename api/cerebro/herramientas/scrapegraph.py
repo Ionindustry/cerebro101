@@ -70,7 +70,9 @@ async def extraer_documento(contenido: str, instruccion: str) -> dict:
 
 registrar(Herramienta(
     nombre="scrapegraph",
-    descripcion="Extrae datos estructurados de una web pública o de un documento descargado. "
-                "Operaciones: extraer(url, instruccion), extraer_documento(contenido, instruccion).",
+    descripcion="Extrae datos estructurados de una web pública o de un documento descargado.",
     operaciones={"extraer": extraer, "extraer_documento": extraer_documento},
+    ayuda={"extraer": "lee una página web pública y devuelve lo que pide la instrucción",
+           "extraer_documento": "lo mismo sobre el texto de un documento ya descargado"},
+    ejemplos={"extraer": {"url": "https://www.ejemplo.com/tarifas", "instruccion": "lista de productos con su precio"}},
 ))

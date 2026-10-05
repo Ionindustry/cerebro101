@@ -32,7 +32,9 @@ async def guardar_borrador(ruta: str, contenido: str) -> str:
 
 registrar(Herramienta(
     nombre="ficheros",
-    descripcion="Documentos de la empresa. Operaciones: listar(carpeta), leer_texto(ruta), "
-                "guardar_borrador(ruta, contenido) — solo escribe en /datos/borradores.",
+    descripcion="Documentos de la empresa. Solo escribe en /datos/borradores.",
     operaciones={"listar": listar, "leer_texto": leer_texto, "guardar_borrador": guardar_borrador},
+    ayuda={"listar": "ficheros de una carpeta", "leer_texto": "contenido de un fichero de texto",
+           "guardar_borrador": "guarda un borrador (ruta relativa a /datos/borradores)"},
+    ejemplos={"listar": {"carpeta": ""}},
 ))

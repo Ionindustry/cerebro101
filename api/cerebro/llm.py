@@ -22,7 +22,7 @@ class ErrorModelo(RuntimeError):
 
 async def chat(asignacion: Asignacion, mensajes: list[dict], esquema: dict | None = None,
                imagenes: list[str] | None = None, temperatura: float = 0.2,
-               timeout: float = 300) -> str | dict:
+               timeout: float = 300, max_tokens: int | None = None) -> str | dict:
     """Llama a /api/chat de Ollama. Con `esquema`, devuelve el JSON ya validado como dict."""
     if imagenes:
         mensajes = [*mensajes[:-1], {**mensajes[-1], "images": imagenes}]
@@ -32,7 +32,7 @@ async def chat(asignacion: Asignacion, mensajes: list[dict], esquema: dict | Non
         "stream": False,
         # Ollama rechaza "-1" como texto: sin unidad debe ir como número
         "keep_alive": int(asignacion.mantener_cargado) if asignacion.mantener_cargado.lstrip("-").isdigit() else asignacion.mantener_cargado,
-        "options": {"temperature": temperatura},
+        "options": {"temperature": temperatura, **({"num_predict": max_tokens} if max_tokens else {})},
     }
     if esquema:
         cuerpo["format"] = esquema

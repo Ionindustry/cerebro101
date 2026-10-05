@@ -18,11 +18,20 @@ NORMAS = (
 )
 
 
-def sistema_agente(ficha: Ficha, herramientas: dict) -> str:
-    lista = "\n".join(f"- {n}: {h.descripcion}" for n, h in herramientas.items())
+def sistema_agente(ficha: Ficha, herramientas: dict, con_esquema: bool = True) -> str:
+    """Prompt del agente. Con `con_esquema` (por defecto) cada herramienta lleva sus operaciones y argumentos exactos."""
+    if con_esquema:
+        from ..herramientas.esquemas import describir
+        lista = "\n".join(describir(h) for h in herramientas.values())
+        reglas = ("\nUsa EXACTAMENTE los nombres de herramienta, operación y argumentos de esta lista: si no está aquí, no existe "
+                  "(no inventes operaciones ni argumentos). Si te falta un dato para llamar a una herramienta, no lo supongas: "
+                  "pídelo en tu respuesta. El departamento y la sensibilidad los pone el sistema; no los pases.\n")
+    else:
+        lista = "\n".join(f"- {n}: {h.descripcion}" for n, h in herramientas.items())
+        reglas = ""
     return (f"{CONTEXTO_EMPRESA}\n\nEres el agente «{ficha.nombre}» del departamento {ficha.departamento}, "
             f"subárea {ficha.subarea}. Tus tareas: {ficha.tareas}.\n\n{NORMAS}\n\n"
-            f"Herramientas disponibles:\n{lista}\n\n"
+            f"Herramientas disponibles:\n{lista}\n{reglas}\n"
             "En cada turno responde con JSON: o bien {\"tipo\":\"herramienta\",\"herramienta\":…,\"operacion\":…,"
             "\"argumentos\":{…}} para usar una herramienta, o bien {\"tipo\":\"respuesta\",\"respuesta\":…,"
             "\"acciones\":[…]} con tu respuesta final y, si procede, las acciones propuestas, cada una con "

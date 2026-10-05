@@ -46,6 +46,10 @@ async def indexar(titulo: str, texto: str, fuente: str, departamento: str = "com
 
 registrar(Herramienta(
     nombre="conocimiento",
-    descripcion="Busca en los documentos, procedimientos y actas de la empresa. Operación: buscar(consulta).",
+    descripcion="Busca en los documentos, procedimientos y actas de la empresa. Es la fuente para responder sobre cómo trabaja la empresa: "
+                "no inventes datos que no aparezcan en los resultados.",
     operaciones={"buscar": buscar, "indexar": indexar},
+    ayuda={"buscar": "consulta en lenguaje natural; devuelve los fragmentos más parecidos con su fuente",
+           "indexar": "añade un documento a la base de conocimiento (solo para cargar documentos, no para responder)"},
+    ejemplos={"buscar": {"consulta": "procedimiento de alta de un cliente de mantenimiento"}},
 ))

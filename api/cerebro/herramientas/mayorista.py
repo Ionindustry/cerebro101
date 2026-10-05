@@ -33,9 +33,14 @@ async def abrir_incidencia(**datos) -> dict:
 
 registrar(Herramienta(
     nombre="mayorista",
-    descripcion="Mayorista de telecom. Operaciones: cobertura(direccion), estado_pedido(id), consumos(mes), "
-                "alta(...) y abrir_incidencia(...) — estas dos requieren aprobación.",
+    descripcion="Mayorista de telecom (pendiente de conectar con el mayorista elegido).",
     operaciones={"cobertura": cobertura, "estado_pedido": estado_pedido, "consumos": consumos,
                  "alta": alta, "abrir_incidencia": abrir_incidencia},
     externas=frozenset({"alta", "abrir_incidencia"}),
+    ayuda={"cobertura": "cobertura de fibra/móvil en una dirección", "estado_pedido": "estado de un pedido por su id",
+           "consumos": "consumos de un mes (AAAA-MM)", "alta": "da de alta una línea o servicio",
+           "abrir_incidencia": "abre una incidencia con el mayorista"},
+    campos={"alta": {"datos": "campos libres del alta (cliente, servicio, dirección…)"},
+            "abrir_incidencia": {"datos": "campos libres de la incidencia (línea, descripción…)"}},
+    ejemplos={"cobertura": {"direccion": "Calle Mayor 12, 43201 Reus"}},
 ))

@@ -47,3 +47,26 @@ no casos sueltos, pero con textos reales aparecerán fallos distintos.
 
 Limitaciones conocidas que no se cubren: nombres en minúsculas sin ninguna pista previa («habló con josep»,
 «laura gómez»).
+
+
+## Uso de herramientas por los agentes
+
+`herramientas_casos.yaml` son 16 peticiones que exigen una herramienta concreta; `scripts/evaluar_herramientas.py` hace
+**una** llamada al modelo del agente por petición (sin ejecutar nada) y comprueba si usa una herramienta de su ficha, si la
+operación existe, si los argumentos son válidos y si es la correcta. Se ejecuta dentro del contenedor de la API (donde está el modelo).
+
+| Prompt | Llamadas válidas | Operación inventada | Argumentos inválidos | JSON cortado o inválido |
+| --- | --- | --- | --- | --- |
+| Antiguo (una frase por herramienta) | 1/16 (6 %) | 11 | 0 | 4 |
+| Con el esquema exacto de cada herramienta | **13/16 (81 %)** | 0 | 2 | 1 |
+
+(ministral-3:3b en CPU, temperatura 0, salida limitada a 500 tokens, una sola ejecución. Informe: `resultados/herramientas.json`.)
+
+Antes, el modelo se inventaba el nombre de la operación casi siempre (`leer_bandeja_entrada`, `extraer_tarifas_productos`,
+`consulta_stock_articulos`…). Ahora el prompt lleva, para cada herramienta de la ficha, sus operaciones con sus argumentos
+exactos (derivados de las firmas reales de las funciones, y los identificadores válidos del cotizador leídos del catálogo),
+y un ejemplo. Los tres fallos que quedan son argumentos añadidos de más (`consideraciones_adicionales`, `item_name`) o JSON
+cortado; en el bucle del agente reciben un mensaje que dice qué argumentos están permitidos y pueden corregirse.
+
+Límites de la medición: 16 casos escritos por mí, una sola muestra por caso y un modelo pequeño en CPU. Con los modelos
+reales de la GPU habrá que repetirla; el script es el mismo.
