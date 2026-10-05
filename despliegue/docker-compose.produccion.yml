@@ -1,0 +1,51 @@
+# Añadidos de producción sobre docker-compose.yml. Se usa siempre junto a él (lo hace despliegue/desplegar.sh):
+#   docker compose -f docker-compose.yml -f despliegue/docker-compose.produccion.yml up -d
+#
+#   · Keycloak en modo producción (`start`) con su propia base de datos PostgreSQL, detrás del proxy.
+#   · Caddy como proxy inverso con HTTPS automático: es lo único que escucha en los puertos 80 y 443.
+#     Todo lo demás solo escucha en 127.0.0.1 o en la red interna de Docker.
+services:
+  keycloak-db:
+    image: postgres:16-alpine
+    environment: {POSTGRES_USER: keycloak, POSTGRES_PASSWORD: "${KEYCLOAK_DB_PASSWORD:?define KEYCLOAK_DB_PASSWORD}", POSTGRES_DB: keycloak}
+    volumes: ["keycloak-db:/var/lib/postgresql/data"]
+    healthcheck: {test: ["CMD-SHELL", "pg_isready -U keycloak"], interval: 3s, timeout: 3s, retries: 20}
+    networks: [cerebro]
+    restart: unless-stopped
+
+  keycloak:
+    command: start --import-realm
+    environment:
+      KC_HTTP_ENABLED: "true"                 # el TLS lo termina Caddy
+      KC_PROXY_HEADERS: xforwarded
+      KC_HEALTH_ENABLED: "true"
+      KC_DB: postgres
+      KC_DB_URL: jdbc:postgresql://keycloak-db:5432/keycloak
+      KC_DB_USERNAME: keycloak
+      KC_DB_PASSWORD: "${KEYCLOAK_DB_PASSWORD}"
+    depends_on:
+      keycloak-db: {condition: service_healthy}
+
+  proxy:
+    image: caddy:2
+    ports: ["80:80", "443:443", "443:443/udp"]
+    environment:
+      CORREO_ADMIN: "${CORREO_ADMIN:?define CORREO_ADMIN}"
+      TLS_MODO: "${TLS_MODO:-letsencrypt}"
+      DOM_PANEL: "${DOM_PANEL:?define DOM_PANEL}"
+      DOM_AUTH: "${DOM_AUTH:?define DOM_AUTH}"
+      DOM_ERP: "${DOM_ERP:?define DOM_ERP}"
+      DOM_TRAZAS: "${DOM_TRAZAS:?define DOM_TRAZAS}"
+      IPS_ADMIN: "${IPS_ADMIN:-private_ranges}"
+    volumes:
+      - ./despliegue/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-datos:/data              # certificados: conservarlo evita pedirlos de nuevo en cada arranque
+      - caddy-config:/config
+    depends_on: [panel, keycloak, langfuse]
+    networks: [cerebro]
+    restart: unless-stopped
+
+volumes:
+  keycloak-db: {}
+  caddy-datos: {}
+  caddy-config: {}

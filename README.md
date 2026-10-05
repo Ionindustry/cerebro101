@@ -20,7 +20,7 @@ cp .env.example .env        # rellena contraseñas, tokens de ERPNext y claves e
 - Registro de decisiones (Langfuse): http://localhost:3001
 
 Para probar sin Keycloak: `CEREBRO_MODO=desarrollo` en `.env` y `PANEL_USUARIO_DESARROLLO=tu-nombre` en el panel.
-La guía completa está en [docs/INSTALACION.md](docs/INSTALACION.md).
+La guía completa está en [docs/INSTALACION.md](docs/INSTALACION.md). Para un servidor real, con HTTPS y un solo comando: [docs/DESPLIEGUE.md](docs/DESPLIEGUE.md).
 
 ## Estructura
 
@@ -34,6 +34,7 @@ La guía completa está en [docs/INSTALACION.md](docs/INSTALACION.md).
 | `servicios/agent-reach/` | Agent Reach aislado, solo lectura de contenido público |
 | `db/` | Esquema de PostgreSQL + pgvector |
 | `scripts/` | Arranque, descarga de modelos, carga de conocimiento, generador de fichas, evaluación del enrutado, exportación de evidencias y copias de seguridad |
+| `despliegue/` | Instalación en un servidor: `desplegar.sh`, proxy Caddy con HTTPS, Keycloak en producción y generación del `.env` |
 | `docs/` | Arquitectura, fases de desarrollo, seguridad, índice de agentes y pendientes |
 
 ## Cómo se añade o cambia un agente

@@ -1,5 +1,7 @@
 # Instalación
 
+> Para un servidor real, con HTTPS, Keycloak en producción y todo en un solo comando, usad [DESPLIEGUE.md](DESPLIEGUE.md). Esta guía describe los pasos sueltos.
+
 ## Requisitos
 
 - Servidor Linux con Docker y Docker Compose
