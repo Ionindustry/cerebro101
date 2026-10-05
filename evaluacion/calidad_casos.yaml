@@ -100,7 +100,7 @@ casos:
     peticion: "Escriu un paràgraf breu en català presentant el nostre servei de videovigilància per a comerços."
     idioma: ca
     max_palabras: 150
-    todos: ['videovigil']
+    todos: ['vigil']
   - id: C16
     tipo: redaccion
     agente: respuesta-leads

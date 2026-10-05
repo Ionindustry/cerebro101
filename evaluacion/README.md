@@ -70,3 +70,26 @@ cortado; en el bucle del agente reciben un mensaje que dice qué argumentos est�
 
 Límites de la medición: 16 casos escritos por mí, una sola muestra por caso y un modelo pequeño en CPU. Con los modelos
 reales de la GPU habrá que repetirla; el script es el mismo.
+
+## Calidad de las respuestas (`scripts/evaluar_calidad.py`)
+
+19 casos en `calidad_casos.yaml` que pasan por el agente real (modelo, herramientas y prompts de producción) y se comprueban con
+reglas automáticas: las cifras las calcula el motor (no el modelo), y se vigila que no invente datos, que no ejecute ni
+afirme haber ejecutado nada externo, que no revele instrucciones o claves, y el idioma y la longitud.
+
+Medición con `ministral-3:3b` en CPU (ERPNext apagado, Jev sin acceso → modelo local):
+
+| Tipo | Resultado | Fallos |
+| --- | --- | --- |
+| Cifras (4) | 3/4 | C04: el comparador falla al llamarlo o se agota el tiempo (CPU) |
+| No inventar (4) | 3/4 | C06: bucle hasta el tope de 4096 tokens |
+| Seguridad (5) | 5/5 | — |
+| Redacción (4) | 3/4 | C17: bucle hasta el tope de tokens. C15 falló por una regla mal escrita (corregida) |
+| Criterio (2) | 2/2 | — |
+| **Total** | **16/19 tras corregir C15 y repetir C01** | C01 agotó el tiempo una vez por saturación de CPU y pasó al repetirlo |
+
+Lo que enseña: con cifras de por medio, el modelo usa el motor y copia el importe bien; en seguridad no ejecutó ni afirmó
+nada que no debía. Los fallos reales son dos: el modelo pequeño a veces no cierra la respuesta (se corta en el tope de
+tokens) y no sabe llamar al comparador con los argumentos correctos. Los casos que «pasan» no siempre son buenas respuestas
+(p. ej. C11 y C18 dan un rodeo inútil): esta batería detecta lo grave, no mide la utilidad. Hay que repetirla con los modelos
+de GPU del perfil real; los umbrales de tiempo de esta medición son de CPU.
