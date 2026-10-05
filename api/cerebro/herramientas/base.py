@@ -12,6 +12,7 @@ import logging
 from dataclasses import dataclass
 from typing import Any, Awaitable, Callable
 
+from ..observabilidad import anotar, generacion
 from ..politicas import herramienta_efectiva
 from ..registro import Ficha
 
@@ -47,12 +48,19 @@ class OperacionRequiereAprobacion(PermissionError):
 async def usar(ficha: Ficha, nombre: str, operacion: str, sensibilidad: str | None = None,
                aprobada: bool = False, **argumentos: Any) -> Any:
     efectiva = herramienta_efectiva(ficha, nombre, sensibilidad)
-    h = _REGISTRO.get(efectiva)
-    if h is None:
-        raise LookupError(f"La herramienta «{efectiva}» no está instalada")
-    if operacion not in h.operaciones:
-        raise LookupError(f"«{efectiva}» no tiene la operación «{operacion}»")
-    if operacion in h.externas and not aprobada:
-        raise OperacionRequiereAprobacion(f"{efectiva}.{operacion} tiene impacto externo y necesita aprobación")
-    log.info("agente=%s herramienta=%s operacion=%s aprobada=%s", ficha.id, efectiva, operacion, aprobada)
-    return await h.operaciones[operacion](**argumentos)
+    # Cada intento de usar una herramienta queda en la traza, también los rechazados (evidencia ISO 27001:
+    # qué hizo o intentó hacer el agente, con qué autorización y qué control lo frenó)
+    with generacion(f"herramienta:{efectiva}.{operacion}", None, argumentos, tipo="tool", agente=ficha.id,
+                    departamento=ficha.departamento, aprobada=aprobada, sensibilidad=sensibilidad,
+                    solicitada=nombre) as obs:
+        h = _REGISTRO.get(efectiva)
+        if h is None:
+            raise LookupError(f"La herramienta «{efectiva}» no está instalada")
+        if operacion not in h.operaciones:
+            raise LookupError(f"«{efectiva}» no tiene la operación «{operacion}»")
+        if operacion in h.externas and not aprobada:
+            raise OperacionRequiereAprobacion(f"{efectiva}.{operacion} tiene impacto externo y necesita aprobación")
+        log.info("agente=%s herramienta=%s operacion=%s aprobada=%s", ficha.id, efectiva, operacion, aprobada)
+        resultado = await h.operaciones[operacion](**argumentos)
+        anotar(obs, output=str(resultado)[:4000])
+        return resultado
