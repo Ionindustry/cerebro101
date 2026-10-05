@@ -4,11 +4,61 @@ name: cerebro-101
 
 x-api: &api
   build: {context: ., dockerfile: api/Dockerfile}
-  env_file: .env
+  # Mínimo privilegio también en el entorno: la API y el worker reciben SOLO lo que usa el código (lista cerrada, sin `env_file`).
+  # Nunca reciben: la clave del propietario de la base de datos, las de Keycloak, ERPNext (administrador y base de datos),
+  # ni las claves internas de Langfuse (cifrado, sal, ClickHouse, MinIO…). Si el Cerebro (o un agente engañado) pudiera leer
+  # su propio entorno, no encontraría nada con lo que alterar las evidencias ni administrar otros sistemas.
+  # api/tests/test_entorno.py comprueba que esta lista y el código no se separan.
+  # Una variable nueva que lea el código (o un buzón de otro departamento) se añade aquí.
   environment:
-    # La aplicación entra con el rol de mínimo privilegio (db/roles.sql), no como propietario de la base de datos.
-    DATABASE_URL: "postgresql://cerebro_app:${CEREBRO_APP_PASSWORD}@postgres:5432/cerebro"
-    POSTGRES_PASSWORD: ""      # la contraseña del propietario no debe estar en el entorno de la API (viene de .env)
+    DATABASE_URL: "postgresql://cerebro_app:${CEREBRO_APP_PASSWORD}@postgres:5432/cerebro"   # rol de mínimo privilegio (db/roles.sql)
+    CEREBRO_MODO: "${CEREBRO_MODO:-produccion}"
+    PERFIL_HARDWARE: "${PERFIL_HARDWARE:-pequena}"
+    TZ: "${TZ:-Europe/Madrid}"
+    REDIS_URL: "${REDIS_URL:-redis://redis:6379/0}"
+    OLLAMA_URL: "${OLLAMA_URL:-http://ollama:11434}"
+    OLLAMA_TIMEOUT: "${OLLAMA_TIMEOUT:-}"                 # vacío = valor por defecto del código
+    OLLAMA_TIMEOUT_CONEXION: "${OLLAMA_TIMEOUT_CONEXION:-}"
+    OLLAMA_TIMEOUT_EMBEDDINGS: "${OLLAMA_TIMEOUT_EMBEDDINGS:-}"
+    OLLAMA_REINTENTOS: "${OLLAMA_REINTENTOS:-}"
+    OLLAMA_CONCURRENCIA: "${OLLAMA_CONCURRENCIA:-}"
+    OLLAMA_ESPERA_MAX: "${OLLAMA_ESPERA_MAX:-}"
+    OLLAMA_MAX_TOKENS: "${OLLAMA_MAX_TOKENS:-}"
+    OLLAMA_FALLOS_CIRCUITO: "${OLLAMA_FALLOS_CIRCUITO:-}"
+    OLLAMA_ENFRIAMIENTO: "${OLLAMA_ENFRIAMIENTO:-}"
+    # ERPNext: un token por departamento («api_key:api_secret»)
+    ERPNEXT_URL: "${ERPNEXT_URL:-}"
+    ERPNEXT_TOKEN: "${ERPNEXT_TOKEN:-}"
+    ERPNEXT_TOKEN_DIRECCION: "${ERPNEXT_TOKEN_DIRECCION:-}"
+    ERPNEXT_TOKEN_FINANZAS: "${ERPNEXT_TOKEN_FINANZAS:-}"
+    ERPNEXT_TOKEN_COMERCIAL: "${ERPNEXT_TOKEN_COMERCIAL:-}"
+    ERPNEXT_TOKEN_OPERACIONES: "${ERPNEXT_TOKEN_OPERACIONES:-}"
+    ERPNEXT_TOKEN_TELECOM: "${ERPNEXT_TOKEN_TELECOM:-}"
+    # Servicios externos
+    XAI_API_KEY: "${XAI_API_KEY:-}"
+    XAI_MODELO: "${XAI_MODELO:-grok-4}"
+    JEV_URL: "${JEV_URL:-}"
+    JEV_API_KEY: "${JEV_API_KEY:-}"
+    JEFF_URL: "${JEFF_URL:-http://jeff:8080}"
+    USAR_JEV_NUBE: "${USAR_JEV_NUBE:-false}"
+    ANONIMIZACION_NER: "${ANONIMIZACION_NER:-heuristico}"
+    ANONIMIZACION_MODELO_SPACY: "${ANONIMIZACION_MODELO_SPACY:-es_core_news_md}"
+    AGENT_REACH_URL: "${AGENT_REACH_URL:-http://agent-reach:8090}"
+    # Buzones y calendarios: general y por departamento (CORREO_<DEPARTAMENTO>_USUARIO / _CLAVE)
+    CORREO_USUARIO: "${CORREO_USUARIO:-}"
+    CORREO_CLAVE: "${CORREO_CLAVE:-}"
+    CORREO_COMERCIAL_USUARIO: "${CORREO_COMERCIAL_USUARIO:-}"
+    CORREO_COMERCIAL_CLAVE: "${CORREO_COMERCIAL_CLAVE:-}"
+    CALENDARIO_USUARIO: "${CALENDARIO_USUARIO:-}"
+    CALENDARIO_CLAVE: "${CALENDARIO_CLAVE:-}"
+    # Identificación de personas (Keycloak) y trazas (Langfuse: solo el par de claves de proyecto)
+    KEYCLOAK_URL: "${KEYCLOAK_URL:-http://keycloak:8080}"
+    KEYCLOAK_REALM: "${KEYCLOAK_REALM:-cerebro}"
+    KEYCLOAK_CLIENTE: "${KEYCLOAK_CLIENTE:-cerebro-panel}"
+    LANGFUSE_HOST: "${LANGFUSE_HOST:-}"
+    LANGFUSE_PUBLIC_KEY: "${LANGFUSE_PUBLIC_KEY:-}"
+    LANGFUSE_SECRET_KEY: "${LANGFUSE_SECRET_KEY:-}"
+    LANGFUSE_REGISTRAR_CONTENIDO: "${LANGFUSE_REGISTRAR_CONTENIDO:-true}"
   volumes: ["./config:/app/config:ro", "datos:/datos"]
   depends_on:
     postgres: {condition: service_started}
@@ -97,8 +147,11 @@ services:
     <<: *api
     command: celery -A cerebro.tareas.celery_app worker -Q peticiones,lote -c 2 -n general@%h
 
-  beat:                   # calendario de tareas programadas (a partir de las fichas)
+  beat:                   # calendario de tareas programadas (a partir de las fichas): no ejecuta agentes, no necesita secretos
     <<: *api
+    environment:
+      TZ: "${TZ:-Europe/Madrid}"
+      REDIS_URL: "${REDIS_URL:-redis://redis:6379/0}"
     command: celery -A cerebro.tareas.celery_app beat
 
   panel:
