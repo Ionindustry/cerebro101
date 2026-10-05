@@ -26,12 +26,17 @@ export default function Jarvis() {
         body: JSON.stringify({ texto: contenido, hilo, origen: "jarvis" }),
       });
       const d = await r.json();
-      if (!r.ok) throw new Error(d.detail || "El Cerebro no ha podido responder");
+      if (!r.ok) {
+        const err = new Error(d.detail || "El Cerebro no ha podido responder");
+        err.amigable = Boolean(d.codigo);          // el modelo de IA no está disponible, va lento…: la API ya lo explica
+        throw err;
+      }
       setHilo(d.hilo);
       setMensajes((m) => [...m, { de: "jarvis", ...d }]);
       if (porVoz && d.respuesta) hablar(d.respuesta);
     } catch (e) {
-      setMensajes((m) => [...m, { de: "jarvis", respuesta: `No he podido completar la petición: ${e.message}. Vuelve a intentarlo en un momento.` }]);
+      const aviso = e.amigable ? e.message : `No he podido completar la petición: ${e.message}. Vuelve a intentarlo en un momento.`;
+      setMensajes((m) => [...m, { de: "jarvis", respuesta: aviso }]);
     } finally {
       setEstado("listo");
     }

@@ -45,3 +45,23 @@ puede llegar horas después y el flujo continúa donde se quedó.
 Ollama mantiene cargados el modelo rápido, el principal y los embeddings; visión y juez se cargan bajo demanda
 (`keep_alive` de 5 minutos). Jarvis lo atiende la API directamente, sin cola; las tareas programadas van a la
 cola `lote` y están concentradas de noche en las fichas.
+
+
+## Cuando el modelo de IA falla
+
+Ollama puede caerse, quedarse sin memoria, ir lento por saturación o no tener descargado un modelo. Cada caso tiene su
+error, su código HTTP y un mensaje para la persona (el panel lo muestra tal cual); ninguno es ya un «500» sin explicación.
+
+| Situación | Qué hace el Cerebro | Respuesta |
+| --- | --- | --- |
+| Ollama caído o reiniciándose | Reintenta 2 veces con espera creciente (1 s, 2 s) | `503 modelo_no_disponible`, con `Retry-After` |
+| Varios fallos de conexión seguidos | Cortacircuitos: responde al instante durante 20 s en vez de hacer esperar a cada petición. Se cierra solo, o en cuanto `/salud/modelos` ve a Ollama responder | `503` inmediato |
+| El modelo tarda más de `OLLAMA_TIMEOUT` | No reintenta (repetir una llamada de minutos solo empeora la cola) | `504 modelo_timeout` |
+| Demasiadas peticiones a la vez | Limita las llamadas simultáneas (`OLLAMA_CONCURRENCIA`); si la espera supera `OLLAMA_ESPERA_MAX`, no deja la petición colgada | `503 modelo_ocupado` |
+| Modelo no descargado | No reintenta; da el comando `ollama pull …` | `503 modelo_no_encontrado` |
+| Respuesta que no es JSON válido, incompleta o cortada por `OLLAMA_MAX_TOKENS` | Reintenta con el modelo principal (único caso en que cambia de modelo: si Ollama está caído, cambiar de modelo no sirve) | `502 respuesta_invalida` si persiste |
+
+`GET /salud/modelos` informa de si Ollama responde y de qué modelos del perfil faltan (la verificación del despliegue lo usa).
+Las tareas programadas reintentan más tarde (hasta 4 veces, con espera creciente) si el modelo no está disponible.
+Por defecto la salida está limitada a 4096 tokens: sin tope, un modelo pequeño en bucle genera hasta agotar el tiempo.
+Todos los fallos quedan en Langfuse con su motivo. Los valores se cambian con las variables `OLLAMA_*` del `.env`.

@@ -68,6 +68,8 @@ Los certificados viven en el volumen `caddy-datos`: conservadlo para no volver a
 | Let's Encrypt rechaza por límite de peticiones | Demasiados intentos fallidos: esperad una hora o probad antes con `--tls interno` |
 | «503» al abrir `auth.…` justo tras instalar | Keycloak aún arranca (1-2 minutos); `docker compose logs keycloak` |
 | El panel vuelve al inicio de sesión una y otra vez | `PANEL_URL` no coincide con la dirección que se usa, o no se ejecutó `configurar_keycloak.py` |
+| Jarvis responde «el modelo de IA no está disponible» (503) | Ollama caído o sin memoria: `docker compose logs ollama`; `curl localhost:8000/salud/modelos` dice si responde y qué modelos faltan |
+| Jarvis responde «el modelo ha tardado…» (504) | Sobrecarga o sin GPU; ajustad `OLLAMA_TIMEOUT` solo si el modelo es lento por diseño |
 | Jarvis tarda minutos en responder | No hay GPU o Ollama no la ve (`nvidia-smi` dentro del contenedor) |
 
 ## Qué se ha probado y qué no

@@ -8,6 +8,7 @@ from contextlib import asynccontextmanager
 
 import psycopg
 from fastapi import Depends, FastAPI, HTTPException
+from fastapi.responses import JSONResponse
 from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
 from langgraph.types import Command
 from pydantic import BaseModel
@@ -17,9 +18,11 @@ from ..aprobaciones import bandeja
 from ..aprobaciones.logica import DecisionNoValida
 from ..cotizador import Solicitud, calcular
 from ..grafo import construir, nodos
+from ..llm import ErrorModelo, circuito, estado_modelos
 from ..observabilidad import callbacks, metadatos
 from ..red_instaladores import Oferta, puntuar
 from ..registro import registro
+from ..router_modelos import modelos_necesarios
 from .auth import Usuario, usuario_actual
 
 GRAFO = {}
@@ -39,6 +42,15 @@ async def ciclo_de_vida(app: FastAPI):
 
 
 app = FastAPI(title="Cerebro 101.cat", version="0.1.0", lifespan=ciclo_de_vida)
+
+
+@app.exception_handler(ErrorModelo)
+async def error_del_modelo(_, e: ErrorModelo):
+    """Un problema del modelo de IA no es un error interno: se explica y se dice cuándo reintentar."""
+    log.warning("Modelo de IA: %s (%s)", e.codigo, e)
+    cabeceras = {"Retry-After": str(e.reintentar_en)} if e.reintentar_en else {}
+    return JSONResponse(status_code=e.http, headers=cabeceras,
+                        content={"detail": str(e), "codigo": e.codigo, "reintentar_en": e.reintentar_en})
 
 
 class Mensaje(BaseModel):
@@ -71,6 +83,12 @@ async def salud():
     r = registro()
     return {"estado": "ok", "agentes": len(r.fichas), "departamentos": len(r.departamentos),
             "perfil_hardware": ajustes.perfil_hardware, "modo": os.environ.get("CEREBRO_MODO", "produccion")}
+
+
+@app.get("/salud/modelos")
+async def salud_modelos():
+    """¿Responde Ollama y están descargados los modelos del perfil? (lo usa la verificación del despliegue)"""
+    return await estado_modelos(modelos_necesarios())
 
 
 @app.post("/jarvis/mensaje")

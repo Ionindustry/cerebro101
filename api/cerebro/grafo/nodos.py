@@ -8,7 +8,7 @@ from langgraph.types import interrupt
 
 from .. import herramientas as H
 from ..aprobaciones import bandeja
-from ..llm import ErrorModelo, chat
+from ..llm import RespuestaInvalida, chat
 from ..politicas import AccionProhibida, nivel_para
 from ..registro import registro
 from ..router_modelos import asignar
@@ -57,7 +57,7 @@ async def enrutar(estado: Estado) -> Estado:
                 {"role": "user", "content": estado["peticion"]}]
     try:
         d = await chat(asignar(ficha, estado.get("origen", "peticion")), mensajes, esquema=esquema, temperatura=0)
-    except ErrorModelo:
+    except RespuestaInvalida:
         d = await chat(asignar(ficha, estado.get("origen", "peticion"), dificil=True), mensajes,
                        esquema=esquema, temperatura=0)
     return {"departamento": d["departamento"]}
@@ -89,7 +89,7 @@ async def ejecutar_agente(estado: Estado) -> Estado:
     for _ in range(MAX_PASOS):
         try:
             d = await chat(asignar(ficha, estado.get("origen", "peticion")), mensajes, esquema=ESQUEMA_AGENTE)
-        except ErrorModelo:
+        except RespuestaInvalida:
             d = await chat(asignar(ficha, estado.get("origen", "peticion"), dificil=True), mensajes,
                            esquema=ESQUEMA_AGENTE)
         if d["tipo"] == "respuesta":

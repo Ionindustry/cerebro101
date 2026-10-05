@@ -15,6 +15,7 @@ from celery import Celery
 from celery.schedules import crontab
 
 from ..ajustes import ajustes
+from ..llm import ModeloNoDisponible, ModeloOcupado, ModeloTimeout
 from ..registro import registro
 
 app = Celery("cerebro", broker=ajustes.redis_url, backend=ajustes.redis_url)
@@ -54,7 +55,9 @@ async def _ejecutar(agente_id: str) -> dict:
                                 "metadata": metadatos(hilo, f"agente:{agente_id}")})
 
 
-@app.task(name="cerebro.tareas.celery_app.ejecutar_programada")
+@app.task(name="cerebro.tareas.celery_app.ejecutar_programada",
+          autoretry_for=(ModeloNoDisponible, ModeloOcupado, ModeloTimeout), retry_backoff=60, retry_backoff_max=900,
+          retry_jitter=True, max_retries=4)
 def ejecutar_programada(agente_id: str) -> dict:
     estado = asyncio.run(_ejecutar(agente_id))
     return {"agente": agente_id, "respuesta": estado.get("respuesta"),

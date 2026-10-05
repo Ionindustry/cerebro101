@@ -46,3 +46,10 @@ def asignar(ficha: Ficha, origen: str = "peticion", con_imagenes: bool = False,
     keep = "-1" if datos.get("siempre_cargado") else f"{cfg['mantener_cargado_segundos']}s"
     return Asignacion(clase=clase, modelo=datos["modelo"],
                       prioridad=cfg["prioridades"].get(origen, 2), mantener_cargado=keep)
+
+
+def modelos_necesarios(perfil: str | None = None, dir_config: Path | None = None) -> list[str]:
+    """Etiquetas de Ollama que usa el perfil activo (más el modelo de embeddings): sirven para avisar de las que falten."""
+    cfg = _modelos(str(dir_config or ajustes.dir_config))
+    perfil = perfil or ajustes.perfil_hardware or cfg["perfil_por_defecto"]
+    return sorted({d["modelo"] for d in cfg["perfiles"][perfil].values()} | {cfg["embeddings"]["modelo"]})

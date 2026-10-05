@@ -86,6 +86,10 @@ verificar() {
   [ "$(code "https://$(valor DOM_TRAZAS)/api/public/health")" = 200 ] && bien "Langfuse https://$(valor DOM_TRAZAS)" || falla "Langfuse no responde"
   if [ "$SIN_ERP" = 0 ]; then [ "$(code "https://$(valor DOM_ERP)/api/method/ping")" = 200 ] && bien "ERPNext https://$(valor DOM_ERP)" || falla "ERPNext no responde"; fi
   "${COMPOSE[@]}" exec -T api python -c "import json,urllib.request as u;print(json.load(u.urlopen('http://localhost:8000/salud')))" 2>/dev/null | sed 's/^/  API: /' || falla "La API no responde"
+  "${COMPOSE[@]}" exec -T api python -c "
+import json, urllib.request as u
+d = json.load(u.urlopen('http://localhost:8000/salud/modelos', timeout=15))
+print('Modelos de IA:', 'todos descargados' if d['ollama'] == 'ok' and not d['faltan'] else ('faltan ' + ', '.join(d['faltan']) + ' (docker compose exec ollama ollama pull …)' if d['ollama'] == 'ok' else 'Ollama no responde'))" 2>/dev/null | sed 's/^/  /' || aviso "No se pudo comprobar los modelos de IA"
   "${COMPOSE[@]}" exec -T api python /app/scripts/comprobar_permisos.py 2>/dev/null | tail -1 | sed 's/^/  Base de datos: /' || aviso "No se pudo ejecutar comprobar_permisos.py"
 }
 
