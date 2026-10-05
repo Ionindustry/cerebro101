@@ -1,18 +1,50 @@
 """Herramientas de cálculo deterministas: cotizador y comparador de instaladores."""
 from __future__ import annotations
 
+from dataclasses import MISSING
+
 from ..cotizador import Solicitud, calcular
 from ..cotizador.motor import cargar_parametros
-from ..red_instaladores import Oferta, puntuar
+from ..red_instaladores import PESOS_POR_DEFECTO, Oferta, puntuar
 from .base import Herramienta, registrar
+
+
+CAMPOS_OFERTA = tuple(Oferta.__dataclass_fields__)
+CAMPOS_OBLIGATORIOS = tuple(n for n, f in Oferta.__dataclass_fields__.items() if f.default is MISSING)
 
 
 async def cotizar(**campos) -> dict:
     return calcular(Solicitud(**campos)).como_dict()
 
 
+def _validar_pesos(pesos: dict | None) -> dict | None:
+    """`pesos` es opcional y un objeto libre: se comprueba con mensajes que el modelo pueda corregir (antes daba un TypeError)."""
+    if not pesos:
+        return None
+    sobran = [k for k in pesos if k not in PESOS_POR_DEFECTO]
+    if sobran:
+        raise ValueError(f"«pesos» solo admite las claves {', '.join(PESOS_POR_DEFECTO)}; sobra: {', '.join(repr(k[:40]) for k in sobran)}. "
+                         "Si nadie ha pedido otros pesos, omite «pesos»")
+    if set(pesos) != set(PESOS_POR_DEFECTO) or not all(isinstance(v, (int, float)) and not isinstance(v, bool) for v in pesos.values()):
+        raise ValueError(f"«pesos» necesita las tres claves {', '.join(PESOS_POR_DEFECTO)} con números que sumen 1 "
+                         f"(por defecto {PESOS_POR_DEFECTO}). Si nadie ha pedido otros pesos, omite «pesos»")
+    return pesos
+
+
+def _oferta(i: int, o: dict) -> Oferta:
+    if not isinstance(o, dict):
+        raise ValueError(f"La oferta {i + 1} debe ser un objeto con los campos {', '.join(CAMPOS_OFERTA)}")
+    sobran = [k for k in o if k not in CAMPOS_OFERTA]
+    faltan = [k for k in CAMPOS_OBLIGATORIOS if k not in o]
+    if sobran or faltan:
+        raise ValueError(f"Oferta {i + 1} ({str(o.get('instalador', '?'))[:30]}): " + "; ".join(
+            m for m in (f"sobran {', '.join(repr(k[:40]) for k in sobran)}" if sobran else "",
+                        f"faltan {', '.join(faltan)}" if faltan else "") if m) + f". Campos: {', '.join(CAMPOS_OFERTA)}")
+    return Oferta(**o)
+
+
 async def comparar(ofertas: list[dict], pesos: dict | None = None) -> list[dict]:
-    return [p.__dict__ for p in puntuar([Oferta(**o) for o in ofertas], pesos)]
+    return [p.__dict__ for p in puntuar([_oferta(i, o) for i, o in enumerate(ofertas)], _validar_pesos(pesos))]
 
 
 def _ids(seccion: str) -> str:
@@ -52,7 +84,8 @@ registrar(Herramienta(
     descripcion="Ordena presupuestos de instaladores por precio, rapidez y eficiencia.",
     operaciones={"comparar": comparar},
     ayuda={"comparar": "cada oferta es un objeto {instalador, precio, dias_hasta_inicio, horas_respuesta, ratio_horas_historico, "
-                       "incidencias_historico, valoracion_calidad (0-5), trabajos_previos?}; pesos = objeto opcional"},
+                       "incidencias_historico, valoracion_calidad (0-5), trabajos_previos?}; pesos: OMÍTELO salvo que se pidan otros; si se pasa, "
+                       "son exactamente {precio, rapidez, eficiencia} y suman 1 (por defecto 0.4, 0.3, 0.3)"},
     ejemplos={"comparar": {"ofertas": [{"instalador": "Roca SL", "precio": 1000, "dias_hasta_inicio": 5, "horas_respuesta": 4,
                                         "ratio_horas_historico": 1.0, "incidencias_historico": 0, "valoracion_calidad": 4.5}]}},
 ))
