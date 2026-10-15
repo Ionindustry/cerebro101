@@ -4,6 +4,7 @@
 # Uso:  ./scripts/copia_seguridad.sh [carpeta_destino] [--parar]
 #   Sin --parar: copia en caliente. PostgreSQL (volcado) es consistente; ClickHouse y MinIO (Langfuse) se
 #                copian como ficheros y pueden quedar a medias. Para esos usad --parar o exportar_evidencias.py.
+#   COPIA_SIN_TRAZAS=1: no copia ClickHouse ni MinIO (las trazas de Langfuse, lo que más pesa); sí copia su base de datos.
 #   --parar:     detiene Langfuse y ClickHouse unos segundos para copiarlos de forma consistente y los vuelve a arrancar.
 #
 # Guarda: cerebro.sql.gz (aprobaciones, registro de acciones, conocimiento…), langfuse.sql.gz, erpnext.sql.gz y
@@ -32,6 +33,7 @@ else
   echo "Aviso: copia en caliente; ClickHouse y MinIO pueden quedar inconsistentes (usad --parar para una copia exacta)."
 fi
 for volumen in clickhouse minio; do
+  [ "${COPIA_SIN_TRAZAS:-0}" = 1 ] && { echo "→ Volumen langfuse-$volumen omitido (COPIA_SIN_TRAZAS=1)"; continue; }
   echo "→ Volumen langfuse-$volumen"
   # tar devuelve 1 si algún fichero cambia mientras se lee (normal en caliente): es un aviso, no un error
   docker run --rm -v "${PROYECTO}_langfuse-${volumen}:/datos:ro" -v "$DESTINO:/copia" alpine \

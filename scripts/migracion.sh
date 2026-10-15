@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # Traslada TODO el stack (datos incluidos) de una máquina a otra: exporta en el origen, importa en el destino.
 #
-#   ORIGEN :  ./scripts/migracion.sh exportar [carpeta]           → migracion-AAAAMMDD-HHMM.tar.gz (+ .sha256)
+#   ORIGEN :  ./scripts/migracion.sh exportar [carpeta] [--sin-trazas]   → migracion-AAAAMMDD-HHMM.tar.gz (+ .sha256)
+#             (--sin-trazas deja fuera ClickHouse y MinIO, que son lo que más pesa; Langfuse conserva su configuración pero no el historial)
 #   DESTINO:  git clone … && cd cerebro101
 #             scp origen:cerebro101/.env .env                       (las claves van por un canal seguro, NO dentro del paquete)
 #             ./scripts/migracion.sh importar migracion-….tar.gz --confirmar
@@ -29,7 +30,8 @@ tar_a_volumen() { docker run --rm -v "$1:/d" -v "$2:/c:ro" alpine sh -c "find /d
 
 exportar() {
   [ -f .env ] || { echo "Falta .env"; exit 1; }
-  local destino="${1:-.}" marca tmp; marca="$(date +%Y%m%d-%H%M)"; mkdir -p "$destino"; destino="$(cd "$destino" && pwd)"
+  local destino="." a; for a in "$@"; do case "$a" in --sin-trazas) export COPIA_SIN_TRAZAS=1;; *) destino="$a";; esac; done
+  local marca tmp; marca="$(date +%Y%m%d-%H%M)"; mkdir -p "$destino"; destino="$(cd "$destino" && pwd)"
   tmp="$(mktemp -d "$destino/.migracion.XXXXXX")"; trap "rm -rf '$tmp'" EXIT
   paso "Copia consistente de las bases y volúmenes (se paran Langfuse y ClickHouse unos segundos)"
   ./scripts/copia_seguridad.sh "$tmp/datos-stack" --parar
@@ -66,7 +68,9 @@ importar() {
   cat "$d/INFO.txt"
 
   paso "Parando los servicios que usan los datos"
-  docker compose stop api worker beat panel langfuse langfuse-worker proxy >/dev/null 2>&1 || true
+  for srv in proxy panel api worker beat langfuse langfuse-worker; do    # uno a uno: si falta alguno (p. ej. el proxy sin producción) no impide parar el resto
+    docker compose stop "$srv" >/dev/null 2>&1 || true
+  done
   docker compose up -d postgres langfuse-db langfuse-clickhouse langfuse-minio >/dev/null
   esperar "PostgreSQL" docker compose exec -T postgres pg_isready -U cerebro -d postgres
   esperar "PostgreSQL de Langfuse" docker compose exec -T langfuse-db pg_isready -U langfuse
@@ -83,7 +87,10 @@ importar() {
 
   paso "Trazas de Langfuse (ClickHouse y MinIO)"
   docker compose stop langfuse-clickhouse langfuse-minio >/dev/null
-  for v in clickhouse minio; do [ -f "$d/$v.tar.gz" ] && tar_a_volumen "${PROYECTO}_langfuse-$v" "$d" "$v.tar.gz"; done
+  for v in clickhouse minio; do
+    if [ -f "$d/$v.tar.gz" ]; then tar_a_volumen "${PROYECTO}_langfuse-$v" "$d" "$v.tar.gz"
+    else echo "  (el paquete no trae $v: se conserva lo que haya en este equipo; el historial de trazas puede no coincidir)"; fi
+  done
 
   paso "Volumen «datos»"
   [ -f "$d/datos.tar.gz" ] && tar_a_volumen "${PROYECTO}_datos" "$d" datos.tar.gz
@@ -101,7 +108,7 @@ importar() {
   fi
 
   paso "Arrancando todo"
-  docker compose up -d
+  docker compose up -d $([ "${MIGRACION_SIN_BUILD:-0}" = 1 ] && echo --no-build)      # SIN_BUILD=1: no reconstruye imágenes (equipos con Docker Hub limitado)
   esperar "la API" curl -fsS -m 5 http://127.0.0.1:8000/salud
   echo; curl -s http://127.0.0.1:8000/salud; echo
   curl -s http://127.0.0.1:8000/salud/constancia; echo
