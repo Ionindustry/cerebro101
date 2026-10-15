@@ -133,7 +133,9 @@ services:
   ollama:
     image: ollama/ollama:latest
     volumes: ["ollama:/root/.ollama"]
-    environment: {OLLAMA_MAX_LOADED_MODELS: "3", OLLAMA_NUM_PARALLEL: "4"}
+    environment:      # los fija despliegue/desplegar.sh según la tarjeta; peticiones simultáneas × contexto = memoria de vídeo
+      OLLAMA_MAX_LOADED_MODELS: "${OLLAMA_MAX_LOADED_MODELS:-3}"
+      OLLAMA_NUM_PARALLEL: "${OLLAMA_NUM_PARALLEL:-4}"
     deploy:
       resources:
         reservations:
@@ -186,6 +188,9 @@ services:
 
   voz:
     build: {context: ./servicios/voz}
+    environment:
+      WHISPER_MODELO: "${WHISPER_MODELO:-large-v3-turbo}"             # con tarjetas de 12 GB o menos: small
+      WHISPER_DISPOSITIVO: "${WHISPER_DISPOSITIVO:-cuda}"             # cpu si la tarjeta no tiene memoria libre
     volumes: ["./servicios/voz/voces:/voces:ro", "whisper:/root/.cache"]
     deploy:
       resources:

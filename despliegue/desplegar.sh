@@ -11,6 +11,8 @@
 #   --tls MODO         letsencrypt (por defecto: DNS público y puertos 80/443 abiertos) | interno (intranet)
 #   --empresa N --abreviatura XX   completa el asistente de ERPNext (razón social y 2-5 letras)
 #   --director E [--nombre N]      primer usuario de dirección (contraseña temporal que se muestra una vez)
+#   --perfil P         perfil de modelos: minima (6–8 GB de vídeo) | mediana (10–12 GB) | pequena (16 GB) | grande (24 GB o más).
+#                      Por defecto se elige según la memoria de la tarjeta (nvidia-smi)
 #   --sin-gpu          instala sin tarjeta NVIDIA (los modelos irán en CPU: muy lento)
 #   --sin-modelos      no descarga los modelos de IA (hacedlo luego con scripts/cargar_modelos.sh)
 #   --sin-erp          no instala ERPNext
@@ -28,7 +30,7 @@ COMPOSE=(docker compose --env-file .env -f docker-compose.yml -f despliegue/dock
 ERP=(docker compose -f erpnext/docker-compose.yml --env-file .env)
 BUILD=(--build); [ "${DESPLIEGUE_SIN_BUILD:-0}" = 1 ] && BUILD=(--no-build)
 
-DOMINIO=""; CORREO=""; TLS="letsencrypt"; EMPRESA=""; ABREV=""; DIRECTOR=""; NOMBRE="Dirección General"
+DOMINIO=""; CORREO=""; TLS="letsencrypt"; EMPRESA=""; ABREV=""; DIRECTOR=""; NOMBRE="Dirección General"; PERFIL=""
 SIN_GPU=0; SIN_MODELOS=0; SIN_ERP=0; SIMULAR=0
 
 bien() { printf '  \033[32m✓\033[0m %s\n' "$*"; }
@@ -37,6 +39,28 @@ falla() { printf '  \033[31m✗\033[0m %s\n' "$*"; }
 paso() { printf '\n\033[1m[%s] %s\033[0m\n' "$1" "$2"; }
 run() { if [ "$SIMULAR" = 1 ]; then echo "  + $*"; else "$@"; fi; }
 valor() { grep -E "^$1=" .env 2>/dev/null | head -1 | cut -d= -f2- | sed 's/[[:space:]]#.*$//'; }
+
+# Perfil de modelos según la memoria de vídeo (MiB, como la da nvidia-smi). Una A2000 de 6 GB → minima; de 12 GB → mediana.
+perfil_para_memoria() {
+  local mib="$1"
+  if [ "$mib" -lt 9000 ]; then echo minima; elif [ "$mib" -lt 15000 ]; then echo mediana
+  elif [ "$mib" -lt 22000 ]; then echo pequena; else echo grande; fi
+}
+memoria_gpu_mib() { nvidia-smi --query-gpu=memory.total --format=csv,noheader,nounits 2>/dev/null | head -1 | tr -dc 0-9; }
+
+# Ajustes de Ollama y de la voz que dependen de la tarjeta (peticiones simultáneas × contexto = memoria de vídeo)
+ajustes_del_perfil() {  # perfil -> "paralelas cargados whisper"
+  case "$1" in
+    minima)  echo "1 1 small";;
+    mediana) echo "2 1 small";;
+    pequena) echo "2 2 large-v3-turbo";;
+    *)       echo "4 3 large-v3-turbo";;
+  esac
+}
+
+fijar_env() {  # clave valor: cambia la línea CLAVE= del .env o la añade
+  if grep -qE "^$1=" .env; then sed -i -E "s|^$1=.*|$1=$2|" .env; else printf '%s=%s\n' "$1" "$2" >> .env; fi
+}
 
 esperar_http() { # url intentos [curl opciones...]
   local url="$1" n="$2"; shift 2
@@ -55,6 +79,8 @@ requisitos() {
   [ "$disco_gb" -ge 100 ] && bien "Disco libre: ${disco_gb} GB" || aviso "Disco libre: ${disco_gb} GB (recomendado 500 GB o más: modelos, base de datos y copias)"
   if command -v nvidia-smi >/dev/null && nvidia-smi >/dev/null 2>&1; then
     bien "GPU: $(nvidia-smi --query-gpu=name,memory.total --format=csv,noheader | head -1)"
+    local mib perfil_rec; mib=$(memoria_gpu_mib); perfil_rec="${PERFIL:-$(perfil_para_memoria "${mib:-0}")}"
+    bien "Perfil de modelos: ${perfil_rec} (${PERFIL:+indicado con --perfil}${PERFIL:-elegido por la memoria de la tarjeta: ${mib} MiB})"
     docker info 2>/dev/null | grep -qi nvidia && bien "Docker con soporte NVIDIA" || { aviso "Docker no muestra el runtime NVIDIA: instalad nvidia-container-toolkit"; [ "$SIN_GPU" = 1 ] || fallos=1; }
   else
     [ "$SIN_GPU" = 1 ] && aviso "Sin GPU (--sin-gpu): los modelos irán en CPU y tardarán minutos por respuesta" || { falla "No se detecta tarjeta NVIDIA (usad --sin-gpu solo para pruebas)"; fallos=1; }
@@ -116,6 +142,13 @@ instalar() {
 
   paso "1" "Configuración (.env)"
   python3 despliegue/preparar_env.py --dominio "$DOMINIO" --correo "$CORREO" --tls "$TLS" | tail -3
+  if [ -n "$PERFIL" ] || { [ "$SIN_GPU" = 0 ] && command -v nvidia-smi >/dev/null && [ -n "$(memoria_gpu_mib)" ]; }; then
+    PERFIL="${PERFIL:-$(perfil_para_memoria "$(memoria_gpu_mib)")}"
+    read -r PARALELAS CARGADOS WHISPER <<<"$(ajustes_del_perfil "$PERFIL")"
+    fijar_env PERFIL_HARDWARE "$PERFIL"; fijar_env OLLAMA_NUM_PARALLEL "$PARALELAS"
+    fijar_env OLLAMA_MAX_LOADED_MODELS "$CARGADOS"; fijar_env WHISPER_MODELO "$WHISPER"
+    bien "Perfil de modelos «$PERFIL» (Ollama: $PARALELAS petición(es) a la vez, $CARGADOS modelo(s) cargado(s); voz: $WHISPER)"
+  fi
 
   paso "2" "Base y modelos de IA"
   "${COMPOSE[@]}" up -d "${BUILD[@]}" postgres redis ollama
@@ -178,7 +211,7 @@ while [ $# -gt 0 ]; do
     --dominio) DOMINIO="$2"; shift 2;; --correo) CORREO="$2"; shift 2;; --tls) TLS="$2"; shift 2;;
     --empresa) EMPRESA="$2"; shift 2;; --abreviatura) ABREV="$2"; shift 2;;
     --director) DIRECTOR="$2"; shift 2;; --nombre) NOMBRE="$2"; shift 2;;
-    --sin-gpu) SIN_GPU=1; shift;; --sin-modelos) SIN_MODELOS=1; shift;; --sin-erp) SIN_ERP=1; shift;; --simular) SIMULAR=1; shift;;
+    --perfil) PERFIL="$2"; shift 2;; --sin-gpu) SIN_GPU=1; shift;; --sin-modelos) SIN_MODELOS=1; shift;; --sin-erp) SIN_ERP=1; shift;; --simular) SIMULAR=1; shift;;
     *) echo "Opción desconocida: $1"; exit 2;;
   esac
 done
@@ -189,5 +222,5 @@ case "$orden" in
   estado) [ -f .env ] || { echo "No hay .env: ¿se ha instalado?"; exit 1; }; TLS="$(valor TLS_MODO)"; SIN_ERP=0; "${COMPOSE[@]}" ps; verificar;;
   actualizar) git pull --ff-only; "${COMPOSE[@]}" up -d "${BUILD[@]}"; "${ERP[@]}" up -d; echo "Actualizado. Las migraciones de la base de datos se aplican solas al arrancar.";;
   copia) ./scripts/copia_seguridad.sh "$@";;
-  *) sed -n '2,23p' "$0" | sed 's/^# \{0,1\}//'; exit 2;;
+  *) sed -n '2,25p' "$0" | sed 's/^# \{0,1\}//'; exit 2;;
 esac

@@ -1,5 +1,7 @@
 # Despliegue en un servidor, con HTTPS
 
+> ¿Servidor con una RTX A2000 (6 o 12 GB)? Empezad por [SERVIDOR_A2000.md](SERVIDOR_A2000.md): perfil de modelos, preparación de la tarjeta y cómo llevar el proyecto.
+
 Un solo comando instala el Cerebro completo —Jarvis, Keycloak, Langfuse y ERPNext— detrás de un proxy con HTTPS.
 
 ## Qué necesitas
@@ -23,7 +25,7 @@ git clone -b claude/new-repository-lqspt7 https://github.com/Ionindustry/cerebro
 
 `--simular` muestra el plan sin hacer nada. `--tls interno` es para intranet sin DNS público: Caddy firma con su propia
 autoridad y el script deja `caddy-raiz.crt`, que hay que instalar como autoridad de confianza en los equipos.
-Otras opciones: `--sin-gpu`, `--sin-modelos`, `--sin-erp` (ver `./despliegue/desplegar.sh` sin argumentos).
+Otras opciones: `--perfil minima|mediana|pequena|grande` (por defecto se elige según la memoria de la tarjeta), `--sin-gpu`, `--sin-modelos`, `--sin-erp` (ver `./despliegue/desplegar.sh` sin argumentos).
 
 El script es repetible: no cambia contraseñas ya generadas. Pasos:
 

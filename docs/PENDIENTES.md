@@ -2,8 +2,8 @@
 
 | Tema | Qué falta | Dónde se conecta |
 | --- | --- | --- |
-| Tarjeta gráfica | Confirmar el modelo exacto («A200» no existe en el catálogo de NVIDIA) | `PERFIL_HARDWARE` en `.env` |
-| Etiquetas de modelos | Verificar en ollama.com/library las de `config/modelos.yaml` | `config/modelos.yaml` |
+| Tarjeta gráfica | Es una RTX A2000 (6 o 12 GB): perfiles `minima` y `mediana` creados y elegidos solos por `desplegar.sh`. Falta medirlos en la tarjeta real y decidir si 6/12 GB bastan (`docs/SERVIDOR_A2000.md`) | `config/modelos.yaml`, `despliegue/desplegar.sh` |
+| Etiquetas de modelos | Verificadas contra registry.ollama.ai (excepto `prometheus2:7b`, que no existe y se ha quitado). Revisar al cambiar de modelo y mantener la tabla de tamaños de `api/tests/test_perfiles_modelos.py` | `config/modelos.yaml` |
 | Jev / jeff | Jev funciona y ahora se anonimiza antes de salir (`docs/SEGURIDAD.md`). Falta: contrato de encargado de tratamiento y retención cero con TypeSafe, validar con vuestro asesor, ampliar `evaluacion/anonimizacion_*.yaml` con casos reales, ERPNext para la lista de entidades, y desplegar jeff (autoalojado) | `.env`, `herramientas/decision.py`, `anonimizacion.py` |
 | Grok | Verificar modelo y formato de búsqueda en docs.x.ai | `herramientas/grok.py` |
 | ERPNext | Instalado, con asistente completado (empresa «101.cat», EUR, ejercicio 2026, plan «Standard with Numbers») y blindado contra validar/borrar desde el Cerebro. Falta: sustituir el plan contable por el PGC con la gestoría, la razón social real (la actual es provisional), el IVA y las plantillas de impuestos, usuarios técnicos de Comercial, Operaciones y Telecom, datos reales y HTTPS si se expone | `erpnext/`, `scripts/erpnext_*.py`, `.env` |

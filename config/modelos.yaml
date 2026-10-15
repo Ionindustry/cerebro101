@@ -5,12 +5,27 @@
 
 perfil_por_defecto: pequena
 
+# Etiquetas y tamaños comprobados contra registry.ollama.ai (Q4): ministral-3:3b 3,0 GB · qwen3.5:4b 3,3 GB ·
+# qwen3.5:9b 6,6 GB · qwen3.8:27b 17,7 GB · bge-m3 1,2 GB. Además del modelo hace falta memoria para el contexto
+# (KV, crece con OLLAMA_NUM_CTX y OLLAMA_NUM_PARALLEL) y para la voz (Whisper). `juez` usa un modelo ya cargado:
+# «prometheus2:7b» no existe en la biblioteca de Ollama y haría fallar a los agentes que lo usan.
+# `despliegue/desplegar.sh` elige el perfil según la memoria de la tarjeta; se puede fijar con --perfil o PERFIL_HARDWARE.
 perfiles:
-  pequena:            # tarjeta de 12–16 GB de memoria
+  minima:             # tarjeta de 6–8 GB (p. ej. RTX A2000 de 6 GB): un solo modelo para todo, siempre cargado
+    rapido:    {modelo: "qwen3.5:4b",       siempre_cargado: true}
+    principal: {modelo: "qwen3.5:4b",       siempre_cargado: true, contexto: 8192}
+    vision:    {modelo: "qwen3.5:4b",       siempre_cargado: true}
+    juez:      {modelo: "qwen3.5:4b",       siempre_cargado: true}
+  mediana:            # tarjeta de 10–12 GB (p. ej. RTX A2000 de 12 GB): un solo modelo de 9B para todo
+    rapido:    {modelo: "qwen3.5:9b",       siempre_cargado: true}
+    principal: {modelo: "qwen3.5:9b",       siempre_cargado: true, contexto: 8192}
+    vision:    {modelo: "qwen3.5:9b",       siempre_cargado: true}
+    juez:      {modelo: "qwen3.5:9b",       siempre_cargado: true}
+  pequena:            # tarjeta de 16 GB: modelo rápido y principal a la vez
     rapido:    {modelo: "ministral-3:3b",   siempre_cargado: true}
     principal: {modelo: "qwen3.5:9b",       siempre_cargado: true, contexto: 32768}
     vision:    {modelo: "qwen3.5:9b",       siempre_cargado: false}
-    juez:      {modelo: "prometheus2:7b",   siempre_cargado: false}
+    juez:      {modelo: "qwen3.5:9b",       siempre_cargado: false}
   grande:             # tarjeta de 24 GB o más (incluida H200)
     rapido:    {modelo: "ministral-3:3b",   siempre_cargado: true}
     principal: {modelo: "qwen3.8:27b",      siempre_cargado: true, contexto: 65536}
