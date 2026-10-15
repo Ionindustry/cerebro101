@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Instala Frappe CRM (con la app «whatsapp» que exige) en el ERPNext de este proyecto. Idempotente.
+# Instala Frappe CRM en el ERPNext de este proyecto. Idempotente.
 #
 #   ./scripts/erpnext_crm.sh instalar [--ref RAMA_O_ETIQUETA]    construye la imagen, la activa y instala las apps en el sitio
 #   ./scripts/erpnext_crm.sh estado                               qué versión hay y si responde
@@ -26,7 +26,7 @@ estado() {
 }
 
 instalar() {
-  local ref="main" a; while [ $# -gt 0 ]; do case "$1" in --ref) ref="$2"; shift 2;; *) echo "Opción desconocida: $1"; exit 2;; esac; done
+  local ref="${CRM_REF:-v1.87.0}" a; while [ $# -gt 0 ]; do case "$1" in --ref) ref="$2"; shift 2;; *) echo "Opción desconocida: $1"; exit 2;; esac; done
   docker ps --format '{{.Names}}' | grep -qx erpnext-db-1 || { echo "ERPNext no está en marcha: docker compose -f erpnext/docker-compose.yml --env-file .env up -d"; exit 1; }
   paso "Copia de seguridad de la base de ERPNext (por si hubiera que volver atrás)"
   mkdir -p copias; local copia="copias/erpnext-antes-crm-$(date +%Y%m%d-%H%M).sql.gz"
@@ -39,8 +39,8 @@ instalar() {
   fijar ERPNEXT_IMAGEN "$IMAGEN"
   "${ERP[@]}" up -d --force-recreate backend frontend queue-short queue-long scheduler websocket configurator
   for _ in $(seq 1 60); do curl -fsS -m 5 -o /dev/null -H "Host: $SITIO" http://127.0.0.1:8081/api/method/ping 2>/dev/null && break; sleep 5; done
-  paso "Instalando whatsapp y crm en el sitio $SITIO"
-  for app in whatsapp crm; do
+  paso "Instalando crm en el sitio $SITIO"
+  for app in $(docker exec erpnext-backend-1 ls apps | grep -E "^(whatsapp|crm)$" | sort -r); do   # whatsapp antes que crm si existe
     bench --site "$SITIO" list-apps 2>/dev/null | grep -q "^$app " && echo "  $app ya instalada" || bench --site "$SITIO" install-app "$app"
   done
   bench --site "$SITIO" migrate
