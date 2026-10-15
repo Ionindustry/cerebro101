@@ -8,7 +8,7 @@ name: erpnext
 
 services:
   backend:
-    image: frappe/erpnext:${ERPNEXT_VERSION:-v16.37.0}
+    image: ${ERPNEXT_IMAGEN:-frappe/erpnext:${ERPNEXT_VERSION:-v16.37.0}}
     networks:
       - frappe_network
     deploy:
@@ -27,7 +27,7 @@ services:
         condition: service_completed_successfully
 
   configurator:
-    image: frappe/erpnext:${ERPNEXT_VERSION:-v16.37.0}
+    image: ${ERPNEXT_IMAGEN:-frappe/erpnext:${ERPNEXT_VERSION:-v16.37.0}}
     networks:
       - frappe_network
     deploy:
@@ -56,7 +56,7 @@ services:
       - logs:/home/frappe/frappe-bench/logs
 
   create-site:
-    image: frappe/erpnext:${ERPNEXT_VERSION:-v16.37.0}
+    image: ${ERPNEXT_IMAGEN:-frappe/erpnext:${ERPNEXT_VERSION:-v16.37.0}}
     networks:
       - frappe_network
     deploy:
@@ -120,7 +120,7 @@ services:
       - db-data:/var/lib/mysql
 
   frontend:
-    image: frappe/erpnext:${ERPNEXT_VERSION:-v16.37.0}
+    image: ${ERPNEXT_IMAGEN:-frappe/erpnext:${ERPNEXT_VERSION:-v16.37.0}}
     networks:
       frappe_network: {}
       cerebro:
@@ -149,7 +149,7 @@ services:
       - "127.0.0.1:8081:8080"      # el 8080 lo usa Keycloak
 
   queue-long:
-    image: frappe/erpnext:${ERPNEXT_VERSION:-v16.37.0}
+    image: ${ERPNEXT_IMAGEN:-frappe/erpnext:${ERPNEXT_VERSION:-v16.37.0}}
     networks:
       - frappe_network
     deploy:
@@ -171,7 +171,7 @@ services:
         condition: service_completed_successfully
 
   queue-short:
-    image: frappe/erpnext:${ERPNEXT_VERSION:-v16.37.0}
+    image: ${ERPNEXT_IMAGEN:-frappe/erpnext:${ERPNEXT_VERSION:-v16.37.0}}
     networks:
       - frappe_network
     deploy:
@@ -211,7 +211,7 @@ services:
         condition: on-failure
 
   scheduler:
-    image: frappe/erpnext:${ERPNEXT_VERSION:-v16.37.0}
+    image: ${ERPNEXT_IMAGEN:-frappe/erpnext:${ERPNEXT_VERSION:-v16.37.0}}
     networks:
       - frappe_network
     deploy:
@@ -228,7 +228,7 @@ services:
         condition: service_completed_successfully
 
   websocket:
-    image: frappe/erpnext:${ERPNEXT_VERSION:-v16.37.0}
+    image: ${ERPNEXT_IMAGEN:-frappe/erpnext:${ERPNEXT_VERSION:-v16.37.0}}
     networks:
       - frappe_network
     deploy:
