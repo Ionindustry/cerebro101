@@ -16,4 +16,5 @@ RUN if [ -n "${WHATSAPP_REF}" ]; then bench get-app --branch "${WHATSAPP_REF}" w
  && bench get-app --branch "${CRM_REF}" crm https://github.com/frappe/crm \
  && git -C apps/crm rev-parse HEAD > apps/crm/.commit \
  && rm -rf apps/crm/.git apps/whatsapp/.git apps/crm/node_modules apps/crm/frontend/node_modules apps/whatsapp/node_modules \
-    ~/.cache ~/.npm ~/.yarn /tmp/*    # solo se limpia lo de estas dos apps: el websocket de Frappe necesita sus propios node_modules
+    ~/.cache ~/.npm ~/.yarn \
+ && (rm -rf /tmp/* 2>/dev/null || true)    # solo se limpia lo de estas dos apps: el websocket de Frappe necesita sus propios node_modules
