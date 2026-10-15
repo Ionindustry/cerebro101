@@ -65,12 +65,25 @@ git clone -b claude/new-repository-lqspt7 ~/cerebro101.bundle cerebro101
 | Cosa | Qué hacer |
 | --- | --- |
 | `.env` (contraseñas y claves) | No está en Git. `desplegar.sh instalar` lo crea con claves aleatorias nuevas. La clave de Jev y las de correo/Grok se ponen a mano |
-| Datos de este entorno de desarrollo (bases, trazas, ERPNext de pruebas) | No merece la pena: son datos de prueba. El servidor empieza limpio; las migraciones crean las tablas |
+| Datos (bases, trazas, ERPNext) | Opcional, con `scripts/migracion.sh` (ver abajo). Si son solo de prueba, empieza limpio: las migraciones crean las tablas |
 | Modelos de Ollama | Se descargan en el servidor (`qwen3.5:4b` ≈ 3,3 GB o `qwen3.5:9b` ≈ 6,6 GB, más `bge-m3`) |
 | Documentos de conocimiento | Se cargan con `scripts/cargar_conocimiento.py` (ver `docs/INSTALACION.md`, paso 5) |
 
-Para mover **datos reales** de un servidor a otro más adelante existe `scripts/copia_seguridad.sh` (volcados de PostgreSQL, Langfuse, ERPNext y
-trazas). La restauración **todavía no está automatizada**: hoy se hace a mano con `psql`/`tar`. Dime si quieres que la escriba.
+Para mover **también los datos** (cuando haya datos reales, o para llevar los de este entorno) existe `scripts/migracion.sh`: en el origen empaqueta
+las bases del Cerebro, de Langfuse y de ERPNext, las trazas y el volumen `datos` en un solo fichero con suma de control; en el destino lo restaura.
+**El `.env` no va dentro del paquete** (son los secretos): se copia aparte por un canal seguro, y el destino lo necesita igual, porque ERPNext
+y las bases guardan esas contraseñas.
+
+```bash
+# ORIGEN
+./scripts/migracion.sh exportar                      # → migracion-AAAAMMDD-HHMM.tar.gz y su .sha256
+scp migracion-*.tar.gz* .env usuario@servidor:~/cerebro101/      # el .env como fichero aparte
+# DESTINO (tras clonar el repositorio y mover el .env a su sitio)
+./scripts/migracion.sh importar migracion-AAAAMMDD-HHMM.tar.gz --confirmar     # SOBRESCRIBE los datos del destino
+./scripts/cargar_modelos.sh                          # los modelos de Ollama no viajan: se descargan
+```
+
+El paquete contiene datos de la empresa y, junto con el `.env`, todo lo necesario para leerlos: trátalo como confidencial y bórralo al terminar.
 
 ## 3. Instalar
 

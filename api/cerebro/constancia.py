@@ -6,6 +6,9 @@ Una acción aprobada se ejecuta aunque la base de datos falle justo después; lo
 3. Se avisa: log CRITICAL, observación en Langfuse con nivel ERROR, aviso en la respuesta de la acción y `/salud/constancia`
    en 503 mientras haya filas sin volcar (para que la monitorización dispare la alerta).
 4. `volcar_pendientes()` las pasa a la base al arrancar y cada pocos minutos (tarea de Celery), conservando la hora original.
+5. Si la base rechaza una fila por ser inválida (no por estar caída), reintentarla no sirve de nada: se aparta en
+   `constancia_rechazada.jsonl` con el motivo. Sigue contando como alerta (`rechazadas` en `/salud/constancia`) hasta que una
+   persona la revise y la retire; así una fila mala no atasca a las buenas ni se pierde en silencio.
 """
 from __future__ import annotations
 
@@ -39,9 +42,19 @@ async def _insertar(f: dict) -> None:
             (f["hilo"], f["agente"], f["herramienta"], f["operacion"], f["aprobacion"], f["resultado"][:4000], f["creado"]))
 
 
-def _guardar_local(f: dict) -> bool:
+def _fichero_rechazadas() -> Path:
+    return _fichero().with_name("constancia_rechazada.jsonl")
+
+
+def _es_definitivo(e: Exception) -> bool:
+    """Un dato que la base rechaza (uuid mal formado, clave ajena inexistente…) no se arregla reintentando; una base caída sí."""
+    definitivos = tuple(getattr(psycopg, n) for n in ("DataError", "IntegrityError", "ProgrammingError") if hasattr(psycopg, n))
+    return bool(definitivos) and isinstance(e, definitivos)
+
+
+def _guardar_local(f: dict, ruta: Path | None = None) -> bool:
     try:
-        ruta = _fichero()
+        ruta = ruta or _fichero()
         ruta.parent.mkdir(parents=True, exist_ok=True)
         fd = os.open(ruta, os.O_WRONLY | os.O_APPEND | os.O_CREAT, 0o600)
         with os.fdopen(fd, "a", encoding="utf-8") as fh:
@@ -55,12 +68,20 @@ def _guardar_local(f: dict) -> bool:
         return False
 
 
-def pendientes() -> int:
+def _contar(ruta: Path) -> int:
     try:
-        with open(_fichero(), encoding="utf-8") as fh:
+        with open(ruta, encoding="utf-8") as fh:
             return sum(1 for linea in fh if linea.strip())
     except FileNotFoundError:
         return 0
+
+
+def pendientes() -> int:
+    return _contar(_fichero())
+
+
+def rechazadas() -> int:
+    return _contar(_fichero_rechazadas())
 
 
 async def dejar_constancia(hilo: str | None, agente: str, herramienta: str, operacion: str,
@@ -96,18 +117,23 @@ async def volcar_pendientes() -> dict:
     """Pasa a la base las filas guardadas en local. Lo que siga fallando se conserva para el próximo intento."""
     ruta = _fichero()
     if not ruta.exists():
-        return {"volcadas": 0, "quedan": 0}
+        return {"volcadas": 0, "quedan": 0, "apartadas": 0}
     with open(ruta, "r+", encoding="utf-8") as fh:
         fcntl.flock(fh, fcntl.LOCK_EX)
         filas = [json.loads(linea) for linea in fh if linea.strip()]
-        quedan, volcadas = [], 0
+        quedan, volcadas, apartadas = [], 0, 0
         for f in filas:
             try:
                 await _insertar(f)
                 volcadas += 1
             except Exception as e:  # noqa: BLE001
-                quedan.append(f)
-                log.warning("Sigue sin poder volcarse la constancia pendiente: %s", e)
+                if _es_definitivo(e) and _guardar_local({**f, "motivo_rechazo": f"{type(e).__name__}: {str(e)[:200]}"}, _fichero_rechazadas()):
+                    apartadas += 1
+                    log.critical("Constancia RECHAZADA por la base (no se reintentará; revisar %s): %s.%s aprobación %s: %s",
+                                 _fichero_rechazadas(), f.get("herramienta"), f.get("operacion"), f.get("aprobacion"), e)
+                else:
+                    quedan.append(f)
+                    log.warning("Sigue sin poder volcarse la constancia pendiente: %s", e)
         fh.seek(0)
         fh.truncate()
         for f in quedan:
@@ -116,4 +142,4 @@ async def volcar_pendientes() -> dict:
         os.fsync(fh.fileno())
     if volcadas:
         log.warning("Constancia pendiente volcada a registro_acciones: %d fila(s); quedan %d", volcadas, len(quedan))
-    return {"volcadas": volcadas, "quedan": len(quedan)}
+    return {"volcadas": volcadas, "quedan": len(quedan), "apartadas": apartadas}

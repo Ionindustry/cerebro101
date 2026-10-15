@@ -92,11 +92,11 @@ async def salud():
 
 @app.get("/salud/constancia")
 async def salud_constancia():
-    """503 mientras haya acciones ejecutadas sin constancia en la base: es lo que debe vigilar la monitorización."""
-    n = constancia.pendientes()
-    cuerpo = {"pendientes": n, "fallos_desde_el_arranque": constancia.ESTADO["fallos"],
+    """503 mientras haya acciones ejecutadas sin constancia en la base (pendientes de volcar o rechazadas por la base y sin revisar): es lo que debe vigilar la monitorización."""
+    n, r = constancia.pendientes(), constancia.rechazadas()
+    cuerpo = {"pendientes": n, "rechazadas": r, "fallos_desde_el_arranque": constancia.ESTADO["fallos"],
               "ultimo_fallo": constancia.ESTADO["ultimo_fallo"]}
-    return JSONResponse(status_code=503 if n else 200, content=cuerpo)
+    return JSONResponse(status_code=503 if (n or r) else 200, content=cuerpo)
 
 
 @app.get("/salud/modelos")

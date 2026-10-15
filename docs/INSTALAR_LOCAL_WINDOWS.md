@@ -74,6 +74,7 @@ Ollama y Langfuse deja la máquina sin memoria y los modelos empiezan a dar time
 
 - **Los datos**: bases de datos, trazas, sesiones y modelos descargados viven en volúmenes de Docker de cada máquina. Un clon empieza vacío:
   el servicio `migraciones` crea las tablas y hay que repetir el asistente de ERPNext y cargar los documentos de conocimiento.
+  Para traer los datos de otra máquina: `./scripts/migracion.sh importar paquete.tar.gz --confirmar` (con el `.env` del origen copiado antes; ver [SERVIDOR_A2000.md](SERVIDOR_A2000.md)).
 - **Los secretos**: `.env` está fuera de Git a propósito. Nunca lo subas ni lo pegues en un chat.
 - **Los ficheros de entornos restringidos** (`docker-compose.override.yml`, `Dockerfile.local`, `ca.crt`): solo hacían falta en el entorno
   de desarrollo en la nube. En tu PC no.
