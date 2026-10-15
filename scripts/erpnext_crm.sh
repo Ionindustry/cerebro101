@@ -12,7 +12,7 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 [ -f .env ] || { echo "Falta .env"; exit 1; }
 ERP=(docker compose -f erpnext/docker-compose.yml --env-file .env)
-valor() { grep -E "^$1=" .env | head -1 | cut -d= -f2- | sed 's/[[:space:]]#.*$//'; }
+valor() { { grep -E "^$1=" .env || true; } | head -1 | cut -d= -f2- | sed 's/[[:space:]]#.*$//'; }    # una clave ausente da cadena vacía, no error
 fijar() { if grep -qE "^$1=" .env; then sed -i -E "s|^$1=.*|$1=$2|" .env; else printf '%s=%s\n' "$1" "$2" >> .env; fi; }
 paso() { printf '\n\033[1m→ %s\033[0m\n' "$*"; }
 SITIO="$(valor ERPNEXT_SITE)"; SITIO="${SITIO:-erp.101.cat}"
@@ -22,7 +22,8 @@ bench() { docker exec -u frappe -w /home/frappe/frappe-bench erpnext-backend-1 b
 
 estado() {
   docker exec erpnext-backend-1 bench --site "$SITIO" list-apps 2>/dev/null | tail -6 || echo "ERPNext no está en marcha"
-  printf 'CRM: '; curl -s -o /dev/null -m 15 -w '%{http_code}\n' -H "Host: $SITIO" http://127.0.0.1:8081/crm || true
+  local c; c="$(curl -s -o /dev/null -m 15 -w '%{http_code}' -H "Host: $SITIO" http://127.0.0.1:8081/crm || true)"
+  case "$c" in 200|302|403) echo "CRM: responde ($c; sin sesión es normal que pida iniciar sesión)";; *) echo "CRM: NO responde ($c)";; esac
 }
 
 instalar() {
@@ -44,8 +45,7 @@ instalar() {
     bench --site "$SITIO" list-apps 2>/dev/null | grep -q "^$app " && echo "  $app ya instalada" || bench --site "$SITIO" install-app "$app"
   done
   bench --site "$SITIO" migrate
-  # los ficheros estáticos (JS y CSS) de las apps nuevas: el volumen «sites» ya existía y no los trae
-  docker exec -u frappe -w /home/frappe/frappe-bench/sites erpnext-backend-1 ../env/bin/python -c "import frappe.build as b; b.make_asset_dirs()"
+  # los ficheros estáticos (JS y CSS) de CRM ya están en la imagen: se compilaron al construirla
   bench --site "$SITIO" clear-cache
   "${ERP[@]}" restart backend frontend queue-short queue-long scheduler websocket >/dev/null
   for _ in $(seq 1 60); do curl -fsS -m 5 -o /dev/null -H "Host: $SITIO" http://127.0.0.1:8081/api/method/ping 2>/dev/null && break; sleep 3; done

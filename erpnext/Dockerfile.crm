@@ -18,3 +18,5 @@ RUN if [ -n "${WHATSAPP_REF}" ]; then bench get-app --branch "${WHATSAPP_REF}" w
  && rm -rf apps/crm/.git apps/whatsapp/.git apps/crm/node_modules apps/crm/frontend/node_modules apps/whatsapp/node_modules \
     ~/.cache ~/.npm ~/.yarn \
  && (rm -rf /tmp/* 2>/dev/null || true)    # solo se limpia lo de estas dos apps: el websocket de Frappe necesita sus propios node_modules
+# Los estáticos de las apps nuevas (JS y CSS) se sirven desde assets/<app>: el enlace lo debe traer la imagen para que lo vean todos los contenedores
+RUN for a in crm whatsapp; do [ -d "apps/$a" ] && ln -sfn "/home/frappe/frappe-bench/apps/$a/$a/public" "assets/$a" || true; done

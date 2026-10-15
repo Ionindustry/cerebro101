@@ -20,7 +20,7 @@ cd "$(dirname "$0")/.."
 orden="${1:-}"; [ $# -gt 0 ] && shift || true
 PROYECTO="$(docker compose config --format json 2>/dev/null | python3 -c 'import sys,json;print(json.load(sys.stdin)["name"])')"
 ERP=(docker compose -f erpnext/docker-compose.yml --env-file .env)
-valor() { grep -E "^$1=" .env | head -1 | cut -d= -f2- | sed 's/[[:space:]]#.*$//'; }
+valor() { { grep -E "^$1=" .env || true; } | head -1 | cut -d= -f2- | sed 's/[[:space:]]#.*$//'; }    # una clave ausente da cadena vacía, no error
 paso() { printf '\n\033[1m→ %s\033[0m\n' "$*"; }
 esperar() { # descripción comando…
   local d="$1"; shift; for _ in $(seq 1 60); do "$@" >/dev/null 2>&1 && return 0; sleep 3; done; echo "No responde: $d"; exit 1

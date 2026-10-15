@@ -36,6 +36,11 @@
    - `python scripts/erpnext_blindar.py` (una vez, y reiniciar `backend queue-short queue-long`): impide que los usuarios
      `cerebro.*` validen, cancelen o borren documentos, aunque su rol lo permita (el rol «Accounts User» puede validar
      facturas). Segunda barrera dentro del propio ERP, además de la política y del conector.
+   - **Frappe CRM** (opcional, interfaz de CRM moderna sobre el mismo ERPNext): `./scripts/erpnext_crm.sh instalar`. Construye la imagen
+     `cerebro-erpnext-crm` (la oficial + CRM v1.87.0), la activa, instala la app en el sitio y migra; antes hace una copia de la base. Queda en
+     `http://localhost:8081/crm` (misma cuenta de ERPNext). Necesita acceso a github.com, npm y PyPI durante la construcción (10-20 min, unos
+     5 GB de disco). No uses la rama `main` de CRM: es la línea 2.0 en desarrollo y no compila con Frappe 16.36. Los datos del CRM (CRM Lead,
+     CRM Deal…) son documentos distintos de los Lead y Opportunity del módulo CRM de ERPNext que usan hoy los agentes: no se sincronizan solos.
    - La API del Cerebro lo ve como `http://erpnext:8080` (`ERPNEXT_URL`); el navegador, en `localhost:8081`.
 7. Integraciones: en `config/integraciones.yaml`, poner el servidor IMAP/SMTP y la URL CalDAV del servidor de
    correo propio, y las URL de sindicación (ATOM) de las plataformas de contratación. Las cuentas van en `.env`
