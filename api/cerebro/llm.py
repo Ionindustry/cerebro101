@@ -199,6 +199,9 @@ async def chat(asignacion: Asignacion, mensajes: list[dict], esquema: dict | Non
         # Ollama rechaza "-1" como texto: sin unidad debe ir como número
         "keep_alive": int(asignacion.mantener_cargado) if asignacion.mantener_cargado.lstrip("-").isdigit() else asignacion.mantener_cargado,
         "options": {"temperature": temperatura, "num_predict": max_tokens, "num_ctx": num_ctx},   # sin num_ctx Ollama usa 4096
+        # Los modelos que razonan (qwen3.5…) gastan el tope de tokens «pensando» antes de escribir el JSON y la respuesta sale
+        # cortada. Para enrutar y usar herramientas no hace falta: OLLAMA_PENSAR=true lo activa.
+        "think": os.environ.get("OLLAMA_PENSAR", "").strip().lower() in ("1", "true", "si", "sí"),
     }
     if esquema:
         cuerpo["format"] = esquema
@@ -227,8 +230,12 @@ async def chat(asignacion: Asignacion, mensajes: list[dict], esquema: dict | Non
                 log.warning("Respuesta de %s cortada por el límite de %d tokens", asignacion.modelo, max_tokens)
             return contenido
         if cortada:
-            log.warning("Respuesta de %s cortada en %d tokens (%d caracteres, %d en blanco); final: %r", asignacion.modelo, max_tokens, len(contenido), sum(c.isspace() for c in contenido), contenido[-150:])
-            raise RespuestaInvalida(f"La respuesta del modelo {asignacion.modelo} se cortó al llegar al límite de {max_tokens} tokens.",
+            pensado = len(resp["message"].get("thinking") or "")
+            log.warning("Respuesta de %s cortada en %d tokens (%d caracteres de respuesta, %d de razonamiento); final: %r",
+                        asignacion.modelo, max_tokens, len(contenido), pensado, contenido[-150:])
+            motivo = (f" El modelo gastó el límite razonando ({pensado} caracteres de razonamiento): comprueba que OLLAMA_PENSAR no esté activado."
+                      if pensado else "")
+            raise RespuestaInvalida(f"La respuesta del modelo {asignacion.modelo} se cortó al llegar al límite de {max_tokens} tokens.{motivo}",
                                     parcial=contenido)
         try:
             datos = json.loads(contenido)

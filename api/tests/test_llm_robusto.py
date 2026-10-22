@@ -155,6 +155,26 @@ class TestLlmRobusto(unittest.TestCase):
             self.chat(srv)
         self.assertEqual(srv.cuerpos[0]["options"]["num_ctx"], 16384)
 
+    def test_el_razonamiento_va_desactivado_salvo_que_se_active(self):
+        srv = Servidor(respuesta(OK))
+        self.chat(srv)
+        self.assertIs(srv.cuerpos[0]["think"], False)
+        for valor in ("true", "1", "sí"):
+            with mock.patch.dict(os.environ, {"OLLAMA_PENSAR": valor}):
+                srv = Servidor(respuesta(OK))
+                self.chat(srv)
+            self.assertIs(srv.cuerpos[0]["think"], True, valor)
+
+    def test_si_se_corta_por_razonar_el_error_lo_dice(self):
+        # caso real: qwen3.5:9b con tope de 400 tokens gastó todo pensando y no llegó a escribir el JSON
+        pensando = respuesta({**OK, "message": {"content": "", "thinking": "Vamos a analizar la petición… " * 40},
+                              "done_reason": "length", "prompt_eval_count": 900, "eval_count": 400})
+        with self.assertRaises(llm.RespuestaInvalida) as e:
+            self.chat(Servidor(pensando), esquema=ESQUEMA, max_tokens=400)
+        self.assertIn("400 tokens", str(e.exception))
+        self.assertIn("razonando", str(e.exception))
+        self.assertIn("OLLAMA_PENSAR", str(e.exception))
+
     def test_entrada_que_llena_la_ventana_es_contexto_lleno_y_no_un_bucle(self):
         # caso real: 4032 tokens de entrada con la ventana por defecto de 4096; el modelo se queda sin sitio tras 64 tokens
         lleno = respuesta({**OK, "message": {"content": '{"tipo": "respuesta"'}, "done_reason": "length",
