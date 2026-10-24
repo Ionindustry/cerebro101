@@ -4,6 +4,7 @@
 #
 #   ./scripts/arrancar.sh            levanta lo que esté parado y espera a que respondan
 #   ./scripts/arrancar.sh estado     solo comprueba (sale con 0 si la API responde, con 1 si no); no arranca nada
+#   ./scripts/arrancar.sh reparar-erp  reinicia los servicios del ERP en el orden correcto (backend y websocket, luego el frontend)
 #
 # Variables: ARRANCAR_ESPERA=300 (segundos máximos esperando a la API), ARRANCAR_SERVICIOS="api postgres ..." (solo esos del Cerebro),
 #            ARRANCAR_SIN_ERP=1 (no toca ERPNext).
@@ -30,7 +31,19 @@ resumen() {
   return 0
 }
 
+# Tras reiniciar Docker, todo arranca a la vez y el frontend (nginx) puede caerse porque aun no existe el websocket
+# ("host not found in upstream"). Reiniciarlo cuando los demas ya estan en pie lo arregla.
+reparar_erp() {
+  echo "[$(marca)] Reparando el ERP: se reinician backend y websocket y despues el frontend..."
+  "${ERP[@]}" --progress quiet restart backend websocket >/dev/null 2>&1
+  sleep 20
+  "${ERP[@]}" --progress quiet restart frontend >/dev/null 2>&1
+  for _ in $(seq 1 24); do erp_ok && return 0; sleep 5; done
+  return 1
+}
+
 if [ "${1:-}" = "estado" ]; then resumen; api_ok; exit $?; fi
+if [ "${1:-}" = "reparar-erp" ]; then reparar_erp && echo "[$(marca)] ERP: responde" || echo "[$(marca)] ERP: sigue sin responder"; exit 0; fi
 
 [ -f .env ] || { echo "Falta .env: este equipo no tiene el Cerebro instalado (scripts/iniciar.sh)"; exit 2; }
 docker info >/dev/null 2>&1 || { echo "[$(marca)] Docker no responde: arráncalo y repite"; exit 1; }
@@ -46,9 +59,19 @@ fi
 
 usa_erp=0; if [ -f erpnext/docker-compose.yml ] && [ "${ARRANCAR_SIN_ERP:-0}" != 1 ] && [ -n "$("${ERP[@]}" ps -a -q 2>/dev/null)" ]; then usa_erp=1; fi
 echo "[$(marca)] Esperando a la API$([ "$usa_erp" = 1 ] && echo ' y al ERP') (hasta ${ESPERA} s)..."
-for _ in $(seq 1 $((ESPERA / 5))); do
-  if api_ok && { [ "$usa_erp" = 0 ] || erp_ok; }; then break; fi
-  sleep 5
-done
+espera_servicios() {   # segundos maximos
+  local i; for i in $(seq 1 $(($1 / 5))); do
+    if api_ok && { [ "$usa_erp" = 0 ] || erp_ok; }; then return 0; fi
+    sleep 5
+  done
+  return 1
+}
+PRIMERA=$(( ESPERA < 90 ? ESPERA : 90 ))
+if ! espera_servicios "$PRIMERA"; then
+  if [ "$usa_erp" = 1 ] && api_ok && ! erp_ok; then
+    reparar_erp || true
+  fi
+  espera_servicios $(( ESPERA - PRIMERA > 30 ? ESPERA - PRIMERA : 30 )) || true
+fi
 resumen
 api_ok
