@@ -10,7 +10,7 @@
 # Lo que los agentes pueden hacer: leer, redactar borradores (aparecen en la carpeta Borradores del buzón) y marcar como gestionado.
 # CONTESTAR o ENVIAR sale de la empresa: pasa SIEMPRE por la bandeja de aprobaciones y una persona ve el texto completo antes de aprobar.
 #
-# Comercial no tiene buzón propio todavía: sus agentes no podrán usar el correo hasta que se le asigne uno (docs/CORREO.md).
+# Comercial usa de momento la cuenta albert@101.cat; cuando exista comercial@ se cambia aquí.
 
 servidor:                       # valores por defecto de todos los buzones; cada buzón puede sustituirlos con sus propios «imap» y «smtp»
   imap: {host: "mail.101.cat", puerto: 993, seguridad: ssl}          # seguridad: ssl | starttls | ninguna (esta última solo para pruebas)
@@ -48,6 +48,11 @@ buzones:
     departamentos: [atencion]
     descripcion: "Incidencias y atención al cliente"
     firma: "Atención al cliente · 101.cat"
+  albert:
+    direccion: albert@101.cat
+    departamentos: [comercial]
+    descripcion: "Cuenta personal de Albert, usada por Comercial (todo envío lo aprueba una persona)"
+    firma: "Albert · 101.cat"
   concursos:
     direccion: concursos@101.cat
     departamentos: [licitaciones]

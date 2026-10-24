@@ -61,9 +61,9 @@ que se enviará** y, si es una respuesta, el mensaje original. Aprobar es lo ún
 
 ## Pendiente de decidir con la empresa
 
-- Buzones: administracion@ (Dirección, Operaciones y Telecom), facturacion@ (Finanzas), rrhh@ (Personas), soporte@ (Atención) y concursos@ (Licitaciones).
-  **Comercial no tiene buzón** y sus agentes de correo (respuesta-leads, canal-email, gestor-cuentas) no podrán usarlo hasta asignarle uno
-  (p. ej. añadir `comercial` a los departamentos de soporte@, o crear comercial@). Los agentes de Licitaciones no tienen aún la herramienta `correo` en su ficha.
+- Buzones: administracion@ (Dirección, Operaciones y Telecom), facturacion@ (Finanzas), rrhh@ (Personas), soporte@ (Atención), concursos@ (Licitaciones)
+  y albert@ (Comercial, de momento con la cuenta personal de Albert: las respuestas salen firmadas con su nombre, por eso todas pasan por aprobación;
+  cuando exista comercial@ se cambia el buzón en `config/buzones.yaml`). En Licitaciones usa el correo el agente `presentacion-requerimientos` (aclaraciones y subsanaciones).
 - ¿Qué buzones empiezan en modo «solo leer y preparar borradores»? Mientras no pongas su contraseña, un buzón no hace nada.
 - ¿Firma de cada buzón (campo `firma`) y texto del pie comercial? Los revisa la persona responsable de protección de datos.
 - Los agentes que atienden estos buzones y su frecuencia de revisión (tareas programadas) se ajustan en sus fichas.

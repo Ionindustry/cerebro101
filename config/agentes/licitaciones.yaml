@@ -62,6 +62,7 @@ agentes:
   - conocimiento
   - plataformas_contratacion
   - calendario
+  - correo
   aprobacion: doble
   horario: null
   sensibilidad: media
