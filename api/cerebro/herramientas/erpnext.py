@@ -19,6 +19,12 @@ from .base import Herramienta, registrar
 
 def _cabeceras(departamento: str) -> dict:
     token = os.environ.get(f"ERPNEXT_TOKEN_{departamento.upper()}") or os.environ.get("ERPNEXT_TOKEN", "")
+    if not token:
+        # Sin esto el ERP responde 401/403 y la persona solo ve un error HTTP sin pistas
+        raise PermissionError(
+            f"No hay clave de ERPNext para el departamento «{departamento}» (falta ERPNEXT_TOKEN_{departamento.upper()} en el .env). "
+            f"Se crea con: python3 scripts/erpnext_usuario_tecnico.py --departamento {departamento} --roles \"Sales User\" "
+            "(los roles según lo que deba leer ese departamento) y después docker compose up -d --force-recreate --no-deps api worker beat")
     return {"Authorization": f"token {token}", "Accept": "application/json"}
 
 

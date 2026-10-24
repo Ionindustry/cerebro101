@@ -79,3 +79,31 @@ class TestCalendario(unittest.TestCase):
     def test_sin_fines_de_semana(self):
         sabado = date(2026, 10, 10)
         self.assertEqual(calcular_huecos([], sabado, sabado, 60), [])
+
+
+class TestClaveDelErpPorDepartamento(unittest.TestCase):
+    """Sin clave del departamento, el error dice qué falta y cómo crearla (antes: un 401/403 sin pistas)."""
+
+    def setUp(self):
+        try:
+            from cerebro.herramientas import erpnext
+        except ImportError as e:
+            self.skipTest(f"requiere las dependencias del contenedor: {e}")
+        self.erp = erpnext
+
+    def test_sin_clave_explica_como_crearla(self):
+        import os
+        from unittest import mock
+        with mock.patch.dict(os.environ, {"ERPNEXT_TOKEN": "", "ERPNEXT_TOKEN_COMERCIAL": ""}):
+            with self.assertRaises(PermissionError) as e:
+                self.erp._cabeceras("comercial")
+        t = str(e.exception)
+        self.assertIn("ERPNEXT_TOKEN_COMERCIAL", t)
+        self.assertIn("erpnext_usuario_tecnico.py --departamento comercial", t)
+
+    def test_usa_la_del_departamento_y_si_no_la_general(self):
+        import os
+        from unittest import mock
+        with mock.patch.dict(os.environ, {"ERPNEXT_TOKEN": "general:g", "ERPNEXT_TOKEN_COMERCIAL": "com:c"}):
+            self.assertEqual(self.erp._cabeceras("comercial")["Authorization"], "token com:c")
+            self.assertEqual(self.erp._cabeceras("legal")["Authorization"], "token general:g")
