@@ -131,7 +131,7 @@ if ($Estado) {
   foreach ($t in $Tareas) {
     $x = Get-ScheduledTask -TaskName $t -ErrorAction SilentlyContinue
     if ($x) { $i = Get-ScheduledTaskInfo -TaskName $t; Write-Host ("{0}: {1}; ultima ejecucion {2}; resultado {3}" -f $t, $x.State, $i.LastRunTime, $i.LastTaskResult) }
-    else { Write-Host "$t: NO instalada" }
+    else { Write-Host "${t}: NO instalada" }
   }
   Write-Host ("Docker: " + $(if (Docker-Responde) { "responde" } else { "NO responde" }))
   Write-Host ("API del Cerebro: " + $(if (Api-Responde) { "responde" } else { "NO responde" }))
