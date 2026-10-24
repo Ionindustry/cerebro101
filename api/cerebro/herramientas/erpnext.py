@@ -88,9 +88,27 @@ async def leer(doctype: str, nombre: str, departamento: str) -> dict:
     return r.json()["data"]
 
 
+# Frappe CRM solo deja ver los leads y tratos de los que el usuario es propietario (o se le asignan): sin propietario, quien los crea no los ve
+PROPIETARIO = {"CRM Lead": "lead_owner", "CRM Deal": "deal_owner"}
+_usuarios: dict[str, str] = {}
+
+
+async def _usuario_tecnico(departamento: str) -> str:
+    token = _cabeceras(departamento)["Authorization"]
+    if token not in _usuarios:
+        async with httpx.AsyncClient(base_url=ajustes.erpnext_url, timeout=30) as c:
+            r = await c.get("/api/method/frappe.auth.get_logged_user", headers=_cabeceras(departamento))
+        r.raise_for_status()
+        _usuarios[token] = r.json()["message"]
+    return _usuarios[token]
+
+
 async def crear_borrador(doctype: str, datos: dict[str, Any], departamento: str) -> dict:
     comprobar_acceso(departamento, doctype, "borrador")
     datos = {**datos, "docstatus": 0}   # siempre borrador
+    campo = PROPIETARIO.get(doctype)
+    if campo and not datos.get(campo):
+        datos[campo] = await _usuario_tecnico(departamento)
     async with httpx.AsyncClient(base_url=ajustes.erpnext_url, timeout=30) as c:
         r = await c.post(f"/api/resource/{quote(doctype, safe='')}", json=datos, headers=_cabeceras(departamento))
     r.raise_for_status()

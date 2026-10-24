@@ -108,7 +108,7 @@ class TestLlamadasAlErp(unittest.TestCase):
             self.peticiones.append(request)
             return httpx.Response(200, json={"data": [{"name": "X"}]})
         self.transporte = httpx.MockTransport(responder)
-        real = httpx.AsyncClient
+        real = self.real = httpx.AsyncClient
         self.parches = [mock.patch.dict(os.environ, {"ERPNEXT_TOKEN_COMERCIAL": "k:s"}),
                         mock.patch.object(erp.httpx, "AsyncClient", lambda **kw: real(transport=self.transporte, **kw)),
                         mock.patch.object(erp, "ajustes", SimpleNamespace(erpnext_url="http://erp", dir_config=erp.ajustes.dir_config))]
@@ -125,6 +125,28 @@ class TestLlamadasAlErp(unittest.TestCase):
         with self.assertRaises(PermissionError):
             self.correr(erp.crear_borrador("Sales Invoice", {"customer": "X"}, "comercial"))
         self.assertEqual(self.peticiones, [])
+
+    def test_un_lead_del_crm_se_crea_con_el_usuario_tecnico_como_propietario(self):
+        # Frappe CRM solo deja ver los leads propios: sin propietario, quien lo crea no lo ve
+        cuerpos = []
+
+        def responder(request):
+            if request.url.path.endswith("get_logged_user"):
+                return httpx.Response(200, json={"message": "cerebro.comercial@101.cat"})
+            cuerpos.append((request.method, request.url.path, request.content))
+            return httpx.Response(200, json={"data": {"name": "CRM-LEAD-1"}})
+        real = self.real
+        with mock.patch.object(erp.httpx, "AsyncClient", lambda **kw: real(transport=httpx.MockTransport(responder), **kw)):
+            erp._usuarios.clear()
+            self.correr(erp.crear_borrador("CRM Lead", {"first_name": "Marta"}, "comercial"))
+            self.correr(erp.crear_borrador("CRM Lead", {"first_name": "Pere", "lead_owner": "otro@x"}, "comercial"))
+            self.correr(erp.crear_borrador("Contact", {"first_name": "Anna"}, "comercial"))
+        import json as _j
+        enviados = [_j.loads(c[2]) for c in cuerpos if c[0] == "POST"]
+        self.assertEqual(enviados[0]["lead_owner"], "cerebro.comercial@101.cat")
+        self.assertEqual(enviados[1]["lead_owner"], "otro@x")                 # si lo indica, se respeta
+        self.assertNotIn("lead_owner", enviados[2])                           # otros documentos no se tocan
+        self.assertTrue(all(e["docstatus"] == 0 for e in enviados))
 
     def test_lo_permitido_sale_con_la_ruta_codificada(self):
         self.correr(erp.leer("Customer", "Comunitat Vilanova SL", "comercial"))

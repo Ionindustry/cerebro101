@@ -67,6 +67,31 @@ def probar(url: str, token: str, doctype: str) -> str:
         return f"error:{type(e).__name__}"
 
 
+def filas(url: str, token: str, doctype: str) -> int:
+    req = urllib.request.Request(f"{url.rstrip('/')}/api/resource/{urllib.parse.quote(doctype, safe='')}?limit_page_length=50",
+                                 headers={"Authorization": f"token {token}", "Accept": "application/json"})
+    try:
+        with urllib.request.urlopen(req, timeout=20) as r:
+            return len(json.load(r).get("data", []))
+    except Exception:  # noqa: BLE001
+        return -1
+
+
+def doctypes_existentes(url: str, clave_admin: str) -> set[str] | None:
+    """Nombres de DocType que existen en este ERP (para distinguir «no tiene permiso» de «ese documento no existe aquí»)."""
+    try:
+        op = urllib.request.build_opener(urllib.request.HTTPCookieProcessor(http.cookiejar.CookieJar()))
+        op.open(urllib.request.Request(url.rstrip("/") + "/api/method/login", data=urllib.parse.urlencode({"usr": "Administrator", "pwd": clave_admin}).encode()), timeout=30)
+        with op.open(url.rstrip("/") + "/api/resource/DocType?limit_page_length=5000&fields=%5B%22name%22%5D", timeout=60) as r:
+            return {x["name"] for x in json.load(r)["data"]}
+    except Exception:  # noqa: BLE001
+        return None
+
+
+# Frappe da lectura de Contact y Address enlazados a documentos que el usuario sí puede leer: no es una fuga de la política
+VINCULADOS = {"Contact", "Address"}
+
+
 def roles_de_usuarios(url: str, clave_admin: str) -> dict[str, list[str]]:
     op = urllib.request.build_opener(urllib.request.HTTPCookieProcessor(http.cookiejar.CookieJar()))
 
@@ -119,19 +144,35 @@ def main() -> int:
         print(f"{'documento':22}" + "".join(f"{dep[:11]:>12}" for dep in claves))
         for d in probados:
             print(f"{d:22}" + "".join(f"{('L' if res[d][dep] == 'lee' else ('·' if res[d][dep] in ('no', 'inexistente') else '?')):>12}" for dep in claves))
+        existentes = doctypes_existentes(a.url, env["ERPNEXT_ADMIN_PASSWORD"]) if env.get("ERPNEXT_ADMIN_PASSWORD") else None
+        notas: list[str] = []
         for dep in claves:
             if any(res[d][dep] == "clave-no-valida" for d in probados):
                 incidencias.append(f"{dep}: el ERP no reconoce su clave (ERPNEXT_TOKEN_{dep.upper()}): hay que regenerarla")
                 continue
-            permitidos = set(pol_deps.get(dep, {}).get("leer", []))
+            leer_dep = set(pol_deps.get(dep, {}).get("leer", []))
+            permitidos = leer_dep | set((politica or {}).get("referencias", []) or [])      # referencias: solo devuelven el nombre
             de_mas = [d for d in probados if res[d][dep] == "lee" and d not in permitidos]
-            faltan = [d for d in sorted(permitidos) if res.get(d, {}).get(dep) == "no"]
-            informe["departamentos"].setdefault(dep, {})["lee_fuera_de_politica"] = de_mas
-            informe["departamentos"][dep]["politica_sin_permiso_en_erp"] = faltan
+            if "User" in de_mas and filas(a.url, claves[dep], "User") <= 1:                  # solo su propia ficha
+                de_mas.remove("User")
+            vinc = [d for d in de_mas if d in VINCULADOS and leer_dep]
+            de_mas = [d for d in de_mas if d not in vinc]
+            sin_erp = [d for d in sorted(leer_dep) if existentes is not None and d not in existentes]
+            faltan = [d for d in sorted(leer_dep) if res.get(d, {}).get(dep) == "no" and d not in sin_erp]
+            informe["departamentos"].setdefault(dep, {}).update({"lee_fuera_de_politica": de_mas, "politica_sin_permiso_en_erp": faltan,
+                                                                  "politica_sin_documento_en_erp": sin_erp, "visibles_por_enlace": vinc})
             if de_mas:
-                incidencias.append(f"{dep}: su usuario del ERP puede leer FUERA de su política: {', '.join(de_mas)}  -> quitarle roles al usuario cerebro.{dep}")
+                incidencias.append(f"{dep}: su usuario del ERP puede leer FUERA de su política: {', '.join(de_mas)}  -> revisar los roles del usuario cerebro.{dep} (¿tiene solo el rol «Cerebro {dep.capitalize()}»? scripts/erpnext_roles_cerebro.py)")
             if faltan:
-                incidencias.append(f"{dep}: la política le permite {', '.join(faltan)} pero el ERP se lo niega -> sus agentes fallarán; falta algún rol")
+                incidencias.append(f"{dep}: la política le permite {', '.join(faltan)} pero el ERP se lo niega -> sus agentes fallarán; falta algún permiso en el rol")
+            if vinc:
+                notas.append(f"{dep}: ve {', '.join(vinc)} enlazados a los documentos que sí puede leer (regla interna de ERPNext; el código no deja a sus agentes pedirlos si no están en su política)")
+            if sin_erp:
+                notas.append(f"{dep}: su política incluye documentos que NO existen en este ERP: {', '.join(sin_erp)} (¿falta instalar la aplicación que los trae, p. ej. HRMS?)")
+        if notas:
+            print("\n== Notas (no son incidencias) ==")
+            for n in notas:
+                print(" - " + n)
     else:
         print("\n(No hay ninguna clave ERPNEXT_TOKEN_<DEPARTAMENTO> en el .env: no se puede comprobar el ERP)")
 

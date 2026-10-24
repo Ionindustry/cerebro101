@@ -134,7 +134,7 @@ instalar() {
     for s in "1 Generar/completar .env con contraseñas aleatorias y las direcciones de $DOMINIO (permisos 600)" \
              "2 Levantar Postgres, Redis y Ollama; descargar los modelos de IA" \
              "3 Levantar API, worker, panel, Langfuse (v3), Keycloak (producción, con su base de datos) y migraciones" \
-             "4 ERPNext: instalar${EMPRESA:+, asistente de «$EMPRESA»}, usuarios técnicos y blindaje" \
+             "4 ERPNext: instalar${EMPRESA:+, asistente de «$EMPRESA»}, un rol y un usuario técnico por departamento, y blindaje" \
              "5 Keycloak: direcciones de $DOMINIO${DIRECTOR:+ y primer usuario $DIRECTOR}" \
              "6 Proxy Caddy con HTTPS ($TLS) en 80/443" "7 Verificación"; do echo "  ${s%% *}. ${s#* }"; done
     exit 0
@@ -163,8 +163,8 @@ instalar() {
     "${ERP[@]}" up -d
     esperar_http "http://127.0.0.1:8081/api/method/ping" 120 && bien "ERPNext responde" || { falla "ERPNext no responde tras 10 minutos: ${ERP[*]} logs create-site"; exit 1; }
     [ -n "$EMPRESA" ] && python3 scripts/erpnext_asistente.py --empresa "$EMPRESA" --abreviatura "$ABREV" || aviso "Asistente de ERPNext pendiente: hacedlo en https://$(valor DOM_ERP) o con scripts/erpnext_asistente.py"
-    python3 scripts/erpnext_usuario_tecnico.py --departamento direccion --roles "Sales User,Purchase User,HR User"
-    python3 scripts/erpnext_usuario_tecnico.py --departamento finanzas --roles "Accounts User"
+    # Un rol por departamento generado desde config/erp_acceso.yaml y un usuario técnico con SOLO ese rol (en vez de roles estándar, que dan de más)
+    python3 scripts/erpnext_roles_cerebro.py --todos --dominio "$DOMINIO"
     python3 scripts/erpnext_blindar.py
     "${ERP[@]}" restart backend queue-short queue-long >/dev/null
     "${ERP[@]}" exec -T backend bench --site "$(valor ERPNEXT_SITE)" set-config host_name "https://$(valor DOM_ERP)" >/dev/null

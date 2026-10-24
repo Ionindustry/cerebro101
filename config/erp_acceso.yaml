@@ -16,6 +16,12 @@
 # Se comprueba con:  python3 scripts/auditar_acceso_erp.py
 modo: bloquear
 
+# Datos maestros que un borrador necesita poder ENLAZAR (cuentas, monedas, territorios…). Solo se da el permiso de «selección»
+# (elegirlos al rellenar un campo), no el de leerlos. Lo usa scripts/erpnext_roles_cerebro.py al crear el rol de cada departamento.
+# Si un agente falla al crear un borrador con «no tiene permiso para seleccionar X», se añade X aquí y se repite el script.
+referencias: [Account, Company, Currency, Cost Center, Warehouse, UOM, Item Group, Customer Group, Territory, Price List,
+              Mode of Payment, Sales Taxes and Charges Template, Purchase Taxes and Charges Template, Payment Terms Template, Project]
+
 departamentos:
   comercial:
     leer: [Customer, Contact, Address, Lead, Opportunity, Prospect, Quotation, Sales Order, Item, Campaign, Territory,

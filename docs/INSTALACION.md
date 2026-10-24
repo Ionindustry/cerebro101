@@ -33,12 +33,11 @@
      `python scripts/erpnext_usuario_tecnico.py --departamento finanzas --roles "Accounts User"`
      (para Dirección, que usa el Cerebro para leer clientes, proveedores y empleados al anonimizar:
      `--departamento direccion --roles "Sales User,Purchase User,HR User"`). Reiniciad la API después.
-   - **Cada departamento cuyos agentes consultan el ERP necesita su propio usuario técnico** (`ERPNEXT_TOKEN_<DEPARTAMENTO>`); sin él, el agente
-     responde con un error que lo dice. Con las fichas actuales usan el ERP: areas, atencion, comercial, direccion, finanzas, legal, licitaciones,
-     marketing, operaciones, personas, tecnologia y telecom. Por ejemplo, para que Jarvis pueda consultar clientes con los agentes comerciales:
-     `python scripts/erpnext_usuario_tecnico.py --departamento comercial --roles "Sales User"` y después
-     `docker compose up -d --force-recreate --no-deps api worker beat` (la API solo lee las claves al arrancar). Dale a cada uno solo los roles que
-     necesite; si un departamento no tiene clave propia se usa `ERPNEXT_TOKEN` (clave general, déjala vacía o de solo lectura).
+   - **Usuarios técnicos: uno por departamento, con un rol propio.** `python3 scripts/erpnext_roles_cerebro.py --todos` crea el rol «Cerebro <Departamento>»
+     (con lo que dice `config/erp_acceso.yaml`) y el usuario `cerebro.<departamento>` con solo ese rol, guarda sus claves en el `.env` y comprueba con ellas que
+     cada uno ve lo suyo y nada más. Se puede repetir cuando cambie la política (`--simular` muestra el plan sin cambiar nada; `--departamento X` hace uno solo).
+     Después: `docker compose up -d --force-recreate --no-deps api worker beat` (la API solo lee las claves al arrancar) y `python3 scripts/auditar_acceso_erp.py`.
+     Los roles estándar (Sales User, Accounts User…) dan de más y ya no se usan; `scripts/erpnext_usuario_tecnico.py` queda para casos sueltos.
    - `python scripts/erpnext_blindar.py` (una vez, y reiniciar `backend queue-short queue-long`): impide que los usuarios
      `cerebro.*` validen, cancelen o borren documentos, aunque su rol lo permita (el rol «Accounts User» puede validar
      facturas). Segunda barrera dentro del propio ERP, además de la política y del conector.
