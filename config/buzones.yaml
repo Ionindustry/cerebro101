@@ -13,8 +13,8 @@
 # Comercial usa de momento la cuenta albert@101.cat; cuando exista comercial@ se cambia aquí.
 
 servidor:                       # valores por defecto de todos los buzones; cada buzón puede sustituirlos con sus propios «imap» y «smtp»
-  imap: {host: "mail.101.cat", puerto: 993, seguridad: ssl}          # seguridad: ssl | starttls | ninguna (esta última solo para pruebas)
-  smtp: {host: "mail.101.cat", puerto: 587, seguridad: starttls}     # seguridad: ssl | starttls | ninguna
+  imap: {host: "imap.101.cat", puerto: 143, seguridad: ninguna}          # seguridad: ssl | starttls | ninguna (esta última solo para pruebas)
+  smtp: {host: "smtp.101.cat", puerto: 587, seguridad: starttls}     # seguridad: ssl | starttls | ninguna
 carpetas: {entrada: "INBOX", borradores: "Drafts", enviados: "Sent"}  # los nombres cambian según el proveedor (p. ej. «Borradores», «Elementos enviados»)
 
 limites:

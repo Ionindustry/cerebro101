@@ -32,8 +32,9 @@ que se enviará** y, si es una respuesta, el mensaje original. Aprobar es lo ún
 ## Poner en marcha un buzón (paso a paso)
 
 1. **Crea el buzón en tu servidor de correo** (si no existe) y apunta su contraseña. Lo ideal es una contraseña propia y larga para el Cerebro.
-2. **Revisa el servidor** en `config/buzones.yaml` (`servidor:`): `host`, `puerto` y `seguridad` de IMAP y SMTP. Por defecto `mail.101.cat`
-   (IMAP 993 con SSL, SMTP 587 con STARTTLS). También el nombre de las carpetas (`Borradores`/`Drafts`, `Enviados`/`Sent`) según tu proveedor.
+2. **Revisa el servidor** en `config/buzones.yaml` (`servidor:`): `host`, `puerto` y `seguridad` de IMAP y SMTP. Por defecto el de 101.cat:
+   IMAP `imap.101.cat` puerto 143 sin cifrado, SMTP `smtp.101.cat` puerto 587 con STARTTLS.
+   Ojo: IMAP sin cifrado envía la contraseña en claro; solo es razonable si el servidor está en la misma red o máquina. Si el servidor admite STARTTLS en el 143 o SSL en el 993, cambia `seguridad` a `starttls` o `ssl`. También el nombre de las carpetas (`Borradores`/`Drafts`, `Enviados`/`Sent`) según tu proveedor.
 3. **Da de alta el buzón** (en Ubuntu/WSL, dentro de la carpeta del proyecto). La contraseña se pide sin mostrarla:
 
    ```bash
@@ -55,7 +56,7 @@ que se enviará** y, si es una respuesta, el mensaje original. Aprobar es lo ún
 
 ## Qué proveedor de correo tienes
 
-- **Servidor propio** (`mail.101.cat`, Dovecot/Postfix, Mailcow…): funciona tal cual con usuario y contraseña (usa «contraseña de aplicación» si tu servidor la ofrece).
+- **Servidor propio** (`imap.101.cat`/`smtp.101.cat`, Dovecot/Postfix, Mailcow…): funciona tal cual con usuario y contraseña (usa «contraseña de aplicación» si tu servidor la ofrece).
 - **Google Workspace:** IMAP `imap.gmail.com:993` y SMTP `smtp.gmail.com:587`; hace falta activar la verificación en dos pasos y crear una **contraseña de aplicación** por buzón.
 - **Microsoft 365 / Outlook:** Microsoft ha desactivado el acceso IMAP/SMTP con contraseña en la mayoría de los inquilinos; haría falta OAuth2, que **esta versión no incluye**. Díselo a quien te lo configure antes de contratarlo.
 
