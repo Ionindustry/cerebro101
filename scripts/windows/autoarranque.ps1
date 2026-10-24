@@ -41,13 +41,19 @@ function Tomar-Turno {
   try { return $script:Mutex.WaitOne(0) } catch [System.Threading.AbandonedMutexException] { return $true }
 }
 
-# docker info con limite de tiempo: un Docker medio caido puede quedarse colgado
+# docker info con limite de tiempo: un Docker medio caido puede quedarse colgado.
+# No se usa el codigo de salida: tras Start-Process -PassThru a veces llega vacio y daba siempre "no responde".
+# Docker responde si "docker info" llega a imprimir "Server Version" (solo lo muestra si el motor esta vivo).
 function Docker-Responde {
   $salida = Join-Path $env:TEMP "cerebro-docker-info.txt"; $err = Join-Path $env:TEMP "cerebro-docker-info-err.txt"
+  Remove-Item $salida, $err -ErrorAction SilentlyContinue
   try {
     $p = Start-Process -FilePath "docker" -ArgumentList "info" -NoNewWindow -PassThru -RedirectStandardOutput $salida -RedirectStandardError $err
     if (-not $p.WaitForExit(20000)) { try { $p.Kill() } catch {}; return $false }
-    return ($p.ExitCode -eq 0)
+    Start-Sleep -Milliseconds 200
+    if (-not (Test-Path $salida)) { return $false }
+    $texto = Get-Content $salida -Raw -ErrorAction SilentlyContinue
+    return [bool]($texto -match "Server Version")
   } catch { return $false }
 }
 
@@ -151,7 +157,8 @@ if ($Arrancar) {
 if ($Vigilar) {
   if (-not (Tomar-Turno)) { return }
   $e = Leer-Estado
-  if (Docker-Responde) {
+  # Si la API del Cerebro responde, el motor de Docker esta vivo aunque la comprobacion de "docker info" falle
+  if ((Docker-Responde) -or (Api-Responde)) {
     if ($e.fallos -ne 0) { Escribir-Log "Docker vuelve a responder"; $e.fallos = 0; Guardar-Estado $e }
     if (-not (Api-Responde)) {
       Escribir-Log "Docker responde pero la API no: se vuelven a levantar los servicios"
