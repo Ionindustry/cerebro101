@@ -19,7 +19,7 @@ PROHIBIDAS = ("POSTGRES_PASSWORD", "DATABASE_URL_ADMIN", "KEYCLOAK_ADMIN_PASSWOR
 # Las lee el código pero no son del entorno de la API (migraciones, rutas, pruebas)
 AJENAS = {"DATABASE_URL_ADMIN", "CEREBRO_APP_PASSWORD", "CEREBRO_DB_DIR", "CEREBRO_CONFIG", "CEREBRO_DATOS"}
 # Variables que se crean con f-string: prefijo -> se exige al menos una en la lista
-DINAMICAS = ("ERPNEXT_TOKEN_", "CORREO_", "CALENDARIO_")
+DINAMICAS = ("ERPNEXT_TOKEN_", "CALENDARIO_")
 
 
 def _env(servicio: str) -> dict:
@@ -51,6 +51,19 @@ class TestEntorno(unittest.TestCase):
             texto = yaml.dump(env)
             for v in PROHIBIDAS:
                 self.assertNotIn("${" + v, texto, f"{servicio} usa {v} dentro de otro valor")
+
+    def test_las_claves_de_los_buzones_solo_las_montan_la_api_y_el_worker(self):
+        def monta(servicio):
+            return any("/run/secretos" in v for v in COMPOSE["services"][servicio].get("volumes", []))
+        self.assertTrue(monta("api") and monta("worker"))
+        self.assertFalse(monta("beat"))
+        for n, s in COMPOSE["services"].items():
+            if n not in ("api", "worker"):
+                self.assertFalse(any("secretos" in v for v in s.get("volumes", [])), f"{n} no debe ver secretos/")
+        for v in COMPOSE["services"]["api"]["volumes"]:
+            if "secretos" in v:
+                self.assertTrue(v.endswith(":ro"), "secretos/ se monta de solo lectura")
+        self.assertNotIn("CORREO_CLAVE", _env("api"))               # sin contraseñas de correo en el entorno
 
     def test_beat_solo_recibe_lo_imprescindible(self):
         self.assertLessEqual(set(_env("beat")), {"TZ", "REDIS_URL"})

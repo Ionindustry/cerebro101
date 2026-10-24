@@ -32,6 +32,7 @@ class Herramienta:
     ayuda: dict[str, str] = field(default_factory=dict)       # operación → para qué sirve y cómo se usa
     campos: dict[str, dict[str, str]] = field(default_factory=dict)   # operación con **campos → {campo: descripción}
     ejemplos: dict[str, dict] = field(default_factory=dict)   # operación → argumentos de ejemplo (el primero va al prompt)
+    vistas: dict[str, Funcion] = field(default_factory=dict)  # operación externa → vista previa para quien aprueba (mismos argumentos)
 
 
 _REGISTRO: dict[str, Herramienta] = {}
@@ -52,6 +53,20 @@ def validar_llamada(ficha: Ficha, nombre: str, operacion: str, argumentos: dict,
     except (ValueError, LookupError, PermissionError) as e:
         return str(e)
     return None
+
+
+def es_externa(nombre: str, operacion: str) -> bool:
+    h = _REGISTRO.get(nombre)
+    return bool(h and operacion in h.externas)
+
+
+async def vista_previa(ficha: Ficha, nombre: str, operacion: str, argumentos: dict, sensibilidad: str | None = None) -> dict | None:
+    """Lo que debe ver la persona que aprueba (destinatario, texto exacto…), o None si la operación no tiene vista.
+    Si la vista falla (p. ej. el mensaje que se quería contestar ya no existe) el error sube y la acción no llega a aprobarse."""
+    h = _REGISTRO.get(herramienta_efectiva(ficha, nombre, sensibilidad))
+    if h is None or operacion not in h.vistas:
+        return None
+    return await h.vistas[operacion](**{**argumentos, "departamento": ficha.departamento})
 
 
 def disponibles_para(ficha: Ficha) -> dict[str, Herramienta]:

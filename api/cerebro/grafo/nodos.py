@@ -143,7 +143,7 @@ async def registrar_aprobaciones(estado: Estado, config) -> Estado:
             acciones.append(a)
             continue
         try:
-            d = nivel_para(ficha, a["accion"])
+            d = nivel_para(ficha, a["accion"], externa=H.es_externa(a.get("herramienta", ""), a.get("operacion", "")))
         except AccionProhibida as e:
             acciones.append({**a, "estado": "error", "resultado": str(e)})
             continue
@@ -155,9 +155,17 @@ async def registrar_aprobaciones(estado: Estado, config) -> Estado:
         if not d.requiere:
             acciones.append({**a, "estado": "aprobada"})
             continue
+        datos = {"resumen": a["resumen"], "argumentos": a.get("argumentos", {})}
+        if a.get("herramienta") and a.get("operacion"):
+            try:
+                vista = await H.vista_previa(ficha, a["herramienta"], a["operacion"], a.get("argumentos") or {}, estado.get("sensibilidad"))
+            except Exception as e:  # noqa: BLE001
+                acciones.append({**a, "estado": "error", "resultado": f"No se puede preparar para aprobación: {e}"})
+                continue
+            if vista:
+                datos["vista"] = vista
         sid = await bandeja.crear(hilo, ficha.id, ficha.departamento, a["accion"], d.nivel,
-                                  d.aprobadores, d.voz_permitida,
-                                  {"resumen": a["resumen"], "argumentos": a.get("argumentos", {})})
+                                  d.aprobadores, d.voz_permitida, datos)
         acciones.append({**a, "solicitud_id": sid, "estado": "pendiente"})
     return {"acciones": acciones}
 

@@ -31,6 +31,19 @@ export default function Aprobaciones() {
               <span className="nivel">{NIVELES[s.nivel]}</span>
             </header>
             <div className="meta">Lo propone {s.agente} ({s.departamento}) el {new Date(s.creado).toLocaleString("es-ES")}</div>
+            {s.datos?.vista && (
+              <section className="vista" aria-label={s.datos.vista.titulo}>
+                <h3>{s.datos.vista.titulo}</h3>
+                <dl>
+                  {s.datos.vista.campos.map(([etiqueta, valor]) => (
+                    <div key={etiqueta}>
+                      <dt>{etiqueta}</dt>
+                      <dd style={{ whiteSpace: "pre-wrap" }}>{valor}</dd>
+                    </div>
+                  ))}
+                </dl>
+              </section>
+            )}
             <div className="botones">
               <button className="boton si" onClick={() => decidir(s.id, true)}>Aprobar</button>
               <button className="boton no" onClick={() => decidir(s.id, false)}>Rechazar</button>

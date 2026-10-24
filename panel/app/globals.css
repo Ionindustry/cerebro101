@@ -91,3 +91,10 @@ h1 { font-size: 30px; font-weight: 300; letter-spacing: -0.6px; margin: 0 0 20px
 @media (max-width: 760px) {
   .rail .sesion { margin: 0 0 0 auto; flex-direction: row; align-items: center; gap: 12px; padding: 0 8px; }
 }
+
+/* Vista previa de lo que se aprueba (p. ej. destinatario y texto de un correo) */
+.vista { margin: 12px 0 0; padding: 12px 14px; border-radius: var(--radio); background: var(--fondo); }
+.vista h3 { font-size: 14px; margin: 0 0 8px; font-weight: 600; }
+.vista dl { margin: 0; display: grid; gap: 8px; }
+.vista dt { font-size: 12px; color: var(--secundario); text-transform: uppercase; letter-spacing: .04em; }
+.vista dd { margin: 2px 0 0; font-size: 15px; overflow-wrap: anywhere; }

@@ -1,0 +1,60 @@
+# Buzones de correo de la empresa que pueden usar los agentes (herramienta «correo»).
+#
+# Cada buzón dice qué DEPARTAMENTOS pueden usarlo: el departamento de un agente lo fija el sistema, no el modelo, así que un agente de
+# Personas nunca puede abrir administracion@ ni uno de Finanzas rrhh@. Las contraseñas NO van aquí: están en `.env.buzones`
+# (variables CORREO_<BUZON>_CLAVE, y CORREO_<BUZON>_USUARIO si el usuario de acceso no es la propia dirección).
+#
+# Dar de alta un buzón:   python3 scripts/buzon_alta.py --id rrhh --direccion rrhh@101.cat --departamentos personas
+# Probar los buzones:     python3 scripts/probar_buzones.py
+#
+# Lo que los agentes pueden hacer: leer, redactar borradores (aparecen en la carpeta Borradores del buzón) y marcar como gestionado.
+# CONTESTAR o ENVIAR sale de la empresa: pasa SIEMPRE por la bandeja de aprobaciones y una persona ve el texto completo antes de aprobar.
+#
+# NOMBRES Y DEPARTAMENTOS: PROPUESTA INICIAL, a revisar con la empresa (docs/CORREO.md).
+
+servidor:                       # valores por defecto de todos los buzones; cada buzón puede sustituirlos con sus propios «imap» y «smtp»
+  imap: {host: "mail.101.cat", puerto: 993, seguridad: ssl}          # seguridad: ssl | starttls | ninguna (esta última solo para pruebas)
+  smtp: {host: "mail.101.cat", puerto: 587, seguridad: starttls}     # seguridad: ssl | starttls | ninguna
+carpetas: {entrada: "INBOX", borradores: "Drafts", enviados: "Sent"}  # los nombres cambian según el proveedor (p. ej. «Borradores», «Elementos enviados»)
+
+limites:
+  destinatarios_max: 5          # destinatarios de un mismo mensaje
+  texto_max: 6000               # caracteres del cuerpo que escribe un agente
+  mensajes_max: 20              # mensajes que devuelve una lectura de bandeja
+
+# Pie obligatorio en comunicaciones comerciales (LSSI): forma sencilla y gratuita de darse de baja
+pie_comercial: >-
+  Has recibido este mensaje porque nos diste tu consentimiento o eres cliente de 101.cat.
+  Si no quieres recibir más comunicaciones, responde con la palabra BAJA.
+
+buzones:
+  administracion:
+    direccion: administracion@101.cat
+    departamentos: [finanzas, direccion]
+    descripcion: "Facturas, cobros y gestión administrativa"
+    firma: "Departamento de Administración · 101.cat"
+  rrhh:
+    direccion: rrhh@101.cat
+    departamentos: [personas]
+    descripcion: "Candidaturas, vacaciones, bajas y gestiones de personal"
+    firma: "Recursos Humanos · 101.cat"
+  comercial:
+    direccion: comercial@101.cat
+    departamentos: [comercial]
+    descripcion: "Consultas de clientes y peticiones de presupuesto"
+    firma: "Departamento Comercial · 101.cat"
+  soporte:
+    direccion: soporte@101.cat
+    departamentos: [atencion]
+    descripcion: "Incidencias y atención al cliente"
+    firma: "Atención al cliente · 101.cat"
+  compras:
+    direccion: compras@101.cat
+    departamentos: [operaciones]
+    descripcion: "Proveedores, pedidos y presupuestos de instaladores"
+    firma: "Compras y Operaciones · 101.cat"
+  telecom:
+    direccion: telecom@101.cat
+    departamentos: [telecom]
+    descripcion: "Mayoristas y operadores"
+    firma: "Telecomunicaciones · 101.cat"

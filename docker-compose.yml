@@ -54,11 +54,7 @@ x-api: &api
     ANONIMIZACION_NER: "${ANONIMIZACION_NER:-heuristico}"
     ANONIMIZACION_MODELO_SPACY: "${ANONIMIZACION_MODELO_SPACY:-es_core_news_md}"
     AGENT_REACH_URL: "${AGENT_REACH_URL:-http://agent-reach:8090}"
-    # Buzones y calendarios: general y por departamento (CORREO_<DEPARTAMENTO>_USUARIO / _CLAVE)
-    CORREO_USUARIO: "${CORREO_USUARIO:-}"
-    CORREO_CLAVE: "${CORREO_CLAVE:-}"
-    CORREO_COMERCIAL_USUARIO: "${CORREO_COMERCIAL_USUARIO:-}"
-    CORREO_COMERCIAL_CLAVE: "${CORREO_COMERCIAL_CLAVE:-}"
+    # Calendarios (los buzones de correo van por secretos/buzones.env, no por el .env)
     CALENDARIO_USUARIO: "${CALENDARIO_USUARIO:-}"
     CALENDARIO_CLAVE: "${CALENDARIO_CLAVE:-}"
     # Identificación de personas (Keycloak) y trazas (Langfuse: solo el par de claves de proyecto)
@@ -69,7 +65,8 @@ x-api: &api
     LANGFUSE_PUBLIC_KEY: "${LANGFUSE_PUBLIC_KEY:-}"
     LANGFUSE_SECRET_KEY: "${LANGFUSE_SECRET_KEY:-}"
     LANGFUSE_REGISTRAR_CONTENIDO: "${LANGFUSE_REGISTRAR_CONTENIDO:-true}"
-  volumes: ["./config:/app/config:ro", "datos:/datos"]
+  # secretos/ lleva las contraseñas de los buzones de correo (ver docs/CORREO.md); solo la API y el worker lo montan
+  volumes: ["./config:/app/config:ro", "datos:/datos", "./secretos:/run/secretos:ro"]
   depends_on:
     postgres: {condition: service_started}
     redis: {condition: service_started}
@@ -164,6 +161,7 @@ services:
     environment:
       TZ: "${TZ:-Europe/Madrid}"
       REDIS_URL: "${REDIS_URL:-redis://redis:6379/0}"
+    volumes: ["./config:/app/config:ro", "datos:/datos"]
     command: celery -A cerebro.tareas.celery_app beat
 
   redis-panel:            # sesiones del panel: Redis propio con contraseña y persistencia (la API y el worker no la tienen)

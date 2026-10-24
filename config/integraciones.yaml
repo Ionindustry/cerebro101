@@ -1,13 +1,6 @@
 # Integraciones directas (sin n8n). Las credenciales van en .env, nunca aquí.
 
-correo:                       # servidor de correo propio
-  imap: {host: "mail.101.cat", puerto: 993}        # IMAP con TLS
-  smtp: {host: "mail.101.cat", puerto: 587, starttls: true}
-  carpeta_borradores: "Drafts"                      # se ve en el cliente de correo de cada persona
-  # Pie obligatorio en comunicaciones comerciales (LSSI): forma sencilla y gratuita de darse de baja
-  pie_comercial: >-
-    Has recibido este mensaje porque nos diste tu consentimiento o eres cliente de 101.cat.
-    Si no quieres recibir más comunicaciones, responde con la palabra BAJA.
+# El correo (varios buzones) se configura en config/buzones.yaml; sus contraseñas, en secretos/buzones.env.
 
 calendario:                   # servidor CalDAV propio (el del servidor de correo o uno aparte)
   url: "https://mail.101.cat/dav/"

@@ -22,6 +22,7 @@ prohibidas:
 # Acciones con impacto externo: obligan a pasar por la bandeja aunque la ficha diga «libre».
 impacto_externo:
   - enviar_correo
+  - responder_correo
   - publicar
   - enviar_whatsapp
   - presentar_licitacion       # la hace una persona; el agente solo prepara el paquete

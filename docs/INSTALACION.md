@@ -47,9 +47,9 @@
      5 GB de disco). No uses la rama `main` de CRM: es la línea 2.0 en desarrollo y no compila con Frappe 16.36. Los datos del CRM (CRM Lead,
      CRM Deal…) son documentos distintos de los Lead y Opportunity del módulo CRM de ERPNext que usan hoy los agentes: no se sincronizan solos.
    - La API del Cerebro lo ve como `http://erpnext:8080` (`ERPNEXT_URL`); el navegador, en `localhost:8081`.
-7. Integraciones: en `config/integraciones.yaml`, poner el servidor IMAP/SMTP y la URL CalDAV del servidor de
-   correo propio, y las URL de sindicación (ATOM) de las plataformas de contratación. Las cuentas van en `.env`
-   (`CORREO_*`, `CALENDARIO_*`). Se recomienda una cuenta técnica por departamento, con acceso solo a su buzón.
+7. Integraciones: en `config/integraciones.yaml`, poner la URL CalDAV del calendario y las URL de sindicación (ATOM)
+   de las plataformas de contratación; las cuentas del calendario van en `.env` (`CALENDARIO_*`). El correo tiene
+   su propia guía: `docs/CORREO.md` (buzones corporativos, qué departamento usa cada uno y sus contraseñas).
 
 ## Comprobación
 

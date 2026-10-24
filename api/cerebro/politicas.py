@@ -43,13 +43,14 @@ class DecisionAprobacion:
     voz_permitida: bool
 
 
-def nivel_para(ficha: Ficha, accion: str, dir_config: Path | None = None) -> DecisionAprobacion:
-    """Decide qué aprobación necesita `accion` hecha por el agente `ficha`."""
+def nivel_para(ficha: Ficha, accion: str, dir_config: Path | None = None, externa: bool = False) -> DecisionAprobacion:
+    """Decide qué aprobación necesita `accion` hecha por el agente `ficha`.
+    `externa`: la operación de la herramienta tiene impacto externo, sea cual sea el nombre que el agente dé a la acción."""
     pol, _ = _config(str(dir_config or ajustes.dir_config))
     if accion in pol["prohibidas"]:
         raise AccionProhibida(f"La acción «{accion}» no la puede ejecutar ningún agente")
     nivel = ficha.aprobacion
-    if nivel == "libre" and accion in pol["impacto_externo"]:
+    if nivel == "libre" and (externa or accion in pol["impacto_externo"]):
         nivel = "simple"          # lo que sale de la empresa siempre pasa por una persona
     datos = pol["niveles"][nivel]
     return DecisionAprobacion(
