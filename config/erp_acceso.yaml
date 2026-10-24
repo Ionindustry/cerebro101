@@ -2,6 +2,10 @@
 # con la clave del departamento que fija el sistema (el modelo no puede cambiarla). Es una segunda barrera: los roles de ERPNext
 # solos no bastan (p. ej. cualquier usuario con «Sales User» puede leer Bank Account, Account, User y Role).
 #
+# AJUSTADO tras la primera auditoría (24/10): se han quitado de la política los documentos que el ERP niega al usuario técnico del
+# departamento con sus roles actuales (comercial: Item Price y Sales Stage; direccion: Sales Invoice; finanzas: Budget y Purchase Order).
+# Para recuperarlos, se añade el rol que falte al usuario cerebro.<departamento> en ERPNext y se vuelve a poner aquí.
+#
 # PROPUESTA INICIAL: está pensada con las fichas actuales y hay que revisarla con la empresa. Si un agente necesita un documento
 # que aquí no figura, el error se lo dice; se añade al departamento que corresponda y se reinicia la API.
 #   leer     documentos que el departamento puede consultar (listar y leer)
@@ -14,17 +18,17 @@ modo: bloquear
 
 departamentos:
   comercial:
-    leer: [Customer, Contact, Address, Lead, Opportunity, Prospect, Quotation, Sales Order, Item, Item Price, Campaign, Territory,
-           Customer Group, Sales Stage, Project,
+    leer: [Customer, Contact, Address, Lead, Opportunity, Prospect, Quotation, Sales Order, Item, Campaign, Territory,
+           Customer Group, Project,
            CRM Lead, CRM Deal, CRM Organization, CRM Task, FCRM Note, CRM Call Log, CRM Lead Source, CRM Lead Status, CRM Deal Status,
            CRM Product, CRM Industry, CRM Territory, CRM Lost Reason]
     borrador: [Lead, Opportunity, Prospect, Quotation, Contact, Address, CRM Lead, CRM Deal, CRM Organization, CRM Task, FCRM Note]
   finanzas:
     leer: [Sales Invoice, Purchase Invoice, Payment Entry, Journal Entry, GL Entry, Account, Bank Account, Cost Center, Payment Request,
-           Budget, Customer, Supplier, Sales Order, Purchase Order, Item, Project]
+           Customer, Supplier, Sales Order, Item, Project]
     borrador: [Sales Invoice, Purchase Invoice, Payment Entry, Journal Entry, Payment Request]
   direccion:                      # lectura amplia para inteligencia de negocio; sin contabilidad detallada ni nóminas
-    leer: [Customer, Supplier, Employee, Item, Sales Order, Sales Invoice, Purchase Invoice, Purchase Order, Quotation, Opportunity,
+    leer: [Customer, Supplier, Employee, Item, Sales Order, Purchase Invoice, Purchase Order, Quotation, Opportunity,
            Lead, Project, Task, Campaign, Territory, Customer Group, Bin, CRM Lead, CRM Deal, CRM Organization]
     borrador: []
   operaciones:
