@@ -1,6 +1,7 @@
 """Da de alta (o cambia la contraseña de) un buzón de correo de la empresa.
 
     python3 scripts/buzon_alta.py --id rrhh --direccion rrhh@101.cat --departamentos personas
+    python3 scripts/buzon_alta.py --todos        # pide la contraseña de cada buzón ya configurado
 
 Hace dos cosas: añade el buzón a config/buzones.yaml (qué departamentos lo pueden usar) y guarda su contraseña en
 secretos/buzones.env, que nunca se sube a git. La contraseña se pide por teclado SIN mostrarla (o con --clave-env NOMBRE
@@ -46,7 +47,8 @@ def añadir_a_yaml(ident: str, direccion: str, departamentos: list[str], descrip
 
 def main() -> int:
     a = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    a.add_argument("--id", required=True, help="nombre corto del buzón, p. ej. rrhh")
+    a.add_argument("--id", help="nombre corto del buzón, p. ej. rrhh")
+    a.add_argument("--todos", action="store_true", help="pide la contraseña de cada buzón de config/buzones.yaml (Intro vacío = saltar)")
     a.add_argument("--direccion", help="dirección completa, p. ej. rrhh@101.cat (obligatoria si el buzón es nuevo)")
     a.add_argument("--departamentos", help="departamentos que pueden usarlo, separados por comas (obligatorio si es nuevo)")
     a.add_argument("--descripcion", default="")
@@ -54,6 +56,18 @@ def main() -> int:
     a.add_argument("--clave-env", help="toma la contraseña de esta variable de entorno en vez de pedirla")
     a.add_argument("--solo-clave", action="store_true", help="no toca config/buzones.yaml: solo guarda la contraseña")
     r = a.parse_args()
+    if r.todos:
+        import yaml
+        for ident, b in (yaml.safe_load(YAML.read_text(encoding="utf-8")).get("buzones") or {}).items():
+            clave = getpass.getpass(f"{b['direccion']} — contraseña (Intro para saltar, no se ve al escribir): ")
+            if clave:
+                poner(SECRETOS, f"CORREO_{ident.upper()}_CLAVE", clave)
+                print(f"  guardada: {ident}")
+        print("Listo. Comprueba con: docker compose exec api python /app/scripts/probar_buzones.py")
+        return 0
+    if not r.id:
+        print("Indica --id <buzón> o --todos")
+        return 2
     ident = r.id.lower()
     if not re.fullmatch(r"[a-z0-9_]+", ident):
         print("--id solo admite letras minúsculas, números y _")
