@@ -29,19 +29,21 @@ def probar(ident: str) -> bool:
         print(f"  {ident:<16} sin contraseña (sin dar de alta: scripts/buzon_alta.py --id {ident})")
         return True
     estado = []
+    smtp = B.servidor(ident, "smtp")
+    print(f"  ({ident}: SMTP {smtp['host']}:{smtp['puerto']} {smtp['seguridad']}, certificado verificado contra «{smtp.get('tls_nombre') or smtp['host']}»)")
     try:
         con = correo._imap(ident)
         con.select("INBOX", readonly=True)
         correo._cerrar(con)
         estado.append("IMAP ok")
     except Exception as e:  # noqa: BLE001
-        estado.append(f"IMAP FALLA ({type(e).__name__}: {str(e)[:120]})")
+        estado.append(f"IMAP FALLA ({type(e).__name__}: {str(e)[:300]})")
     try:
         with correo._smtp(ident):
             pass
         estado.append("SMTP ok")
     except Exception as e:  # noqa: BLE001
-        estado.append(f"SMTP FALLA ({type(e).__name__}: {str(e)[:120]})")
+        estado.append(f"SMTP FALLA ({type(e).__name__}: {str(e)[:300]})")
     ok = all(" ok" in x for x in estado)
     print(f"  {ident:<16} {B.cargar()['buzones'][ident]['direccion']:<28} {' · '.join(estado)}")
     return ok
