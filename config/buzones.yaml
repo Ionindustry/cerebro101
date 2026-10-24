@@ -14,7 +14,8 @@
 
 servidor:                       # valores por defecto de todos los buzones; cada buzón puede sustituirlos con sus propios «imap» y «smtp»
   imap: {host: "imap.101.cat", puerto: 143, seguridad: ninguna}          # seguridad: ssl | starttls | ninguna (esta última solo para pruebas)
-  smtp: {host: "smtp.101.cat", puerto: 587, seguridad: starttls}     # seguridad: ssl | starttls | ninguna
+  smtp: {host: "smtp.101.cat", puerto: 587, seguridad: starttls,     # seguridad: ssl | starttls | ninguna
+         tls_nombre: "smtp.servidor-correo.net"}                      # el certificado del proveedor (Acens) vale para *.servidor-correo.net, no para smtp.101.cat; se verifica contra este nombre
 carpetas: {entrada: "INBOX", borradores: "Drafts", enviados: "Sent"}  # los nombres cambian según el proveedor (p. ej. «Borradores», «Elementos enviados»)
 
 limites:

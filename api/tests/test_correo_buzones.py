@@ -105,6 +105,30 @@ class TestAcceso(Base):
             B.servidor("rrhh", "imap")
 
 
+class TestTlsNombre(Base):
+    def test_el_certificado_se_verifica_contra_tls_nombre(self):
+        from unittest import mock
+        visto = {}
+
+        class FalsoSMTP:
+            def __init__(self, host, puerto, timeout=None):
+                self._host = host
+
+            def starttls(self, context=None):
+                visto["nombre"], visto["verifica"] = self._host, context.check_hostname
+
+            def login(self, *a):
+                pass
+        cfg = dict(CONFIG, servidor={**CONFIG["servidor"], "smtp": {"host": "smtp.101.cat", "puerto": 587, "seguridad": "starttls",
+                                                                    "tls_nombre": "smtp.servidor-correo.net"}})
+        with open(self.f.name, "w", encoding="utf-8") as fh:
+            yaml.safe_dump(cfg, fh)
+        B.limpiar_cache()
+        with mock.patch.object(correo.smtplib, "SMTP", FalsoSMTP):
+            correo._smtp("rrhh")
+        self.assertEqual(visto, {"nombre": "smtp.servidor-correo.net", "verifica": True})
+
+
 class TestProtecciones(Base):
     def test_no_se_escribe_a_buzones_propios(self):
         with self.assertRaises(ValueError) as e:

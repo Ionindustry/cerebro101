@@ -142,6 +142,9 @@ def _smtp(buzon: str) -> smtplib.SMTP:
     else:
         s = smtplib.SMTP(c["host"], c["puerto"], timeout=60)
         if c["seguridad"] == "starttls":
+            if c.get("tls_nombre"):
+                # el certificado del proveedor está emitido para otro nombre que el del servidor: se sigue verificando, contra ese nombre
+                s._host = c["tls_nombre"]
             s.starttls(context=ssl.create_default_context())
     s.login(usuario, clave)
     return s
