@@ -1,0 +1,60 @@
+# Política de acceso al ERP y al CRM por departamento. La aplica el código (herramientas/erpnext.py) ANTES de hablar con el ERP,
+# con la clave del departamento que fija el sistema (el modelo no puede cambiarla). Es una segunda barrera: los roles de ERPNext
+# solos no bastan (p. ej. cualquier usuario con «Sales User» puede leer Bank Account, Account, User y Role).
+#
+# PROPUESTA INICIAL: está pensada con las fichas actuales y hay que revisarla con la empresa. Si un agente necesita un documento
+# que aquí no figura, el error se lo dice; se añade al departamento que corresponda y se reinicia la API.
+#   leer     documentos que el departamento puede consultar (listar y leer)
+#   borrador documentos que puede crear en BORRADOR (siempre un subconjunto de «leer»; validar lo hace una persona)
+#   modo     bloquear (por defecto) | avisar (solo deja constancia en el registro; útil para ver qué se bloquearía)
+# Un departamento que no figura aquí no puede usar el ERP. `User`, `Role`, `Company` y `Bank Account` no están pensados para nadie salvo
+# donde se indica: son de lo primero que se leería para atacar.
+# Se comprueba con:  python3 scripts/auditar_acceso_erp.py
+modo: bloquear
+
+departamentos:
+  comercial:
+    leer: [Customer, Contact, Address, Lead, Opportunity, Prospect, Quotation, Sales Order, Item, Item Price, Campaign, Territory,
+           Customer Group, Sales Stage, Project,
+           CRM Lead, CRM Deal, CRM Organization, CRM Task, FCRM Note, CRM Call Log, CRM Lead Source, CRM Lead Status, CRM Deal Status,
+           CRM Product, CRM Industry, CRM Territory, CRM Lost Reason]
+    borrador: [Lead, Opportunity, Prospect, Quotation, Contact, Address, CRM Lead, CRM Deal, CRM Organization, CRM Task, FCRM Note]
+  finanzas:
+    leer: [Sales Invoice, Purchase Invoice, Payment Entry, Journal Entry, GL Entry, Account, Bank Account, Cost Center, Payment Request,
+           Budget, Customer, Supplier, Sales Order, Purchase Order, Item, Project]
+    borrador: [Sales Invoice, Purchase Invoice, Payment Entry, Journal Entry, Payment Request]
+  direccion:                      # lectura amplia para inteligencia de negocio; sin contabilidad detallada ni nóminas
+    leer: [Customer, Supplier, Employee, Item, Sales Order, Sales Invoice, Purchase Invoice, Purchase Order, Quotation, Opportunity,
+           Lead, Project, Task, Campaign, Territory, Customer Group, Bin, CRM Lead, CRM Deal, CRM Organization]
+    borrador: []
+  operaciones:
+    leer: [Item, Item Price, Bin, Warehouse, Stock Entry, Material Request, Purchase Order, Purchase Receipt, Delivery Note, Supplier,
+           Project, Task, Timesheet, Work Order, BOM, Sales Order, Customer, Contact, Address]
+    borrador: [Material Request, Purchase Order, Stock Entry, Delivery Note, Work Order, Task, Timesheet, Project]
+  telecom:
+    leer: [Customer, Contact, Address, Item, Item Price, Sales Order, Quotation, Project, Task, Supplier, Purchase Order,
+           Subscription, Subscription Plan]
+    borrador: [Quotation, Sales Order, Task]
+  atencion:
+    leer: [Customer, Contact, Address, Issue, Project, Task, Item, Serial No, Warranty Claim, Maintenance Schedule, Maintenance Visit]
+    borrador: [Issue, Task, Warranty Claim, Maintenance Visit]
+  areas:                          # líneas técnicas: CCTV, incendios, accesos…
+    leer: [Customer, Contact, Address, Item, Item Price, Bin, Serial No, Project, Task, Quotation, Sales Order, Supplier,
+           Warranty Claim, Maintenance Schedule, Maintenance Visit]
+    borrador: [Quotation, Task, Maintenance Visit, Warranty Claim]
+  licitaciones:
+    leer: [Customer, Contact, Opportunity, Quotation, Project, Task, Item, Item Price, Supplier, Contract]
+    borrador: [Opportunity, Quotation, Task]
+  legal:
+    leer: [Contract, Customer, Supplier, Project, Task, Non Conformance, Quality Goal, Quality Procedure, Quality Review, Quality Action]
+    borrador: [Contract, Non Conformance, Quality Goal, Quality Review, Quality Action, Task]
+  marketing:                      # sin datos personales de clientes: solo campañas, contactos de prospección (Lead) y catálogo
+    leer: [Campaign, Lead, Item, Item Price, Customer Group, Territory, CRM Lead Source, CRM Industry]
+    borrador: [Campaign]
+  personas:                       # datos de empleados: el departamento más sensible
+    leer: [Employee, Department, Designation, Holiday List, Leave Application, Attendance, Job Opening, Job Applicant,
+           Employee Onboarding, Training Event, Training Program, Salary Structure, Salary Slip]
+    borrador: [Leave Application, Job Opening, Employee Onboarding, Training Event]
+  tecnologia:
+    leer: [Item, Serial No, Asset, Warehouse, Bin, Project, Task]
+    borrador: []

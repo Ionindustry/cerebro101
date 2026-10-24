@@ -7,14 +7,54 @@ lo hace siempre una persona en ERPNext.
 """
 from __future__ import annotations
 
+import functools
 import json
+import logging
 import os
+import re
+from pathlib import Path
 from typing import Any
+from urllib.parse import quote
 
 import httpx
+import yaml
 
 from ..ajustes import ajustes
 from .base import Herramienta, registrar
+
+log = logging.getLogger("cerebro.erpnext")
+_DOCTYPE = re.compile(r"^[A-Za-z][A-Za-z0-9 _-]{1,80}$")
+_NOMBRE_PROHIBIDO = re.compile(r"[/\\?#%]|\.\.|[\x00-\x1f]")      # un nombre de documento no puede ser una ruta ni llevar parámetros
+
+
+@functools.lru_cache(maxsize=4)
+def _politica(dir_config: str) -> dict:
+    ruta = Path(dir_config) / "erp_acceso.yaml"
+    if not ruta.exists():
+        return {"modo": "bloquear", "departamentos": {}}          # sin política, nada: no se abre el ERP por olvido
+    return yaml.safe_load(ruta.read_text(encoding="utf-8")) or {}
+
+
+def comprobar_acceso(departamento: str, doctype: str, accion: str, nombre: str | None = None) -> None:
+    """Política de config/erp_acceso.yaml: qué documentos puede tocar cada departamento. `accion`: «leer» o «borrador».
+    Además impide que un nombre de documento se use para salirse de /api/resource/ (rutas, parámetros)."""
+    if not isinstance(doctype, str) or not _DOCTYPE.match(doctype):
+        raise PermissionError(f"«{str(doctype)[:60]}» no es un tipo de documento válido")
+    if nombre is not None and (not isinstance(nombre, str) or not nombre or _NOMBRE_PROHIBIDO.search(nombre)):
+        raise PermissionError("El nombre del documento no es válido (no puede llevar «/», «..», «?», «#» ni «%»)")
+    pol = _politica(str(ajustes.dir_config))
+    permitidos = ((pol.get("departamentos") or {}).get(departamento) or {}).get(accion) or []
+    if doctype in permitidos:
+        return
+    verbo = "consultar" if accion == "leer" else "crear en borrador"
+    ejemplos = ", ".join(permitidos[:12]) + ("…" if len(permitidos) > 12 else "")
+    mensaje = (f"El departamento «{departamento}» no tiene permitido {verbo} «{doctype}» en el ERP/CRM (config/erp_acceso.yaml). "
+               + (f"Puede: {ejemplos}." if permitidos else "No tiene ningún documento permitido para esta acción."))
+    if (pol.get("modo") or "bloquear") == "avisar":
+        log.warning("ACCESO FUERA DE POLÍTICA (solo aviso): %s", mensaje)
+        return
+    log.warning("Acceso al ERP bloqueado: %s", mensaje)
+    raise PermissionError(mensaje)
 
 
 def _cabeceras(departamento: str) -> dict:
@@ -30,26 +70,29 @@ def _cabeceras(departamento: str) -> dict:
 
 async def listar(doctype: str, departamento: str, filtros: list | None = None,
                  campos: list[str] | None = None, limite: int = 50) -> list[dict]:
+    comprobar_acceso(departamento, doctype, "leer")
     params = {"limit_page_length": limite, "fields": json.dumps(campos or ["name"])}
     if filtros:
         params["filters"] = json.dumps(filtros)
     async with httpx.AsyncClient(base_url=ajustes.erpnext_url, timeout=30) as c:
-        r = await c.get(f"/api/resource/{doctype}", params=params, headers=_cabeceras(departamento))
+        r = await c.get(f"/api/resource/{quote(doctype, safe='')}", params=params, headers=_cabeceras(departamento))
     r.raise_for_status()
     return r.json()["data"]
 
 
 async def leer(doctype: str, nombre: str, departamento: str) -> dict:
+    comprobar_acceso(departamento, doctype, "leer", nombre)
     async with httpx.AsyncClient(base_url=ajustes.erpnext_url, timeout=30) as c:
-        r = await c.get(f"/api/resource/{doctype}/{nombre}", headers=_cabeceras(departamento))
+        r = await c.get(f"/api/resource/{quote(doctype, safe='')}/{quote(nombre, safe='')}", headers=_cabeceras(departamento))
     r.raise_for_status()
     return r.json()["data"]
 
 
 async def crear_borrador(doctype: str, datos: dict[str, Any], departamento: str) -> dict:
+    comprobar_acceso(departamento, doctype, "borrador")
     datos = {**datos, "docstatus": 0}   # siempre borrador
     async with httpx.AsyncClient(base_url=ajustes.erpnext_url, timeout=30) as c:
-        r = await c.post(f"/api/resource/{doctype}", json=datos, headers=_cabeceras(departamento))
+        r = await c.post(f"/api/resource/{quote(doctype, safe='')}", json=datos, headers=_cabeceras(departamento))
     r.raise_for_status()
     return r.json()["data"]
 
