@@ -40,7 +40,7 @@ que se enviará** y, si es una respuesta, el mensaje original. Aprobar es lo ún
    python3 scripts/buzon_alta.py --id rrhh --direccion rrhh@101.cat --departamentos personas
    ```
 
-   Si el buzón ya está en `config/buzones.yaml` (los seis de ejemplo ya están), basta con la contraseña:
+   Si el buzón ya está en `config/buzones.yaml` (los cinco de la empresa ya están), basta con la contraseña:
    `python3 scripts/buzon_alta.py --id rrhh`.
 4. **Comprueba que conecta** (no lee ni envía nada):
 
@@ -61,8 +61,9 @@ que se enviará** y, si es una respuesta, el mensaje original. Aprobar es lo ún
 
 ## Pendiente de decidir con la empresa
 
-- Los nombres de buzón y la correspondencia con departamentos de `config/buzones.yaml` son una propuesta: administracion@ (Finanzas y Dirección),
-  rrhh@ (Personas), comercial@, soporte@ (Atención), compras@ (Operaciones) y telecom@.
+- Buzones: administracion@ (Dirección, Operaciones y Telecom), facturacion@ (Finanzas), rrhh@ (Personas), soporte@ (Atención) y concursos@ (Licitaciones).
+  **Comercial no tiene buzón** y sus agentes de correo (respuesta-leads, canal-email, gestor-cuentas) no podrán usarlo hasta asignarle uno
+  (p. ej. añadir `comercial` a los departamentos de soporte@, o crear comercial@). Los agentes de Licitaciones no tienen aún la herramienta `correo` en su ficha.
 - ¿Qué buzones empiezan en modo «solo leer y preparar borradores»? Mientras no pongas su contraseña, un buzón no hace nada.
 - ¿Firma de cada buzón (campo `firma`) y texto del pie comercial? Los revisa la persona responsable de protección de datos.
 - Los agentes que atienden estos buzones y su frecuencia de revisión (tareas programadas) se ajustan en sus fichas.

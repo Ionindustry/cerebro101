@@ -10,7 +10,7 @@
 # Lo que los agentes pueden hacer: leer, redactar borradores (aparecen en la carpeta Borradores del buzón) y marcar como gestionado.
 # CONTESTAR o ENVIAR sale de la empresa: pasa SIEMPRE por la bandeja de aprobaciones y una persona ve el texto completo antes de aprobar.
 #
-# NOMBRES Y DEPARTAMENTOS: PROPUESTA INICIAL, a revisar con la empresa (docs/CORREO.md).
+# Comercial no tiene buzón propio todavía: sus agentes no podrán usar el correo hasta que se le asigne uno (docs/CORREO.md).
 
 servidor:                       # valores por defecto de todos los buzones; cada buzón puede sustituirlos con sus propios «imap» y «smtp»
   imap: {host: "mail.101.cat", puerto: 993, seguridad: ssl}          # seguridad: ssl | starttls | ninguna (esta última solo para pruebas)
@@ -30,31 +30,26 @@ pie_comercial: >-
 buzones:
   administracion:
     direccion: administracion@101.cat
-    departamentos: [finanzas, direccion]
-    descripcion: "Facturas, cobros y gestión administrativa"
+    departamentos: [direccion, operaciones, telecom]
+    descripcion: "Gestión administrativa general, proveedores y operadores"
     firma: "Departamento de Administración · 101.cat"
+  facturacion:
+    direccion: facturacion@101.cat
+    departamentos: [finanzas]
+    descripcion: "Facturas, cobros y reclamaciones de pago"
+    firma: "Facturación · 101.cat"
   rrhh:
     direccion: rrhh@101.cat
     departamentos: [personas]
     descripcion: "Candidaturas, vacaciones, bajas y gestiones de personal"
     firma: "Recursos Humanos · 101.cat"
-  comercial:
-    direccion: comercial@101.cat
-    departamentos: [comercial]
-    descripcion: "Consultas de clientes y peticiones de presupuesto"
-    firma: "Departamento Comercial · 101.cat"
   soporte:
     direccion: soporte@101.cat
     departamentos: [atencion]
     descripcion: "Incidencias y atención al cliente"
     firma: "Atención al cliente · 101.cat"
-  compras:
-    direccion: compras@101.cat
-    departamentos: [operaciones]
-    descripcion: "Proveedores, pedidos y presupuestos de instaladores"
-    firma: "Compras y Operaciones · 101.cat"
-  telecom:
-    direccion: telecom@101.cat
-    departamentos: [telecom]
-    descripcion: "Mayoristas y operadores"
-    firma: "Telecomunicaciones · 101.cat"
+  concursos:
+    direccion: concursos@101.cat
+    departamentos: [licitaciones]
+    descripcion: "Concursos y licitaciones públicas"
+    firma: "Licitaciones · 101.cat"
