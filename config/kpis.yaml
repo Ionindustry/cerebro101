@@ -46,6 +46,9 @@ herramientas:
     - {nombre: "Consultas a redes y vídeo", claves: ["uso:agent_reach.*"], unidad: "consultas"}
   grok:
     - {nombre: "Consultas de tendencias", claves: ["uso:grok.*"], unidad: "consultas"}
+  web:
+    - {nombre: "Búsquedas en internet", claves: ["uso:web.buscar"], unidad: "búsquedas"}
+    - {nombre: "Páginas leídas", claves: ["uso:web.leer"], unidad: "páginas"}
 
 # KPI de cargo del ERP/CRM por departamento (los de un agente concreto, más abajo, sustituyen a estos).
 departamentos:

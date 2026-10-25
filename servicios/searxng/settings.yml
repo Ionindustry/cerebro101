@@ -1,0 +1,21 @@
+# SearXNG: el buscador propio de Jarvis (servicio `searxng` de docker-compose.yml). Solo se alcanza desde la red interna del Cerebro.
+# Une las respuestas de varios buscadores públicos sin cuenta ni claves; el Cerebro filtra antes que ninguna consulta lleve datos de la empresa.
+use_default_settings: true
+
+general:
+  instance_name: "Buscador del Cerebro 101.cat"
+  enable_metrics: false
+
+search:
+  safe_search: 1
+  default_lang: "es"
+  autocomplete: ""
+  formats: [html, json]       # el Cerebro lee el formato json
+
+server:
+  limiter: false              # no está expuesto a internet: lo usa solo la API
+  image_proxy: false
+  # la clave se pone con SEARXNG_SECRET (docker-compose.yml); no hace falta guardarla aquí
+
+ui:
+  static_use_hash: true

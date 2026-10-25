@@ -5,7 +5,7 @@ Cada fase dura unas 4 semanas y solo empieza si la anterior cumple su criterio d
 ## Fase 1 — Cimientos
 
 - [x] Estructura del proyecto, docker-compose y esquema de base de datos
-- [x] Registro de 114 agentes como configuración validada
+- [x] Registro de 115 agentes como configuración validada
 - [x] Políticas de aprobación y de sensibilidad de datos en código
 - [x] Grafo de orquestación: Director General → departamento → agente → aprobaciones
 - [x] Panel de Jarvis con conversación, bandeja de aprobaciones y directorio de agentes

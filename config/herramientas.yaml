@@ -11,6 +11,7 @@ herramientas:
   scrapegraph:               {local: true,  sensibilidad_max: baja,  nota: "modelo local; solo salen visitas a webs públicas"}
   agent_reach:               {local: false, sensibilidad_max: baja,  nota: "contenedor aislado, solo lectura de contenido público"}
   grok:                      {local: false, sensibilidad_max: baja,  nota: "API de xAI; solo consultas sobre temas públicos"}
+  web:                       {local: false, sensibilidad_max: baja,  nota: "búsqueda en internet (SearXNG propio) y lectura de páginas públicas; las consultas no pueden llevar datos de clientes ni de personas"}
   jev:                       {local: false, sensibilidad_max: media, nota: "nube de TypeSafe; media solo con retención cero y datos anonimizados"}
   jeff:                      {local: true,  sensibilidad_max: alta,  nota: "sustituto local de Jev"}
   plataformas_contratacion:  {local: false, sensibilidad_max: baja}

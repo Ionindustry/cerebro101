@@ -59,6 +59,7 @@ x-api: &api
     ANONIMIZACION_NER: "${ANONIMIZACION_NER:-heuristico}"
     ANONIMIZACION_MODELO_SPACY: "${ANONIMIZACION_MODELO_SPACY:-es_core_news_md}"
     AGENT_REACH_URL: "${AGENT_REACH_URL:-http://agent-reach:8090}"
+    SEARXNG_URL: "${SEARXNG_URL:-http://searxng:8080}"           # buscador propio de Jarvis (internet)
     # Calendarios (los buzones de correo van por secretos/buzones.env, no por el .env)
     CALENDARIO_USUARIO: "${CALENDARIO_USUARIO:-}"
     CALENDARIO_CLAVE: "${CALENDARIO_CLAVE:-}"
@@ -207,6 +208,23 @@ services:
       resources:
         reservations:
           devices: [{driver: nvidia, count: all, capabilities: [gpu]}]
+    networks: [cerebro]
+    restart: unless-stopped
+
+  searxng:                # buscador propio de Jarvis (internet): sin claves, solo en la red interna; la API le pregunta con consultas ya filtradas
+    image: searxng/searxng:latest
+    environment:
+      SEARXNG_SECRET: "${SEARXNG_SECRET:-cerebro-searxng-solo-red-interna}"
+      SEARXNG_BASE_URL: "http://searxng:8080/"
+    volumes: ["./servicios/searxng/settings.yml:/etc/searxng/settings.yml:ro"]
+    cap_drop: [ALL]
+    cap_add: [CHOWN, SETGID, SETUID]
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://localhost:8080/healthz"]
+      interval: 30s
+      timeout: 8s
+      retries: 3
+      start_period: 20s
     networks: [cerebro]
     restart: unless-stopped
 

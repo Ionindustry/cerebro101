@@ -1,12 +1,13 @@
 # Índice de agentes
 
-13 departamentos, 60 subáreas y 114 agentes. Generado por `scripts/generar_fichas.py`.
+13 departamentos, 60 subáreas y 115 agentes. Generado por `scripts/generar_fichas.py`.
 
 ## Dirección General
 
 | Agente | Subárea | Modelo | Aprobación | Horario | Tareas |
 | --- | --- | --- | --- | --- | --- |
 | **Director General** | Coordinación | rapido | libre | 0 7 * * 1-5 | Recibe todas las peticiones, las enruta al departamento correcto, prioriza conflictos entre áreas y genera el resumen diario |
+| Asistente general | Coordinación | principal | libre | bajo petición | Responde cualquier duda general o de actualidad con la fecha y hora actuales y consultando internet (buscador propio y lectura de páginas públicas); nunca con datos de clientes ni de personas, y lo que es del negocio lo redirige al departamento que corresponde |
 | Secretaría de Dirección | Coordinación | principal | simple | bajo petición | Agenda de dirección, actas de reuniones y seguimiento de acuerdos y fechas límite |
 | Estratega | Estrategia | principal | libre | 0 8 * * 1 | Objetivos trimestrales, análisis de escenarios y alertas de desviación |
 | Analista BI | Inteligencia de negocio | principal | libre | 30 6 * * * | Consolida los KPI de todos los departamentos en el panel diario y semanal |
