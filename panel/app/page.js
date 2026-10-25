@@ -1,6 +1,6 @@
 "use client";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { elegir, mensajeError, nivel, nombre, restricciones, soloEntradas } from "../lib/microfonos";
+import { elegir, mensajeError, mensajeTranscripcion, nivel, nombre, restricciones, soloEntradas } from "../lib/microfonos";
 
 const SUGERENCIAS = [
   "¿Hay concursos nuevos que nos interesen?",
@@ -109,9 +109,14 @@ export default function Jarvis() {
       setEstado("pensando");
       const fd = new FormData();
       fd.append("audio", new Blob(trozos, { type: "audio/webm" }), "voz.webm");
-      const r = await fetch("/voz/transcribir", { method: "POST", body: fd });
-      const d = r.ok ? await r.json() : { texto: "" };
-      d.texto ? enviar(d.texto, true) : (setAvisoMic("No he entendido nada. Comprueba que la barra de nivel se mueve cuando hablas."), setEstado("listo"));
+      let estadoHttp = 0, d = { texto: "" };
+      try {
+        const r = await fetch("/voz/transcribir", { method: "POST", body: fd });
+        estadoHttp = r.status;
+        if (r.ok) d = await r.json();
+      } catch { /* sin llegar al servicio de voz */ }
+      const aviso = mensajeTranscripcion(estadoHttp, d.texto || "");
+      if (aviso) { setAvisoMic(aviso); setEstado("listo"); } else enviar(d.texto, true);
     };
     grabadora.current = rec;
     rec.start();

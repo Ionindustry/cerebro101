@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { elegir, mensajeError, nivel, nombre, restricciones, soloEntradas } from "../lib/microfonos.js";
+import { elegir, mensajeError, mensajeTranscripcion, nivel, nombre, restricciones, soloEntradas } from "../lib/microfonos.js";
 
 const disp = [
   { kind: "audioinput", deviceId: "default", label: "Predeterminado" },
@@ -46,4 +46,13 @@ test("el nivel va de 0 (silencio) a 1 (fuerte)", () => {
   assert.equal(nivel([128, 192, 64]), 1);
   assert.ok(nivel([128, 144]) > 0 && nivel([128, 144]) < 1);
   assert.equal(nivel([]), 0);
+});
+
+test("al transcribir se distingue «no se oye nada» de «el servicio de voz no funciona»", () => {
+  assert.equal(mensajeTranscripcion(200, "hola"), "");
+  assert.match(mensajeTranscripcion(200, "  "), /No he oído palabras/);
+  assert.match(mensajeTranscripcion(500), /servicio de voz.*error 500/);
+  assert.match(mensajeTranscripcion(503), /docker compose logs voz/);
+  assert.match(mensajeTranscripcion(0), /no responde\./);
+  assert.match(mensajeTranscripcion(401), /sesión ha caducado/);
 });

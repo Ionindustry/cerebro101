@@ -35,3 +35,10 @@ export function nivel(muestras) {
   for (const v of muestras) max = Math.max(max, Math.abs(v - 128));
   return Math.min(1, max / 64);
 }
+
+// Qué decirle a la persona según lo que ha pasado al transcribir: `estado` es el código HTTP, 0 si ni siquiera se pudo llegar al servicio
+export function mensajeTranscripcion(estado, texto = "") {
+  if (estado === 200) return texto.trim() ? "" : "No he oído palabras. Habla más cerca del micrófono, sube su volumen o prueba con otro micrófono de la lista.";
+  if (estado === 401) return "La sesión ha caducado. Recarga la página e inicia sesión de nuevo.";
+  return "El servicio de voz del servidor no responde" + (estado ? ` (error ${estado})` : "") + ". El micrófono funciona, pero hay que revisar el servicio de voz: docker compose logs voz.";
+}
