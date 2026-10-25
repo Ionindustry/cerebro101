@@ -176,10 +176,18 @@ async def ver_aprobaciones(usuario: Usuario = Depends(usuario_actual)):
 
 @app.get("/aprobaciones/historial")
 async def ver_historial(decision: str | None = None, q: str | None = None, pagina: int = 0, limite: int = 30,
-                        usuario: Usuario = Depends(usuario_actual)):
-    """Aprobaciones ya resueltas (aprobadas y rechazadas): se guardan todas. Dirección las ve todas; el resto, las de sus departamentos."""
+                        departamento: str | None = None, usuario: Usuario = Depends(usuario_actual)):
+    """Aprobaciones ya resueltas (aprobadas y rechazadas): se guardan todas. Dirección las ve todas; el resto, las de sus departamentos.
+    `departamento` filtra por uno."""
     deps = None if "direccion" in usuario.roles else usuario.departamentos
-    return await bandeja.historial(deps, decision, q, limite, pagina)
+    return await bandeja.historial(deps, decision, q, limite, pagina, departamento)
+
+
+@app.get("/aprobaciones/resumen")
+async def resumen_aprobaciones(dias: int = 30, usuario: Usuario = Depends(usuario_actual)):
+    """Dashboard de Aprobaciones: pendientes, resueltas, tiempos, por departamento, por día, agentes y acciones más frecuentes."""
+    deps = None if "direccion" in usuario.roles else usuario.departamentos
+    return await bandeja.resumen(deps, dias)
 
 
 @app.post("/aprobaciones/{sid}")
