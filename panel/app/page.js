@@ -217,7 +217,7 @@ export default function Jarvis() {
                   aria-label="Respuesta por voz" title="Respuesta por voz" onClick={cambiarVoz}><span /></button>
           <span className="voz-etiqueta">Respuesta por voz</span>
           {hablando && <button type="button" className="of-boton" onClick={pararAudio}>Callar</button>}
-          {estado === "escuchando" && <span className="nivel" role="meter" aria-label="Nivel del micrófono" aria-valuemin="0" aria-valuemax="1" aria-valuenow={nivelMic.toFixed(2)}><i style={{ width: `${Math.round(nivelMic * 100)}%` }} /></span>}
+          {estado === "escuchando" && <span className="mic-nivel" role="meter" aria-label="Nivel del micrófono" aria-valuemin="0" aria-valuemax="1" aria-valuenow={nivelMic.toFixed(2)}><i style={{ width: `${Math.round(nivelMic * 100)}%` }} /></span>}
         </div>
         {micros.length === 0 && !avisoMic && entorno && <div className="micro-ayuda">{ayudaSinMicrofonos(entorno.seguro, entorno.api)}</div>}
         {avisoMic && <div className="micro-aviso" role="alert">{avisoMic}</div>}
