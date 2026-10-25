@@ -32,6 +32,11 @@ jobs:
       - name: Pruebas
         working-directory: api
         run: python -m unittest discover -s tests
+      - name: Voz (cambio a CPU si falla la tarjeta gráfica, sin cargar modelos)
+        working-directory: servicios/voz
+        run: |
+          pip install python-multipart
+          python -m unittest discover -s tests
 
   panel:
     name: Panel · pruebas de Node

@@ -1,21 +1,89 @@
-"""Servicio de voz de Jarvis: voz a texto (faster-whisper) y texto a voz (Piper), todo local."""
+"""Servicio de voz de Jarvis: voz a texto (faster-whisper) y texto a voz (Piper), todo local.
+
+Whisper usa la tarjeta gráfica (WHISPER_DISPOSITIVO=cuda) si puede. Si las librerías de NVIDIA no están o la tarjeta falla al transcribir
+(«libcublas.so.12 is not found»), el servicio pasa solo a la CPU con un modelo más pequeño (WHISPER_MODELO_CPU, por defecto «small») y lo dice en el log:
+transcribe más despacio, pero transcribe.
+"""
 from __future__ import annotations
 
+import logging
 import os
 import subprocess
 import tempfile
+import threading
 
 from fastapi import FastAPI, UploadFile
 from fastapi.responses import Response
-from faster_whisper import WhisperModel
 
-MODELO = os.environ.get("WHISPER_MODELO", "large-v3-turbo")
-DISPOSITIVO = os.environ.get("WHISPER_DISPOSITIVO", "cuda")
+log = logging.getLogger("voz")
+MODELO = os.environ.get("WHISPER_MODELO") or "large-v3-turbo"
+DISPOSITIVO = os.environ.get("WHISPER_DISPOSITIVO") or "cuda"
+MODELO_CPU = os.environ.get("WHISPER_MODELO_CPU") or "small"
 VOCES = {"ca": os.environ.get("PIPER_VOZ_CA", "/voces/ca_ES-upc_ona-medium.onnx"),
          "es": os.environ.get("PIPER_VOZ_ES", "/voces/es_ES-davefx-medium.onnx")}
 
-app = FastAPI(title="Voz de Jarvis")
-whisper = WhisperModel(MODELO, device=DISPOSITIVO, compute_type="float16" if DISPOSITIVO == "cuda" else "int8")
+_estado = {"modelo": MODELO, "dispositivo": DISPOSITIVO, "whisper": None, "alternativa": None}
+_cerrojo = threading.Lock()
+
+
+def _cargar(nombre: str, dispositivo: str):
+    from faster_whisper import WhisperModel          # aquí y no arriba: así el servicio arranca (y se prueba) sin el modelo cargado
+    return WhisperModel(nombre, device=dispositivo, compute_type="float16" if dispositivo == "cuda" else "int8")
+
+
+def _es_fallo_de_gpu(e: Exception) -> bool:
+    t = str(e).lower()
+    return any(p in t for p in ("cublas", "cudnn", "cuda", "cudart", "nvrtc"))
+
+
+def _a_cpu(motivo: Exception) -> None:
+    log.warning("La tarjeta gráfica no sirve para Whisper (%s): se usa la CPU con el modelo «%s». Para usar la tarjeta hacen falta las "
+                "librerías CUDA 12 y cuDNN 9 en la imagen de voz.", motivo, MODELO_CPU)
+    _estado.update(modelo=MODELO_CPU, dispositivo="cpu", whisper=_cargar(MODELO_CPU, "cpu"), alternativa=str(motivo)[:200])
+
+
+def modelo():
+    with _cerrojo:
+        if _estado["whisper"] is None:
+            try:
+                _estado["whisper"] = _cargar(_estado["modelo"], _estado["dispositivo"])
+            except Exception as e:  # noqa: BLE001
+                if _estado["dispositivo"] != "cuda" or not _es_fallo_de_gpu(e):
+                    raise
+                _a_cpu(e)
+        return _estado["whisper"]
+
+
+def _transcribir_fichero(ruta: str) -> tuple[str, str]:
+    """Una transcripción. Si falla por la tarjeta gráfica, se cambia a CPU y se repite una vez."""
+    for intento in (1, 2):
+        try:
+            segmentos, info = modelo().transcribe(ruta, vad_filter=True)
+            return " ".join(s.text.strip() for s in segmentos), info.language     # los segmentos se calculan al recorrerlos: el fallo también puede salir aquí
+        except Exception as e:  # noqa: BLE001
+            with _cerrojo:
+                if intento == 1 and _estado["dispositivo"] == "cuda" and _es_fallo_de_gpu(e):
+                    _a_cpu(e)
+                    continue
+            raise
+    raise RuntimeError("inalcanzable")
+
+
+async def _arranque(_app):
+    try:
+        modelo()
+    except Exception:  # noqa: BLE001
+        log.exception("No se pudo cargar el modelo de Whisper; se reintentará con la primera petición")
+    yield
+
+
+app = FastAPI(title="Voz de Jarvis", lifespan=_arranque)
+
+
+@app.get("/salud")
+async def salud():
+    return {"modelo": _estado["modelo"], "dispositivo": _estado["dispositivo"], "cargado": _estado["whisper"] is not None,
+            "alternativa_por": _estado["alternativa"]}
 
 
 @app.post("/transcribir")
@@ -23,9 +91,8 @@ async def transcribir(audio: UploadFile):
     with tempfile.NamedTemporaryFile(suffix=".webm") as fh:
         fh.write(await audio.read())
         fh.flush()
-        segmentos, info = whisper.transcribe(fh.name, vad_filter=True)
-        texto = " ".join(s.text.strip() for s in segmentos)
-    return {"texto": texto, "idioma": info.language}
+        texto, idioma = _transcribir_fichero(fh.name)
+    return {"texto": texto, "idioma": idioma}
 
 
 @app.post("/hablar")
