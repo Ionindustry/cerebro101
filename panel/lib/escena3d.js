@@ -5,7 +5,7 @@ import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import { RoundedBoxGeometry } from "three/examples/jsm/geometries/RoundedBoxGeometry.js";
 import { COLOR, SALA, distribucion } from "./oficina.js";
 
-const ALTO_MURO = 1.2;
+const ALTO_MURO = 1.5;
 const DIR_CAMARA = new THREE.Vector3(1, 0.8, 1).normalize();       // vista isométrica desde el frente-derecha
 const c = (hex) => new THREE.Color(hex);
 
@@ -89,6 +89,49 @@ export function crearOficina({ contenedor, departamentos, alSeleccionarAgente, a
   const margen = 3.2, espesor = 1.4;
   poner(new RoundedBoxGeometry(dist.ancho + margen * 2, espesor, dist.fondo + margen * 2, 4, 0.45), mat.suelo, dist.centro.x, -espesor / 2, dist.centro.z, { emite: false });
   const lineasSala = new Map();
+  const carteles = new Map();                                     // id de sala → { mesh, ctx, tex, nombre, n, sel }
+  const ANCHO_CARTEL = SALA - 0.6, CW = 2048, CH = 240;
+
+  // El nombre del departamento va escrito en su pared del fondo: se redibuja cuando cambia el número de agentes trabajando o la sala elegida
+  function dibujarCartel(c) {
+    const g = c.ctx;
+    g.clearRect(0, 0, CW, CH);
+    g.textBaseline = "middle";
+    g.fillStyle = c.n ? COLOR.senal : "#bdbdc4";
+    g.beginPath(); g.arc(78, CH / 2, 22, 0, Math.PI * 2); g.fill();
+    let px = 132;
+    const info = c.n ? `${c.n} trabajando` : "";
+    g.font = "600 70px system-ui, 'Segoe UI', Roboto, sans-serif";
+    const anchoInfo = info ? g.measureText(info).width + 70 : 0;
+    let tam = 132;
+    g.font = `700 ${tam}px system-ui, 'Segoe UI', Roboto, sans-serif`;
+    const texto = c.nombre.toUpperCase();
+    while (g.measureText(texto).width > CW - px - anchoInfo - 40 && tam > 60) { tam -= 4; g.font = `700 ${tam}px system-ui, 'Segoe UI', Roboto, sans-serif`; }
+    g.fillStyle = "#16161a";
+    g.fillText(texto, px, CH / 2 + 4);
+    if (info) {
+      g.font = "600 70px system-ui, 'Segoe UI', Roboto, sans-serif";
+      g.fillStyle = COLOR.senal; g.textAlign = "right";
+      g.fillText(info, CW - 50, CH / 2 + 4); g.textAlign = "left";
+    }
+    if (c.sel) { g.fillStyle = COLOR.senal; g.fillRect(40, CH - 22, CW - 80, 10); }
+    c.tex.needsUpdate = true;
+  }
+  function crearCartel(sala, x, y, z) {
+    const canvas = document.createElement("canvas");
+    canvas.width = CW; canvas.height = CH;
+    const tex = new THREE.CanvasTexture(canvas);
+    tex.colorSpace = THREE.SRGBColorSpace;
+    tex.anisotropy = renderer.capabilities.getMaxAnisotropy();
+    const mesh = new THREE.Mesh(new THREE.PlaneGeometry(ANCHO_CARTEL, ANCHO_CARTEL * CH / CW), new THREE.MeshBasicMaterial({ map: tex, transparent: true, toneMapped: false }));
+    mesh.position.set(x, y, z);
+    mesh.matrixAutoUpdate = false; mesh.updateMatrix();
+    mesh.userData.sala = sala.id;
+    escena.add(mesh);
+    const c = { mesh, ctx: canvas.getContext("2d"), tex, nombre: sala.nombre, n: 0, sel: false };
+    dibujarCartel(c);
+    carteles.set(sala.id, c);
+  }
   for (const s of dist.salas) {
     const placa = poner(new THREE.BoxGeometry(SALA, 0.14, SALA), mat.sala, s.x + SALA / 2, 0.07, s.z + SALA / 2, { emite: false });
     placa.userData.sala = s.id;
@@ -99,7 +142,8 @@ export function crearOficina({ contenedor, departamentos, alSeleccionarAgente, a
     // muros bajos al fondo (los dos lados lejanos), con hueco de puerta
     const g = 0.24;
     const tramo = (x0, z0, w, d) => poner(new RoundedBoxGeometry(w, ALTO_MURO, d, 2, 0.05), mat.blanco, s.x + x0 + w / 2, ALTO_MURO / 2 + 0.14, s.z + z0 + d / 2);
-    tramo(0, 0, SALA * 0.36, g); tramo(SALA * 0.5, 0, SALA * 0.5, g);
+    tramo(0, 0, SALA, g);                                       // pared del fondo, entera: lleva el nombre del departamento
+    crearCartel(s, s.x + SALA / 2, 0.14 + ALTO_MURO * 0.52, s.z + g + 0.01);
     tramo(0, 0, g, SALA * 0.44); tramo(0, SALA * 0.56, g, SALA * 0.44);
   }
 
@@ -162,20 +206,10 @@ export function crearOficina({ contenedor, departamentos, alSeleccionarAgente, a
     agentes.set(a.id, { ...a, grupo, cuerpo, punto, anillo, pantalla, estado: "reposo", fase: Math.random() * 6.28 });
   }
 
-  // --- Etiquetas de sala (HTML sobre la escena) ------------------------------------------------------------------------------------
+  // --- Capa HTML sobre la escena (solo el nombre del agente elegido) ---------------------------------------------------------------
   const capa = document.createElement("div");
   capa.className = "of3-capa";
   contenedor.appendChild(capa);
-  const etiquetas = dist.salas.map((s) => {
-    const e = document.createElement("button");
-    e.className = "of3-etiqueta";
-    e.type = "button";
-    e.innerHTML = `<i></i><span></span><em></em>`;
-    e.querySelector("span").textContent = s.nombre;
-    e.addEventListener("click", () => alSeleccionarSala?.(s.id));
-    capa.appendChild(e);
-    return { s, e, punto: e.querySelector("i"), n: e.querySelector("em"), pos: new THREE.Vector3(s.x + SALA / 2, 0.3, s.z + SALA + 0.55) };
-  });
   const nombreAgente = document.createElement("div");
   nombreAgente.className = "of3-nombre";
   nombreAgente.hidden = true;
@@ -250,6 +284,7 @@ export function crearOficina({ contenedor, departamentos, alSeleccionarAgente, a
   }
   function resaltarSala(id) {
     for (const [sid, l] of lineasSala) l.material = sid === id ? mat.lineaSel : mat.linea;
+    for (const [sid, c] of carteles) { const sel = sid === id; if (sel !== c.sel) { c.sel = sel; dibujarCartel(c); } }
   }
 
   // --- Interacción ---------------------------------------------------------------------------------------------------------------
@@ -312,7 +347,6 @@ export function crearOficina({ contenedor, departamentos, alSeleccionarAgente, a
     if (seleccionado) { const a = agentes.get(seleccionado); marca.visible = true; marca.position.set(a.grupo.position.x, 0.17, a.grupo.position.z); marca.scale.setScalar(1 + Math.sin(t * 4) * 0.06); }
     else marca.visible = false;
     controles.update();
-    for (const e of etiquetas) proyectar(e.pos, e.e);
     if (seleccionado) {
       const a = agentes.get(seleccionado);
       nombreAgente.hidden = false;
@@ -343,10 +377,9 @@ export function crearOficina({ contenedor, departamentos, alSeleccionarAgente, a
         }
         if (s === "trabajando") trabajando.set(a.sala, (trabajando.get(a.sala) || 0) + 1);
       }
-      for (const e of etiquetas) {
-        const n = trabajando.get(e.s.id) || 0;
-        e.punto.style.background = n ? COLOR.senal : "#bdbdc4";
-        e.n.textContent = n ? String(n) : "";
+      for (const [id, c] of carteles) {
+        const n = trabajando.get(id) || 0;
+        if (n !== c.n) { c.n = n; dibujarCartel(c); }
       }
     },
     enfocarSala, enfocarAgente, vistaGeneral,

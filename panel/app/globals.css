@@ -118,13 +118,6 @@ h1 { font-size: 30px; font-weight: 300; letter-spacing: -0.6px; margin: 0 0 20px
   height: calc(100dvh - 150px); min-height: 480px; background: #f1f1f3; }
 .of3 { position: absolute; inset: 0; }
 .of3-capa { position: absolute; inset: 0; pointer-events: none; overflow: hidden; }
-.of3-etiqueta { position: absolute; left: 0; top: 0; pointer-events: auto; display: inline-flex; align-items: center; gap: 7px; white-space: nowrap;
-  background: rgba(255,255,255,.96); border: 1px solid #e3e3e7; border-radius: 99px; padding: 3px 11px 3px 9px; cursor: pointer;
-  font: 500 10.5px/1.6 ui-monospace, SFMono-Regular, Menlo, monospace; letter-spacing: .07em; text-transform: uppercase; color: var(--tinta);
-  box-shadow: 0 2px 8px rgba(0,0,0,.06); }
-.of3-etiqueta:hover { background: #fff; border-color: var(--tinta); }
-.of3-etiqueta i { width: 7px; height: 7px; border-radius: 50%; background: #bdbdc4; }
-.of3-etiqueta em { font-style: normal; font-weight: 700; color: #f2584b; }
 .of3-nombre { position: absolute; left: 0; top: 0; background: var(--tinta); color: #fff; border-radius: 99px; padding: 3px 12px; font-size: 13px; font-weight: 600; white-space: nowrap; }
 .of-cargando { position: absolute; left: 24px; top: 20px; z-index: 2; }
 .of-ayuda { position: absolute; left: 50%; bottom: 14px; transform: translateX(-50%); margin: 0; font-size: 13px; color: var(--secundario); background: rgba(255,255,255,.8);

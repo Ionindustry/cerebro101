@@ -11,7 +11,7 @@ en la pantalla al entrar.
 - **Negro quieto y pantalla apagada:** en reposo. El director de cada sala lleva una banda blanca y ocupa el primer puesto.
 - **Mover la cámara:** arrastra para girar un poco y desplazar; rueda del ratón para acercar. **Esc** o «← Toda la oficina» vuelven a la vista general.
 - **Pasar el ratón** por un agente: nombre, área, estado y qué hace ahora.
-- **Pulsar una sala** (o su etiqueta): la cámara vuela hasta ella y la lista lateral muestra sus agentes.
+- **El nombre de cada departamento está escrito en su pared del fondo**, con cuántos agentes están trabajando (en coral). **Pulsar una sala** (o su pared): la cámara vuela hasta ella y la lista lateral muestra sus agentes.
 - **Pulsar un agente — entrar en él:** la cámara se acerca a su puesto y se abre su ficha con: estado y qué hace ahora, qué hace en la empresa, herramientas y nivel de aprobación,
   lo que **espera tu aprobación** (con destinatario y asunto, y enlace a Aprobaciones), los **pasos recientes** (línea de tiempo: «Pensando», «Usando correo · leer_adjunto»,
   «Propone enviar_correo y espera aprobación», «Ejecuta … (aprobada)») y las **acciones registradas**. Se refresca cada 2,5 s mientras está abierta.
