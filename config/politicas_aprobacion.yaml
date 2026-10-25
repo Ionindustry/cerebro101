@@ -22,6 +22,19 @@ prohibidas:
   - firmar_en_nombre_de_la_empresa
   - validar_documento_erp      # los documentos del ERP los valida siempre una persona
 
+# QUÉ NECESITA FIRMA. Se decide por la operación, no por el agente:
+#   estándar    → no pide firma: lecturas, borradores, propuestas, resúmenes… (todo lo que no está en las dos listas de abajo ni sale de la empresa)
+#   supervisada → pide tu firma: todo lo que sale de la empresa (operaciones marcadas como externas en su herramienta + `impacto_externo`) y lo que añadas en `supervisadas`
+#   reservada   → compromisos económicos o legales: firma individual, solo en el panel (no por voz) y NO se puede cubrir con una autorización por objetivo
+# Se escribe como «herramienta.operacion» (p. ej. correo.enviar) o como nombre de acción (p. ej. publicar).
+supervision:
+  supervisadas: []
+  reservadas:
+    - presentar_licitacion
+    - pedido_proveedor
+    - alta_mayorista
+    - mayorista.alta
+
 # Acciones con impacto externo: obligan a pasar por la bandeja aunque la ficha diga «libre».
 impacto_externo:
   - enviar_correo

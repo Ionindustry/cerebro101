@@ -45,6 +45,21 @@ class TestPoliticas(unittest.TestCase):
             d = nivel_para(self.r.fichas[nombre], accion)
             self.assertEqual(d.aprobadores, ("direccion",), nombre)
 
+    def test_lo_estandar_no_pide_firma_aunque_el_agente_sea_doble(self):
+        d = nivel_para(self.r.fichas["precio-licitacion"], "preparar_borrador")
+        self.assertFalse(d.requiere)
+        self.assertEqual(d.clase, "estandar")
+
+    def test_lo_reservado_es_individual_y_solo_en_el_panel(self):
+        d = nivel_para(self.r.fichas["radar-tendencias"], "presentar_licitacion")
+        self.assertEqual((d.clase, d.nivel, d.voz_permitida), ("reservada", "doble", False))
+        d = nivel_para(self.r.fichas["radar-tendencias"], "algo", herramienta="mayorista", operacion="alta")
+        self.assertEqual(d.clase, "reservada")
+
+    def test_lo_que_sale_de_la_empresa_es_supervisado(self):
+        d = nivel_para(self.r.fichas["radar-tendencias"], "algo", externa=True)
+        self.assertEqual((d.clase, d.requiere), ("supervisada", True))
+
     def test_acciones_prohibidas(self):
         with self.assertRaises(AccionProhibida):
             nivel_para(self.r.fichas["contable"], "validar_documento_erp")

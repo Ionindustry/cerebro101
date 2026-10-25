@@ -25,6 +25,24 @@ function Detalle({ s }) {
         <div><dt>Acción</dt><dd>{s.accion}</dd></div>
         <div><dt>Fecha</dt><dd>{fecha(s.creado)}</dd></div>
       </dl>
+      {s.datos?.objetivo && <p><strong>Objetivo:</strong> {s.datos.objetivo}</p>}
+      {Array.isArray(s.datos?.acciones) && (
+        <div className="ap-lote">
+          <p className="meta">Firmas una vez y se ejecutan estas {s.datos.acciones.length} acciones:</p>
+          <ol>
+            {s.datos.acciones.map((a, i) => (
+              <li key={i}>
+                <strong>{a.resumen}</strong>
+                {a.vista?.campos?.length > 0 && (
+                  <dl className="ap-campos">
+                    {a.vista.campos.map(([k, v]) => <div key={k}><dt>{k}</dt><dd>{texto(v)}</dd></div>)}
+                  </dl>
+                )}
+              </li>
+            ))}
+          </ol>
+        </div>
+      )}
       {s.datos?.vista?.titulo && <h3>{s.datos.vista.titulo}</h3>}
       {campos.length > 0 ? (
         <dl className="ap-campos">
@@ -32,7 +50,7 @@ function Detalle({ s }) {
             <div key={k}><dt>{k}</dt><dd>{texto(v)}</dd></div>
           ))}
         </dl>
-      ) : <p className="meta">Esta solicitud no trae más datos que el resumen.</p>}
+      ) : !s.datos?.acciones && <p className="meta">Esta solicitud no trae más datos que el resumen.</p>}
     </div>
   );
 }

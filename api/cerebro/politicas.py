@@ -41,23 +41,44 @@ class DecisionAprobacion:
     nivel: str
     aprobadores: tuple[str, ...]
     voz_permitida: bool
+    clase: str = "estandar"       # estandar | supervisada | reservada
 
 
-def nivel_para(ficha: Ficha, accion: str, dir_config: Path | None = None, externa: bool = False) -> DecisionAprobacion:
-    """Decide qué aprobación necesita `accion` hecha por el agente `ficha`.
-    `externa`: la operación de la herramienta tiene impacto externo, sea cual sea el nombre que el agente dé a la acción."""
+def clase_de(accion: str, herramienta: str = "", operacion: str = "", externa: bool = False, dir_config: Path | None = None) -> str:
+    """Qué necesita una acción: `estandar` (nada), `supervisada` (tu firma) o `reservada` (firma individual, nunca por voz ni cubierta por un objetivo).
+    Una acción prohibida lanza AccionProhibida. Lo que no se reconoce como supervisado ni reservado es estándar, salvo que salga de la empresa."""
     pol, _ = _config(str(dir_config or ajustes.dir_config))
     if accion in pol["prohibidas"]:
         raise AccionProhibida(f"La acción «{accion}» no la puede ejecutar ningún agente")
-    nivel = ficha.aprobacion
-    if nivel == "libre" and (externa or accion in pol["impacto_externo"]):
-        nivel = "simple"          # lo que sale de la empresa siempre pasa por una persona
+    sup = pol.get("supervision") or {}
+    clave = f"{herramienta}.{operacion}" if herramienta and operacion else ""
+    nombres = {accion, clave} - {""}
+    if nombres & set(sup.get("reservadas") or []):
+        return "reservada"
+    if externa or accion in pol["impacto_externo"] or nombres & set(sup.get("supervisadas") or []):
+        return "supervisada"
+    return "estandar"
+
+
+def nivel_para(ficha: Ficha, accion: str, dir_config: Path | None = None, externa: bool = False,
+               herramienta: str = "", operacion: str = "") -> DecisionAprobacion:
+    """Decide qué aprobación necesita `accion` hecha por el agente `ficha`.
+
+    La firma depende de la operación (ver `clase_de`), no del agente: las operaciones estándar no la piden aunque el agente sea «simple» o «doble».
+    `externa`: la operación de la herramienta tiene impacto externo, sea cual sea el nombre que el agente dé a la acción.
+    El nivel de la ficha solo afecta a cómo se firma lo que sí la pide: «doble» (y lo reservado) solo se firma en el panel, no por voz."""
+    pol, _ = _config(str(dir_config or ajustes.dir_config))
+    clase = clase_de(accion, herramienta, operacion, externa, dir_config)
+    if clase == "estandar":
+        return DecisionAprobacion(requiere=False, nivel="libre", aprobadores=(), voz_permitida=False, clase=clase)
+    nivel = "doble" if clase == "reservada" or ficha.aprobacion == "doble" else "simple"
     datos = pol["niveles"][nivel]
     return DecisionAprobacion(
         requiere=bool(datos["aprobadores"]),
         nivel=nivel,
         aprobadores=tuple(datos["aprobadores"]),
         voz_permitida=bool(datos.get("voz_permitida", False)),
+        clase=clase,
     )
 
 

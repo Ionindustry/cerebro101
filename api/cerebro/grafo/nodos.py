@@ -183,20 +183,28 @@ async def ejecutar_agente(estado: Estado, config=None) -> Estado:
 
 
 async def registrar_aprobaciones(estado: Estado, config) -> Estado:
+    """Decide qué acciones necesitan firma (ver politicas.clase_de) y las lleva a la bandeja.
+
+    - Estándar (lecturas, borradores, propuestas…): se ejecutan sin firma.
+    - Supervisadas (lo que sale de la empresa): una sola solicitud por petición. Si el objetivo se compone de varias acciones, se firma el objetivo una vez y
+      no cada subtarea; la solicitud lleva la lista completa para revisarla antes de firmar.
+    - Reservadas (compromisos económicos o legales): una solicitud por acción, siempre individual."""
     ficha = registro().fichas[estado["agente"]]
     hilo = config["configurable"]["thread_id"]
-    acciones = []
+    acciones: list[dict] = []
+    lote: list[tuple[int, dict, object, dict]] = []             # (posición, acción, decisión, datos) de las supervisadas
     for a in estado.get("acciones", []):
         if a.get("solicitud_id"):
             acciones.append(a)
             continue
+        herramienta, operacion = a.get("herramienta", ""), a.get("operacion", "")
         try:
-            d = nivel_para(ficha, a["accion"], externa=H.es_externa(a.get("herramienta", ""), a.get("operacion", "")))
+            d = nivel_para(ficha, a["accion"], externa=H.es_externa(herramienta, operacion), herramienta=herramienta, operacion=operacion)
         except AccionProhibida as e:
             acciones.append({**a, "estado": "error", "resultado": str(e)})
             continue
-        if a.get("herramienta") and a.get("operacion"):       # no se pide aprobar algo que va a fallar al ejecutarse
-            motivo = H.validar_llamada(ficha, a["herramienta"], a["operacion"], a.get("argumentos") or {}, estado.get("sensibilidad"))
+        if herramienta and operacion:       # no se pide aprobar algo que va a fallar al ejecutarse
+            motivo = H.validar_llamada(ficha, herramienta, operacion, a.get("argumentos") or {}, estado.get("sensibilidad"))
             if motivo:
                 acciones.append({**a, "estado": "error", "resultado": f"Acción no válida, no se envía a aprobación: {motivo}"})
                 continue
@@ -204,19 +212,41 @@ async def registrar_aprobaciones(estado: Estado, config) -> Estado:
             acciones.append({**a, "estado": "aprobada"})
             continue
         datos = {"resumen": a["resumen"], "argumentos": a.get("argumentos", {})}
-        if a.get("herramienta") and a.get("operacion"):
+        if herramienta and operacion:
             try:
-                vista = await H.vista_previa(ficha, a["herramienta"], a["operacion"], a.get("argumentos") or {}, estado.get("sensibilidad"))
+                vista = await H.vista_previa(ficha, herramienta, operacion, a.get("argumentos") or {}, estado.get("sensibilidad"))
             except Exception as e:  # noqa: BLE001
                 acciones.append({**a, "estado": "error", "resultado": f"No se puede preparar para aprobación: {e}"})
                 continue
             if vista:
                 datos["vista"] = vista
-        sid = await bandeja.crear(hilo, ficha.id, ficha.departamento, a["accion"], d.nivel,
-                                  d.aprobadores, d.voz_permitida, datos)
+        if d.clase == "supervisada":
+            lote.append((len(acciones), a, d, datos))
+            acciones.append({**a, "estado": "pendiente"})
+            continue
+        sid = await bandeja.crear(hilo, ficha.id, ficha.departamento, a["accion"], d.nivel, d.aprobadores, d.voz_permitida, datos)
         acciones.append({**a, "solicitud_id": sid, "estado": "pendiente"})
         await actividad.evento(ficha.id, f"Propone «{a['accion']}» y espera aprobación", hilo)
-        await actividad.contar(ficha.id, f"propuesta:{a.get('herramienta') or '?'}.{a.get('operacion') or '?'}")
+        await actividad.contar(ficha.id, f"propuesta:{herramienta or '?'}.{operacion or '?'}")
+    if lote:
+        if len(lote) == 1:
+            _, a, d, datos = lote[0]
+            sid = await bandeja.crear(hilo, ficha.id, ficha.departamento, a["accion"], d.nivel, d.aprobadores, d.voz_permitida, datos)
+        else:
+            objetivo = " ".join(str(estado.get("peticion") or "").split())[:300]
+            nivel = "doble" if any(d.nivel == "doble" for _, _, d, _ in lote) else "simple"
+            decision = next(d for _, _, d, _ in lote if d.nivel == nivel)
+            datos = {"resumen": f"Objetivo con {len(lote)} acciones" + (f": {objetivo[:120]}" if objetivo else ""), "objetivo": objetivo,
+                     "acciones": [{"accion": a["accion"], "herramienta": a.get("herramienta"), "operacion": a.get("operacion"),
+                                   "resumen": a["resumen"], "argumentos": dt.get("argumentos", {}), **({"vista": dt["vista"]} if "vista" in dt else {})}
+                                  for _, a, _, dt in lote]}
+            sid = await bandeja.crear(hilo, ficha.id, ficha.departamento, "objetivo", nivel, decision.aprobadores,
+                                      all(d.voz_permitida for _, _, d, _ in lote), datos)
+        for pos, a, _, _ in lote:
+            acciones[pos] = {**acciones[pos], "solicitud_id": sid}
+            await actividad.contar(ficha.id, f"propuesta:{a.get('herramienta') or '?'}.{a.get('operacion') or '?'}")
+        await actividad.evento(ficha.id, f"Propone un objetivo con {len(lote)} acciones y espera aprobación" if len(lote) > 1
+                               else f"Propone «{lote[0][1]['accion']}» y espera aprobación", hilo)
     return {"acciones": acciones}
 
 
@@ -226,7 +256,8 @@ def esperar_aprobaciones(estado: Estado) -> Estado:
         return {}
     # El grafo se detiene aquí hasta que la API lo reanude con las decisiones:
     # {"<solicitud_id>": "aprobada" | "rechazada", ...}
-    decisiones = interrupt({"pendientes": [{"id": a["solicitud_id"], "resumen": a["resumen"]} for a in pendientes]})
+    unicas = {a["solicitud_id"]: a["resumen"] for a in reversed(pendientes)}          # un objetivo con varias acciones es una sola solicitud
+    decisiones = interrupt({"pendientes": [{"id": sid, "resumen": r} for sid, r in unicas.items()]})
     return {"acciones": [{**a, "estado": decisiones.get(a.get("solicitud_id"), a["estado"])}
                          for a in estado["acciones"]]}
 
