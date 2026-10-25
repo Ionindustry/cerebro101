@@ -22,6 +22,8 @@ limites:
   destinatarios_max: 5          # destinatarios de un mismo mensaje
   texto_max: 6000               # caracteres del cuerpo que escribe un agente
   mensajes_max: 20              # mensajes que devuelve una lectura de bandeja
+  adjunto_max_mb: 10            # tamaño máximo de un adjunto que se abre o se guarda en el ERP
+  adjunto_texto_chars: 6000     # caracteres que devuelve cada lectura de un adjunto (cabe en el contexto del modelo); si hay más, se sigue por trozos
 
 # Pie obligatorio en comunicaciones comerciales (LSSI): forma sencilla y gratuita de darse de baja
 pie_comercial: >-

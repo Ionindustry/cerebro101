@@ -7,6 +7,7 @@ lo hace siempre una persona en ERPNext.
 """
 from __future__ import annotations
 
+import asyncio
 import functools
 import json
 import logging
@@ -115,6 +116,33 @@ async def crear_borrador(doctype: str, datos: dict[str, Any], departamento: str)
     return r.json()["data"]
 
 
+EXTENSIONES_ADJUNTO = {".pdf", ".docx", ".xlsx", ".csv", ".txt", ".png", ".jpg", ".jpeg", ".doc", ".xls", ".pptx", ".odt", ".ods"}
+
+
+async def adjuntar_desde_correo(doctype: str, nombre: str, message_id: str, adjunto: int | str, departamento: str,
+                                buzon: str | None = None) -> dict:
+    """Guarda un adjunto de un correo del buzón del departamento en un documento del ERP/CRM (queda como fichero PRIVADO del documento).
+    Solo en documentos que el departamento puede crear en borrador (política), con la clave del departamento y con tipos de fichero
+    admitidos: nunca ejecutables ni comprimidos."""
+    from . import buzones as B, correo, documentos as D
+    comprobar_acceso(departamento, doctype, "borrador", nombre)
+    ident, _ = B.resolver(departamento, buzon)
+    fichero, tipo, datos = await asyncio.to_thread(correo.obtener_adjunto, ident, message_id, adjunto)
+    ext = D.extension(fichero)
+    if ext not in EXTENSIONES_ADJUNTO:
+        raise PermissionError(f"No se guardan en el ERP ficheros «{ext or 'sin extensión'}». Se admiten: {', '.join(sorted(EXTENSIONES_ADJUNTO))}")
+    if (ext == ".pdf" and not datos.lstrip()[:5] == b"%PDF-") or (ext in (".docx", ".xlsx", ".pptx") and datos[:2] != b"PK"):
+        raise PermissionError(f"El fichero «{fichero}» no es del tipo que indica su extensión: no se guarda")
+    async with httpx.AsyncClient(base_url=ajustes.erpnext_url, timeout=60) as c:
+        r = await c.post("/api/method/upload_file", headers=_cabeceras(departamento),
+                         data={"doctype": doctype, "docname": nombre, "is_private": "1", "folder": "Home/Attachments"},
+                         files={"file": (fichero, datos, tipo)})
+    if r.status_code >= 400:
+        raise RuntimeError(f"El ERP no ha aceptado el fichero ({r.status_code}): {r.text[:200]}")
+    msg = r.json()["message"]
+    return {"guardado": msg.get("file_name"), "url": msg.get("file_url"), "documento": f"{doctype} {nombre}", "bytes": len(datos)}
+
+
 AYUDA_DOCUMENTOS = (
     "Documentos habituales (doctype: campos; los campos pueden variar con la versión): "
     "Customer(customer_name, customer_type, customer_group, territory, email_id); Supplier(supplier_name, supplier_group); "
@@ -129,10 +157,12 @@ registrar(Herramienta(
     nombre="erpnext",
     descripcion="ERP de la empresa: clientes, proyectos, artículos, precios, facturas, compras. Nunca valida documentos: "
                 "solo los lee o los deja en borrador para que una persona los valide.",
-    operaciones={"listar": listar, "leer": leer, "crear_borrador": crear_borrador},
+    operaciones={"listar": listar, "leer": leer, "crear_borrador": crear_borrador, "adjuntar_desde_correo": adjuntar_desde_correo},
     ayuda={"listar": "lista documentos. filtros = lista de [campo, operador, valor], p. ej. [[\"status\", \"=\", \"Open\"]]. " + AYUDA_DOCUMENTOS,
            "leer": "un documento completo por su nombre (doctype y nombre exactos, p. ej. Customer + «Comunitat Vilanova SL»)",
-           "crear_borrador": "crea un documento en BORRADOR; «datos» lleva los campos del documento"},
+           "crear_borrador": "crea un documento en BORRADOR; «datos» lleva los campos del documento",
+           "adjuntar_desde_correo": "guarda un adjunto de un correo (message_id y adjunto, de correo.leer_bandeja) como fichero privado de un documento "
+                                    "que ya existe (doctype y nombre exactos); úsalo después de crear_borrador, con el nombre que este devuelve"},
     ejemplos={"listar": {"doctype": "Customer", "campos": ["customer_name"], "limite": 10},
               "crear_borrador": {"doctype": "Sales Invoice", "datos": {"customer": "Comunitat Vilanova SL", "items": [{"item_code": "ART-001", "qty": 2, "rate": 150}]}}},
 ))

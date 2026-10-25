@@ -18,3 +18,5 @@ casos:
   - {id: H15, agente: analista-noticias, peticion: "Dame la transcripción de https://www.youtube.com/watch?v=dQw4w9WgXcQ", aceptar: [agent_reach.transcripcion_youtube]}
   - {id: H16, agente: catalogo-proveedores, peticion: "Enumera los ficheros que hay en la carpeta de tarifas", aceptar: [ficheros.listar]}
   - {id: H17, agente: seleccion, peticion: "Lee los correos recibidos en el buzón de RR.HH. y dime de qué trata cada uno. No contestes a ninguno.", aceptar: [correo.leer_bandeja, correo.listar_buzones]}
+  - {id: H18, agente: respuesta-leads, peticion: "El último correo del buzón de Comercial trae un PDF adjunto con un presupuesto. Léelo y dime los importes", aceptar: [correo.leer_bandeja, correo.leer_adjunto]}
+
