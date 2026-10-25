@@ -12,7 +12,7 @@
 
 1. `cp .env.example .env` y rellenar contraseñas (`POSTGRES_PASSWORD` es del propietario de la base de datos y
    `CEREBRO_APP_PASSWORD` la del rol con el que trabaja la aplicación: usad dos distintas). Elegir `PERFIL_HARDWARE` según la memoria de la tarjeta.
-2. Descargar las voces de Piper en catalán y castellano en `servicios/voz/voces/`
+2. Descargar las voces de Piper en catalán y castellano con `python3 scripts/voces_descargar.py` (van a `servicios/voz/voces/`; ver `docs/VOZ.md`)
    (https://huggingface.co/rhasspy/piper-voices).
 3. `./scripts/iniciar.sh`
 4. Entrar en Keycloak (http://localhost:8080, usuario `admin` y `KEYCLOAK_ADMIN_PASSWORD`), realm `cerebro`: crear los
