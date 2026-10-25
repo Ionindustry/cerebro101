@@ -54,6 +54,7 @@ async def _local(texto: str, tipo: str, opciones: list[str] | None, rubrica: str
 
 
 URL_JEV = "https://api.typesafe.ai"
+ESPERA_JEFF = 120         # jeff usa el modelo local: la primera llamada tras un rato puede tener que cargarlo en la tarjeta
 NIVELES_PUNTUACION = 10   # Jev admite como máximo 10 niveles (0..9); se reescala a 0..10, como el modelo local
 
 
@@ -82,12 +83,12 @@ def _traducir(tipo: str, respuesta: dict) -> dict:
 
 
 async def _llamar_api(base_url: str, clave: str, texto: str, tipo: str, opciones, rubrica,
-                      transporte: httpx.AsyncBaseTransport | None = None) -> dict:
+                      transporte: httpx.AsyncBaseTransport | None = None, espera: float = 30) -> dict:
     if tipo == "eleccion" and not opciones:
         raise ValueError("La elección necesita opciones")
     cuerpo = {"model": "jev-latest", "state": texto, "questions": {"q": _pregunta(tipo, opciones, rubrica)}}
     cabeceras = {"Authorization": f"Bearer {clave}"} if clave else {}
-    async with httpx.AsyncClient(base_url=base_url or URL_JEV, timeout=30, transport=transporte) as c:
+    async with httpx.AsyncClient(base_url=base_url or URL_JEV, timeout=espera, transport=transporte) as c:
         r = await c.post("/v1/systemone", json=cuerpo, headers=cabeceras)
     r.raise_for_status()
     return _traducir(tipo, r.json()["answers"]["q"])
@@ -122,40 +123,52 @@ async def preparar_para_la_nube(texto: str, opciones, rubrica) -> tuple[anon.Res
     return res, rub, motivos
 
 
+async def _respaldo(texto: str, tipo: str, opciones, rubrica, motivo: str) -> dict:
+    """Cuando Jev no puede o no debe usarse: primero jeff (misma API, en el servidor, sin que salga ningún dato) y, si tampoco está, el modelo local."""
+    try:
+        r = await _llamar_api(ajustes.jeff_url, "", texto, tipo, opciones, rubrica, espera=ESPERA_JEFF)
+        return {**r, "via": f"jeff ({motivo})"}
+    except (httpx.HTTPError, KeyError, ValueError) as e:
+        log.warning("jeff no disponible (%s): se usa el modelo local", e)
+        return {**await _local(texto, tipo, opciones, rubrica), "via": f"local ({motivo}; jeff no disponible)"}
+
+
 def _crear(proveedor: str):
     async def decidir(texto: str, tipo: str = "si_no", opciones: list[str] | None = None,
                       rubrica: str | None = None) -> dict:
         if proveedor == "jev" and not ajustes.usar_jev_nube:
-            log.info("Jev en la nube desactivado (USAR_JEV_NUBE=false): se usa el modelo local")
-            return await _local(texto, tipo, opciones, rubrica)
+            log.info("Jev en la nube desactivado (USAR_JEV_NUBE=false): decide jeff")
+            return await _respaldo(texto, tipo, opciones, rubrica, "Jev desactivado")
         url, clave = (ajustes.jev_url, ajustes.jev_api_key) if proveedor == "jev" else (ajustes.jeff_url, "")
         if proveedor == "jev" and not clave:
-            log.warning("Falta JEV_API_KEY: se usa el modelo local")
-            return await _local(texto, tipo, opciones, rubrica)
+            log.warning("Falta JEV_API_KEY: decide jeff")
+            return await _respaldo(texto, tipo, opciones, rubrica, "sin clave de Jev")
         if proveedor == "jev":
-            # Nada sale a la nube sin anonimizar; si no se puede garantizar, decide el modelo local
+            # Nada sale a la nube sin anonimizar; si no se puede garantizar, decide jeff (en el servidor)
             res, rub, motivos = await preparar_para_la_nube(texto, opciones, rubrica)
             if motivos:
-                log.info("Jev no recibe esta petición (%s): se usa el modelo local", "; ".join(motivos))
+                log.info("Jev no recibe esta petición (%s): decide jeff", "; ".join(motivos))
                 with generacion("jev.decidir:bloqueado", None, "[no enviado]", tipo="tool",
                                 **{**res.resumen(), "apto": False, "motivos": motivos}):
                     pass
-                r = await _local(texto, tipo, opciones, rubrica)
-                return {**r, "via": "local (no apto para la nube)"}
+                return await _respaldo(texto, tipo, opciones, rubrica, "no apto para la nube")
             texto, rubrica = res.texto, rub
             extra = {"via": "jev (anonimizado)"}
             audit = res.resumen()
         else:
-            extra, audit = {}, {}
+            extra, audit = {"via": "jeff"}, {}
         try:
             with generacion("jev.decidir" if proveedor == "jev" else "jeff.decidir", "jev-latest", texto,
                             tipo="generation", tipo_decision=tipo, **audit) as obs:
-                r = await _llamar_api(url, clave, texto, tipo, opciones, rubrica)
+                r = await _llamar_api(url, clave, texto, tipo, opciones, rubrica, espera=30 if proveedor == "jev" else ESPERA_JEFF)
                 anotar(obs, output=json.dumps(r, ensure_ascii=False))
                 return {**r, **extra}
         except (httpx.HTTPError, KeyError, ValueError) as e:
-            log.warning("%s no disponible (%s): se usa el modelo local", proveedor, e)
-            return await _local(texto, tipo, opciones, rubrica)
+            if proveedor == "jev":
+                log.warning("Jev no disponible (%s): decide jeff", e)
+                return await _respaldo(texto, tipo, opciones, rubrica, "Jev no disponible")
+            log.warning("jeff no disponible (%s): se usa el modelo local", e)
+            return {**await _local(texto, tipo, opciones, rubrica), "via": "local (jeff no disponible)"}
     return decidir
 
 
@@ -168,3 +181,70 @@ for _p, _desc in (("jev", "Jev en la nube (solo datos públicos o anonimizados)"
         ayuda={"decidir": "tipo «eleccion» necesita opciones; «puntuacion» necesita rubrica; «si_no» es una afirmación o pregunta en texto"},
         ejemplos={"decidir": {"texto": "El grabador lleva tres días sin grabar", "tipo": "eleccion", "opciones": ["soporte", "ventas"]}},
     ))
+
+
+# --- Estado de Jev / jeff / modelo local (para el panel y el diagnóstico) -------------------------------------------------------------
+
+import time as _tiempo
+
+_CACHE: dict = {"cuando": 0.0, "datos": None}
+PRUEBA = "Prueba de funcionamiento: el sol sale por el este."          # sin datos de nadie: es lo único que puede salir a la nube
+
+
+async def _probar(url: str, clave: str, transporte=None) -> tuple[bool, float, str]:
+    t0 = _tiempo.monotonic()
+    try:
+        r = await _llamar_api(url, clave, PRUEBA, "si_no", None, None, transporte, espera=30 if clave else ESPERA_JEFF)
+        return True, round(_tiempo.monotonic() - t0, 2), f"respondió «{'sí' if r['si'] else 'no'}»"
+    except httpx.HTTPStatusError as e:
+        return False, 0, {401: "la clave es incorrecta o ha caducado", 403: "la clave no tiene permiso", 429: "se ha superado el límite de uso"}.get(
+            e.response.status_code, f"responde con error {e.response.status_code}")
+    except (httpx.HTTPError, KeyError, ValueError) as e:
+        return False, 0, f"no responde ({type(e).__name__})"
+
+
+async def estado(probar: bool = False, transporte_nube=None, transporte_jeff=None, transporte_ollama=None) -> dict:
+    """¿Qué vía de decisiones cerradas está operativa y cuál usará cada nivel de sensibilidad? `probar` hace una pregunta real a cada servicio
+    (la de la nube sin datos de nadie); sin él se reutiliza el resultado de hace menos de un minuto."""
+    if not probar and _CACHE["datos"] and _tiempo.monotonic() - _CACHE["cuando"] < 60:
+        return _CACHE["datos"]
+    from ..llm import estado_modelos
+    from ..router_modelos import modelos_necesarios
+
+    # Nube (Jev)
+    if not ajustes.usar_jev_nube:
+        nube = {"estado": "desactivado", "detalle": "USAR_JEV_NUBE no está en «true»: las decisiones se hacen en local"}
+    elif not ajustes.jev_api_key:
+        nube = {"estado": "sin_clave", "detalle": "falta la clave de Jev (JEV_API_KEY): se activa con scripts/jev_activar.py"}
+    else:
+        ok, seg, det = await _probar(ajustes.jev_url, ajustes.jev_api_key, transporte_nube)
+        nube = {"estado": "operativo" if ok else "caido", "detalle": det, "segundos": seg}
+    # jeff (autoalojado)
+    try:
+        async with httpx.AsyncClient(base_url=ajustes.jeff_url, timeout=5, transport=transporte_jeff) as c:
+            r = await c.get("/salud")
+        if r.status_code == 200:
+            ok, seg, det = await _probar(ajustes.jeff_url, "", transporte_jeff)
+            jeff = {"estado": "operativo" if ok else "caido", "detalle": det, "segundos": seg, "modelo": r.json().get("modelo")}
+        else:
+            jeff = {"estado": "caido", "detalle": r.json().get("detail", f"responde {r.status_code}") if r.headers.get("content-type", "").startswith("application/json") else f"responde {r.status_code}"}
+    except httpx.HTTPError:
+        jeff = {"estado": "no_desplegado", "detalle": "el servicio jeff no responde: arráncalo con «docker compose up -d jeff»"}
+    # modelo local
+    m = await estado_modelos(modelos_necesarios(), transporte_ollama)
+    local = {"estado": "operativo" if m.get("ollama") == "ok" and not m.get("faltan") else "caido",
+             "detalle": "Ollama responde" if m.get("ollama") == "ok" and not m.get("faltan") else (f"faltan modelos: {', '.join(m.get('faltan', []))}" if m.get("ollama") == "ok" else "Ollama no responde")}
+
+    def via(sensibilidad: str) -> str:
+        if sensibilidad != "alta" and nube["estado"] == "operativo":
+            return "jev"
+        if jeff["estado"] == "operativo":
+            return "jeff"
+        return "local" if local["estado"] == "operativo" else "ninguna"
+    datos = {"nube": nube, "jeff": jeff, "local": local, "se_usara": {n: via(n) for n in ("baja", "media", "alta")},
+             "operativo": nube["estado"] == "operativo" or jeff["estado"] == "operativo",
+             "resumen": ("Jev operativo" if nube["estado"] == "operativo" else
+                         "Jev no activo; decide jeff (local)" if jeff["estado"] == "operativo" else
+                         "Solo el modelo local" if local["estado"] == "operativo" else "Sin motor de decisiones")}
+    _CACHE.update(cuando=_tiempo.monotonic(), datos=datos)
+    return datos

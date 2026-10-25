@@ -18,8 +18,9 @@ agentes:
   subarea: Protección de datos
   tareas: Registro de tratamientos, derechos y revisión legal de cada campaña
   modelo: principal
-  herramientas: &id001
+  herramientas:
   - conocimiento
+  - jev
   aprobacion: simple
   horario: null
   sensibilidad: alta
@@ -30,7 +31,9 @@ agentes:
   subarea: Cumplimiento normativo
   tareas: Calendario de obligaciones legales y requisitos por área de servicio
   modelo: principal
-  herramientas: *id001
+  herramientas:
+  - conocimiento
+  - jev
   aprobacion: libre
   horario: 0 8 * * 1
   sensibilidad: media
@@ -136,6 +139,7 @@ agentes:
   herramientas:
   - conocimiento
   - erpnext
+  - jev
   aprobacion: simple
   horario: 0 8 * * 1
   sensibilidad: media

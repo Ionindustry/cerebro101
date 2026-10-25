@@ -23,6 +23,7 @@ agentes:
   - conocimiento
   - erpnext
   - correo
+  - jev
   aprobacion: simple
   horario: null
   sensibilidad: alta
@@ -63,6 +64,7 @@ agentes:
   - conocimiento
   - erpnext
   - correo
+  - jev
   aprobacion: simple
   horario: 0 9 * * 1-5
   sensibilidad: alta

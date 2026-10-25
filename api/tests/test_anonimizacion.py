@@ -135,8 +135,8 @@ class TestEnganchesConJev(unittest.TestCase):
         self.d = d
         self.enviado = []
 
-        async def api(url, clave, texto, tipo, opciones, rubrica, transporte=None):
-            self.enviado.append({"texto": texto, "rubrica": rubrica, "opciones": opciones})
+        async def api(url, clave, texto, tipo, opciones, rubrica, transporte=None, espera=30):
+            self.enviado.append({"url": url, "texto": texto, "rubrica": rubrica, "opciones": opciones})
             return {"eleccion": "soporte", "confianza": 0.9, "motivo": "x"}
 
         async def local(texto, tipo, opciones, rubrica):
@@ -171,17 +171,55 @@ class TestEnganchesConJev(unittest.TestCase):
             self.assertNotIn(dato, enviado)
         self.assertIn("grabador", enviado)
 
-    def test_categoria_especial_no_sale_y_decide_el_modelo_local(self):
+    def _a_la_nube(self):
+        return [e for e in self.enviado if e["url"] == self.d.ajustes.jev_url]
+
+    def test_categoria_especial_no_sale_a_la_nube_y_decide_jeff(self):
         r = self._decidir("El instalador tiene baja médica y no puede ir")
-        self.assertEqual(self.enviado, [])
+        self.assertEqual(self._a_la_nube(), [])
+        self.assertEqual([e["url"] for e in self.enviado], [self.d.ajustes.jeff_url])       # solo al jeff del servidor
+        self.assertIn("jeff", r["via"])
+        self.assertIn("no apto", r["via"])
+
+    def test_sin_jeff_decide_el_modelo_local(self):
+        async def sin_jeff(*a, **k):
+            raise self.d.httpx.ConnectError("no")
+        with mock.patch.object(self.d, "_llamar_api", sin_jeff):
+            r = self._decidir("El instalador tiene baja médica y no puede ir")
         self.assertEqual(r["eleccion"], "local")
-        self.assertIn("local", r["via"])
+        self.assertIn("jeff no disponible", r["via"])
 
     def test_opciones_con_datos_personales_no_salen(self):
         h = self.d._crear("jev")
         r = asyncio.run(h("texto normal", tipo="eleccion", opciones=["Marta Puig", "otro"]))
-        self.assertEqual(self.enviado, [])
-        self.assertEqual(r["eleccion"], "local")
+        self.assertEqual(self._a_la_nube(), [])
+        self.assertIn("jeff", r["via"])
+
+    def test_si_jev_falla_decide_jeff_con_el_texto_original(self):
+        llamadas = []
+
+        async def falla_la_nube(url, clave, texto, tipo, opciones, rubrica, transporte=None, espera=30):
+            llamadas.append((url, texto))
+            if url == self.d.ajustes.jev_url:
+                raise self.d.httpx.ConnectError("sin red")
+            return {"eleccion": "ventas", "confianza": 0.8, "motivo": "jeff"}
+        with mock.patch.object(self.d, "_llamar_api", falla_la_nube):
+            r = self._decidir("el cliente quiere ampliar el contrato")
+        self.assertEqual(r["eleccion"], "ventas")
+        self.assertIn("Jev no disponible", r["via"])
+        self.assertEqual([u for u, _ in llamadas], [self.d.ajustes.jev_url, self.d.ajustes.jeff_url])
+
+    def test_jev_desactivado_o_sin_clave_decide_jeff(self):
+        for campo, valor, texto in (("usar_jev_nube", False, "Jev desactivado"), ("jev_api_key", "", "sin clave")):
+            anterior = self.d.ajustes.__dict__[campo]
+            self.d.ajustes.__dict__[campo] = valor
+            try:
+                self.enviado.clear()
+                r = self._decidir("consulta cualquiera")
+                self.assertEqual(self._a_la_nube(), [])
+                self.assertIn(texto, r["via"])
+            finally:
+                self.d.ajustes.__dict__[campo] = anterior
 
     def test_jeff_local_no_anonimiza(self):
         h = self.d._crear("jeff")

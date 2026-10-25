@@ -52,6 +52,7 @@ agentes:
   - correo
   - calendario
   - erpnext
+  - jev
   aprobacion: simple
   horario: null
   sensibilidad: media

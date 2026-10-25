@@ -18,7 +18,7 @@ agentes:
   subarea: Procedimientos
   tareas: Redacta y actualiza los procesos internos de cada departamento
   modelo: principal
-  herramientas: &id001
+  herramientas:
   - conocimiento
   aprobacion: simple
   horario: null
@@ -30,7 +30,9 @@ agentes:
   subarea: Supervisión de agentes
   tareas: Revisa una muestra de respuestas de cada agente y propone ajustes
   modelo: juez
-  herramientas: *id001
+  herramientas:
+  - conocimiento
+  - jev
   aprobacion: libre
   horario: 0 5 * * *
   sensibilidad: media

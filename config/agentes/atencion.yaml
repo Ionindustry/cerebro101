@@ -9,6 +9,7 @@ agentes:
   - conocimiento
   - correo
   - erpnext
+  - jev
   aprobacion: simple
   horario: null
   sensibilidad: media

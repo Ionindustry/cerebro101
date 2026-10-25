@@ -240,3 +240,24 @@ h1 { font-size: 30px; font-weight: 300; letter-spacing: -0.6px; margin: 0 0 20px
 .kp-barra { display: flex; height: 10px; background: var(--fondo); border-radius: 99px; overflow: hidden; }
 .kp-apiladas { display: flex; height: 16px; border-radius: 99px; overflow: hidden; background: var(--fondo); }
 @media (max-width: 900px) { .kp-doble { grid-template-columns: 1fr; } }
+
+/* Estado de JEV (motor de decisiones) */
+.jev { margin: -8px 0 16px; max-width: 760px; }
+.jev-chip { display: inline-flex; align-items: center; gap: 8px; border: 0; background: var(--superficie); border-radius: 99px; padding: 6px 14px; font-size: 14px; }
+.jev-chip i, .jev li i { display: inline-block; width: 9px; height: 9px; border-radius: 50%; flex-shrink: 0; }
+.jev-panel { background: var(--superficie); border-radius: var(--radio-grande); padding: 14px 18px; margin-top: 8px; }
+.jev-panel ul { list-style: none; margin: 0 0 8px; padding: 0; display: grid; gap: 8px; }
+.jev-panel li { display: flex; gap: 10px; align-items: flex-start; font-size: 14px; }
+.jev-panel li i { margin-top: 7px; }
+.jev-panel p { margin: 6px 0; font-size: 14px; }
+.jev-ayuda code { background: var(--fondo); border-radius: 6px; padding: 2px 8px; font-size: 13px; }
+
+/* Dashboard de departamento */
+.dep-link { display: inline-block; text-decoration: none; color: var(--tinta); margin: 0 0 14px; }
+.dep-link:hover { color: #fff; }
+.kp-tabla { background: var(--superficie); border-radius: var(--radio-grande); overflow: hidden; }
+.kp-fila { display: grid; grid-template-columns: minmax(180px, 3fr) repeat(5, minmax(70px, 1fr)); gap: 8px; align-items: center; padding: 10px 18px; font-size: 14px; text-decoration: none; color: inherit; border-top: 1px solid var(--linea); }
+.kp-fila.cab { font-size: 12px; text-transform: uppercase; letter-spacing: .05em; color: var(--secundario); border-top: 0; background: #fafaf8; }
+a.kp-fila:hover { background: var(--fondo); }
+.kp-fila small { color: var(--secundario); font-weight: 400; }
+@media (max-width: 760px) { .kp-fila { grid-template-columns: 2fr repeat(2, 1fr); } .kp-fila > :nth-child(n+4) { display: none; } }

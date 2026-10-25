@@ -9,6 +9,7 @@ agentes:
   - conocimiento
   - erpnext
   - calendario
+  - jev
   aprobacion: libre
   horario: 0 7 * * 1-5
   sensibilidad: media
@@ -35,6 +36,7 @@ agentes:
   herramientas:
   - conocimiento
   - erpnext
+  - jev
   aprobacion: libre
   horario: null
   sensibilidad: media

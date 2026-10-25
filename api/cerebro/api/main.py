@@ -99,6 +99,13 @@ async def salud_constancia():
     return JSONResponse(status_code=503 if (n or r) else 200, content=cuerpo)
 
 
+@app.get("/salud/jev")
+async def salud_jev(probar: bool = False):
+    """Estado de las vías de decisión (Jev en la nube, jeff autoalojado y modelo local) y cuál usará cada sensibilidad. No devuelve ninguna clave."""
+    from ..herramientas import decision
+    return await decision.estado(probar)
+
+
 @app.get("/salud/modelos")
 async def salud_modelos():
     """¿Responde Ollama y están descargados los modelos del perfil? (lo usa la verificación del despliegue)"""
@@ -195,6 +202,23 @@ async def kpis_del_agente(agente: str, dias: int = 30, usuario: Usuario = Depend
         raise HTTPException(422, str(e)) from e
     except Exception as e:  # noqa: BLE001
         log.warning("No se pudieron calcular los KPI de %s", agente, exc_info=True)
+        raise HTTPException(503, "No se han podido calcular los KPI ahora mismo") from e
+
+
+@app.get("/departamentos/{dep}/kpis")
+async def kpis_del_departamento(dep: str, dias: int = 30, usuario: Usuario = Depends(usuario_actual)):
+    """Dashboard de un departamento: KPI específicos del ERP/CRM, actividad de todos sus agentes y reparto por agente. Dirección y ese departamento."""
+    r = registro()
+    if dep not in r.departamentos:
+        raise HTTPException(404, "Departamento no encontrado")
+    if "direccion" not in usuario.roles and dep not in usuario.departamentos:
+        raise HTTPException(403, "El dashboard de este departamento solo lo ven su departamento y la dirección")
+    try:
+        return await kpis.calcular_departamento(dep, r, kpis.cargar_config(str(ajustes.dir_config)), dias, kpis.Fuente())
+    except ValueError as e:
+        raise HTTPException(422, str(e)) from e
+    except Exception as e:  # noqa: BLE001
+        log.warning("No se pudieron calcular los KPI del departamento %s", dep, exc_info=True)
         raise HTTPException(503, "No se han podido calcular los KPI ahora mismo") from e
 
 

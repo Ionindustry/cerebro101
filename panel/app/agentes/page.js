@@ -1,5 +1,6 @@
 "use client";
 import Link from "next/link";
+import EstadoJev from "../../componentes/EstadoJev";
 import { useEffect, useState } from "react";
 
 const APROBACION = { libre: "Actúa solo", simple: "Pide tu firma", doble: "Pide tu firma (solo en el panel)" };
@@ -18,12 +19,14 @@ export default function Agentes() {
   return (
     <>
       <h1>{visibles.length} agentes</h1>
+      <EstadoJev />
       <div className="filtros">
         <button aria-pressed={!filtro} onClick={() => setFiltro(null)}>Todos</button>
         {Object.entries(deps).map(([id, d]) => (
           <button key={id} aria-pressed={filtro === id} onClick={() => setFiltro(id)}>{d.nombre}</button>
         ))}
       </div>
+      {filtro && <Link className="of-boton dep-link" href={`/departamentos/${filtro}`}>Dashboard de {deps[filtro]?.nombre} →</Link>}
       <div className="agentes">
         {visibles.map((a) => (
           <Link key={a.id} href={`/agentes/${a.id}`} className="tarjeta tarjeta-enlace" aria-label={`Ver los KPI de ${a.nombre}`}>

@@ -53,17 +53,17 @@ AGENTES = {
     ],
     "finanzas": [
         ("contable", "Contable", "Contabilidad", "Asientos en borrador, conciliación bancaria, cierre mensual y cuenta de resultados explicada", "principal", K + ["erpnext"], "doble", "0 4 1 * *", "alta"),
-        ("control-gastos", "Control de Gastos", "Contabilidad", "Lee las facturas de proveedor que llegan por correo (PDF, escaneos y fotos, con OCR), las deja en borrador en el ERP para su validación, clasifica tickets y controla el presupuesto por departamento", "principal", K + ["erpnext", "correo"], "simple", None, "alta"),
+        ("control-gastos", "Control de Gastos", "Contabilidad", "Lee las facturas de proveedor que llegan por correo (PDF, escaneos y fotos, con OCR), las deja en borrador en el ERP para su validación, clasifica tickets y controla el presupuesto por departamento", "principal", K + ["erpnext", "correo", "jev"], "simple", None, "alta"),
         ("tesorero", "Tesorero", "Tesorería", "Previsión de caja a 30/60/90 días, alertas de liquidez y calendario de pagos", "principal", K + ["erpnext"], "libre", "0 7 * * 1", "alta"),
         ("facturacion", "Facturación", "Facturación y cobros", "Prepara facturas en borrador según la normativa vigente para su validación", "principal", K + ["erpnext"], "doble", None, "alta"),
-        ("cobros", "Cobros", "Facturación y cobros", "Detecta impagados y redacta recordatorios graduados según el historial del cliente", "principal", K + ["erpnext", "correo"], "simple", "0 9 * * 1-5", "alta"),
+        ("cobros", "Cobros", "Facturación y cobros", "Detecta impagados y redacta recordatorios graduados según el historial del cliente", "principal", K + ["erpnext", "correo", "jev"], "simple", "0 9 * * 1-5", "alta"),
         ("fiscal", "Fiscal", "Fiscalidad", "Calendario de modelos fiscales y documentación para la gestoría", "principal", K + ["erpnext"], "doble", "0 8 1 * *", "alta"),
     ],
     "comercial": [
         ("director-comercial", "Director Comercial / CRM", "Gestión de clientes", "Mantiene fichas y pipeline al día y detecta oportunidades paradas", "principal", K + ["erpnext"], "libre", "0 8 * * 1-5", "media"),
         ("prospector", "Prospector", "Prospección", "Construye listas de clientes potenciales según el perfil ideal y las puntúa", "rapido", K + ["erpnext", "jev"], "libre", None, "media"),
         ("detector-intencion", "Detector de Intención", "Prospección", "Busca señales públicas de interés (obras, aperturas, ofertas de empleo) y las convierte en leads", "rapido", K + ["scrapegraph", "grok", "jev"], "libre", "0 3 * * *", "baja"),
-        ("respuesta-leads", "Respuesta a Leads", "Prospección", "Contesta cada consulta entrante en minutos y propone fechas de reunión", "principal", K + ["correo", "calendario", "erpnext"], "simple", None, "media"),
+        ("respuesta-leads", "Respuesta a Leads", "Prospección", "Contesta cada consulta entrante en minutos y propone fechas de reunión", "principal", K + ["correo", "calendario", "erpnext", "jev"], "simple", None, "media"),
         ("orquestador-campanas", "Orquestador de Campañas", "Captación multicanal", "Diseña la secuencia por canal, reparte leads y detiene la secuencia cuando alguien responde", "principal", K + ["erpnext"], "simple", "0 9 * * 1-5", "media"),
         ("canal-email", "Email", "Captación multicanal", "Secuencias de email personalizadas respetando consentimientos y bajas", "principal", K + ["correo"], "simple", None, "media"),
         ("canal-linkedin", "LinkedIn", "Captación multicanal", "Prepara mensajes y contenido para que una persona los publique o envíe", "principal", K, "simple", None, "media"),
@@ -85,15 +85,15 @@ AGENTES = {
         ("disenador-ofertas", "Diseñador de Ofertas", "Inteligencia de mercado", "Convierte una oportunidad aprobada en oferta con catálogo, costes y argumentario", "principal", K + ["erpnext", "cotizador"], "doble", None, "media"),
     ],
     "atencion": [
-        ("soporte-n1", "Soporte Nivel 1", "Soporte", "Responde consultas frecuentes por email y chat con la base de conocimiento", "rapido", K + ["correo", "erpnext"], "simple", None, "media"),
+        ("soporte-n1", "Soporte Nivel 1", "Soporte", "Responde consultas frecuentes por email y chat con la base de conocimiento", "rapido", K + ["correo", "erpnext", "jev"], "simple", None, "media"),
         ("escalado", "Escalado", "Soporte", "Clasifica incidencias complejas y las pasa a una persona con todo el contexto", "rapido", K + ["erpnext", "jev"], "libre", None, "media"),
         ("resenas", "Reseñas", "Reputación", "Vigila reseñas públicas y redacta respuestas para aprobar", "rapido", K + ["scrapegraph", "jev"], "simple", "0 10 * * *", "baja"),
         ("reactivacion", "Reactivación", "Fidelización", "Detecta clientes inactivos y prepara mensajes de recuperación", "principal", K + ["erpnext", "correo"], "simple", "0 9 * * 1", "media"),
     ],
     "operaciones": [
-        ("jefe-proyectos", "Jefe de Proyectos", "Gestión de proyectos", "Planifica tareas, plazos y recursos de cada proyecto y avisa de retrasos", "principal", K + ["erpnext", "calendario"], "libre", "0 7 * * 1-5", "media"),
+        ("jefe-proyectos", "Jefe de Proyectos", "Gestión de proyectos", "Planifica tareas, plazos y recursos de cada proyecto y avisa de retrasos", "principal", K + ["erpnext", "calendario", "jev"], "libre", "0 7 * * 1-5", "media"),
         ("entrega", "Entrega", "Entrega", "Checklists de entrega al cliente y confirmación de cierre", "rapido", K + ["erpnext"], "simple", None, "media"),
-        ("calidad", "Calidad", "Calidad", "Registra incidencias, analiza causas y propone mejoras de proceso", "principal", K + ["erpnext"], "libre", None, "media"),
+        ("calidad", "Calidad", "Calidad", "Registra incidencias, analiza causas y propone mejoras de proceso", "principal", K + ["erpnext", "jev"], "libre", None, "media"),
         ("compras", "Compras", "Compras y proveedores", "Compara proveedores, prepara pedidos en borrador y controla plazos", "principal", K + ["erpnext"], "doble", None, "media"),
         ("catalogo-proveedores", "Catálogo de Proveedores", "Compras y proveedores", "Importa tarifas (Visiotech, ETT, Asecur, Saltoki, distribuidora propia), cruza productos y avisa de cambios", "rapido", K + ["erpnext", "ficheros", "jev"], "libre", "0 1 * * *", "media"),
         ("explorador-fabricantes", "Explorador de Fabricantes", "Compras y proveedores", "Busca y evalúa fabricantes nuevos; tarifas y acuerdos vía la distribuidora propia", "principal", K + ["scrapegraph", "agent_reach", "grok"], "libre", "0 2 * * 3", "baja"),
@@ -116,8 +116,8 @@ AGENTES = {
     ],
     "legal": [
         ("contratos", "Contratos", "Contratos", "Revisa contratos, marca cláusulas de riesgo y mantiene plantillas", "principal", K + ["ficheros"], "doble", None, "alta"),
-        ("rgpd", "RGPD", "Protección de datos", "Registro de tratamientos, derechos y revisión legal de cada campaña", "principal", K, "simple", None, "alta"),
-        ("cumplimiento", "Cumplimiento", "Cumplimiento normativo", "Calendario de obligaciones legales y requisitos por área de servicio", "principal", K, "libre", "0 8 * * 1", "media"),
+        ("rgpd", "RGPD", "Protección de datos", "Registro de tratamientos, derechos y revisión legal de cada campaña", "principal", K + ["jev"], "simple", None, "alta"),
+        ("cumplimiento", "Cumplimiento", "Cumplimiento normativo", "Calendario de obligaciones legales y requisitos por área de servicio", "principal", K + ["jev"], "libre", "0 8 * * 1", "media"),
         ("responsable-sig", "Responsable del Sistema Integrado", "Sistemas de gestión", "Coordina ENS, 27001, 9001 y 14001 como un único sistema y prepara la revisión por la dirección", "principal", K + ["ficheros"], "doble", "0 8 1 * *", "media"),
         ("ens", "ENS", "Sistemas de gestión", "Categorización, análisis de riesgos, declaración de aplicabilidad y plan de adecuación", "principal", K + ["ficheros"], "doble", None, "media"),
         ("iso27001", "ISO 27001", "Sistemas de gestión", "SGSI, evaluación de riesgos, aplicabilidad de controles y plan de tratamiento", "principal", K + ["ficheros"], "doble", None, "media"),
@@ -125,7 +125,7 @@ AGENTES = {
         ("iso14001", "ISO 14001", "Sistemas de gestión", "Aspectos ambientales, requisitos legales, residuos y emergencias", "principal", K + ["ficheros"], "doble", None, "media"),
         ("documentacion-evidencias", "Documentación y Evidencias", "Auditoría y evidencias", "Control documental y paquete de evidencias por requisito (solo hechos reales)", "vision", K + ["ficheros"], "simple", "0 3 * * 0", "media"),
         ("auditoria-interna", "Auditoría Interna", "Auditoría y evidencias", "Programa anual, listas de comprobación y simulacros por norma", "juez", K + ["ficheros"], "simple", "0 3 1 * *", "media"),
-        ("no-conformidades", "No Conformidades y Mejora", "Auditoría y evidencias", "Registra no conformidades y sigue acciones correctivas hasta cerrarlas", "principal", K + ["erpnext"], "simple", "0 8 * * 1", "media"),
+        ("no-conformidades", "No Conformidades y Mejora", "Auditoría y evidencias", "Registra no conformidades y sigue acciones correctivas hasta cerrarlas", "principal", K + ["erpnext", "jev"], "simple", "0 8 * * 1", "media"),
         ("despliegue-departamentos", "Despliegue en Departamentos", "Auditoría y evidencias", "Convierte cada política en tareas, flujos y registros por departamento", "principal", K + ["erpnext"], "simple", None, "media"),
     ],
     "tecnologia": [
@@ -137,7 +137,7 @@ AGENTES = {
     "conocimiento": [
         ("bibliotecario", "Bibliotecario", "Base de conocimiento", "Indexa documentos, correos y actas para todos los agentes", "rapido", K + ["ficheros"], "libre", "30 0 * * *", "media"),
         ("procedimientos", "Procedimientos", "Procedimientos", "Redacta y actualiza los procesos internos de cada departamento", "principal", K, "simple", None, "media"),
-        ("auditor-cerebro", "Auditor del Cerebro", "Supervisión de agentes", "Revisa una muestra de respuestas de cada agente y propone ajustes", "juez", K, "libre", "0 5 * * *", "media"),
+        ("auditor-cerebro", "Auditor del Cerebro", "Supervisión de agentes", "Revisa una muestra de respuestas de cada agente y propone ajustes", "juez", K + ["jev"], "libre", "0 5 * * *", "media"),
     ],
     "licitaciones": [
         ("director-licitaciones", "Director de Licitaciones", "Vigilancia de oportunidades", "Coordina el ciclo completo de cada concurso y controla todos los plazos", "principal", K + ["calendario"], "libre", "0 7 * * 1-5", "baja"),

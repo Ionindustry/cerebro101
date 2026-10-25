@@ -130,6 +130,54 @@ class TestCalculo(unittest.TestCase):
         self.assertIn("No se ha podido", kpis.motivo(RuntimeError("x")))
 
 
+class TestDashboardDeDepartamento(unittest.TestCase):
+    def dep(self, dep="finanzas", fuente=None, dias=30):
+        return asyncio.run(kpis.calcular_departamento(dep, REG, CFG, dias, fuente or FuenteFalsa(), HOY))
+
+    def test_estructura_grupos_y_equipo(self):
+        d = self.dep()
+        self.assertEqual(d["departamento"]["id"], "finanzas")
+        self.assertEqual([g["nombre"] for g in d["grupos"]], ["Cartera de clientes", "Proveedores y pagos", "Actividad del periodo"])
+        self.assertEqual(sum(len(g["kpis"]) for g in d["grupos"]), len(CFG["paneles_departamento"]["finanzas"]))
+        self.assertEqual(len(d["equipo"]), len(REG.del_departamento("finanzas")))
+        self.assertTrue(d["equipo"][0]["director"], "el director va el primero")
+        self.assertTrue(all(k["grupo"] for g in d["grupos"] for k in g["kpis"]))
+
+    def test_suma_la_actividad_de_todos_sus_agentes(self):
+        n = len(REG.del_departamento("finanzas"))
+
+        class F(FuenteFalsa):                                   # cada agente: 5 peticiones y 3 propuestas en el periodo actual
+            async def uso(self, agente, desde, hasta):
+                self.n_uso += 1
+                return {"peticion": 5, "uso:erpnext.listar": 4, "error:erpnext.leer": 1} if self.n_uso % 2 else {"peticion": 1}
+        d = self.dep(fuente=F())
+        r = {k["id"]: k for k in d["rendimiento"]}
+        self.assertEqual(r["peticiones"]["valor"], 5 * n)
+        self.assertEqual((r["usos"]["valor"], r["exito"]["valor"]), (4 * n, 80))
+        self.assertEqual((r["propuestas"]["valor"], r["pendientes"]["valor"]), (3 * n, 1 * n))
+        self.assertEqual(r["decision"]["valor"], 10)
+
+    def test_un_kpi_roto_no_rompe_el_dashboard(self):
+        d = self.dep(fuente=FuenteFalsa(rotos={"Sales Invoice"}))
+        kpis_ = [k for g in d["grupos"] for k in g["kpis"]]
+        self.assertTrue(any(k["estado"] == "no_disponible" for k in kpis_))
+        self.assertTrue(any(k["estado"] == "ok" for k in kpis_))
+
+    def test_todos_los_departamentos_se_calculan(self):
+        for dep in REG.departamentos:
+            with self.subTest(dep):
+                d = self.dep(dep)
+                self.assertTrue(d["grupos"] and d["equipo"])
+
+    def test_departamento_de_solo_uso_cuenta_las_consultas(self):
+        class F(FuenteFalsa):
+            async def uso(self, agente, desde, hasta):
+                return {"uso:conocimiento.buscar": 2, "peticion": 1}
+        d = self.dep("conocimiento", F())
+        k = d["grupos"][0]["kpis"][0]
+        self.assertEqual((k["fuente"], k["valor"]), ("uso", 2 * len(REG.del_departamento("conocimiento"))))
+
+
 class TestConfiguracion(unittest.TestCase):
     def test_todo_agente_tiene_kpis_de_cargo(self):
         sin = [f.id for f in REG.fichas.values() if not kpis.definiciones(f, CFG)]
@@ -148,8 +196,24 @@ class TestConfiguracion(unittest.TestCase):
                     errores.append(f"{f.id} ({f.departamento}): {k['doctype']}")
         self.assertEqual(errores, [], "KPI cuyo documento el departamento no puede leer según erp_acceso.yaml")
 
+    def test_todo_departamento_tiene_su_dashboard_y_solo_con_documentos_permitidos(self):
+        self.assertEqual(sorted(set(REG.departamentos) - set(CFG["paneles_departamento"])), [])
+        errores = []
+        for dep, lista in CFG["paneles_departamento"].items():
+            self.assertTrue(lista, f"el dashboard de {dep} está vacío")
+            for k in lista:
+                self.assertTrue(k.get("grupo"), f"{dep}: «{k['nombre']}» sin grupo")
+                if k["tipo"] == "erp" and k["doctype"] not in (POL.get(dep) or {}).get("leer", []):
+                    errores.append(f"{dep}: {k['doctype']}")
+        self.assertEqual(errores, [], "KPI de departamento con documentos que el departamento no puede leer")
+
+    def test_la_mayoria_de_los_agentes_tienen_kpi_propios(self):
+        propios = [f.id for f in REG.fichas.values() if f.id in CFG["agentes"]]
+        self.assertGreaterEqual(len(propios), 60, f"solo {len(propios)} agentes tienen KPI propios")
+
     def test_definiciones_bien_formadas(self):
-        todos = list(CFG["agentes"].values()) + list(CFG["departamentos"].values()) + list(CFG["herramientas"].values())
+        todos = (list(CFG["agentes"].values()) + list(CFG["departamentos"].values()) + list(CFG["herramientas"].values())
+                 + list(CFG["paneles_departamento"].values()))
         for lista in todos:
             for k in lista:
                 self.assertTrue(k.get("nombre"))

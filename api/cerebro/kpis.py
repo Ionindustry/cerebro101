@@ -97,20 +97,8 @@ async def calcular(ficha, cfg: dict, dias: int, fuente, hoy: date | None = None)
         _item("ejecutadas", "Acciones ejecutadas", acc["ok"], "acciones", "aprobadas y llevadas a cabo", None, errores=acc["error"]),
     ]
 
-    cargo = []
-    for i, k in enumerate(definiciones(ficha, cfg)):
-        base = {"id": f"k{i}", "nombre": k["nombre"], "unidad": k.get("unidad", ""), "ayuda": k.get("ayuda", ""), "fuente": k["tipo"]}
-        if k["tipo"] == "uso":
-            valor, ant = _suma(uso, k["claves"]), _suma(uso_ant, k["claves"])
-            cargo.append({**_item(base["id"], base["nombre"], valor, base["unidad"], base["ayuda"], ant), "fuente": "uso", "estado": "ok"})
-            continue
-        try:
-            valor = await fuente.erp(ficha.departamento, k, desde, hasta)
-            ant = await fuente.erp(ficha.departamento, k, d0, h0) if k.get("periodo") else None
-            cargo.append({**_item(base["id"], base["nombre"], valor, base["unidad"], base["ayuda"], ant), "fuente": "erp", "estado": "ok"})
-        except Exception as e:  # noqa: BLE001 — un KPI que falla no tumba el panel: se explica
-            log.info("KPI «%s» de %s no disponible: %s", k["nombre"], ficha.id, e)
-            cargo.append({**_item(base["id"], base["nombre"], None, base["unidad"], base["ayuda"]), "fuente": "erp", "estado": "no_disponible", "motivo": motivo(e)})
+    cargo = [await _evaluar_kpi(f"k{i}", k, ficha.departamento, ficha.id, uso, uso_ant, fuente, desde, hasta, d0, h0)
+             for i, k in enumerate(definiciones(ficha, cfg))]
 
     diario = await fuente.uso_diario(ficha.id, desde, hasta)
     dias_lista = [(v["desde"] + timedelta(days=i)).isoformat() for i in range(dias)]
@@ -135,6 +123,96 @@ async def calcular(ficha, cfg: dict, dias: int, fuente, hoy: date | None = None)
         "serie": [{"dia": d, **por_dia[d]} for d in dias_lista],
         "herramientas": sorted(herr.values(), key=lambda x: -(x["usos"] + x["errores"])),
         "aprobaciones": {"aprobadas": apr["aprobadas"], "rechazadas": apr["rechazadas"], "pendientes": apr["pendientes"]},
+    }
+
+
+async def _evaluar_kpi(id_: str, k: dict, departamento: str, quien: str, uso: dict, uso_ant: dict, fuente, desde: str, hasta: str, d0: str, h0: str) -> dict:
+    """Valor de un KPI del cargo (con el del periodo anterior si tiene `periodo`). Si falla, devuelve «no disponible» con el motivo."""
+    base = {"nombre": k["nombre"], "unidad": k.get("unidad", ""), "ayuda": k.get("ayuda", "")}
+    if k.get("grupo"):
+        base["grupo"] = k["grupo"]
+    if k["tipo"] == "uso":
+        valor, ant = _suma(uso, k["claves"]), _suma(uso_ant, k["claves"])
+        return {**_item(id_, base["nombre"], valor, base["unidad"], base["ayuda"], ant), **{x: base[x] for x in ("grupo",) if x in base}, "fuente": "uso", "estado": "ok"}
+    try:
+        valor = await fuente.erp(departamento, k, desde, hasta)
+        ant = await fuente.erp(departamento, k, d0, h0) if k.get("periodo") else None
+        return {**_item(id_, base["nombre"], valor, base["unidad"], base["ayuda"], ant), **{x: base[x] for x in ("grupo",) if x in base}, "fuente": "erp", "estado": "ok"}
+    except Exception as e:  # noqa: BLE001 — un KPI que falla no tumba el panel: se explica
+        log.info("KPI «%s» de %s no disponible: %s", k["nombre"], quien, e)
+        return {**_item(id_, base["nombre"], None, base["unidad"], base["ayuda"]), **{x: base[x] for x in ("grupo",) if x in base}, "fuente": "erp", "estado": "no_disponible", "motivo": motivo(e)}
+
+
+async def calcular_departamento(dep_id: str, reg, cfg: dict, dias: int, fuente, hoy: date | None = None) -> dict:
+    """Dashboard de un departamento: sus KPI específicos del ERP/CRM (agrupados), el resumen de actividad de todos sus agentes y el reparto por agente."""
+    dep = reg.departamentos[dep_id]
+    fichas = reg.del_departamento(dep_id)
+    v = ventana(dias, hoy)
+    desde, hasta, d0, h0 = (x.isoformat() for x in (v["desde"], v["hasta"], v["desde_ant"], v["hasta_ant"]))
+    uso_dep: dict[str, int] = {}
+    uso_dep_ant: dict[str, int] = {}
+    equipo, tot = [], {"aprobadas": 0, "rechazadas": 0, "pendientes": 0, "total": 0, "seg": 0.0, "n_seg": 0}
+    tot_ant = {"total": 0, "aprobadas": 0, "rechazadas": 0}
+    por_dia: dict[str, dict] = {(v["desde"] + timedelta(days=i)).isoformat(): {"peticiones": 0, "usos": 0} for i in range(dias)}
+    herr: dict[str, dict] = {}
+    for f in fichas:
+        u, ua = await fuente.uso(f.id, desde, hasta), await fuente.uso(f.id, d0, h0)
+        ap, apa = await fuente.aprobaciones(f.id, desde, hasta), await fuente.aprobaciones(f.id, d0, h0)
+        for k, n in u.items():
+            uso_dep[k] = uso_dep.get(k, 0) + n
+        for k, n in ua.items():
+            uso_dep_ant[k] = uso_dep_ant.get(k, 0) + n
+        for campo in ("aprobadas", "rechazadas", "pendientes", "total"):
+            tot[campo] += ap[campo]
+        for campo in ("aprobadas", "rechazadas", "total"):
+            tot_ant[campo] += apa[campo]
+        if ap.get("segundos_medios") is not None and ap["aprobadas"] + ap["rechazadas"]:
+            tot["seg"] += ap["segundos_medios"] * (ap["aprobadas"] + ap["rechazadas"])
+            tot["n_seg"] += ap["aprobadas"] + ap["rechazadas"]
+        usos, errores = _suma(u, ["uso:*"]), _suma(u, ["error:*"])
+        equipo.append({"id": f.id, "nombre": f.nombre, "subarea": f.subarea, "director": f.director, "peticiones": u.get("peticion", 0), "usos": usos,
+                       "exito": round(usos / (usos + errores) * 100) if usos + errores else None, "propuestas": ap["total"], "pendientes": ap["pendientes"]})
+        for dia, clave, n in await fuente.uso_diario(f.id, desde, hasta):
+            d = dia.isoformat() if hasattr(dia, "isoformat") else str(dia)
+            if d in por_dia:
+                if clave == "peticion":
+                    por_dia[d]["peticiones"] += n
+                elif clave.startswith("uso:"):
+                    por_dia[d]["usos"] += n
+            for pref, campo in (("uso:", "usos"), ("error:", "errores")):
+                if clave.startswith(pref):
+                    h = clave[len(pref):].split(".")[0]
+                    herr.setdefault(h, {"herramienta": h, "usos": 0, "errores": 0})[campo] += n
+    usos, errores = _suma(uso_dep, ["uso:*"]), _suma(uso_dep_ant, ["uso:*"])
+    errs = _suma(uso_dep, ["error:*"])
+    res = tot["aprobadas"] + tot["rechazadas"]
+    rendimiento = [
+        _item("peticiones", "Peticiones atendidas", uso_dep.get("peticion", 0), "peticiones", "entre todos los agentes del departamento", uso_dep_ant.get("peticion", 0)),
+        _item("usos", "Usos de herramientas", usos, "usos", "", errores),
+        _item("exito", "Éxito de sus herramientas", round(usos / (usos + errs) * 100) if usos + errs else None, "%", "usos sin error sobre el total"),
+        _item("propuestas", "Propuestas a aprobación", tot["total"], "propuestas", "", tot_ant["total"]),
+        _item("aprobadas", "Aprobadas", tot["aprobadas"], "propuestas", "", tot_ant["aprobadas"]),
+        _item("rechazadas", "Rechazadas", tot["rechazadas"], "propuestas", "", tot_ant["rechazadas"]),
+        _item("tasa", "Tasa de aprobación", round(tot["aprobadas"] / res * 100) if res else None, "%", ""),
+        _item("pendientes", "Esperando tu firma", tot["pendientes"], "propuestas", "ahora mismo"),
+        _item("decision", "Tiempo medio hasta la decisión", round(tot["seg"] / tot["n_seg"] / 60) if tot["n_seg"] else None, "min", ""),
+    ]
+    kpis_dep = (cfg.get("paneles_departamento") or {}).get(dep_id) or []
+    cargo = [await _evaluar_kpi(f"d{i}", k, dep_id, dep_id, uso_dep, uso_dep_ant, fuente, desde, hasta, d0, h0) for i, k in enumerate(kpis_dep)]
+    grupos: list[str] = []
+    for k in cargo:
+        k.setdefault("grupo", "Indicadores")
+        if k["grupo"] not in grupos:
+            grupos.append(k["grupo"])
+    return {
+        "departamento": {"id": dep_id, "nombre": dep["nombre"], "agentes": len(fichas), "director": dep["director"]},
+        "periodo": {"dias": dias, "desde": desde, "hasta": (v["hasta"] - timedelta(days=1)).isoformat()},
+        "grupos": [{"nombre": g, "kpis": [k for k in cargo if k["grupo"] == g]} for g in grupos],
+        "rendimiento": rendimiento,
+        "serie": [{"dia": d, **por_dia[d]} for d in por_dia],
+        "herramientas": sorted(herr.values(), key=lambda x: -(x["usos"] + x["errores"])),
+        "aprobaciones": {"aprobadas": tot["aprobadas"], "rechazadas": tot["rechazadas"], "pendientes": tot["pendientes"]},
+        "equipo": sorted(equipo, key=lambda e: (not e["director"], -e["peticiones"], e["nombre"])),
     }
 
 
