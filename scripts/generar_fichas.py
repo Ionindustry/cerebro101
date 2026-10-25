@@ -108,7 +108,7 @@ AGENTES = {
         ("evaluacion-instaladores", "Evaluación de Instaladores", "Red de instaladores", "Puntúa cada trabajo terminado y mantiene el ranking", "juez", K + ["erpnext"], "libre", "0 4 * * 1", "media"),
     ],
     "personas": [
-        ("seleccion", "Selección", "Selección", "Ofertas de empleo, cribado según criterios fijados y agenda de entrevistas (sin servicios externos)", "principal", K + ["correo", "calendario"], "doble", None, "alta"),
+        ("seleccion", "Selección", "Selección", "Ofertas de empleo, cribado según criterios fijados y agenda de entrevistas (sin servicios externos)", "principal", K + ["correo", "calendario"], "simple", None, "alta"),
         ("onboarding", "Onboarding", "Incorporación", "Checklist de primer día, accesos, documentación y plan de bienvenida", "principal", K + ["erpnext"], "simple", None, "alta"),
         ("administracion-personal", "Administración de Personal", "Administración de personal", "Datos de nómina para la gestoría, vacaciones, bajas y registro horario", "principal", K + ["erpnext"], "doble", "0 8 25 * *", "alta"),
         ("formacion", "Formación", "Desarrollo", "Plan de formación anual y seguimiento de cursos", "principal", K + ["erpnext"], "simple", "0 8 1 * *", "alta"),

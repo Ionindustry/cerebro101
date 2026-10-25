@@ -9,7 +9,7 @@ agentes:
   - conocimiento
   - correo
   - calendario
-  aprobacion: doble
+  aprobacion: simple
   horario: null
   sensibilidad: alta
   departamento: personas

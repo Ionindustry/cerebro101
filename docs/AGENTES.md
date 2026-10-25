@@ -90,7 +90,7 @@
 
 | Agente | Subárea | Modelo | Aprobación | Horario | Tareas |
 | --- | --- | --- | --- | --- | --- |
-| **Selección** | Selección | principal | doble | bajo petición | Ofertas de empleo, cribado según criterios fijados y agenda de entrevistas (sin servicios externos) |
+| **Selección** | Selección | principal | simple | bajo petición | Ofertas de empleo, cribado según criterios fijados y agenda de entrevistas (sin servicios externos) |
 | Onboarding | Incorporación | principal | simple | bajo petición | Checklist de primer día, accesos, documentación y plan de bienvenida |
 | Administración de Personal | Administración de personal | principal | doble | 0 8 25 * * | Datos de nómina para la gestoría, vacaciones, bajas y registro horario |
 | Formación | Desarrollo | principal | simple | 0 8 1 * * | Plan de formación anual y seguimiento de cursos |
