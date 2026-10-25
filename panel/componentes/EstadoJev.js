@@ -1,8 +1,8 @@
 "use client";
 import { useCallback, useEffect, useState } from "react";
 
-const COLORES = { operativo: "#2e7d4f", caido: "#b3261e", sin_clave: "#c98a0b", desactivado: "#9a9aa2", no_desplegado: "#b3261e" };
-const NOMBRES = { operativo: "Operativo", caido: "No responde", sin_clave: "Falta la clave", desactivado: "Desactivado", no_desplegado: "No arrancado" };
+const COLORES = { operativo: "#2e7d4f", configurado: "#2e7d4f", caido: "#b3261e", sin_clave: "#c98a0b", desactivado: "#9a9aa2", no_desplegado: "#b3261e" };
+const NOMBRES = { operativo: "Operativo", configurado: "Configurado (sin probar)", caido: "No responde", sin_clave: "Falta la clave", desactivado: "Desactivado", no_desplegado: "No arrancado" };
 const VIAS = { jev: "Jev (nube)", jeff: "jeff (local)", local: "modelo local", ninguna: "ninguna" };
 
 // Estado del motor de decisiones cerradas (Jev en la nube, jeff autoalojado y modelo local) y qué vía usará cada sensibilidad de datos
@@ -19,7 +19,7 @@ export default function EstadoJev() {
   useEffect(() => { cargar(); const t = setInterval(cargar, 60000); return () => clearInterval(t); }, [cargar]);
 
   if (!e) return null;
-  const color = e.nube.estado === "operativo" ? COLORES.operativo : e.operativo ? COLORES.sin_clave : COLORES.caido;
+  const color = ["operativo", "configurado"].includes(e.nube.estado) ? COLORES.operativo : e.operativo ? COLORES.sin_clave : COLORES.caido;
   return (
     <div className="jev">
       <button className="jev-chip" aria-expanded={abierto} onClick={() => setAbierto((v) => !v)}>

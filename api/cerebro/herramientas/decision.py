@@ -204,8 +204,11 @@ async def _probar(url: str, clave: str, transporte=None) -> tuple[bool, float, s
 
 
 async def estado(probar: bool = False, transporte_nube=None, transporte_jeff=None, transporte_ollama=None) -> dict:
-    """¿Qué vía de decisiones cerradas está operativa y cuál usará cada nivel de sensibilidad? `probar` hace una pregunta real a cada servicio
-    (la de la nube sin datos de nadie); sin él se reutiliza el resultado de hace menos de un minuto."""
+    """¿Qué vía de decisiones cerradas está operativa y cuál usará cada nivel de sensibilidad?
+
+    Sin `probar` solo se hacen comprobaciones ligeras (¿responde jeff y tiene su modelo?, ¿están la clave y la activación de Jev?) y se reutiliza el resultado
+    de hace menos de un minuto. Antes se hacía siempre una pregunta real a jeff (un modelo de lenguaje) y a Jev: el panel la repetía cada minuto, tardaba
+    hasta 15 s (o 2 min con el modelo cargándose) y competía con las respuestas de Jarvis. `probar` hace esa pregunta de prueba, sin datos de nadie."""
     if not probar and _CACHE["datos"] and _tiempo.monotonic() - _CACHE["cuando"] < 60:
         return _CACHE["datos"]
     from ..llm import estado_modelos
@@ -216,14 +219,18 @@ async def estado(probar: bool = False, transporte_nube=None, transporte_jeff=Non
         nube = {"estado": "desactivado", "detalle": "USAR_JEV_NUBE no está en «true»: las decisiones se hacen en local"}
     elif not ajustes.jev_api_key:
         nube = {"estado": "sin_clave", "detalle": "falta la clave de Jev (JEV_API_KEY): se activa con scripts/jev_activar.py"}
-    else:
+    elif probar:
         ok, seg, det = await _probar(ajustes.jev_url, ajustes.jev_api_key, transporte_nube)
         nube = {"estado": "operativo" if ok else "caido", "detalle": det, "segundos": seg}
+    else:
+        nube = {"estado": "configurado", "detalle": "la clave y la activación están puestas; «Comprobar ahora» le hace una pregunta de prueba (no se pregunta sola, para no gastar uso)"}
     # jeff (autoalojado)
     try:
         async with httpx.AsyncClient(base_url=ajustes.jeff_url, timeout=5, transport=transporte_jeff) as c:
             r = await c.get("/salud")
-        if r.status_code == 200:
+        if r.status_code == 200 and not probar:
+            jeff = {"estado": "operativo", "detalle": "responde y tiene su modelo; «Comprobar ahora» le hace una pregunta de prueba", "modelo": r.json().get("modelo")}
+        elif r.status_code == 200:
             ok, seg, det = await _probar(ajustes.jeff_url, "", transporte_jeff)
             jeff = {"estado": "operativo" if ok else "caido", "detalle": det, "segundos": seg, "modelo": r.json().get("modelo")}
         else:
@@ -236,14 +243,15 @@ async def estado(probar: bool = False, transporte_nube=None, transporte_jeff=Non
              "detalle": "Ollama responde" if m.get("ollama") == "ok" and not m.get("faltan") else (f"faltan modelos: {', '.join(m.get('faltan', []))}" if m.get("ollama") == "ok" else "Ollama no responde")}
 
     def via(sensibilidad: str) -> str:
-        if sensibilidad != "alta" and nube["estado"] == "operativo":
+        if sensibilidad != "alta" and nube["estado"] in ("operativo", "configurado"):
             return "jev"
         if jeff["estado"] == "operativo":
             return "jeff"
         return "local" if local["estado"] == "operativo" else "ninguna"
     datos = {"nube": nube, "jeff": jeff, "local": local, "se_usara": {n: via(n) for n in ("baja", "media", "alta")},
-             "operativo": nube["estado"] == "operativo" or jeff["estado"] == "operativo",
+             "operativo": nube["estado"] in ("operativo", "configurado") or jeff["estado"] == "operativo",
              "resumen": ("Jev operativo" if nube["estado"] == "operativo" else
+                         "Jev configurado; decide Jev (sin probar)" if nube["estado"] == "configurado" else
                          "Jev no activo; decide jeff (local)" if jeff["estado"] == "operativo" else
                          "Solo el modelo local" if local["estado"] == "operativo" else "Sin motor de decisiones")}
     _CACHE.update(cuando=_tiempo.monotonic(), datos=datos)
