@@ -113,6 +113,10 @@ class TestCalculo(unittest.TestCase):
         self.assertEqual((h["erpnext"]["usos"], h["erpnext"]["errores"]), (0, 2))
         self.assertEqual(h["correo"]["usos"], 3)
 
+    def test_cobros_incluye_recuperado_y_retraso_medio(self):
+        nombres = [k["nombre"] for k in calcular("cobros")["cargo"]]
+        self.assertEqual(nombres[:2], ["Cobros recuperados", "Media de retraso en facturas vencidas"])
+
     def test_comodines_de_uso(self):
         self.assertEqual(kpis._suma({"uso:calendario.huecos": 2, "uso:calendario.proponer_cita": 3, "uso:otra.x": 9}, ["uso:calendario.*"]), 5)
         self.assertEqual(kpis._suma({"uso:a.b": 1}, ["uso:a.c"]), 0)
@@ -151,8 +155,8 @@ class TestConfiguracion(unittest.TestCase):
                 self.assertTrue(k.get("nombre"))
                 tipo = k.get("tipo", "uso" if "claves" in k else "erp")
                 if tipo == "erp":
-                    self.assertIn(k.get("agregado", "contar"), ("contar", "sumar"))
-                    if k.get("agregado") == "sumar":
+                    self.assertIn(k.get("agregado", "contar"), ("contar", "sumar", "retraso_medio"))
+                    if k.get("agregado") in ("sumar", "retraso_medio"):
                         self.assertTrue(k.get("campo"), k["nombre"])
                 else:
                     self.assertTrue(k["claves"] and all(c.startswith(("uso:", "propuesta:", "error:")) for c in k["claves"]), k["nombre"])
@@ -170,6 +174,61 @@ class TestConfiguracion(unittest.TestCase):
                     self.assertIn(herr, base._REGISTRO, c)
                     if op != "*":
                         self.assertIn(op, base._REGISTRO[herr].operaciones, c)
+
+
+try:
+    import httpx
+    HAY_HTTPX = hasattr(httpx, "MockTransport")
+except ImportError:
+    HAY_HTTPX = False
+
+
+@unittest.skipUnless(HAY_HTTPX, "requiere httpx")
+class TestMetricasDelErp(unittest.TestCase):
+    """Las cifras que se piden al ERP: retraso medio, suma y recuento, con la clave y la política del departamento."""
+
+    def lanzar(self, respuesta, **k):
+        import os
+        from datetime import timedelta
+        from types import SimpleNamespace
+        from unittest import mock
+        from cerebro.herramientas import erpnext as E
+        E._politica.cache_clear()
+        E._METRICAS.clear()
+        peticiones = []
+
+        def manejar(req):
+            peticiones.append(req)
+            return httpx.Response(200, json=respuesta(date.today(), timedelta))
+        real = httpx.AsyncClient
+        with mock.patch.dict(os.environ, {"ERPNEXT_TOKEN_FINANZAS": "k:s"}), \
+                mock.patch.object(E.httpx, "AsyncClient", lambda **kw: real(transport=httpx.MockTransport(manejar), **kw)), \
+                mock.patch.object(E, "ajustes", SimpleNamespace(erpnext_url="http://erp", dir_config=E.ajustes.dir_config)):
+            valor = asyncio.run(E.metrica("finanzas", "Sales Invoice", [["docstatus", "=", 1]], **k))
+        return valor, peticiones
+
+    def test_retraso_medio_en_dias(self):
+        v, p = self.lanzar(lambda hoy, td: {"data": [{"due_date": (hoy - td(days=10)).isoformat()}, {"due_date": (hoy - td(days=20)).isoformat()}, {"due_date": None}]},
+                           agregado="retraso_medio", campo="due_date")
+        self.assertEqual(v, 15.0)
+        self.assertIn("due_date", p[0].url.params["fields"])
+
+    def test_retraso_medio_sin_facturas_es_cero(self):
+        self.assertEqual(self.lanzar(lambda *a: {"data": []}, agregado="retraso_medio", campo="due_date")[0], 0.0)
+
+    def test_suma_y_recuento(self):
+        v, p = self.lanzar(lambda *a: {"data": [{"v": 1210.5}]}, agregado="sumar", campo="outstanding_amount")
+        self.assertEqual(v, 1210.5)
+        self.assertIn('"SUM"', p[0].url.params["fields"])
+        self.assertEqual(self.lanzar(lambda *a: {"message": 7}, agregado="contar")[0], 7.0)
+
+    def test_la_politica_y_los_campos_se_respetan(self):
+        with self.assertRaises(PermissionError):
+            self.lanzar(lambda *a: {}, agregado="sumar", campo="x; drop table")
+        with self.assertRaises(PermissionError):
+            from cerebro.herramientas import erpnext as E
+            E._politica.cache_clear()
+            asyncio.run(E.metrica("comercial", "Bank Account"))
 
 
 if __name__ == "__main__":

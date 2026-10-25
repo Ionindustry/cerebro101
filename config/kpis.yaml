@@ -7,7 +7,7 @@
 #     y (2) el uso de las herramientas de ese agente. Se definen aquí: por agente (`agentes`), y si no hay, los del departamento (`departamentos`).
 #
 # Tipos de KPI del cargo:
-#   erp:  {nombre, doctype, agregado: contar|sumar, campo (para sumar), filtros: [[campo, operador, valor]], periodo: <campo de fecha>, unidad, ayuda}
+#   erp:  {nombre, doctype, agregado: contar|sumar|retraso_medio, campo (para sumar), filtros: [[campo, operador, valor]], periodo: <campo de fecha>, unidad, ayuda}
 #         «periodo» acota por la ventana elegida (7/30/90 días) y permite comparar con el periodo anterior. En los filtros: {hoy} = fecha de hoy.
 #   uso:  {nombre, claves: [uso:herramienta.operacion, ...], unidad, ayuda}   (se suma lo que el agente ha hecho en la ventana; «*» al final = cualquiera)
 # Los doctypes deben estar en `leer` del departamento en config/erp_acceso.yaml (hay un test que lo comprueba). Un KPI cuyo documento no existe en
@@ -108,6 +108,8 @@ departamentos:
 agentes:
   # Finanzas
   cobros:
+    - {nombre: "Cobros recuperados", tipo: erp, doctype: "Payment Entry", agregado: sumar, campo: paid_amount, filtros: [["docstatus", "=", 1], ["payment_type", "=", "Receive"], ["party_type", "=", "Customer"]], periodo: posting_date, unidad: "€", ayuda: "cobros recibidos de clientes en el periodo"}
+    - {nombre: "Media de retraso en facturas vencidas", tipo: erp, doctype: "Sales Invoice", agregado: retraso_medio, campo: due_date, filtros: [["docstatus", "=", 1], ["outstanding_amount", ">", 0], ["due_date", "<", "{hoy}"]], unidad: "días", ayuda: "días que llevan vencidas, de media, las facturas aún sin cobrar"}
     - {nombre: "Pendiente de cobro", tipo: erp, doctype: "Sales Invoice", agregado: sumar, campo: outstanding_amount, filtros: [["docstatus", "=", 1]], unidad: "€"}
     - {nombre: "Facturas vencidas sin cobrar", tipo: erp, doctype: "Sales Invoice", agregado: contar, filtros: [["docstatus", "=", 1], ["outstanding_amount", ">", 0], ["due_date", "<", "{hoy}"]], unidad: "facturas", ayuda: "las que hay que reclamar"}
     - {nombre: "Importe vencido", tipo: erp, doctype: "Sales Invoice", agregado: sumar, campo: outstanding_amount, filtros: [["docstatus", "=", 1], ["due_date", "<", "{hoy}"]], unidad: "€"}

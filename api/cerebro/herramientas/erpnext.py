@@ -135,8 +135,8 @@ async def metrica(departamento: str, doctype: str, filtros: list | None = None, 
             f.append([campo_fecha, ">=", desde])
         if hasta:
             f.append([campo_fecha, "<", hasta])
-    if agregado == "sumar" and not (campo and _CAMPO.match(campo)):
-        raise PermissionError("campo de suma no válido")
+    if agregado in ("sumar", "retraso_medio") and not (campo and _CAMPO.match(campo)):
+        raise PermissionError("campo no válido")
     clave = json.dumps([departamento, doctype, f, agregado, campo], sort_keys=True, default=str)
     hit = _METRICAS.get(clave)
     if hit and _t.monotonic() - hit[0] < ttl:
@@ -146,6 +146,15 @@ async def metrica(departamento: str, doctype: str, filtros: list | None = None, 
             r = await c.get("/api/method/frappe.client.get_count", params={"doctype": doctype, "filters": json.dumps(f)}, headers=_cabeceras(departamento))
             r.raise_for_status()
             valor = float(r.json().get("message") or 0)
+        elif agregado == "retraso_medio":
+            # días de retraso medio: hoy menos la fecha (p. ej. de vencimiento) de cada documento que cumple los filtros
+            r = await c.get(f"/api/resource/{quote(doctype, safe='')}", headers=_cabeceras(departamento),
+                            params={"fields": json.dumps([campo]), "filters": json.dumps(f), "limit_page_length": 2000})
+            r.raise_for_status()
+            from datetime import date as _d
+            hoy = _d.today()
+            dias = [(hoy - _d.fromisoformat(str(x[campo])[:10])).days for x in r.json().get("data", []) if x.get(campo)]
+            valor = round(sum(dias) / len(dias), 1) if dias else 0.0
         else:
             r = await c.get(f"/api/resource/{quote(doctype, safe='')}", headers=_cabeceras(departamento),
                             params={"fields": json.dumps([{"SUM": campo, "as": "v"}]), "filters": json.dumps(f), "limit_page_length": 1})
