@@ -97,6 +97,15 @@ async def elegir_agente(estado: Estado) -> Estado:
 PASO_MAX_TOKENS = 1500          # un paso del agente es una llamada a herramienta o una respuesta: no necesita más
 
 
+def _paso_valido(d: dict | None) -> bool:
+    """¿Sirve la respuesta de un modelo externo? Una llamada a herramienta con nombre, o una respuesta con texto: si viene vacía, se usa el modelo local."""
+    if not d:
+        return False
+    if d.get("tipo") == "herramienta":
+        return bool(d.get("herramienta"))
+    return d.get("tipo") == "respuesta" and bool(str(d.get("respuesta") or "").strip())
+
+
 async def _paso_del_agente(ficha, estado: dict, mensajes: list[dict]) -> dict:
     """Una llamada al modelo con el contexto bajo control: recorta lo antiguo si no cabe y, si aun así el modelo dice que no
     cabe, lo recorta más y reintenta una vez. Si el modelo no da una respuesta válida, sube al modelo principal."""
@@ -107,7 +116,7 @@ async def _paso_del_agente(ficha, estado: dict, mensajes: list[dict]) -> dict:
     # Consulta compleja: si Dirección ha conectado Claude o ChatGPT (y los datos se pueden anonimizar), responde un modelo externo
     if modelos_externos.es_compleja(estado["peticion"]):
         d = await modelos_externos.consultar(ficha, entrada, ESQUEMA_AGENTE, estado.get("sensibilidad"))
-        if d and d.get("tipo") in ("herramienta", "respuesta"):
+        if _paso_valido(d):
             return d
     try:
         try:
@@ -123,7 +132,7 @@ async def _paso_del_agente(ficha, estado: dict, mensajes: list[dict]) -> dict:
         except RespuestaInvalida:
             # Ni el modelo principal local ha dado una respuesta válida: último recurso, un modelo externo (si procede)
             d = await modelos_externos.consultar(ficha, entrada, ESQUEMA_AGENTE, estado.get("sensibilidad"))
-            if d and d.get("tipo") in ("herramienta", "respuesta"):
+            if _paso_valido(d):
                 return d
             raise
 
