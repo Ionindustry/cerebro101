@@ -23,3 +23,4 @@ GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO cerebro_app;
 -- Evidencias: el registro de acciones solo se lee y se anexa; las aprobaciones no se borran
 REVOKE UPDATE, DELETE ON registro_acciones FROM cerebro_app;
 REVOKE DELETE ON aprobaciones FROM cerebro_app;
+REVOKE DELETE ON objetivos FROM cerebro_app;       -- un objetivo se revoca, no se borra

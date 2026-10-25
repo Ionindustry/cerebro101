@@ -277,3 +277,23 @@ a.kp-fila:hover { background: var(--fondo); }
 .micro-ayuda { max-width: 760px; margin: 0 auto 8px; font-size: 13px; color: var(--secundario); }
 .voz-etiqueta { font-size: 14px; color: var(--secundario); margin-left: -2px; }
 .micro-selector .interruptor { margin-left: 8px; }
+
+/* Dashboard y clasificación por departamentos de Aprobaciones */
+.ap-deps { margin-bottom: 12px; }
+.ap-n { display: inline-block; margin-left: 6px; padding: 0 7px; border-radius: 99px; background: rgba(0,0,0,.08); font-size: 12px; font-weight: 700; }
+.ap-deps button[aria-pressed="true"] .ap-n { background: rgba(255,255,255,.25); }
+.ap-dash { max-width: 1100px; }
+.ap-tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; margin: 8px 0 20px; }
+.ap-reparto { list-style: none; margin: 0 0 8px; padding: 0; display: grid; gap: 10px; }
+.ap-reparto li { display: grid; grid-template-columns: minmax(120px, 200px) 1fr minmax(180px, auto); gap: 12px; align-items: center; font-size: 14px; }
+.ap-dep-nombre { border: 0; background: none; padding: 0; text-align: left; font: inherit; font-weight: 600; color: var(--tinta); text-decoration: underline; text-decoration-color: var(--linea); cursor: pointer; }
+.ap-reparto-n { color: var(--secundario); }
+.ap-dos { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 0 24px; }
+@media (max-width: 700px) { .ap-reparto li { grid-template-columns: 1fr; gap: 4px; } }
+.ap-nuevo { display: grid; gap: 12px; margin: 14px 0; }
+.ap-nuevo label { display: grid; gap: 4px; }
+.ap-nuevo fieldset { border: 1px solid var(--borde, #ddd); border-radius: var(--radio); padding: 8px 12px; display: flex; flex-wrap: wrap; gap: 4px 16px; }
+.ap-check { display: flex !important; flex-direction: row; align-items: center; gap: 6px !important; }
+.ap-numeros { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; }
+.ap-objetivo { display: grid; gap: 4px; margin-bottom: 10px; }
+.ap-lote ol { margin: 6px 0 0; padding-left: 20px; display: grid; gap: 10px; }

@@ -36,6 +36,23 @@ CREATE TABLE IF NOT EXISTS aprobaciones (
 );
 CREATE INDEX IF NOT EXISTS aprobaciones_estado_idx ON aprobaciones (estado, departamento);
 
+-- Objetivos permanentes: una firma de Dirección que cubre varias peticiones (con caducidad y tope de acciones)
+CREATE TABLE IF NOT EXISTS objetivos (
+  id             uuid PRIMARY KEY,
+  titulo         text NOT NULL,
+  departamentos  text[] NOT NULL CHECK (cardinality(departamentos) > 0),
+  agentes        text[] NOT NULL DEFAULT '{}',
+  operaciones    text[] NOT NULL CHECK (cardinality(operaciones) > 0),
+  max_acciones   integer NOT NULL CHECK (max_acciones BETWEEN 1 AND 500),
+  usadas         integer NOT NULL DEFAULT 0,
+  caduca         timestamptz NOT NULL,
+  estado         text NOT NULL DEFAULT 'activo' CHECK (estado IN ('activo','revocado')),
+  creado_por     text NOT NULL,
+  creado         timestamptz NOT NULL DEFAULT now(),
+  revocado_por   text,
+  revocado       timestamptz
+);
+
 -- Qué está haciendo cada agente ahora (la pestaña «Oficina» del panel). Es información de estado, no evidencia: se sobrescribe.
 CREATE TABLE IF NOT EXISTS actividad_agentes (
   agente        text PRIMARY KEY,

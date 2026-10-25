@@ -14,7 +14,7 @@ from langgraph.types import Command
 from pydantic import BaseModel
 
 from ..ajustes import ajustes
-from ..aprobaciones import bandeja
+from ..aprobaciones import bandeja, objetivos
 from ..aprobaciones.logica import DecisionNoValida
 from .. import actividad, constancia, kpis, modelos_externos, oficina
 from ..cotizador import Solicitud, calcular
@@ -176,10 +176,57 @@ async def ver_aprobaciones(usuario: Usuario = Depends(usuario_actual)):
 
 @app.get("/aprobaciones/historial")
 async def ver_historial(decision: str | None = None, q: str | None = None, pagina: int = 0, limite: int = 30,
-                        usuario: Usuario = Depends(usuario_actual)):
-    """Aprobaciones ya resueltas (aprobadas y rechazadas): se guardan todas. Dirección las ve todas; el resto, las de sus departamentos."""
+                        departamento: str | None = None, usuario: Usuario = Depends(usuario_actual)):
+    """Aprobaciones ya resueltas (aprobadas y rechazadas): se guardan todas. Dirección las ve todas; el resto, las de sus departamentos.
+    `departamento` filtra por uno."""
     deps = None if "direccion" in usuario.roles else usuario.departamentos
-    return await bandeja.historial(deps, decision, q, limite, pagina)
+    return await bandeja.historial(deps, decision, q, limite, pagina, departamento)
+
+
+@app.get("/aprobaciones/resumen")
+async def resumen_aprobaciones(dias: int = 30, usuario: Usuario = Depends(usuario_actual)):
+    """Dashboard de Aprobaciones: pendientes, resueltas, tiempos, por departamento, por día, agentes y acciones más frecuentes."""
+    deps = None if "direccion" in usuario.roles else usuario.departamentos
+    return await bandeja.resumen(deps, dias)
+
+
+class ObjetivoNuevo(BaseModel):
+    titulo: str
+    departamentos: list[str]
+    agentes: list[str] = []
+    operaciones: list[str]
+    max_acciones: int = 20
+    dias: float = 7
+
+
+@app.get("/objetivos")
+async def ver_objetivos(usuario: Usuario = Depends(usuario_actual)):
+    """Objetivos permanentes (firma que cubre varias peticiones). Solo Dirección."""
+    if "direccion" not in usuario.roles:
+        raise HTTPException(403, "Solo Dirección gestiona los objetivos permanentes")
+    return {"objetivos": await objetivos.listar(), "operaciones": objetivos.operaciones_cubribles(),
+            "departamentos": sorted(registro().departamentos),
+            "limites": {"max_dias": objetivos.MAX_DIAS, "max_acciones": objetivos.MAX_ACCIONES}}
+
+
+@app.post("/objetivos")
+async def crear_objetivo(o: ObjetivoNuevo, usuario: Usuario = Depends(usuario_actual)):
+    if "direccion" not in usuario.roles:
+        raise HTTPException(403, "Solo Dirección gestiona los objetivos permanentes")
+    try:
+        datos = objetivos.validar_nuevo(o.titulo, o.departamentos, o.agentes, o.operaciones, o.max_acciones, o.dias, registro())
+    except objetivos.ObjetivoNoValido as e:
+        raise HTTPException(422, str(e)) from e
+    return {"id": await objetivos.crear(datos, usuario.id)}
+
+
+@app.post("/objetivos/{oid}/revocar")
+async def revocar_objetivo(oid: str, usuario: Usuario = Depends(usuario_actual)):
+    if "direccion" not in usuario.roles:
+        raise HTTPException(403, "Solo Dirección gestiona los objetivos permanentes")
+    if not await objetivos.revocar(oid, usuario.id):
+        raise HTTPException(404, "Objetivo no encontrado o ya revocado")
+    return {"estado": "revocado"}
 
 
 @app.post("/aprobaciones/{sid}")
