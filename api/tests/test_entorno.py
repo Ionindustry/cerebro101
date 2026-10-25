@@ -87,7 +87,7 @@ class TestEntorno(unittest.TestCase):
     def test_cada_variable_de_la_api_con_valor_por_defecto_en_el_codigo_no_llega_vacia(self):
         # `os.environ.get("X", defecto)` devuelve "" si X llega vacía: estas deben llevar un valor por defecto en el compose
         for v in ("CEREBRO_MODO", "PERFIL_HARDWARE", "OLLAMA_URL", "REDIS_URL", "KEYCLOAK_URL", "KEYCLOAK_REALM", "KEYCLOAK_CLIENTE",
-                  "XAI_MODELO", "JEFF_URL", "AGENT_REACH_URL", "USAR_JEV_NUBE", "ANONIMIZACION_NER"):
+                  "XAI_MODELO", "JEFF_URL", "AGENT_REACH_URL", "USAR_JEV_NUBE", "ANONIMIZACION_NER", "SEARXNG_URL"):
             self.assertRegex(_env("api")[v], r"\$\{%s:-.+\}" % v, f"{v} llegaría vacía si no está en .env")
 
 

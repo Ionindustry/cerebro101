@@ -43,6 +43,7 @@ K = ["conocimiento"]  # herramienta base que tienen todos los agentes
 AGENTES = {
     "direccion": [
         ("director-general", "Director General", "Coordinación", "Recibe todas las peticiones, las enruta al departamento correcto, prioriza conflictos entre áreas y genera el resumen diario", "rapido", K + ["jev"], "libre", "0 7 * * 1-5", "media"),
+        ("asistente-general", "Asistente general", "Coordinación", "Responde cualquier duda general o de actualidad con la fecha y hora actuales y consultando internet (buscador propio y lectura de páginas públicas); nunca con datos de clientes ni de personas, y lo que es del negocio lo redirige al departamento que corresponde", "principal", K + ["web"], "libre", None, "baja"),
         ("secretaria-direccion", "Secretaría de Dirección", "Coordinación", "Agenda de dirección, actas de reuniones y seguimiento de acuerdos y fechas límite", "principal", K + ["calendario", "correo"], "simple", None, "media"),
         ("estratega", "Estratega", "Estrategia", "Objetivos trimestrales, análisis de escenarios y alertas de desviación", "principal", K + ["erpnext"], "libre", "0 8 * * 1", "media"),
         ("analista-bi", "Analista BI", "Inteligencia de negocio", "Consolida los KPI de todos los departamentos en el panel diario y semanal", "principal", K + ["erpnext"], "libre", "30 6 * * *", "media"),

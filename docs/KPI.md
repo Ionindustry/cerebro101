@@ -27,4 +27,4 @@ quiere ver.**
 ## Dashboard de cada departamento
 En **Agentes**, al elegir un departamento aparece «Dashboard de <departamento> →». Muestra los **KPI más específicos del área** agrupados (p. ej. Finanzas: cartera de clientes, proveedores y pagos, actividad del periodo;
 Comercial: captación, oportunidades, presupuestos y ventas, clientes), con cifras del ERP/CRM, la actividad sumada de todos sus agentes, y una tabla del **equipo** (peticiones, usos, éxito, propuestas y firmas pendientes de cada agente,
-con enlace a su propio panel). Se define en `paneles_departamento` de `config/kpis.yaml`. Hoy hay 103 KPI de departamento y KPI propios para 69 de los 114 agentes; el resto usa los de su departamento y los de uso de sus herramientas.
+con enlace a su propio panel). Se define en `paneles_departamento` de `config/kpis.yaml`. Hoy hay 103 KPI de departamento y KPI propios para 69 de los 115 agentes; el resto usa los de su departamento y los de uso de sus herramientas.

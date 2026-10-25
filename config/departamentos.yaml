@@ -8,7 +8,7 @@ departamentos:
     - Estrategia
     - Inteligencia de negocio
     - Anticipación y lanzamiento
-    agentes: 8
+    agentes: 9
   finanzas:
     nombre: Finanzas y Contabilidad
     director: contable

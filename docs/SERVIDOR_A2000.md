@@ -43,7 +43,7 @@ Si ese último comando falla, nada de lo demás funcionará con GPU: arréglalo 
 
 ## 2. Llevar el proyecto al servidor
 
-El código, la configuración, los 114 agentes, las pruebas y la documentación están en GitHub, rama `claude/new-repository-lqspt7`. Es la vía normal:
+El código, la configuración, los 115 agentes, las pruebas y la documentación están en GitHub, rama `claude/new-repository-lqspt7`. Es la vía normal:
 
 ```bash
 git clone -b claude/new-repository-lqspt7 https://github.com/ionindustry/cerebro101.git

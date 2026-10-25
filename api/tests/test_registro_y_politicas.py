@@ -12,7 +12,7 @@ class TestRegistro(unittest.TestCase):
 
     def test_totales_del_documento(self):
         self.assertEqual(len(self.r.departamentos), 13)
-        self.assertEqual(len(self.r.fichas), 114)
+        self.assertEqual(len(self.r.fichas), 115)
         self.assertEqual(sum(len(d["subareas"]) for d in self.r.departamentos.values()), 60)
 
     def test_cada_departamento_tiene_director(self):

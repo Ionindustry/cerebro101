@@ -14,6 +14,21 @@ agentes:
   sensibilidad: media
   departamento: direccion
   director: true
+- id: asistente-general
+  nombre: Asistente general
+  subarea: Coordinación
+  tareas: Responde cualquier duda general o de actualidad con la fecha y hora actuales y consultando internet (buscador propio
+    y lectura de páginas públicas); nunca con datos de clientes ni de personas, y lo que es del negocio lo redirige al departamento
+    que corresponde
+  modelo: principal
+  herramientas:
+  - conocimiento
+  - web
+  aprobacion: libre
+  horario: null
+  sensibilidad: baja
+  departamento: direccion
+  director: false
 - id: secretaria-direccion
   nombre: Secretaría de Dirección
   subarea: Coordinación

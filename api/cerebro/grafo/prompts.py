@@ -1,7 +1,24 @@
 """Instrucciones de sistema. Se construyen a partir de la ficha del agente."""
 from __future__ import annotations
 
+from datetime import datetime, timezone
+from zoneinfo import ZoneInfo
+
+from ..ajustes import ajustes
 from ..registro import Ficha
+
+DIAS = ("lunes", "martes", "miércoles", "jueves", "viernes", "sábado", "domingo")
+MESES = ("enero", "febrero", "marzo", "abril", "mayo", "junio", "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre")
+
+
+def ahora_texto(ahora: datetime | None = None) -> str:
+    """Fecha y hora actuales en la zona de la empresa, con el día de la semana: los modelos no tienen reloj y sin esto se inventan la fecha."""
+    try:
+        zona = ZoneInfo(ajustes.zona_horaria)
+    except Exception:  # noqa: BLE001 - zona mal escrita en el .env: UTC antes que fallar
+        zona = timezone.utc
+    t = (ahora or datetime.now(timezone.utc)).astimezone(zona)
+    return f"{DIAS[t.weekday()]} {t.day} de {MESES[t.month - 1]} de {t.year}, {t:%H:%M} (hora de {getattr(zona, 'key', 'UTC')})"
 
 CONTEXTO_EMPRESA = (
     "Trabajas para 101.cat, empresa instaladora de sistemas de seguridad y telecomunicaciones en "
@@ -29,7 +46,8 @@ def sistema_agente(ficha: Ficha, herramientas: dict, con_esquema: bool = True) -
     else:
         lista = "\n".join(f"- {n}: {h.descripcion}" for n, h in herramientas.items())
         reglas = ""
-    return (f"{CONTEXTO_EMPRESA}\n\nEres el agente «{ficha.nombre}» del departamento {ficha.departamento}, "
+    return (f"{CONTEXTO_EMPRESA}\n\nFecha y hora actuales: {ahora_texto()}. Úsalas para «hoy», «mañana», plazos y días de la semana; "
+            f"no las supongas.\n\nEres el agente «{ficha.nombre}» del departamento {ficha.departamento}, "
             f"subárea {ficha.subarea}. Tus tareas: {ficha.tareas}.\n\n{NORMAS}\n\n"
             f"Herramientas disponibles:\n{lista}\n{reglas}\n"
             "En cada turno responde con JSON: o bien {\"tipo\":\"herramienta\",\"herramienta\":…,\"operacion\":…,"
@@ -50,6 +68,8 @@ def sistema_director_general(departamentos: dict, agentes: dict[str, list[str]] 
             "(cámaras, incendios, accesos, redes, renovables…), su obra, mantenimiento, legalizaciones o "
             "ayudas. Presupuestos, clientes, proyectos, compras, personal, contratos, cobros, licitaciones "
             "o telecomunicaciones de operador van a su propio departamento.\n\n"
+            "Las dudas generales, de cultura general o de actualidad que no son del negocio (qué día es, noticias, normativa pública, "
+            "cómo funciona algo, definiciones, comparativas…) van a «direccion»: allí las responde el Asistente general, que consulta internet.\n\n"
             f"Departamentos:\n{lista}")
 
 

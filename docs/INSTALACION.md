@@ -55,5 +55,5 @@
 
 ```bash
 curl http://localhost:8000/salud
-# {"estado":"ok","agentes":114,"departamentos":13,...}
+# {"estado":"ok","agentes":115,"departamentos":13,...}
 ```

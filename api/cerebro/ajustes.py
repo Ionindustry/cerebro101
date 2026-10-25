@@ -26,6 +26,7 @@ class Ajustes:
     jev_api_key: str = field(default_factory=lambda: _env("JEV_API_KEY", ""))
     jeff_url: str = field(default_factory=lambda: _env("JEFF_URL", "http://jeff:8080"))
     usar_jev_nube: bool = field(default_factory=lambda: _env("USAR_JEV_NUBE", "false").lower() == "true")
+    searxng_url: str = field(default_factory=lambda: _env("SEARXNG_URL") or "http://searxng:8080")
     agent_reach_url: str = field(default_factory=lambda: _env("AGENT_REACH_URL", "http://agent-reach:8090"))
     zona_horaria: str = field(default_factory=lambda: _env("TZ", "Europe/Madrid"))
 
