@@ -90,7 +90,7 @@ def respuesta(p: Pregunta, r: dict) -> dict:
 
 async def preguntar(cliente: httpx.AsyncClient, estado: str, p: Pregunta) -> dict:
     cuerpo = {"model": modelo(), "stream": False, "think": False, "format": esquema(p), "keep_alive": -1,
-              "options": {"temperature": 0, "num_ctx": CONTEXTO},
+              "options": {"temperature": 0, "num_ctx": CONTEXTO, "presence_penalty": 0, "frequency_penalty": 0, "repeat_penalty": 1},   # Qwen trae presence_penalty=1,5: hace derivar a otros idiomas
               "messages": [{"role": "system", "content": "Eres un evaluador preciso. Respondes solo con el JSON pedido, sin explicaciones."},
                            {"role": "user", "content": f"Estado:\n{estado}\n\nPregunta:\n{instruccion(p)}"}]}
     r = await cliente.post(f"{OLLAMA}/api/chat", json=cuerpo)
