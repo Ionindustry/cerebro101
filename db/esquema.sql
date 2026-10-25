@@ -36,6 +36,17 @@ CREATE TABLE IF NOT EXISTS aprobaciones (
 );
 CREATE INDEX IF NOT EXISTS aprobaciones_estado_idx ON aprobaciones (estado, departamento);
 
+-- Qué está haciendo cada agente ahora (la pestaña «Oficina» del panel). Es información de estado, no evidencia: se sobrescribe.
+CREATE TABLE IF NOT EXISTS actividad_agentes (
+  agente        text PRIMARY KEY,
+  estado        text NOT NULL CHECK (estado IN ('trabajando','reposo')),
+  detalle       text,
+  hilo          text,
+  actualizado   timestamptz NOT NULL DEFAULT now(),
+  ultima        text,
+  ultima_fecha  timestamptz
+);
+
 -- Registro de acciones ejecutadas (evidencia para ENS / ISO 27001)
 CREATE TABLE IF NOT EXISTS registro_acciones (
   id           bigserial PRIMARY KEY,

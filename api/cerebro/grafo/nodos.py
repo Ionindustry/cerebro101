@@ -8,6 +8,7 @@ import os
 from langgraph.types import interrupt
 
 from .. import herramientas as H
+from .. import actividad
 from ..aprobaciones import bandeja
 from ..constancia import dejar_constancia
 from ..llm import ContextoLleno, RespuestaInvalida, chat
@@ -52,6 +53,7 @@ async def enrutar(estado: Estado) -> Estado:
         return {"departamento": registro().fichas[estado["agente"]].departamento}
     r = registro()
     ficha = r.fichas["director-general"]
+    await actividad.marcar(ficha.id, "Decidiendo qué departamento atiende la petición")
     esquema = {"type": "object", "properties": {
         "departamento": {"type": "string", "enum": list(r.departamentos)}, "motivo": {"type": "string"}},
         "required": ["departamento", "motivo"]}
@@ -59,12 +61,15 @@ async def enrutar(estado: Estado) -> Estado:
                     r.departamentos, {k: [f.nombre for f in r.del_departamento(k)] for k in r.departamentos})},
                 {"role": "user", "content": estado["peticion"]}]
     try:
-        d = await chat(asignar(ficha, estado.get("origen", "peticion")), mensajes, esquema=esquema, temperatura=0, max_tokens=400)
-    except ContextoLleno:
-        raise
-    except RespuestaInvalida:
-        d = await chat(asignar(ficha, estado.get("origen", "peticion"), dificil=True), mensajes,
-                       esquema=esquema, temperatura=0, max_tokens=400)
+        try:
+            d = await chat(asignar(ficha, estado.get("origen", "peticion")), mensajes, esquema=esquema, temperatura=0, max_tokens=400)
+        except ContextoLleno:
+            raise
+        except RespuestaInvalida:
+            d = await chat(asignar(ficha, estado.get("origen", "peticion"), dificil=True), mensajes,
+                           esquema=esquema, temperatura=0, max_tokens=400)
+    finally:
+        await actividad.reposo(ficha.id)
     return {"departamento": d["departamento"]}
 
 
@@ -80,8 +85,12 @@ async def elegir_agente(estado: Estado) -> Estado:
         "required": ["agente", "motivo"]}
     mensajes = [{"role": "system", "content": sistema_director_departamento(r.departamentos[dep]["nombre"], fichas)},
                 {"role": "user", "content": estado["peticion"]}]
-    d = await chat(asignar(director, estado.get("origen", "peticion"), dificil=True), mensajes,
-                   esquema=esquema, temperatura=0, max_tokens=400)
+    await actividad.marcar(director.id, "Eligiendo qué agente atiende la petición")
+    try:
+        d = await chat(asignar(director, estado.get("origen", "peticion"), dificil=True), mensajes,
+                       esquema=esquema, temperatura=0, max_tokens=400)
+    finally:
+        await actividad.reposo(director.id)
     return {"agente": d["agente"]}
 
 
@@ -107,19 +116,20 @@ async def _paso_del_agente(ficha, estado: dict, mensajes: list[dict]) -> dict:
         return await chat(asignar(ficha, origen, dificil=True), entrada, esquema=ESQUEMA_AGENTE, max_tokens=PASO_MAX_TOKENS)
 
 
-async def ejecutar_agente(estado: Estado) -> Estado:
-    ficha = registro().fichas[estado["agente"]]
+async def _ejecutar_agente(estado: Estado, ficha) -> Estado:
     disponibles = H.disponibles_para(ficha)
     mensajes = [{"role": "system", "content": sistema_agente(ficha, disponibles)},
                 {"role": "user", "content": estado["peticion"]}]
     pasos: list[dict] = []
     for _ in range(MAX_PASOS):
+        await actividad.marcar(ficha.id, "Pensando")
         d = await _paso_del_agente(ficha, estado, mensajes)
         if d["tipo"] == "respuesta":
             acciones = [{**a, "argumentos": a.get("argumentos", {}), "estado": "propuesta"}
                         for a in d.get("acciones", [])]
             return {"respuesta": d.get("respuesta", ""), "acciones": acciones, "pasos": pasos}
         args = inyectar(ficha, estado, d.get("herramienta", ""), d.get("argumentos") or {})
+        await actividad.marcar(ficha.id, f"Usando {d.get('herramienta', '?')} · {d.get('operacion', '?')}")
         try:
             resultado = await H.usar(ficha, d.get("herramienta", ""), d.get("operacion", ""),
                                      sensibilidad=estado.get("sensibilidad"), **args)
@@ -132,6 +142,20 @@ async def ejecutar_agente(estado: Estado) -> Estado:
                                                                             default=str)[:limite_resultado()]}]
     return {"respuesta": "No he podido terminar la tarea en el número máximo de pasos.", "pasos": pasos,
             "acciones": []}
+
+
+async def ejecutar_agente(estado: Estado, config=None) -> Estado:
+    ficha = registro().fichas[estado["agente"]]
+    hilo = (config or {}).get("configurable", {}).get("thread_id") if config else None
+    await actividad.marcar(ficha.id, "Empieza a trabajar", hilo)
+    try:
+        r = await _ejecutar_agente(estado, ficha)
+    except BaseException:
+        await actividad.reposo(ficha.id, "Terminó con error")
+        raise
+    ultimo = (r.get("pasos") or [{}])[-1]
+    await actividad.reposo(ficha.id, f"Usó {ultimo['herramienta']} · {ultimo['operacion']}" if ultimo.get("herramienta") else "Atendió una petición")
+    return r
 
 
 async def registrar_aprobaciones(estado: Estado, config) -> Estado:

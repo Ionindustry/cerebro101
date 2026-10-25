@@ -16,7 +16,7 @@ from pydantic import BaseModel
 from ..ajustes import ajustes
 from ..aprobaciones import bandeja
 from ..aprobaciones.logica import DecisionNoValida
-from .. import constancia
+from .. import actividad, constancia, oficina
 from ..cotizador import Solicitud, calcular
 from ..grafo import construir, nodos
 from ..llm import ErrorModelo, circuito, estado_modelos
@@ -146,6 +146,17 @@ async def decidir(sid: str, d: Decision, usuario: Usuario = Depends(usuario_actu
     config = {"configurable": {"thread_id": hilo}, "callbacks": callbacks(), "metadata": metadatos(hilo, usuario.id)}
     estado = await GRAFO["g"].ainvoke(Command(resume=estados), config)
     return {"estado": s.estado, **_salida(estado, hilo)}
+
+
+@app.get("/oficina")
+async def ver_oficina(usuario: Usuario = Depends(usuario_actual)):
+    """La oficina del panel: departamentos, agentes y qué hace cada uno ahora. Sin base de datos se muestra todo en reposo."""
+    try:
+        snap = await actividad.instantanea()
+    except Exception:  # noqa: BLE001
+        log.warning("No se pudo leer la actividad de los agentes", exc_info=True)
+        snap = {"actividad": {}, "pendientes": {}, "ultimas": []}
+    return oficina.construir(registro(), snap, usuario.roles, usuario.departamentos)
 
 
 @app.get("/departamentos")

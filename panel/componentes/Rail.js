@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 
 const SECCIONES = [
   { ruta: "/", nombre: "Jarvis" },
+  { ruta: "/oficina", nombre: "Oficina" },
   { ruta: "/aprobaciones", nombre: "Aprobaciones" },
   { ruta: "/agentes", nombre: "Agentes" },
 ];
