@@ -195,6 +195,21 @@ class TestLlmRobusto(unittest.TestCase):
         bien = respuesta({**OK, "message": {"content": '{"a": "x"}'}, "prompt_eval_count": 6000, "eval_count": 300})
         self.assertEqual(self.chat(Servidor(bien), esquema=ESQUEMA), {"a": "x"})
 
+    def test_se_anula_la_penalizacion_de_presencia_del_modelo(self):
+        # Qwen trae presence_penalty=1,5 en su Modelfile: con JSON y castellano el modelo derivaba a otros idiomas
+        srv = Servidor(respuesta(OK))
+        self.chat(srv)
+        o = srv.cuerpos[0]["options"]
+        self.assertEqual((o["presence_penalty"], o["frequency_penalty"], o["repeat_penalty"]), (0, 0, 1))
+        srv = Servidor(respuesta(OK))
+        with mock.patch.dict(os.environ, {"OLLAMA_PENALIZACION_PRESENCIA": "0.5"}):
+            self.chat(srv)
+        self.assertEqual(srv.cuerpos[0]["options"]["presence_penalty"], 0.5)
+        srv = Servidor(respuesta(OK))
+        with mock.patch.dict(os.environ, {"OLLAMA_PENALIZACION_PRESENCIA": ""}):      # vacío = el valor por defecto del código
+            self.chat(srv)
+        self.assertEqual(srv.cuerpos[0]["options"]["presence_penalty"], 0)
+
     def test_el_tope_global_de_tokens_manda_sobre_el_de_cada_paso(self):
         srv = Servidor(respuesta(OK))
         with mock.patch.dict(os.environ, {"OLLAMA_MAX_TOKENS": "300"}):

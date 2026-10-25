@@ -198,7 +198,10 @@ async def chat(asignacion: Asignacion, mensajes: list[dict], esquema: dict | Non
         "stream": False,
         # Ollama rechaza "-1" como texto: sin unidad debe ir como número
         "keep_alive": int(asignacion.mantener_cargado) if asignacion.mantener_cargado.lstrip("-").isdigit() else asignacion.mantener_cargado,
-        "options": {"temperature": temperatura, "num_predict": max_tokens, "num_ctx": num_ctx},   # sin num_ctx Ollama usa 4096
+        # sin num_ctx Ollama usa 4096. Los modelos Qwen traen en su Modelfile presence_penalty=1,5 (pensado para razonar): penaliza cada palabra ya usada y,
+        # con salida en JSON y respuestas en castellano, hace derivar al modelo a otros idiomas («Çavuz değil mi ki orayış?»). Aquí se fija en 0.
+        "options": {"temperature": temperatura, "num_predict": max_tokens, "num_ctx": num_ctx,
+                    "presence_penalty": _num("OLLAMA_PENALIZACION_PRESENCIA", 0), "frequency_penalty": 0, "repeat_penalty": 1},
         # Los modelos que razonan (qwen3.5…) gastan el tope de tokens «pensando» antes de escribir el JSON y la respuesta sale
         # cortada. Para enrutar y usar herramientas no hace falta: OLLAMA_PENSAR=true lo activa.
         "think": os.environ.get("OLLAMA_PENSAR", "").strip().lower() in ("1", "true", "si", "sí"),
