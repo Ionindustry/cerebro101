@@ -1,0 +1,133 @@
+# Generado por scripts/generar_fichas.py — edita allí y vuelve a generar.
+agentes:
+- id: estratega-contenidos
+  nombre: Estratega de Contenidos
+  subarea: Contenido
+  tareas: Calendario editorial mensual según lo que vende y la temporada
+  modelo: principal
+  herramientas:
+  - conocimiento
+  - erpnext
+  aprobacion: libre
+  horario: 0 8 1 * *
+  sensibilidad: baja
+  departamento: marketing
+  director: true
+- id: redactor
+  nombre: Redactor
+  subarea: Contenido
+  tareas: Artículos, newsletters y textos web en catalán, castellano e inglés
+  modelo: principal
+  herramientas: &id001
+  - conocimiento
+  aprobacion: simple
+  horario: null
+  sensibilidad: baja
+  departamento: marketing
+  director: false
+- id: social-media
+  nombre: Social Media
+  subarea: Redes sociales
+  tareas: Prepara y programa publicaciones y responde comentarios rutinarios
+  modelo: principal
+  herramientas: *id001
+  aprobacion: simple
+  horario: null
+  sensibilidad: baja
+  departamento: marketing
+  director: false
+- id: seo-geo
+  nombre: SEO/GEO
+  subarea: SEO y visibilidad IA
+  tareas: Auditoría web y posicionamiento en buscadores y asistentes de IA
+  modelo: principal
+  herramientas:
+  - conocimiento
+  - scrapegraph
+  aprobacion: simple
+  horario: 0 4 * * 1
+  sensibilidad: baja
+  departamento: marketing
+  director: false
+- id: publicidad
+  nombre: Publicidad
+  subarea: Publicidad
+  tareas: Analiza campañas de pago, propone presupuesto y redacta anuncios
+  modelo: principal
+  herramientas: *id001
+  aprobacion: doble
+  horario: 0 7 * * 1
+  sensibilidad: baja
+  departamento: marketing
+  director: false
+- id: guardian-marca
+  nombre: Guardián de Marca
+  subarea: Marca
+  tareas: Guía de estilo y tono; revisa que todo lo publicado sea coherente
+  modelo: rapido
+  herramientas:
+  - conocimiento
+  - jev
+  aprobacion: libre
+  horario: null
+  sensibilidad: baja
+  departamento: marketing
+  director: false
+- id: radar-tendencias
+  nombre: Radar de Tendencias
+  subarea: Inteligencia de mercado
+  tareas: Vigila X y la web en tiempo real con Grok y envía alertas puntuadas
+  modelo: rapido
+  herramientas:
+  - conocimiento
+  - grok
+  - agent_reach
+  - jev
+  aprobacion: libre
+  horario: 0 */2 * * *
+  sensibilidad: baja
+  departamento: marketing
+  director: false
+- id: analista-noticias
+  nombre: Analista de Noticias de Mercado
+  subarea: Inteligencia de mercado
+  tareas: Prensa sectorial, boletines, ayudas, normativa y competidores; fichas de oportunidad
+  modelo: principal
+  herramientas:
+  - conocimiento
+  - scrapegraph
+  - agent_reach
+  - jev
+  aprobacion: libre
+  horario: 0 2 * * *
+  sensibilidad: baja
+  departamento: marketing
+  director: false
+- id: analista-competencia
+  nombre: Analista de Competencia
+  subarea: Inteligencia de mercado
+  tareas: Ficha de cada competidor a partir de su web pública; avisa de cambios semanales
+  modelo: principal
+  herramientas:
+  - conocimiento
+  - scrapegraph
+  - agent_reach
+  aprobacion: libre
+  horario: 0 1 * * 1
+  sensibilidad: baja
+  departamento: marketing
+  director: false
+- id: disenador-ofertas
+  nombre: Diseñador de Ofertas
+  subarea: Inteligencia de mercado
+  tareas: Convierte una oportunidad aprobada en oferta con catálogo, costes y argumentario
+  modelo: principal
+  herramientas:
+  - conocimiento
+  - erpnext
+  - cotizador
+  aprobacion: doble
+  horario: null
+  sensibilidad: media
+  departamento: marketing
+  director: false

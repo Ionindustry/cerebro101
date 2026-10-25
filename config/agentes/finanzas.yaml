@@ -1,0 +1,85 @@
+# Generado por scripts/generar_fichas.py — edita allí y vuelve a generar.
+agentes:
+- id: contable
+  nombre: Contable
+  subarea: Contabilidad
+  tareas: Asientos en borrador, conciliación bancaria, cierre mensual y cuenta de resultados explicada
+  modelo: principal
+  herramientas:
+  - conocimiento
+  - erpnext
+  aprobacion: doble
+  horario: 0 4 1 * *
+  sensibilidad: alta
+  departamento: finanzas
+  director: true
+- id: control-gastos
+  nombre: Control de Gastos
+  subarea: Contabilidad
+  tareas: Lee las facturas de proveedor que llegan por correo (PDF, escaneos y fotos, con OCR), las deja en borrador en el
+    ERP para su validación, clasifica tickets y controla el presupuesto por departamento
+  modelo: principal
+  herramientas:
+  - conocimiento
+  - erpnext
+  - correo
+  - jev
+  aprobacion: simple
+  horario: null
+  sensibilidad: alta
+  departamento: finanzas
+  director: false
+- id: tesorero
+  nombre: Tesorero
+  subarea: Tesorería
+  tareas: Previsión de caja a 30/60/90 días, alertas de liquidez y calendario de pagos
+  modelo: principal
+  herramientas:
+  - conocimiento
+  - erpnext
+  aprobacion: libre
+  horario: 0 7 * * 1
+  sensibilidad: alta
+  departamento: finanzas
+  director: false
+- id: facturacion
+  nombre: Facturación
+  subarea: Facturación y cobros
+  tareas: Prepara facturas en borrador según la normativa vigente para su validación
+  modelo: principal
+  herramientas:
+  - conocimiento
+  - erpnext
+  aprobacion: doble
+  horario: null
+  sensibilidad: alta
+  departamento: finanzas
+  director: false
+- id: cobros
+  nombre: Cobros
+  subarea: Facturación y cobros
+  tareas: Detecta impagados y redacta recordatorios graduados según el historial del cliente
+  modelo: principal
+  herramientas:
+  - conocimiento
+  - erpnext
+  - correo
+  - jev
+  aprobacion: simple
+  horario: 0 9 * * 1-5
+  sensibilidad: alta
+  departamento: finanzas
+  director: false
+- id: fiscal
+  nombre: Fiscal
+  subarea: Fiscalidad
+  tareas: Calendario de modelos fiscales y documentación para la gestoría
+  modelo: principal
+  herramientas:
+  - conocimiento
+  - erpnext
+  aprobacion: doble
+  horario: 0 8 1 * *
+  sensibilidad: alta
+  departamento: finanzas
+  director: false

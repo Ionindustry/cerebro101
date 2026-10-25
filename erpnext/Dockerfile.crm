@@ -1,0 +1,22 @@
+# ERPNext + Frappe CRM en una sola imagen, partiendo de la oficial.
+# Las apps tienen que estar dentro de la imagen: todos los contenedores del ERP (web, colas, planificador) deben tener su código.
+#
+#   docker build -f erpnext/Dockerfile.crm -t cerebro-erpnext-crm:v16.37.0 erpnext/      (lo hace scripts/erpnext_crm.sh)
+#
+# CRM_REF: etiqueta o rama de Frappe CRM. Por defecto la última versión estable que admite Frappe 16 (v1.87.0: frappe >=15,<17).
+# NO uses `main`: es la línea 2.0.0-dev, exige la app «whatsapp» y su interfaz no compila con Frappe 16.36 (falta FeatherIcon en frappe-ui).
+# WHATSAPP_REF: solo si quieres instalar también la app de WhatsApp (vacío = no se instala).
+ARG ERPNEXT_VERSION=v16.37.0
+FROM frappe/erpnext:${ERPNEXT_VERSION}
+ARG CRM_REF=v1.87.0
+ARG WHATSAPP_REF=
+USER frappe
+WORKDIR /home/frappe/frappe-bench
+RUN if [ -n "${WHATSAPP_REF}" ]; then bench get-app --branch "${WHATSAPP_REF}" whatsapp https://github.com/frappe/whatsapp; fi \
+ && bench get-app --branch "${CRM_REF}" crm https://github.com/frappe/crm \
+ && git -C apps/crm rev-parse HEAD > apps/crm/.commit \
+ && rm -rf apps/crm/.git apps/whatsapp/.git apps/crm/node_modules apps/crm/frontend/node_modules apps/whatsapp/node_modules \
+    ~/.cache ~/.npm ~/.yarn \
+ && (rm -rf /tmp/* 2>/dev/null || true)    # solo se limpia lo de estas dos apps: el websocket de Frappe necesita sus propios node_modules
+# Los estáticos de las apps nuevas (JS y CSS) se sirven desde assets/<app>: el enlace lo debe traer la imagen para que lo vean todos los contenedores
+RUN for a in crm whatsapp; do [ -d "apps/$a" ] && ln -sfn "/home/frappe/frappe-bench/apps/$a/$a/public" "assets/$a" || true; done

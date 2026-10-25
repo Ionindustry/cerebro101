@@ -1,0 +1,58 @@
+# Proxy inverso del Cerebro 101.cat. Las direcciones salen del .env (DOM_*). Caddy obtiene y renueva los
+# certificados solo (TLS_MODO=letsencrypt) o los firma con su propia CA (TLS_MODO=interno, para intranet).
+{
+	email {$CORREO_ADMIN}
+}
+
+(tls_letsencrypt) {
+}
+
+(tls_interno) {
+	tls internal
+}
+
+(seguridad) {
+	encode zstd gzip
+	header {
+		Strict-Transport-Security "max-age=31536000"
+		X-Content-Type-Options "nosniff"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		-Server
+	}
+}
+
+# Panel de Jarvis
+{$DOM_PANEL} {
+	import tls_{$TLS_MODO}
+	import seguridad
+	reverse_proxy panel:3000
+}
+
+# Inicio de sesión (Keycloak). La consola de administración y el realm «master» solo desde IPS_ADMIN.
+{$DOM_AUTH} {
+	import tls_{$TLS_MODO}
+	import seguridad
+	@administracion path /admin /admin/* /realms/master /realms/master/*
+	handle @administracion {
+		@fuera not remote_ip {$IPS_ADMIN}
+		respond @fuera "Acceso restringido" 403
+		reverse_proxy keycloak:8080
+	}
+	handle {
+		reverse_proxy keycloak:8080
+	}
+}
+
+# ERPNext (instalación aparte: erpnext/docker-compose.yml, que lo publica en la red «cerebro» como «erpnext»)
+{$DOM_ERP} {
+	import tls_{$TLS_MODO}
+	import seguridad
+	reverse_proxy erpnext:8080
+}
+
+# Registro de decisiones (Langfuse)
+{$DOM_TRAZAS} {
+	import tls_{$TLS_MODO}
+	import seguridad
+	reverse_proxy langfuse:3000
+}

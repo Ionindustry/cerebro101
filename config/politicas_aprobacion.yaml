@@ -1,0 +1,33 @@
+# Niveles de autonomía (sección «Flujos, gobernanza y aprobaciones» del documento).
+niveles:
+  libre:
+    descripcion: "Analizar, resumir, clasificar y redactar borradores internos"
+    aprobadores: []
+  # FIRMA ÚNICA: todo lo que requiere aprobación lo firma Dirección, una sola persona, sin importar el departamento. (Antes «doble» pedía además
+  # al responsable del departamento y a una segunda persona.) El motor sigue admitiendo varios firmantes por si se quiere volver a exigirlos:
+  # basta con poner [responsable_departamento, direccion] en el nivel que corresponda.
+  simple:
+    descripcion: "Enviar a clientes, publicar, responder reseñas, contactar terceros"
+    aprobadores: [direccion]
+    voz_permitida: true
+  doble:
+    descripcion: "Pagos, facturas, contratos, precios, ofertas, firma y presentación de licitaciones (firma de Dirección, solo en el panel)"
+    aprobadores: [direccion]
+    voz_permitida: false        # lo más delicado se firma solo en el panel con usuario identificado, no por voz
+
+# Acciones que ningún agente puede ejecutar nunca, sea cual sea su ficha.
+prohibidas:
+  - borrar_datos
+  - cambiar_permisos
+  - firmar_en_nombre_de_la_empresa
+  - validar_documento_erp      # los documentos del ERP los valida siempre una persona
+
+# Acciones con impacto externo: obligan a pasar por la bandeja aunque la ficha diga «libre».
+impacto_externo:
+  - enviar_correo
+  - responder_correo
+  - publicar
+  - enviar_whatsapp
+  - presentar_licitacion       # la hace una persona; el agente solo prepara el paquete
+  - pedido_proveedor
+  - alta_mayorista

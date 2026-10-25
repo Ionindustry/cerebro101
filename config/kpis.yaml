@@ -1,0 +1,456 @@
+# KPI del panel de cada agente (pestaña «Agentes» → pulsar un agente).
+#
+# Cada panel tiene dos bloques:
+#   · «Rendimiento»: igual para todos (peticiones atendidas, éxito de herramientas, propuestas, aprobadas/rechazadas, tiempo de decisión…).
+#     Sale de los contadores del propio Cerebro, no hay que configurar nada.
+#   · «KPI del cargo»: lo que importa del puesto. Salen de (1) el ERP/CRM —con la clave y la política de acceso del departamento, solo lectura—,
+#     y (2) el uso de las herramientas de ese agente. Se definen aquí: por agente (`agentes`), y si no hay, los del departamento (`departamentos`).
+#
+# Tipos de KPI del cargo:
+#   erp:  {nombre, doctype, agregado: contar|sumar|retraso_medio, campo (para sumar), filtros: [[campo, operador, valor]], periodo: <campo de fecha>, unidad, ayuda}
+#         «periodo» acota por la ventana elegida (7/30/90 días) y permite comparar con el periodo anterior. En los filtros: {hoy} = fecha de hoy.
+#   uso:  {nombre, claves: [uso:herramienta.operacion, ...], unidad, ayuda}   (se suma lo que el agente ha hecho en la ventana; «*» al final = cualquiera)
+# Los doctypes deben estar en `leer` del departamento en config/erp_acceso.yaml (hay un test que lo comprueba). Un KPI cuyo documento no existe en
+# el ERP instalado (p. ej. RR.HH. sin HRMS) se muestra como «no disponible» con el motivo, sin romper el resto.
+#
+# PROPUESTA INICIAL: son los indicadores razonables de cada puesto con los documentos que hay en el ERP/CRM; hay que revisarlos con cada responsable.
+
+# Indicadores de USO por herramienta: se añaden al panel de todo agente que tenga esa herramienta en su ficha.
+herramientas:
+  correo:
+    - {nombre: "Correos leídos", claves: ["uso:correo.leer_bandeja"], unidad: "consultas", ayuda: "veces que ha revisado un buzón"}
+    - {nombre: "Adjuntos analizados", claves: ["uso:correo.leer_adjunto"], unidad: "documentos", ayuda: "PDF, Word, Excel o fotos leídos (con OCR si hace falta)"}
+    - {nombre: "Respuestas y envíos propuestos", claves: ["propuesta:correo.responder", "propuesta:correo.enviar"], unidad: "propuestas", ayuda: "salen de la empresa solo si las firmas"}
+  erpnext:
+    - {nombre: "Consultas al ERP/CRM", claves: ["uso:erpnext.listar", "uso:erpnext.leer"], unidad: "consultas"}
+    - {nombre: "Borradores creados en el ERP/CRM", claves: ["uso:erpnext.crear_borrador", "uso:erpnext.crear_factura_compra", "uso:erpnext.adjuntar_desde_correo"], unidad: "documentos", ayuda: "siempre en borrador: los valida una persona"}
+  calendario:
+    - {nombre: "Citas y huecos propuestos", claves: ["uso:calendario.*"], unidad: "propuestas"}
+  cotizador:
+    - {nombre: "Presupuestos calculados", claves: ["uso:cotizador.cotizar"], unidad: "cálculos"}
+  conocimiento:
+    - {nombre: "Consultas a la base de conocimiento", claves: ["uso:conocimiento.*"], unidad: "consultas"}
+  plataformas_contratacion:
+    - {nombre: "Revisiones de plataformas de contratación", claves: ["uso:plataformas_contratacion.*"], unidad: "revisiones"}
+  mayorista:
+    - {nombre: "Consultas a mayoristas", claves: ["uso:mayorista.*"], unidad: "consultas"}
+  comparador_instaladores:
+    - {nombre: "Comparativas de instaladores", claves: ["uso:comparador_instaladores.*"], unidad: "comparativas"}
+  jev:
+    - {nombre: "Decisiones asistidas por IA", claves: ["uso:jev.*"], unidad: "decisiones"}
+  ficheros:
+    - {nombre: "Ficheros consultados o preparados", claves: ["uso:ficheros.*"], unidad: "operaciones"}
+  scrapegraph:
+    - {nombre: "Páginas web analizadas", claves: ["uso:scrapegraph.*"], unidad: "páginas"}
+  agent_reach:
+    - {nombre: "Consultas a redes y vídeo", claves: ["uso:agent_reach.*"], unidad: "consultas"}
+  grok:
+    - {nombre: "Consultas de tendencias", claves: ["uso:grok.*"], unidad: "consultas"}
+
+# KPI de cargo del ERP/CRM por departamento (los de un agente concreto, más abajo, sustituyen a estos).
+departamentos:
+  comercial:
+    - {nombre: "Leads nuevos", tipo: erp, doctype: "CRM Lead", agregado: contar, periodo: creation, unidad: "leads", ayuda: "altas en el CRM en el periodo"}
+    - {nombre: "Oportunidades abiertas", tipo: erp, doctype: "CRM Deal", agregado: contar, filtros: [["status", "not in", ["Won", "Lost"]]], unidad: "oportunidades"}
+    - {nombre: "Presupuestos emitidos", tipo: erp, doctype: Quotation, agregado: contar, periodo: transaction_date, unidad: "presupuestos"}
+    - {nombre: "Importe presupuestado", tipo: erp, doctype: Quotation, agregado: sumar, campo: grand_total, periodo: transaction_date, unidad: "€"}
+  finanzas:
+    - {nombre: "Pendiente de cobro", tipo: erp, doctype: "Sales Invoice", agregado: sumar, campo: outstanding_amount, filtros: [["docstatus", "=", 1]], unidad: "€", ayuda: "facturas de venta validadas sin cobrar del todo"}
+    - {nombre: "Facturas vencidas sin cobrar", tipo: erp, doctype: "Sales Invoice", agregado: contar, filtros: [["docstatus", "=", 1], ["outstanding_amount", ">", 0], ["due_date", "<", "{hoy}"]], unidad: "facturas"}
+    - {nombre: "Pendiente de pago a proveedores", tipo: erp, doctype: "Purchase Invoice", agregado: sumar, campo: outstanding_amount, filtros: [["docstatus", "=", 1]], unidad: "€"}
+    - {nombre: "Facturas de proveedor en borrador", tipo: erp, doctype: "Purchase Invoice", agregado: contar, filtros: [["docstatus", "=", 0]], unidad: "facturas", ayuda: "esperan que una persona las revise y valide"}
+  atencion:
+    - {nombre: "Incidencias abiertas", tipo: erp, doctype: Issue, agregado: contar, filtros: [["status", "=", "Open"]], unidad: "incidencias"}
+    - {nombre: "Incidencias nuevas", tipo: erp, doctype: Issue, agregado: contar, periodo: creation, unidad: "incidencias"}
+    - {nombre: "Incidencias cerradas", tipo: erp, doctype: Issue, agregado: contar, filtros: [["status", "=", "Closed"]], periodo: modified, unidad: "incidencias"}
+    - {nombre: "Garantías abiertas", tipo: erp, doctype: "Warranty Claim", agregado: contar, filtros: [["status", "=", "Open"]], unidad: "reclamaciones"}
+  operaciones:
+    - {nombre: "Proyectos abiertos", tipo: erp, doctype: Project, agregado: contar, filtros: [["status", "=", "Open"]], unidad: "proyectos"}
+    - {nombre: "Tareas pendientes", tipo: erp, doctype: Task, agregado: contar, filtros: [["status", "in", ["Open", "Working", "Pending Review"]]], unidad: "tareas"}
+    - {nombre: "Pedidos de compra en el periodo", tipo: erp, doctype: "Purchase Order", agregado: contar, periodo: transaction_date, unidad: "pedidos"}
+    - {nombre: "Albaranes de entrega", tipo: erp, doctype: "Delivery Note", agregado: contar, periodo: posting_date, unidad: "albaranes"}
+  direccion:
+    - {nombre: "Ventas contratadas (pedidos)", tipo: erp, doctype: "Sales Order", agregado: sumar, campo: grand_total, periodo: transaction_date, unidad: "€"}
+    - {nombre: "Oportunidades abiertas", tipo: erp, doctype: "CRM Deal", agregado: contar, filtros: [["status", "not in", ["Won", "Lost"]]], unidad: "oportunidades"}
+    - {nombre: "Proyectos abiertos", tipo: erp, doctype: Project, agregado: contar, filtros: [["status", "=", "Open"]], unidad: "proyectos"}
+    - {nombre: "Clientes", tipo: erp, doctype: Customer, agregado: contar, unidad: "clientes"}
+  marketing:
+    - {nombre: "Leads captados", tipo: erp, doctype: Lead, agregado: contar, periodo: creation, unidad: "leads"}
+    - {nombre: "Campañas", tipo: erp, doctype: Campaign, agregado: contar, unidad: "campañas"}
+  licitaciones:
+    - {nombre: "Oportunidades en seguimiento", tipo: erp, doctype: Opportunity, agregado: contar, filtros: [["status", "=", "Open"]], unidad: "oportunidades"}
+    - {nombre: "Ofertas emitidas", tipo: erp, doctype: Quotation, agregado: contar, periodo: transaction_date, unidad: "ofertas"}
+    - {nombre: "Tareas pendientes", tipo: erp, doctype: Task, agregado: contar, filtros: [["status", "in", ["Open", "Working"]]], unidad: "tareas"}
+  legal:
+    - {nombre: "No conformidades abiertas", tipo: erp, doctype: "Non Conformance", agregado: contar, filtros: [["status", "!=", "Closed"]], unidad: "no conformidades"}
+    - {nombre: "Acciones de calidad abiertas", tipo: erp, doctype: "Quality Action", agregado: contar, filtros: [["status", "!=", "Completed"]], unidad: "acciones"}
+    - {nombre: "Contratos", tipo: erp, doctype: Contract, agregado: contar, unidad: "contratos"}
+  personas:
+    - {nombre: "Plantilla activa", tipo: erp, doctype: Employee, agregado: contar, filtros: [["status", "=", "Active"]], unidad: "personas"}
+    - {nombre: "Solicitudes de ausencia abiertas", tipo: erp, doctype: "Leave Application", agregado: contar, filtros: [["status", "=", "Open"]], unidad: "solicitudes"}
+    - {nombre: "Ofertas de empleo abiertas", tipo: erp, doctype: "Job Opening", agregado: contar, filtros: [["status", "=", "Open"]], unidad: "ofertas"}
+    - {nombre: "Candidaturas recibidas", tipo: erp, doctype: "Job Applicant", agregado: contar, periodo: creation, unidad: "candidaturas"}
+  telecom:
+    - {nombre: "Suscripciones activas", tipo: erp, doctype: Subscription, agregado: contar, filtros: [["status", "=", "Active"]], unidad: "suscripciones"}
+    - {nombre: "Ofertas emitidas", tipo: erp, doctype: Quotation, agregado: contar, periodo: transaction_date, unidad: "ofertas"}
+    - {nombre: "Pedidos de venta", tipo: erp, doctype: "Sales Order", agregado: contar, periodo: transaction_date, unidad: "pedidos"}
+  areas:
+    - {nombre: "Proyectos abiertos", tipo: erp, doctype: Project, agregado: contar, filtros: [["status", "=", "Open"]], unidad: "proyectos"}
+    - {nombre: "Presupuestos emitidos", tipo: erp, doctype: Quotation, agregado: contar, periodo: transaction_date, unidad: "presupuestos"}
+    - {nombre: "Visitas de mantenimiento", tipo: erp, doctype: "Maintenance Visit", agregado: contar, periodo: mntc_date, unidad: "visitas"}
+    - {nombre: "Garantías abiertas", tipo: erp, doctype: "Warranty Claim", agregado: contar, filtros: [["status", "=", "Open"]], unidad: "reclamaciones"}
+  tecnologia:
+    - {nombre: "Activos registrados", tipo: erp, doctype: Asset, agregado: contar, unidad: "activos"}
+    - {nombre: "Tareas pendientes", tipo: erp, doctype: Task, agregado: contar, filtros: [["status", "in", ["Open", "Working"]]], unidad: "tareas"}
+  conocimiento: []
+
+# KPI de cargo propios de cada agente (sustituyen a los de su departamento).
+agentes:
+  # Finanzas
+  cobros:
+    - {nombre: "Cobros recuperados", tipo: erp, doctype: "Payment Entry", agregado: sumar, campo: paid_amount, filtros: [["docstatus", "=", 1], ["payment_type", "=", "Receive"], ["party_type", "=", "Customer"]], periodo: posting_date, unidad: "€", ayuda: "cobros recibidos de clientes en el periodo"}
+    - {nombre: "Media de retraso en facturas vencidas", tipo: erp, doctype: "Sales Invoice", agregado: retraso_medio, campo: due_date, filtros: [["docstatus", "=", 1], ["outstanding_amount", ">", 0], ["due_date", "<", "{hoy}"]], unidad: "días", ayuda: "días que llevan vencidas, de media, las facturas aún sin cobrar"}
+    - {nombre: "Pendiente de cobro", tipo: erp, doctype: "Sales Invoice", agregado: sumar, campo: outstanding_amount, filtros: [["docstatus", "=", 1]], unidad: "€"}
+    - {nombre: "Facturas vencidas sin cobrar", tipo: erp, doctype: "Sales Invoice", agregado: contar, filtros: [["docstatus", "=", 1], ["outstanding_amount", ">", 0], ["due_date", "<", "{hoy}"]], unidad: "facturas", ayuda: "las que hay que reclamar"}
+    - {nombre: "Importe vencido", tipo: erp, doctype: "Sales Invoice", agregado: sumar, campo: outstanding_amount, filtros: [["docstatus", "=", 1], ["due_date", "<", "{hoy}"]], unidad: "€"}
+  control-gastos:
+    - {nombre: "Facturas de proveedor en borrador", tipo: erp, doctype: "Purchase Invoice", agregado: contar, filtros: [["docstatus", "=", 0]], unidad: "facturas", ayuda: "pendientes de revisión humana"}
+    - {nombre: "Facturas de proveedor del periodo", tipo: erp, doctype: "Purchase Invoice", agregado: contar, periodo: posting_date, unidad: "facturas"}
+    - {nombre: "Gasto facturado en el periodo", tipo: erp, doctype: "Purchase Invoice", agregado: sumar, campo: grand_total, periodo: posting_date, unidad: "€"}
+  tesorero:
+    - {nombre: "A cobrar", tipo: erp, doctype: "Sales Invoice", agregado: sumar, campo: outstanding_amount, filtros: [["docstatus", "=", 1]], unidad: "€"}
+    - {nombre: "A pagar a proveedores", tipo: erp, doctype: "Purchase Invoice", agregado: sumar, campo: outstanding_amount, filtros: [["docstatus", "=", 1]], unidad: "€"}
+    - {nombre: "Cobros y pagos del periodo", tipo: erp, doctype: "Payment Entry", agregado: contar, periodo: posting_date, unidad: "movimientos"}
+  facturacion:
+    - {nombre: "Facturas emitidas", tipo: erp, doctype: "Sales Invoice", agregado: contar, filtros: [["docstatus", "=", 1]], periodo: posting_date, unidad: "facturas"}
+    - {nombre: "Facturado en el periodo", tipo: erp, doctype: "Sales Invoice", agregado: sumar, campo: grand_total, filtros: [["docstatus", "=", 1]], periodo: posting_date, unidad: "€"}
+    - {nombre: "Facturas en borrador", tipo: erp, doctype: "Sales Invoice", agregado: contar, filtros: [["docstatus", "=", 0]], unidad: "facturas", ayuda: "esperan validación humana"}
+  contable:
+    - {nombre: "Asientos en borrador", tipo: erp, doctype: "Journal Entry", agregado: contar, filtros: [["docstatus", "=", 0]], unidad: "asientos"}
+    - {nombre: "Asientos del periodo", tipo: erp, doctype: "Journal Entry", agregado: contar, periodo: posting_date, unidad: "asientos"}
+    - {nombre: "Movimientos de pago del periodo", tipo: erp, doctype: "Payment Entry", agregado: contar, periodo: posting_date, unidad: "movimientos"}
+  fiscal:
+    - {nombre: "Facturación del periodo (base de IVA repercutido)", tipo: erp, doctype: "Sales Invoice", agregado: sumar, campo: net_total, filtros: [["docstatus", "=", 1]], periodo: posting_date, unidad: "€"}
+    - {nombre: "Compras del periodo (base de IVA soportado)", tipo: erp, doctype: "Purchase Invoice", agregado: sumar, campo: net_total, filtros: [["docstatus", "=", 1]], periodo: posting_date, unidad: "€"}
+  # Comercial
+  director-comercial:
+    - {nombre: "Leads nuevos", tipo: erp, doctype: "CRM Lead", agregado: contar, periodo: creation, unidad: "leads"}
+    - {nombre: "Oportunidades abiertas", tipo: erp, doctype: "CRM Deal", agregado: contar, filtros: [["status", "not in", ["Won", "Lost"]]], unidad: "oportunidades"}
+    - {nombre: "Importe presupuestado", tipo: erp, doctype: Quotation, agregado: sumar, campo: grand_total, periodo: transaction_date, unidad: "€"}
+    - {nombre: "Pedidos de venta", tipo: erp, doctype: "Sales Order", agregado: sumar, campo: grand_total, periodo: transaction_date, unidad: "€"}
+  prospector:
+    - {nombre: "Leads nuevos (CRM)", tipo: erp, doctype: "CRM Lead", agregado: contar, periodo: creation, unidad: "leads"}
+    - {nombre: "Leads nuevos (ERP)", tipo: erp, doctype: Lead, agregado: contar, periodo: creation, unidad: "leads"}
+    - {nombre: "Organizaciones en el CRM", tipo: erp, doctype: "CRM Organization", agregado: contar, unidad: "organizaciones"}
+  respuesta-leads:
+    - {nombre: "Leads nuevos", tipo: erp, doctype: "CRM Lead", agregado: contar, periodo: creation, unidad: "leads"}
+    - {nombre: "Leads sin contactar", tipo: erp, doctype: "CRM Lead", agregado: contar, filtros: [["status", "=", "New"]], unidad: "leads", ayuda: "a la espera de una primera respuesta"}
+  propuestas:
+    - {nombre: "Presupuestos emitidos", tipo: erp, doctype: Quotation, agregado: contar, periodo: transaction_date, unidad: "presupuestos"}
+    - {nombre: "Importe presupuestado", tipo: erp, doctype: Quotation, agregado: sumar, campo: grand_total, periodo: transaction_date, unidad: "€"}
+    - {nombre: "Presupuestos en borrador", tipo: erp, doctype: Quotation, agregado: contar, filtros: [["docstatus", "=", 0]], unidad: "presupuestos", ayuda: "esperan revisión"}
+  gestor-cuentas:
+    - {nombre: "Clientes", tipo: erp, doctype: Customer, agregado: contar, unidad: "clientes"}
+    - {nombre: "Pedidos de venta del periodo", tipo: erp, doctype: "Sales Order", agregado: contar, periodo: transaction_date, unidad: "pedidos"}
+  analista-captacion:
+    - {nombre: "Leads nuevos", tipo: erp, doctype: "CRM Lead", agregado: contar, periodo: creation, unidad: "leads"}
+    - {nombre: "Campañas", tipo: erp, doctype: Campaign, agregado: contar, unidad: "campañas"}
+  # Operaciones
+  jefe-proyectos:
+    - {nombre: "Proyectos abiertos", tipo: erp, doctype: Project, agregado: contar, filtros: [["status", "=", "Open"]], unidad: "proyectos"}
+    - {nombre: "Tareas pendientes", tipo: erp, doctype: Task, agregado: contar, filtros: [["status", "in", ["Open", "Working", "Pending Review"]]], unidad: "tareas"}
+    - {nombre: "Tareas vencidas", tipo: erp, doctype: Task, agregado: contar, filtros: [["status", "in", ["Open", "Working"]], ["exp_end_date", "<", "{hoy}"]], unidad: "tareas", ayuda: "con fecha de fin ya pasada"}
+  compras:
+    - {nombre: "Pedidos de compra", tipo: erp, doctype: "Purchase Order", agregado: contar, periodo: transaction_date, unidad: "pedidos"}
+    - {nombre: "Importe comprado", tipo: erp, doctype: "Purchase Order", agregado: sumar, campo: grand_total, periodo: transaction_date, unidad: "€"}
+    - {nombre: "Pedidos en borrador", tipo: erp, doctype: "Purchase Order", agregado: contar, filtros: [["docstatus", "=", 0]], unidad: "pedidos", ayuda: "esperan validación"}
+  inventario:
+    - {nombre: "Artículos activos", tipo: erp, doctype: Item, agregado: contar, filtros: [["disabled", "=", 0]], unidad: "artículos"}
+    - {nombre: "Artículos sin existencias", tipo: erp, doctype: Bin, agregado: contar, filtros: [["actual_qty", "<=", 0]], unidad: "artículos"}
+  entrega:
+    - {nombre: "Albaranes de entrega", tipo: erp, doctype: "Delivery Note", agregado: contar, periodo: posting_date, unidad: "albaranes"}
+    - {nombre: "Proyectos abiertos", tipo: erp, doctype: Project, agregado: contar, filtros: [["status", "=", "Open"]], unidad: "proyectos"}
+  cotizador:
+    - {nombre: "Presupuestos calculados", tipo: uso, claves: ["uso:cotizador.cotizar"], unidad: "cálculos"}
+    - {nombre: "Borradores de presupuesto en el ERP", tipo: erp, doctype: "Sales Order", agregado: contar, filtros: [["docstatus", "=", 0]], unidad: "borradores"}
+  # Atención
+  soporte-n1:
+    - {nombre: "Incidencias abiertas", tipo: erp, doctype: Issue, agregado: contar, filtros: [["status", "=", "Open"]], unidad: "incidencias"}
+    - {nombre: "Incidencias nuevas", tipo: erp, doctype: Issue, agregado: contar, periodo: creation, unidad: "incidencias"}
+    - {nombre: "Incidencias cerradas", tipo: erp, doctype: Issue, agregado: contar, filtros: [["status", "=", "Closed"]], periodo: modified, unidad: "incidencias"}
+  # Dirección
+  analista-bi:
+    - {nombre: "Ventas contratadas", tipo: erp, doctype: "Sales Order", agregado: sumar, campo: grand_total, periodo: transaction_date, unidad: "€"}
+    - {nombre: "Compras del periodo", tipo: erp, doctype: "Purchase Invoice", agregado: sumar, campo: grand_total, periodo: posting_date, unidad: "€"}
+    - {nombre: "Oportunidades abiertas", tipo: erp, doctype: "CRM Deal", agregado: contar, filtros: [["status", "not in", ["Won", "Lost"]]], unidad: "oportunidades"}
+  # Personas
+  seleccion:
+    - {nombre: "Ofertas de empleo abiertas", tipo: erp, doctype: "Job Opening", agregado: contar, filtros: [["status", "=", "Open"]], unidad: "ofertas"}
+    - {nombre: "Candidaturas recibidas", tipo: erp, doctype: "Job Applicant", agregado: contar, periodo: creation, unidad: "candidaturas"}
+  administracion-personal:
+    - {nombre: "Plantilla activa", tipo: erp, doctype: Employee, agregado: contar, filtros: [["status", "=", "Active"]], unidad: "personas"}
+    - {nombre: "Solicitudes de ausencia abiertas", tipo: erp, doctype: "Leave Application", agregado: contar, filtros: [["status", "=", "Open"]], unidad: "solicitudes"}
+  # Licitaciones
+  rastreador:
+    - {nombre: "Oportunidades en seguimiento", tipo: erp, doctype: Opportunity, agregado: contar, filtros: [["status", "=", "Open"]], unidad: "oportunidades"}
+  # Legal
+  no-conformidades:
+    - {nombre: "No conformidades abiertas", tipo: erp, doctype: "Non Conformance", agregado: contar, filtros: [["status", "!=", "Closed"]], unidad: "no conformidades"}
+    - {nombre: "No conformidades del periodo", tipo: erp, doctype: "Non Conformance", agregado: contar, periodo: creation, unidad: "no conformidades"}
+  contratos:
+    - {nombre: "Contratos registrados", tipo: erp, doctype: Contract, agregado: contar, unidad: "contratos"}
+
+# KPI de cargo de más agentes (cada uno, con los documentos del ERP/CRM que su departamento puede leer).
+  director-areas:
+    - {nombre: "Proyectos abiertos", tipo: erp, doctype: Project, agregado: contar, filtros: [["status", "=", "Open"]], unidad: "proyectos"}
+    - {nombre: "Presupuestos emitidos", tipo: erp, doctype: Quotation, agregado: contar, periodo: transaction_date, unidad: "presupuestos"}
+    - {nombre: "Garantías abiertas", tipo: erp, doctype: "Warranty Claim", agregado: contar, filtros: [["status", "=", "Open"]], unidad: "reclamaciones"}
+  esp-cctv: &presupuestos_area
+    - {nombre: "Presupuestos emitidos", tipo: erp, doctype: Quotation, agregado: contar, periodo: transaction_date, unidad: "presupuestos"}
+    - {nombre: "Importe presupuestado", tipo: erp, doctype: Quotation, agregado: sumar, campo: grand_total, periodo: transaction_date, unidad: "€"}
+  esp-incendios: *presupuestos_area
+  esp-accesos: *presupuestos_area
+  esp-redes: *presupuestos_area
+  esp-television: *presupuestos_area
+  esp-renovables: *presupuestos_area
+  esp-domotica: *presupuestos_area
+  esp-construccion: *presupuestos_area
+  esp-localizacion:
+    - {nombre: "Equipos con nº de serie registrados", tipo: erp, doctype: "Serial No", agregado: contar, unidad: "equipos"}
+    - {nombre: "Proyectos abiertos", tipo: erp, doctype: Project, agregado: contar, filtros: [["status", "=", "Open"]], unidad: "proyectos"}
+  mantenimientos:
+    - {nombre: "Visitas de mantenimiento", tipo: erp, doctype: "Maintenance Visit", agregado: contar, periodo: mntc_date, unidad: "visitas"}
+    - {nombre: "Planes de mantenimiento", tipo: erp, doctype: "Maintenance Schedule", agregado: contar, unidad: "planes"}
+    - {nombre: "Garantías abiertas", tipo: erp, doctype: "Warranty Claim", agregado: contar, filtros: [["status", "=", "Open"]], unidad: "reclamaciones"}
+  coordinacion-obra:
+    - {nombre: "Proyectos abiertos", tipo: erp, doctype: Project, agregado: contar, filtros: [["status", "=", "Open"]], unidad: "proyectos"}
+    - {nombre: "Tareas vencidas", tipo: erp, doctype: Task, agregado: contar, filtros: [["status", "in", ["Open", "Working"]], ["exp_end_date", "<", "{hoy}"]], unidad: "tareas"}
+  escalado:
+    - {nombre: "Incidencias abiertas", tipo: erp, doctype: Issue, agregado: contar, filtros: [["status", "=", "Open"]], unidad: "incidencias"}
+    - {nombre: "Incidencias de prioridad alta abiertas", tipo: erp, doctype: Issue, agregado: contar, filtros: [["status", "=", "Open"], ["priority", "=", "High"]], unidad: "incidencias"}
+  reactivacion:
+    - {nombre: "Clientes", tipo: erp, doctype: Customer, agregado: contar, unidad: "clientes"}
+    - {nombre: "Clientes nuevos", tipo: erp, doctype: Customer, agregado: contar, periodo: creation, unidad: "clientes"}
+    - {nombre: "Incidencias del periodo", tipo: erp, doctype: Issue, agregado: contar, periodo: creation, unidad: "incidencias", ayuda: "clientes que han vuelto a contactar"}
+  # Dirección
+  estratega:
+    - {nombre: "Ventas contratadas", tipo: erp, doctype: "Sales Order", agregado: sumar, campo: grand_total, periodo: transaction_date, unidad: "€"}
+    - {nombre: "Oportunidades abiertas", tipo: erp, doctype: "CRM Deal", agregado: contar, filtros: [["status", "not in", ["Won", "Lost"]]], unidad: "oportunidades"}
+    - {nombre: "Clientes", tipo: erp, doctype: Customer, agregado: contar, unidad: "clientes"}
+  prevision-demanda:
+    - {nombre: "Leads nuevos", tipo: erp, doctype: "CRM Lead", agregado: contar, periodo: creation, unidad: "leads"}
+    - {nombre: "Pedidos de venta", tipo: erp, doctype: "Sales Order", agregado: contar, periodo: transaction_date, unidad: "pedidos"}
+    - {nombre: "Presupuestos emitidos", tipo: erp, doctype: Quotation, agregado: contar, periodo: transaction_date, unidad: "presupuestos"}
+  paquetizador-servicios:
+    - {nombre: "Artículos activos", tipo: erp, doctype: Item, agregado: contar, filtros: [["disabled", "=", 0]], unidad: "artículos"}
+    - {nombre: "Presupuestos emitidos", tipo: erp, doctype: Quotation, agregado: contar, periodo: transaction_date, unidad: "presupuestos"}
+  capacidad-planificacion:
+    - {nombre: "Proyectos abiertos", tipo: erp, doctype: Project, agregado: contar, filtros: [["status", "=", "Open"]], unidad: "proyectos"}
+    - {nombre: "Tareas pendientes", tipo: erp, doctype: Task, agregado: contar, filtros: [["status", "in", ["Open", "Working"]]], unidad: "tareas"}
+  lanzamiento-rapido:
+    - {nombre: "Oportunidades abiertas", tipo: erp, doctype: Opportunity, agregado: contar, filtros: [["status", "=", "Open"]], unidad: "oportunidades"}
+    - {nombre: "Presupuestos emitidos", tipo: erp, doctype: Quotation, agregado: contar, periodo: transaction_date, unidad: "presupuestos"}
+  # Marketing
+  estratega-contenidos:
+    - {nombre: "Campañas", tipo: erp, doctype: Campaign, agregado: contar, unidad: "campañas"}
+    - {nombre: "Leads captados", tipo: erp, doctype: Lead, agregado: contar, periodo: creation, unidad: "leads"}
+  disenador-ofertas:
+    - {nombre: "Artículos activos", tipo: erp, doctype: Item, agregado: contar, filtros: [["disabled", "=", 0]], unidad: "artículos"}
+    - {nombre: "Tarifas en el catálogo", tipo: erp, doctype: "Item Price", agregado: contar, unidad: "precios"}
+  # Operaciones
+  calidad:
+    - {nombre: "Proyectos abiertos", tipo: erp, doctype: Project, agregado: contar, filtros: [["status", "=", "Open"]], unidad: "proyectos"}
+    - {nombre: "Tareas pendientes de revisión", tipo: erp, doctype: Task, agregado: contar, filtros: [["status", "=", "Pending Review"]], unidad: "tareas"}
+  catalogo-proveedores:
+    - {nombre: "Proveedores", tipo: erp, doctype: Supplier, agregado: contar, unidad: "proveedores"}
+    - {nombre: "Tarifas en el catálogo", tipo: erp, doctype: "Item Price", agregado: contar, unidad: "precios"}
+  tiempos-reales:
+    - {nombre: "Partes de horas del periodo", tipo: erp, doctype: Timesheet, agregado: contar, periodo: creation, unidad: "partes"}
+    - {nombre: "Proyectos abiertos", tipo: erp, doctype: Project, agregado: contar, filtros: [["status", "=", "Open"]], unidad: "proyectos"}
+  captador-instaladores:
+    - {nombre: "Proveedores e instaladores dados de alta", tipo: erp, doctype: Supplier, agregado: contar, periodo: creation, unidad: "proveedores"}
+  acuerdos-instaladores:
+    - {nombre: "Proveedores", tipo: erp, doctype: Supplier, agregado: contar, unidad: "proveedores"}
+    - {nombre: "Pedidos de compra del periodo", tipo: erp, doctype: "Purchase Order", agregado: contar, periodo: transaction_date, unidad: "pedidos"}
+  evaluacion-instaladores:
+    - {nombre: "Pedidos de compra recibidos", tipo: erp, doctype: "Purchase Receipt", agregado: contar, periodo: posting_date, unidad: "recepciones"}
+    - {nombre: "Pedidos de compra del periodo", tipo: erp, doctype: "Purchase Order", agregado: contar, periodo: transaction_date, unidad: "pedidos"}
+  negociador:
+    - {nombre: "Pedidos de compra del periodo", tipo: erp, doctype: "Purchase Order", agregado: contar, periodo: transaction_date, unidad: "pedidos"}
+    - {nombre: "Importe comprado", tipo: erp, doctype: "Purchase Order", agregado: sumar, campo: grand_total, periodo: transaction_date, unidad: "€"}
+  comparador-presupuestos:
+    - {nombre: "Pedidos de compra del periodo", tipo: erp, doctype: "Purchase Order", agregado: contar, periodo: transaction_date, unidad: "pedidos"}
+    - {nombre: "Proveedores", tipo: erp, doctype: Supplier, agregado: contar, unidad: "proveedores"}
+  # Personas
+  onboarding:
+    - {nombre: "Incorporaciones del periodo", tipo: erp, doctype: "Employee Onboarding", agregado: contar, periodo: creation, unidad: "incorporaciones"}
+    - {nombre: "Plantilla activa", tipo: erp, doctype: Employee, agregado: contar, filtros: [["status", "=", "Active"]], unidad: "personas"}
+  formacion:
+    - {nombre: "Acciones de formación del periodo", tipo: erp, doctype: "Training Event", agregado: contar, periodo: creation, unidad: "acciones"}
+    - {nombre: "Programas de formación", tipo: erp, doctype: "Training Program", agregado: contar, unidad: "programas"}
+  # Telecom
+  director-telecom:
+    - {nombre: "Suscripciones activas", tipo: erp, doctype: Subscription, agregado: contar, filtros: [["status", "=", "Active"]], unidad: "suscripciones"}
+    - {nombre: "Pedidos de venta", tipo: erp, doctype: "Sales Order", agregado: sumar, campo: grand_total, periodo: transaction_date, unidad: "€"}
+  catalogo-tarifas:
+    - {nombre: "Planes de suscripción", tipo: erp, doctype: "Subscription Plan", agregado: contar, unidad: "planes"}
+    - {nombre: "Tarifas en el catálogo", tipo: erp, doctype: "Item Price", agregado: contar, unidad: "precios"}
+  contratacion-telecom:
+    - {nombre: "Ofertas emitidas", tipo: erp, doctype: Quotation, agregado: contar, periodo: transaction_date, unidad: "ofertas"}
+    - {nombre: "Pedidos de venta", tipo: erp, doctype: "Sales Order", agregado: contar, periodo: transaction_date, unidad: "pedidos"}
+  provision:
+    - {nombre: "Suscripciones activas", tipo: erp, doctype: Subscription, agregado: contar, filtros: [["status", "=", "Active"]], unidad: "suscripciones"}
+    - {nombre: "Tareas pendientes", tipo: erp, doctype: Task, agregado: contar, filtros: [["status", "in", ["Open", "Working"]]], unidad: "tareas"}
+  soporte-telecom:
+    - {nombre: "Tareas pendientes", tipo: erp, doctype: Task, agregado: contar, filtros: [["status", "in", ["Open", "Working"]]], unidad: "tareas"}
+  facturacion-servicios:
+    - {nombre: "Pedidos de venta del periodo", tipo: erp, doctype: "Sales Order", agregado: contar, periodo: transaction_date, unidad: "pedidos"}
+    - {nombre: "Importe de pedidos", tipo: erp, doctype: "Sales Order", agregado: sumar, campo: grand_total, periodo: transaction_date, unidad: "€"}
+  retencion-cartera:
+    - {nombre: "Suscripciones activas", tipo: erp, doctype: Subscription, agregado: contar, filtros: [["status", "=", "Active"]], unidad: "suscripciones"}
+    - {nombre: "Suscripciones canceladas", tipo: erp, doctype: Subscription, agregado: contar, filtros: [["status", "=", "Cancelled"]], periodo: modified, unidad: "suscripciones"}
+  # Legal
+  iso9001:
+    - {nombre: "Objetivos de calidad", tipo: erp, doctype: "Quality Goal", agregado: contar, unidad: "objetivos"}
+    - {nombre: "Procedimientos de calidad", tipo: erp, doctype: "Quality Procedure", agregado: contar, unidad: "procedimientos"}
+    - {nombre: "Revisiones de calidad del periodo", tipo: erp, doctype: "Quality Review", agregado: contar, periodo: creation, unidad: "revisiones"}
+  despliegue-departamentos:
+    - {nombre: "Procedimientos de calidad", tipo: erp, doctype: "Quality Procedure", agregado: contar, unidad: "procedimientos"}
+    - {nombre: "Tareas pendientes", tipo: erp, doctype: Task, agregado: contar, filtros: [["status", "in", ["Open", "Working"]]], unidad: "tareas"}
+  # Licitaciones
+  director-licitaciones:
+    - {nombre: "Oportunidades en seguimiento", tipo: erp, doctype: Opportunity, agregado: contar, filtros: [["status", "=", "Open"]], unidad: "oportunidades"}
+    - {nombre: "Ofertas emitidas", tipo: erp, doctype: Quotation, agregado: contar, periodo: transaction_date, unidad: "ofertas"}
+    - {nombre: "Importe ofertado", tipo: erp, doctype: Quotation, agregado: sumar, campo: grand_total, periodo: transaction_date, unidad: "€"}
+    - {nombre: "Tareas vencidas", tipo: erp, doctype: Task, agregado: contar, filtros: [["status", "in", ["Open", "Working"]], ["exp_end_date", "<", "{hoy}"]], unidad: "tareas"}
+  costes-licitacion:
+    - {nombre: "Ofertas emitidas", tipo: erp, doctype: Quotation, agregado: contar, periodo: transaction_date, unidad: "ofertas"}
+  precio-licitacion:
+    - {nombre: "Importe ofertado", tipo: erp, doctype: Quotation, agregado: sumar, campo: grand_total, periodo: transaction_date, unidad: "€"}
+  arquitecto-solucion:
+    - {nombre: "Ofertas emitidas", tipo: erp, doctype: Quotation, agregado: contar, periodo: transaction_date, unidad: "ofertas"}
+    - {nombre: "Artículos activos", tipo: erp, doctype: Item, agregado: contar, filtros: [["disabled", "=", 0]], unidad: "artículos"}
+  # Tecnología
+  datos:
+    - {nombre: "Activos registrados", tipo: erp, doctype: Asset, agregado: contar, unidad: "activos"}
+    - {nombre: "Equipos con nº de serie", tipo: erp, doctype: "Serial No", agregado: contar, unidad: "equipos"}
+
+# Dashboard de cada DEPARTAMENTO (Agentes → elegir departamento → «Dashboard del departamento»): los KPI más específicos del área, agrupados.
+# Mismo formato que arriba, con `grupo` para agruparlos en pantalla. Se suman al resumen de actividad de todos sus agentes.
+paneles_departamento:
+  finanzas:
+    - {grupo: "Cartera de clientes", nombre: "Pendiente de cobro", tipo: erp, doctype: "Sales Invoice", agregado: sumar, campo: outstanding_amount, filtros: [["docstatus", "=", 1]], unidad: "€"}
+    - {grupo: "Cartera de clientes", nombre: "Facturas vencidas sin cobrar", tipo: erp, doctype: "Sales Invoice", agregado: contar, filtros: [["docstatus", "=", 1], ["outstanding_amount", ">", 0], ["due_date", "<", "{hoy}"]], unidad: "facturas"}
+    - {grupo: "Cartera de clientes", nombre: "Importe vencido", tipo: erp, doctype: "Sales Invoice", agregado: sumar, campo: outstanding_amount, filtros: [["docstatus", "=", 1], ["due_date", "<", "{hoy}"]], unidad: "€"}
+    - {grupo: "Cartera de clientes", nombre: "Media de retraso en facturas vencidas", tipo: erp, doctype: "Sales Invoice", agregado: retraso_medio, campo: due_date, filtros: [["docstatus", "=", 1], ["outstanding_amount", ">", 0], ["due_date", "<", "{hoy}"]], unidad: "días"}
+    - {grupo: "Cartera de clientes", nombre: "Cobros recuperados", tipo: erp, doctype: "Payment Entry", agregado: sumar, campo: paid_amount, filtros: [["docstatus", "=", 1], ["payment_type", "=", "Receive"], ["party_type", "=", "Customer"]], periodo: posting_date, unidad: "€"}
+    - {grupo: "Proveedores y pagos", nombre: "Pendiente de pago a proveedores", tipo: erp, doctype: "Purchase Invoice", agregado: sumar, campo: outstanding_amount, filtros: [["docstatus", "=", 1]], unidad: "€"}
+    - {grupo: "Proveedores y pagos", nombre: "Pagos realizados", tipo: erp, doctype: "Payment Entry", agregado: sumar, campo: paid_amount, filtros: [["docstatus", "=", 1], ["payment_type", "=", "Pay"]], periodo: posting_date, unidad: "€"}
+    - {grupo: "Proveedores y pagos", nombre: "Facturas de proveedor en borrador", tipo: erp, doctype: "Purchase Invoice", agregado: contar, filtros: [["docstatus", "=", 0]], unidad: "facturas", ayuda: "esperan revisión humana"}
+    - {grupo: "Actividad del periodo", nombre: "Facturado", tipo: erp, doctype: "Sales Invoice", agregado: sumar, campo: grand_total, filtros: [["docstatus", "=", 1]], periodo: posting_date, unidad: "€"}
+    - {grupo: "Actividad del periodo", nombre: "Compras facturadas", tipo: erp, doctype: "Purchase Invoice", agregado: sumar, campo: grand_total, filtros: [["docstatus", "=", 1]], periodo: posting_date, unidad: "€"}
+    - {grupo: "Actividad del periodo", nombre: "Asientos en borrador", tipo: erp, doctype: "Journal Entry", agregado: contar, filtros: [["docstatus", "=", 0]], unidad: "asientos"}
+  comercial:
+    - {grupo: "Captación", nombre: "Leads nuevos", tipo: erp, doctype: "CRM Lead", agregado: contar, periodo: creation, unidad: "leads"}
+    - {grupo: "Captación", nombre: "Leads sin contactar", tipo: erp, doctype: "CRM Lead", agregado: contar, filtros: [["status", "=", "New"]], unidad: "leads"}
+    - {grupo: "Captación", nombre: "Organizaciones nuevas", tipo: erp, doctype: "CRM Organization", agregado: contar, periodo: creation, unidad: "organizaciones"}
+    - {grupo: "Oportunidades", nombre: "Oportunidades abiertas", tipo: erp, doctype: "CRM Deal", agregado: contar, filtros: [["status", "not in", ["Won", "Lost"]]], unidad: "oportunidades"}
+    - {grupo: "Oportunidades", nombre: "Oportunidades ganadas", tipo: erp, doctype: "CRM Deal", agregado: contar, filtros: [["status", "=", "Won"]], periodo: modified, unidad: "oportunidades"}
+    - {grupo: "Oportunidades", nombre: "Oportunidades perdidas", tipo: erp, doctype: "CRM Deal", agregado: contar, filtros: [["status", "=", "Lost"]], periodo: modified, unidad: "oportunidades"}
+    - {grupo: "Presupuestos y ventas", nombre: "Presupuestos emitidos", tipo: erp, doctype: Quotation, agregado: contar, periodo: transaction_date, unidad: "presupuestos"}
+    - {grupo: "Presupuestos y ventas", nombre: "Importe presupuestado", tipo: erp, doctype: Quotation, agregado: sumar, campo: grand_total, periodo: transaction_date, unidad: "€"}
+    - {grupo: "Presupuestos y ventas", nombre: "Pedidos de venta", tipo: erp, doctype: "Sales Order", agregado: contar, periodo: transaction_date, unidad: "pedidos"}
+    - {grupo: "Presupuestos y ventas", nombre: "Importe de pedidos", tipo: erp, doctype: "Sales Order", agregado: sumar, campo: grand_total, periodo: transaction_date, unidad: "€"}
+    - {grupo: "Clientes", nombre: "Clientes", tipo: erp, doctype: Customer, agregado: contar, unidad: "clientes"}
+    - {grupo: "Clientes", nombre: "Clientes nuevos", tipo: erp, doctype: Customer, agregado: contar, periodo: creation, unidad: "clientes"}
+  operaciones:
+    - {grupo: "Proyectos", nombre: "Proyectos abiertos", tipo: erp, doctype: Project, agregado: contar, filtros: [["status", "=", "Open"]], unidad: "proyectos"}
+    - {grupo: "Proyectos", nombre: "Proyectos completados", tipo: erp, doctype: Project, agregado: contar, filtros: [["status", "=", "Completed"]], periodo: modified, unidad: "proyectos"}
+    - {grupo: "Proyectos", nombre: "Tareas pendientes", tipo: erp, doctype: Task, agregado: contar, filtros: [["status", "in", ["Open", "Working", "Pending Review"]]], unidad: "tareas"}
+    - {grupo: "Proyectos", nombre: "Tareas vencidas", tipo: erp, doctype: Task, agregado: contar, filtros: [["status", "in", ["Open", "Working"]], ["exp_end_date", "<", "{hoy}"]], unidad: "tareas"}
+    - {grupo: "Compras", nombre: "Pedidos de compra", tipo: erp, doctype: "Purchase Order", agregado: contar, periodo: transaction_date, unidad: "pedidos"}
+    - {grupo: "Compras", nombre: "Importe comprado", tipo: erp, doctype: "Purchase Order", agregado: sumar, campo: grand_total, periodo: transaction_date, unidad: "€"}
+    - {grupo: "Compras", nombre: "Pedidos en borrador", tipo: erp, doctype: "Purchase Order", agregado: contar, filtros: [["docstatus", "=", 0]], unidad: "pedidos"}
+    - {grupo: "Compras", nombre: "Solicitudes de material abiertas", tipo: erp, doctype: "Material Request", agregado: contar, filtros: [["docstatus", "=", 1], ["status", "=", "Pending"]], unidad: "solicitudes"}
+    - {grupo: "Entregas e inventario", nombre: "Albaranes de entrega", tipo: erp, doctype: "Delivery Note", agregado: contar, periodo: posting_date, unidad: "albaranes"}
+    - {grupo: "Entregas e inventario", nombre: "Órdenes de trabajo en curso", tipo: erp, doctype: "Work Order", agregado: contar, filtros: [["status", "=", "In Process"]], unidad: "órdenes"}
+    - {grupo: "Entregas e inventario", nombre: "Artículos activos", tipo: erp, doctype: Item, agregado: contar, filtros: [["disabled", "=", 0]], unidad: "artículos"}
+    - {grupo: "Entregas e inventario", nombre: "Artículos sin existencias", tipo: erp, doctype: Bin, agregado: contar, filtros: [["actual_qty", "<=", 0]], unidad: "artículos"}
+  atencion:
+    - {grupo: "Incidencias", nombre: "Incidencias abiertas", tipo: erp, doctype: Issue, agregado: contar, filtros: [["status", "=", "Open"]], unidad: "incidencias"}
+    - {grupo: "Incidencias", nombre: "Incidencias de prioridad alta abiertas", tipo: erp, doctype: Issue, agregado: contar, filtros: [["status", "=", "Open"], ["priority", "=", "High"]], unidad: "incidencias"}
+    - {grupo: "Incidencias", nombre: "Incidencias nuevas", tipo: erp, doctype: Issue, agregado: contar, periodo: creation, unidad: "incidencias"}
+    - {grupo: "Incidencias", nombre: "Incidencias cerradas", tipo: erp, doctype: Issue, agregado: contar, filtros: [["status", "=", "Closed"]], periodo: modified, unidad: "incidencias"}
+    - {grupo: "Garantías y mantenimiento", nombre: "Garantías abiertas", tipo: erp, doctype: "Warranty Claim", agregado: contar, filtros: [["status", "=", "Open"]], unidad: "reclamaciones"}
+    - {grupo: "Garantías y mantenimiento", nombre: "Visitas de mantenimiento", tipo: erp, doctype: "Maintenance Visit", agregado: contar, periodo: mntc_date, unidad: "visitas"}
+    - {grupo: "Garantías y mantenimiento", nombre: "Planes de mantenimiento", tipo: erp, doctype: "Maintenance Schedule", agregado: contar, unidad: "planes"}
+    - {grupo: "Clientes", nombre: "Clientes", tipo: erp, doctype: Customer, agregado: contar, unidad: "clientes"}
+  direccion:
+    - {grupo: "Ventas", nombre: "Pedidos de venta (importe)", tipo: erp, doctype: "Sales Order", agregado: sumar, campo: grand_total, periodo: transaction_date, unidad: "€"}
+    - {grupo: "Ventas", nombre: "Presupuestos emitidos (importe)", tipo: erp, doctype: Quotation, agregado: sumar, campo: grand_total, periodo: transaction_date, unidad: "€"}
+    - {grupo: "Ventas", nombre: "Oportunidades abiertas", tipo: erp, doctype: "CRM Deal", agregado: contar, filtros: [["status", "not in", ["Won", "Lost"]]], unidad: "oportunidades"}
+    - {grupo: "Ventas", nombre: "Leads nuevos", tipo: erp, doctype: "CRM Lead", agregado: contar, periodo: creation, unidad: "leads"}
+    - {grupo: "Compras", nombre: "Compras facturadas", tipo: erp, doctype: "Purchase Invoice", agregado: sumar, campo: grand_total, filtros: [["docstatus", "=", 1]], periodo: posting_date, unidad: "€"}
+    - {grupo: "Compras", nombre: "Pedidos de compra (importe)", tipo: erp, doctype: "Purchase Order", agregado: sumar, campo: grand_total, periodo: transaction_date, unidad: "€"}
+    - {grupo: "Empresa", nombre: "Proyectos abiertos", tipo: erp, doctype: Project, agregado: contar, filtros: [["status", "=", "Open"]], unidad: "proyectos"}
+    - {grupo: "Empresa", nombre: "Clientes", tipo: erp, doctype: Customer, agregado: contar, unidad: "clientes"}
+    - {grupo: "Empresa", nombre: "Proveedores", tipo: erp, doctype: Supplier, agregado: contar, unidad: "proveedores"}
+    - {grupo: "Empresa", nombre: "Plantilla activa", tipo: erp, doctype: Employee, agregado: contar, filtros: [["status", "=", "Active"]], unidad: "personas"}
+  marketing:
+    - {grupo: "Captación", nombre: "Leads captados", tipo: erp, doctype: Lead, agregado: contar, periodo: creation, unidad: "leads"}
+    - {grupo: "Captación", nombre: "Leads captados en total", tipo: erp, doctype: Lead, agregado: contar, unidad: "leads"}
+    - {grupo: "Campañas", nombre: "Campañas", tipo: erp, doctype: Campaign, agregado: contar, unidad: "campañas"}
+    - {grupo: "Campañas", nombre: "Campañas creadas", tipo: erp, doctype: Campaign, agregado: contar, periodo: creation, unidad: "campañas"}
+    - {grupo: "Catálogo", nombre: "Artículos activos", tipo: erp, doctype: Item, agregado: contar, filtros: [["disabled", "=", 0]], unidad: "artículos"}
+    - {grupo: "Catálogo", nombre: "Tarifas en el catálogo", tipo: erp, doctype: "Item Price", agregado: contar, unidad: "precios"}
+  licitaciones:
+    - {grupo: "Oportunidades", nombre: "Oportunidades en seguimiento", tipo: erp, doctype: Opportunity, agregado: contar, filtros: [["status", "=", "Open"]], unidad: "oportunidades"}
+    - {grupo: "Oportunidades", nombre: "Oportunidades nuevas", tipo: erp, doctype: Opportunity, agregado: contar, periodo: creation, unidad: "oportunidades"}
+    - {grupo: "Ofertas", nombre: "Ofertas emitidas", tipo: erp, doctype: Quotation, agregado: contar, periodo: transaction_date, unidad: "ofertas"}
+    - {grupo: "Ofertas", nombre: "Importe ofertado", tipo: erp, doctype: Quotation, agregado: sumar, campo: grand_total, periodo: transaction_date, unidad: "€"}
+    - {grupo: "Contratos y plazos", nombre: "Contratos", tipo: erp, doctype: Contract, agregado: contar, unidad: "contratos"}
+    - {grupo: "Contratos y plazos", nombre: "Tareas pendientes", tipo: erp, doctype: Task, agregado: contar, filtros: [["status", "in", ["Open", "Working"]]], unidad: "tareas"}
+    - {grupo: "Contratos y plazos", nombre: "Tareas vencidas", tipo: erp, doctype: Task, agregado: contar, filtros: [["status", "in", ["Open", "Working"]], ["exp_end_date", "<", "{hoy}"]], unidad: "tareas"}
+  legal:
+    - {grupo: "Calidad", nombre: "No conformidades abiertas", tipo: erp, doctype: "Non Conformance", agregado: contar, filtros: [["status", "!=", "Closed"]], unidad: "no conformidades"}
+    - {grupo: "Calidad", nombre: "No conformidades nuevas", tipo: erp, doctype: "Non Conformance", agregado: contar, periodo: creation, unidad: "no conformidades"}
+    - {grupo: "Calidad", nombre: "Acciones de calidad abiertas", tipo: erp, doctype: "Quality Action", agregado: contar, filtros: [["status", "!=", "Completed"]], unidad: "acciones"}
+    - {grupo: "Calidad", nombre: "Revisiones de calidad", tipo: erp, doctype: "Quality Review", agregado: contar, periodo: creation, unidad: "revisiones"}
+    - {grupo: "Sistema de gestión", nombre: "Objetivos de calidad", tipo: erp, doctype: "Quality Goal", agregado: contar, unidad: "objetivos"}
+    - {grupo: "Sistema de gestión", nombre: "Procedimientos de calidad", tipo: erp, doctype: "Quality Procedure", agregado: contar, unidad: "procedimientos"}
+    - {grupo: "Contratos", nombre: "Contratos", tipo: erp, doctype: Contract, agregado: contar, unidad: "contratos"}
+    - {grupo: "Contratos", nombre: "Contratos nuevos", tipo: erp, doctype: Contract, agregado: contar, periodo: creation, unidad: "contratos"}
+  personas:
+    - {grupo: "Plantilla", nombre: "Plantilla activa", tipo: erp, doctype: Employee, agregado: contar, filtros: [["status", "=", "Active"]], unidad: "personas"}
+    - {grupo: "Plantilla", nombre: "Incorporaciones del periodo", tipo: erp, doctype: "Employee Onboarding", agregado: contar, periodo: creation, unidad: "incorporaciones"}
+    - {grupo: "Ausencias", nombre: "Solicitudes de ausencia abiertas", tipo: erp, doctype: "Leave Application", agregado: contar, filtros: [["status", "=", "Open"]], unidad: "solicitudes"}
+    - {grupo: "Selección", nombre: "Ofertas de empleo abiertas", tipo: erp, doctype: "Job Opening", agregado: contar, filtros: [["status", "=", "Open"]], unidad: "ofertas"}
+    - {grupo: "Selección", nombre: "Candidaturas recibidas", tipo: erp, doctype: "Job Applicant", agregado: contar, periodo: creation, unidad: "candidaturas"}
+    - {grupo: "Formación", nombre: "Acciones de formación", tipo: erp, doctype: "Training Event", agregado: contar, periodo: creation, unidad: "acciones"}
+    - {grupo: "Formación", nombre: "Programas de formación", tipo: erp, doctype: "Training Program", agregado: contar, unidad: "programas"}
+  telecom:
+    - {grupo: "Cartera", nombre: "Suscripciones activas", tipo: erp, doctype: Subscription, agregado: contar, filtros: [["status", "=", "Active"]], unidad: "suscripciones"}
+    - {grupo: "Cartera", nombre: "Suscripciones canceladas", tipo: erp, doctype: Subscription, agregado: contar, filtros: [["status", "=", "Cancelled"]], periodo: modified, unidad: "suscripciones"}
+    - {grupo: "Cartera", nombre: "Planes de suscripción", tipo: erp, doctype: "Subscription Plan", agregado: contar, unidad: "planes"}
+    - {grupo: "Venta", nombre: "Ofertas emitidas", tipo: erp, doctype: Quotation, agregado: contar, periodo: transaction_date, unidad: "ofertas"}
+    - {grupo: "Venta", nombre: "Pedidos de venta", tipo: erp, doctype: "Sales Order", agregado: contar, periodo: transaction_date, unidad: "pedidos"}
+    - {grupo: "Venta", nombre: "Importe de pedidos", tipo: erp, doctype: "Sales Order", agregado: sumar, campo: grand_total, periodo: transaction_date, unidad: "€"}
+    - {grupo: "Mayoristas", nombre: "Proveedores (mayoristas)", tipo: erp, doctype: Supplier, agregado: contar, unidad: "proveedores"}
+    - {grupo: "Mayoristas", nombre: "Tareas pendientes", tipo: erp, doctype: Task, agregado: contar, filtros: [["status", "in", ["Open", "Working"]]], unidad: "tareas"}
+  areas:
+    - {grupo: "Proyectos", nombre: "Proyectos abiertos", tipo: erp, doctype: Project, agregado: contar, filtros: [["status", "=", "Open"]], unidad: "proyectos"}
+    - {grupo: "Proyectos", nombre: "Tareas vencidas", tipo: erp, doctype: Task, agregado: contar, filtros: [["status", "in", ["Open", "Working"]], ["exp_end_date", "<", "{hoy}"]], unidad: "tareas"}
+    - {grupo: "Presupuestos", nombre: "Presupuestos emitidos", tipo: erp, doctype: Quotation, agregado: contar, periodo: transaction_date, unidad: "presupuestos"}
+    - {grupo: "Presupuestos", nombre: "Importe presupuestado", tipo: erp, doctype: Quotation, agregado: sumar, campo: grand_total, periodo: transaction_date, unidad: "€"}
+    - {grupo: "Postventa", nombre: "Visitas de mantenimiento", tipo: erp, doctype: "Maintenance Visit", agregado: contar, periodo: mntc_date, unidad: "visitas"}
+    - {grupo: "Postventa", nombre: "Planes de mantenimiento", tipo: erp, doctype: "Maintenance Schedule", agregado: contar, unidad: "planes"}
+    - {grupo: "Postventa", nombre: "Garantías abiertas", tipo: erp, doctype: "Warranty Claim", agregado: contar, filtros: [["status", "=", "Open"]], unidad: "reclamaciones"}
+    - {grupo: "Postventa", nombre: "Equipos con nº de serie", tipo: erp, doctype: "Serial No", agregado: contar, unidad: "equipos"}
+  tecnologia:
+    - {grupo: "Infraestructura", nombre: "Activos registrados", tipo: erp, doctype: Asset, agregado: contar, unidad: "activos"}
+    - {grupo: "Infraestructura", nombre: "Equipos con nº de serie", tipo: erp, doctype: "Serial No", agregado: contar, unidad: "equipos"}
+    - {grupo: "Trabajo", nombre: "Tareas pendientes", tipo: erp, doctype: Task, agregado: contar, filtros: [["status", "in", ["Open", "Working"]]], unidad: "tareas"}
+    - {grupo: "Trabajo", nombre: "Tareas vencidas", tipo: erp, doctype: Task, agregado: contar, filtros: [["status", "in", ["Open", "Working"]], ["exp_end_date", "<", "{hoy}"]], unidad: "tareas"}
+  conocimiento:
+    - {grupo: "Uso del conocimiento", nombre: "Consultas a la base de conocimiento", tipo: uso, claves: ["uso:conocimiento.*"], unidad: "consultas", ayuda: "entre todos los agentes de la empresa que la usan: se muestran las de este departamento"}
+    - {grupo: "Uso del conocimiento", nombre: "Ficheros consultados o preparados", tipo: uso, claves: ["uso:ficheros.*"], unidad: "operaciones"}

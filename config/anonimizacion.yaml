@@ -1,0 +1,39 @@
+# Anonimización de lo que sale hacia servicios externos (Jev en la nube). Ver docs/SEGURIDAD.md.
+# Todo el texto se limpia en local; si algo no se puede garantizar, no se envía y se usa el modelo local.
+
+max_caracteres: 4000          # un texto más largo no se envía (menos es más: mandad solo lo necesario)
+
+# Términos que nunca se sustituyen (la propia empresa y sus marcas)
+conservar: ["101.cat", "101cat", "Cerebro", "Jarvis"]
+
+# Nombres propios que ya conocéis y no están en ERPNext (se suman a los de ERPNext)
+entidades_extra:
+  personas: []
+  organizaciones: []
+
+# Documentos de ERPNext de los que se leen los nombres: doctype -> {campo, tipo}.
+#   tipo «personas»: se reconocen también el nombre y los apellidos sueltos (≥ 4 letras)
+#   tipo «organizaciones»: solo el nombre completo (también sirve para clientes que son personas físicas)
+# Si ERPNext está configurado y alguna lectura falla, NO se envía nada a la nube (falta la protección principal).
+erpnext:
+  Customer: {campo: customer_name, tipo: organizaciones}
+  Supplier: {campo: supplier_name, tipo: organizaciones}
+  Employee: {campo: employee_name, tipo: personas}
+caducidad_lista_segundos: 600
+
+# Categorías especiales del RGPD (art. 9) y datos penales: si aparece alguna, no sale nada a la nube.
+categorias_especiales:         # una palabra que termina en * vale como prefijo («embaraz*» → embarazo, embarazada…)
+  salud: [depresion, depressio, ansiedad, ansietat, baja laboral, baixa laboral, incapacidad temporal, incapacitat temporal,
+          diagnostico, diagnostic, enfermedad*, malalti*, malaltia*, baja medica, baixa mèdica, discapac*, minusval*, embaraz*,
+          embaràs, medicacion, medicació, psicolog*, psiquiatr*, tratamiento medico, tractament mèdic, cancer*, càncer, oncolog*,
+          quimioterap*, radioterap*, diabet*, hipertens*, epilep*, esquizofren*, bipolar*, autis*, vih, sida, adiccion*, addicci*]
+  ideologia_creencias: [afiliacion sindical, afiliació sindical, sindicato*, sindicat*, religion*, religió, ideologia politica,
+                        orientacion sexual, orientació sexual, partido politico, partit polític, homosexual*, bisexual*, lesbian*,
+                        transexual*, transgener*, musulm*, islam*, judio*, jueu*, catolic*, evangelic*, ateo, ateu, creencia*]
+  penales: [antecedentes penales, antecedents penals, condena*, delito*, delicte*, sentencia penal, denuncia penal, preso*, presó]
+  menores: [menor de edad, menor d'edat, menores de edad]
+
+# Secuencias de palabras con mayúscula que son términos del negocio y no nombres de persona
+no_son_nombres: [Control de Accesos, Contra Incendios, Atención al Cliente, Dirección General, Recursos Humanos,
+                 Buenos Días, Bon Dia, Buenas Tardes, Bona Tarda, Muchas Gracias, Moltes Gràcies, Estimado Cliente,
+                 Estimats Senyors, Comunidad de Vecinos, Comunitat de Veïns]

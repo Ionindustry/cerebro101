@@ -1,0 +1,482 @@
+{
+  "antiguo": [
+    {
+      "id": "H01",
+      "resultado": "operacion_inventada",
+      "llamada": "erpnext.consulta_stock_articulos",
+      "argumentos": {
+        "categoria": "detectores de humo",
+        "proveedor": null,
+        "—> Buscar en el catálogo de productos de la empresa (sección ": "Artículos"
+      },
+      "correcta": false,
+      "segundos": 51.6
+    },
+    {
+      "id": "H02",
+      "resultado": "operacion_inventada",
+      "llamada": "erpnext.buscar_clientes_activos",
+      "argumentos": {
+        "categoria": "clientes",
+        "estado": "activo",
+        "campo_nombre": "nombre_completo",
+        "limit": 100
+      },
+      "correcta": false,
+      "segundos": 20.0
+    },
+    {
+      "id": "H03",
+      "resultado": "operacion_inventada",
+      "llamada": "erpnext.consultar_cliente",
+      "argumentos": {
+        "nombre_cliente": "Comunitat Vilanova SL",
+        "campo_detalles": [
+          "dirección",
+          "contacto",
+          "áreas_de_interés",
+          "historial_proyectos",
+          "contratos_activos",
+          "presupuestos",
+          "facturas_pagadas",
+          "preferencias_comerciales",
+          "estado_contrato",
+          "fecha_alta",
+          "descripción_general"
+        ]
+      },
+      "correcta": false,
+      "segundos": 29.7
+    },
+    {
+      "id": "H04",
+      "resultado": "operacion_inventada",
+      "llamada": "calendario.consultar_disponibilidad",
+      "argumentos": {
+        "fecha": "2026-10-08",
+        "hora_inicio": "08:00",
+        "hora_fin": "12:00",
+        "intervalo_minutos": 60,
+        "excluir_horas": [
+          "09:00-09:30",
+          0
+        ],
+        "formato": "ISO_8601"
+      },
+      "correcta": false,
+      "segundos": 24.6
+    },
+    {
+      "id": "H05",
+      "resultado": "operacion_inventada",
+      "llamada": "cotizador.calcular_presupuesto_instalacion",
+      "argumentos": {
+        "cantidad": 2,
+        "tipo_camara": "CAMERA_EXTERIOR_IP_1MP",
+        "id_camara": "CAMERA_EXTERIOR_IP_1MP",
+        "montaje": true,
+        "montaje_tipo": "FIXO",
+        "id_montaje": "MONTAGE_FIXO",
+        "trabajo_técnico": true,
+        "id_trabajo_técnico": "TECNICO_INSTALACION_CAMARAS",
+        "cableado": {
+          "longitud": 10,
+          "id_cableado": "CABLE_CAT5E_10M",
+          "montaje": true
+        },
+        "montaje_estructura": {
+          "id_montaje": "MONTAGE_ESTRUCTURA_FIXA",
+          "cantidad": 1
+        },
+        "soporte_antena": {
+          "id_soporte": "ANTENES_EXTERIORES_1",
+          "cantidad": 1
+        },
+        "soporte_ventilador": {
+          "id_soporte": "VENTILADOR_EXTERIOR",
+          "cantidad": 1
+        },
+        "accesorio_extra": [
+          {
+            "id_accesorio": "CABLE_CAT5E_5M",
+            "cantidad": 1
+          }
+        ],
+        "precio_iva": "21",
+        "precio_iva_porcentaje": 21
+      },
+      "correcta": false,
+      "segundos": 79.3
+    },
+    {
+      "id": "H06",
+      "resultado": "error",
+      "detalle": "El modelo ministral-3:3b no devolvió JSON válido",
+      "correcta": false,
+      "segundos": 93.4
+    },
+    {
+      "id": "H07",
+      "resultado": "error",
+      "detalle": "El modelo ministral-3:3b no devolvió JSON válido",
+      "correcta": false,
+      "segundos": 101.7
+    },
+    {
+      "id": "H08",
+      "resultado": "operacion_inventada",
+      "llamada": "grok.búsqueda_en_tiempo_real",
+      "argumentos": {
+        "consulta": "cámaras de videovigilancia con IA #CCTV #InteligenciaArtificial #Seguridad #Tecnología #Cataluña",
+        "limite_de_resultados": 20,
+        "filtro_de_idioma": [
+          "es",
+          "ca"
+        ],
+        "filtro_de_temas": [
+          "tecnología",
+          "seguridad",
+          "innovación",
+          "IA"
+        ],
+        "filtro_de_fecha": "hasta_hora_actual"
+      },
+      "correcta": false,
+      "segundos": 35.9
+    },
+    {
+      "id": "H09",
+      "resultado": "operacion_inventada",
+      "llamada": "scrapegraph.extraer_tarifas_productos",
+      "argumentos": {
+        "url": "https://www.ejemplo.com/tarifas",
+        "detalles": {
+          "productos": true,
+          "precios": true,
+          "descripciones": true,
+          "exclusiones": true,
+          "modalidades_de_pago": true,
+          "plazos_de_vencimiento": true,
+          "servicios_incluidos": true,
+          "servicios_excluidos": true
+        },
+        "limite_de_resultados": 10,
+        "formato": "json"
+      },
+      "correcta": false,
+      "segundos": 34.9
+    },
+    {
+      "id": "H10",
+      "resultado": "operacion_inventada",
+      "llamada": "ficheros.buscar_cobertura_fibra",
+      "argumentos": {
+        "direccion": "Calle Mayor 12, Reus",
+        "provincia": "Tarragona",
+        "servicio": "fibra óptica",
+        "metodo": "consultar_base_datos_cobertura_instalada"
+      },
+      "correcta": false,
+      "segundos": 21.7
+    },
+    {
+      "id": "H11",
+      "resultado": "operacion_inventada",
+      "llamada": "correo.leer_bandeja_entrada",
+      "argumentos": {
+        "categoria": "no_leidos",
+        "marca_comercial": true
+      },
+      "correcta": false,
+      "segundos": 10.9
+    },
+    {
+      "id": "H12",
+      "resultado": "error",
+      "detalle": "El modelo ministral-3:3b no devolvió JSON válido",
+      "correcta": false,
+      "segundos": 98.8
+    },
+    {
+      "id": "H13",
+      "resultado": "operacion_inventada",
+      "llamada": "conocimiento.buscar_procedimiento",
+      "argumentos": {
+        "seccion": "gestión_clientes",
+        "procedimiento": "alta_cliente_mantenimiento",
+        "palabras_clave": [
+          "alta",
+          "mantenimiento",
+          "proceso",
+          "clientes"
+        ]
+      },
+      "correcta": false,
+      "segundos": 21.9
+    },
+    {
+      "id": "H14",
+      "resultado": "error",
+      "detalle": "El modelo ministral-3:3b no devolvió JSON válido",
+      "correcta": false,
+      "segundos": 96.5
+    },
+    {
+      "id": "H15",
+      "resultado": "operacion_inventada",
+      "llamada": "agent_reach.transcribir_youtube",
+      "argumentos": {
+        "url": "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
+        "detalles_transcripcion": {
+          "resumen": "Extraer la transcripción completa del video viral de YouTube con música de 'Never Gonna Give You Up' de Rick Astley. Este contenido es conocido por ser un montaje de clips de videos populares con la misma canción de fondo.",
+          "formato": "texto plano con etiquetas de tiempo para cada fragmento"
+        }
+      },
+      "correcta": false,
+      "segundos": 31.5
+    },
+    {
+      "id": "H16",
+      "resultado": "valida",
+      "llamada": "ficheros.listar",
+      "argumentos": {
+        "carpeta": "tarifas"
+      },
+      "correcta": true,
+      "segundos": 28.1
+    }
+  ],
+  "nuevo": [
+    {
+      "id": "H01",
+      "resultado": "argumentos_invalidos",
+      "llamada": "erpnext.listar",
+      "argumentos": {
+        "doctype": "Bin",
+        "filtros": [
+          [
+            "item_group",
+            "=",
+            "Detectors de humo"
+          ],
+          "—> Verificar si existe un grupo específico para detectores de humo en el sistema ERPnext de 101.cat (según procedimientos internos). Si no hay un grupo definido, se buscará por código o descripción genérica de detectores de humo (ej: "
+        ],
+        "item_name": "LIQUIDAÇÃO DE DETECTORES DE HUMO",
+        "stock_uom": "unidades"
+      },
+      "correcta": false,
+      "segundos": 49.9
+    },
+    {
+      "id": "H02",
+      "resultado": "valida",
+      "llamada": "erpnext.listar",
+      "argumentos": {
+        "doctype": "Customer",
+        "campos": [
+          "customer_name"
+        ],
+        "filtros": [
+          [
+            "status",
+            "=",
+            "Open"
+          ]
+        ],
+        "limite": 100
+      },
+      "correcta": true,
+      "segundos": 52.5
+    },
+    {
+      "id": "H03",
+      "resultado": "valida",
+      "llamada": "erpnext.listar",
+      "argumentos": {
+        "doctype": "Customer",
+        "filtros": [
+          [
+            "customer_name",
+            "=",
+            "Comunitat Vilanova SL"
+          ]
+        ],
+        "campos": [
+          "customer_name",
+          "customer_type",
+          "customer_group",
+          "territory",
+          "email_id",
+          "phone",
+          "address",
+          "website",
+          "notes",
+          "last_purchase_date",
+          "status"
+        ]
+      },
+      "correcta": true,
+      "segundos": 52.4
+    },
+    {
+      "id": "H04",
+      "resultado": "valida",
+      "llamada": "calendario.proponer_cita",
+      "argumentos": {
+        "desde": "2026-10-08T09:00",
+        "hasta": "2026-10-08T10:00",
+        "duracion_min": 60,
+        "opciones": 3
+      },
+      "correcta": true,
+      "segundos": 23.5
+    },
+    {
+      "id": "H05",
+      "resultado": "valida",
+      "llamada": "cotizador.cotizar",
+      "argumentos": {
+        "partidas": {
+          "camara_exterior": 2
+        },
+        "cuadrilla_tecnicos": "uno"
+      },
+      "correcta": true,
+      "segundos": 45.3
+    },
+    {
+      "id": "H06",
+      "resultado": "valida",
+      "llamada": "cotizador.cotizar",
+      "argumentos": {
+        "materiales": {
+          "corrugado_16": 300,
+          "tubo_rigido_16": 100
+        },
+        "cuadrilla_lampistas": "pareja"
+      },
+      "correcta": true,
+      "segundos": 20.5
+    },
+    {
+      "id": "H07",
+      "resultado": "valida",
+      "llamada": "plataformas_contratacion.novedades",
+      "argumentos": {
+        "cpv": [
+          "35125000"
+        ],
+        "importe_min": 10000,
+        "importe_max": null
+      },
+      "correcta": true,
+      "segundos": 29.0
+    },
+    {
+      "id": "H08",
+      "resultado": "valida",
+      "llamada": "grok.buscar",
+      "argumentos": {
+        "consulta": "cámaras de videovigilancia con inteligencia artificial 2024 Cataluña",
+        "en_x": true,
+        "en_web": true,
+        "max_resultados": 5
+      },
+      "correcta": true,
+      "segundos": 32.5
+    },
+    {
+      "id": "H09",
+      "resultado": "valida",
+      "llamada": "scrapegraph.extraer",
+      "argumentos": {
+        "url": "https://www.ejemplo.com/tarifas",
+        "instruccion": "lista detallada de productos con sus precios correspondientes, incluyendo nombres, descripciones breves y unidades de medida si aplica"
+      },
+      "correcta": true,
+      "segundos": 27.9
+    },
+    {
+      "id": "H10",
+      "resultado": "valida",
+      "llamada": "mayorista.cobertura",
+      "argumentos": {
+        "direccion": "Calle Mayor 12, Reus"
+      },
+      "correcta": true,
+      "segundos": 25.4
+    },
+    {
+      "id": "H11",
+      "resultado": "valida",
+      "llamada": "correo.leer_bandeja",
+      "argumentos": {
+        "no_leidos": true,
+        "limite": 20
+      },
+      "correcta": true,
+      "segundos": 12.3
+    },
+    {
+      "id": "H12",
+      "resultado": "error",
+      "detalle": "El modelo ministral-3:3b no devolvió JSON válido",
+      "correcta": false,
+      "segundos": 145.3
+    },
+    {
+      "id": "H13",
+      "resultado": "valida",
+      "llamada": "conocimiento.buscar",
+      "argumentos": {
+        "consulta": "procedimiento de alta de un cliente de mantenimiento en 101.cat",
+        "k": 6
+      },
+      "correcta": true,
+      "segundos": 31.0
+    },
+    {
+      "id": "H14",
+      "resultado": "argumentos_invalidos",
+      "llamada": "jev.decidir",
+      "argumentos": {
+        "texto": "¿Merece la pena presentar oferta para el concurso de suministro de 20 cámaras IP (presupuesto: 30.000 €, plazo: 4 semanas) en 101.cat?",
+        "tipo": "eleccion",
+        "opciones": [
+          "presentar",
+          "no_presentar"
+        ],
+        "rubrica": "viabilidad_general",
+        "consideraciones_adicionales": [
+          "Demanda potencial: ¿Existe demanda histórica en el área de CCTV en Cataluña para este volumen y tipo de cámaras? (Buscar: 'volumen de pedidos CCTV 20 cámaras IP en Cataluña' y 'tendencias mercado CCTV 2024').",
+          "Capacidad operativa: ¿Tenemos capacidad de entrega en 4 semanas para 20 cámaras IP? (Buscar: 'capacidad logística cámaras IP' y 'plazos de entrega históricos').",
+          "Competencia: ¿Hay competencia directa en el mercado con precios similares? (Buscar: 'precios cámaras IP 2024 Cataluña' y 'competidores CCTV en Cataluña').",
+          "Certificaciones: ¿Las cámaras cumplen con certificaciones obligatorias para el sector? (Buscar: 'certificaciones cámaras IP 2024' y 'normativas seguridad cámaras').",
+          "Solvencia: ¿El cliente tiene solvencia técnica y financiera para este tipo de contrato? (Buscar: 'cliente potencial CCTV solvencia' y 'historial pagos 101.cat')."
+        ]
+      },
+      "correcta": false,
+      "segundos": 87.2
+    },
+    {
+      "id": "H15",
+      "resultado": "valida",
+      "llamada": "agent_reach.transcripcion_youtube",
+      "argumentos": {
+        "url": "https://www.youtube.com/watch?v=dQw4w9WgXcQ"
+      },
+      "correcta": true,
+      "segundos": 28.4
+    },
+    {
+      "id": "H16",
+      "resultado": "valida",
+      "llamada": "ficheros.listar",
+      "argumentos": {
+        "carpeta": "tarifas"
+      },
+      "correcta": true,
+      "segundos": 34.3
+    }
+  ]
+}

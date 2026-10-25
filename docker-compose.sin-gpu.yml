@@ -1,0 +1,9 @@
+# Para equipos sin tarjeta NVIDIA (un portátil o Docker Desktop en Windows sin GPU): quita la reserva de GPU de Ollama y de la voz.
+# Uso:  docker compose -f docker-compose.yml -f docker-compose.sin-gpu.yml up -d
+#       (o, una vez, en el .env:  COMPOSE_FILE=docker-compose.yml:docker-compose.sin-gpu.yml)
+# Funciona, pero lento: las respuestas tardan decenas de segundos o minutos. Usa PERFIL_HARDWARE=pequena.
+services:
+  ollama:
+    deploy: !reset null
+  voz:
+    deploy: !reset null

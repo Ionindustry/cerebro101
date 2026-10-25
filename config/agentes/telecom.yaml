@@ -1,0 +1,137 @@
+# Generado por scripts/generar_fichas.py — edita allí y vuelve a generar.
+agentes:
+- id: director-telecom
+  nombre: Director de Telecom
+  subarea: Acuerdos con mayoristas
+  tareas: Coordina el departamento, decide el catálogo y sigue margen, altas y bajas
+  modelo: principal
+  herramientas:
+  - conocimiento
+  - erpnext
+  aprobacion: libre
+  horario: 0 8 * * 1
+  sensibilidad: media
+  departamento: telecom
+  director: true
+- id: gestor-mayoristas
+  nombre: Gestor de Mayoristas
+  subarea: Acuerdos con mayoristas
+  tareas: Compara y negocia tarifas, comisiones y niveles de servicio con mayoristas
+  modelo: principal
+  herramientas:
+  - conocimiento
+  - correo
+  aprobacion: doble
+  horario: null
+  sensibilidad: media
+  departamento: telecom
+  director: false
+- id: catalogo-tarifas
+  nombre: Catálogo de Tarifas
+  subarea: Acuerdos con mayoristas
+  tareas: Oferta de venta con margen (fibra, móvil, centralita, SIP, SD-WAN, SIM M2M)
+  modelo: principal
+  herramientas:
+  - conocimiento
+  - erpnext
+  aprobacion: doble
+  horario: 0 2 * * 1
+  sensibilidad: media
+  departamento: telecom
+  director: false
+- id: cobertura-ahorro
+  nombre: Estudio de Cobertura y Ahorro
+  subarea: Venta y contratación
+  tareas: Cobertura por dirección, dimensionado y comparación con la factura actual
+  modelo: vision
+  herramientas:
+  - conocimiento
+  - mayorista
+  - ficheros
+  aprobacion: libre
+  horario: null
+  sensibilidad: media
+  departamento: telecom
+  director: false
+- id: contratacion-telecom
+  nombre: Contratación
+  subarea: Venta y contratación
+  tareas: Contrato, identidad, domiciliación, consentimientos y portabilidades
+  modelo: principal
+  herramientas:
+  - conocimiento
+  - erpnext
+  - mayorista
+  aprobacion: doble
+  horario: null
+  sensibilidad: alta
+  departamento: telecom
+  director: false
+- id: provision
+  nombre: Provisión
+  subarea: Provisión y soporte
+  tareas: Altas con el mayorista, instalación, activación y portabilidades
+  modelo: rapido
+  herramientas:
+  - conocimiento
+  - mayorista
+  - erpnext
+  aprobacion: simple
+  horario: '*/30 * * * *'
+  sensibilidad: alta
+  departamento: telecom
+  director: false
+- id: soporte-telecom
+  nombre: Soporte Telecom
+  subarea: Provisión y soporte
+  tareas: Incidencias de línea y tickets con el mayorista dentro de plazo
+  modelo: rapido
+  herramientas:
+  - conocimiento
+  - mayorista
+  - erpnext
+  aprobacion: simple
+  horario: null
+  sensibilidad: alta
+  departamento: telecom
+  director: false
+- id: facturacion-servicios
+  nombre: Facturación de Servicios
+  subarea: Facturación y cartera
+  tareas: Consumos, facturación mensual y conciliación con la factura mayorista
+  modelo: principal
+  herramientas:
+  - conocimiento
+  - mayorista
+  - erpnext
+  aprobacion: doble
+  horario: 0 3 1 * *
+  sensibilidad: alta
+  departamento: telecom
+  director: false
+- id: retencion-cartera
+  nombre: Retención y Cartera
+  subarea: Facturación y cartera
+  tareas: Riesgo de baja, fin de permanencias y paquetes combinados
+  modelo: principal
+  herramientas:
+  - conocimiento
+  - erpnext
+  - jev
+  aprobacion: simple
+  horario: 0 9 * * 1
+  sensibilidad: media
+  departamento: telecom
+  director: false
+- id: cumplimiento-telecom
+  nombre: Cumplimiento Telecom
+  subarea: Regulación
+  tareas: Obligaciones de operador ante la CNMC, consumo, conservación de datos y portabilidad
+  modelo: principal
+  herramientas:
+  - conocimiento
+  aprobacion: libre
+  horario: 0 8 * * 1
+  sensibilidad: media
+  departamento: telecom
+  director: false

@@ -1,0 +1,127 @@
+# Generado por scripts/generar_fichas.py — edita allí y vuelve a generar.
+departamentos:
+  direccion:
+    nombre: Dirección General
+    director: director-general
+    subareas:
+    - Coordinación
+    - Estrategia
+    - Inteligencia de negocio
+    - Anticipación y lanzamiento
+    agentes: 8
+  finanzas:
+    nombre: Finanzas y Contabilidad
+    director: contable
+    subareas:
+    - Contabilidad
+    - Tesorería
+    - Facturación y cobros
+    - Fiscalidad
+    agentes: 6
+  comercial:
+    nombre: Comercial y Ventas
+    director: director-comercial
+    subareas:
+    - Gestión de clientes
+    - Prospección
+    - Captación multicanal
+    - Propuestas
+    - Postventa
+    agentes: 11
+  marketing:
+    nombre: Marketing
+    director: estratega-contenidos
+    subareas:
+    - Contenido
+    - Redes sociales
+    - SEO y visibilidad IA
+    - Publicidad
+    - Marca
+    - Inteligencia de mercado
+    agentes: 10
+  atencion:
+    nombre: Atención al Cliente
+    director: soporte-n1
+    subareas:
+    - Soporte
+    - Reputación
+    - Fidelización
+    agentes: 4
+  operaciones:
+    nombre: Operaciones y Servicio
+    director: jefe-proyectos
+    subareas:
+    - Gestión de proyectos
+    - Entrega
+    - Calidad
+    - Compras y proveedores
+    - Cotización de instalaciones
+    - Red de instaladores
+    agentes: 15
+  personas:
+    nombre: Personas (RRHH)
+    director: seleccion
+    subareas:
+    - Selección
+    - Incorporación
+    - Administración de personal
+    - Desarrollo
+    agentes: 5
+  legal:
+    nombre: Legal y Cumplimiento
+    director: contratos
+    subareas:
+    - Contratos
+    - Protección de datos
+    - Cumplimiento normativo
+    - Sistemas de gestión
+    - Auditoría y evidencias
+    agentes: 12
+  tecnologia:
+    nombre: Tecnología y Sistemas
+    director: infraestructura
+    subareas:
+    - Infraestructura
+    - Seguridad
+    - Web y desarrollo
+    - Datos
+    agentes: 4
+  conocimiento:
+    nombre: Conocimiento y Supervisión
+    director: bibliotecario
+    subareas:
+    - Base de conocimiento
+    - Procedimientos
+    - Supervisión de agentes
+    agentes: 3
+  licitaciones:
+    nombre: Licitaciones Públicas
+    director: director-licitaciones
+    subareas:
+    - Vigilancia de oportunidades
+    - Documentación administrativa
+    - Oferta técnica
+    - Oferta económica
+    - Seguimiento
+    agentes: 12
+  telecom:
+    nombre: Telecom mayorista
+    director: director-telecom
+    subareas:
+    - Acuerdos con mayoristas
+    - Venta y contratación
+    - Provisión y soporte
+    - Facturación y cartera
+    - Regulación
+    agentes: 10
+  areas:
+    nombre: Áreas de Servicio
+    director: director-areas
+    subareas:
+    - Coordinación
+    - Seguridad
+    - Conectividad e infraestructuras
+    - Energía y hogar
+    - Obra
+    - Servicios recurrentes y tramitación
+    agentes: 14

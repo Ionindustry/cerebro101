@@ -1,0 +1,320 @@
+# Cerebro 101.cat — todo en el servidor local. Arranque: ./scripts/iniciar.sh
+# ERPNext se instala aparte con frappe_docker (ver docs/INSTALACION.md) en la misma red «cerebro».
+name: cerebro-101
+
+x-api: &api
+  build: {context: ., dockerfile: api/Dockerfile}
+  # Mínimo privilegio también en el entorno: la API y el worker reciben SOLO lo que usa el código (lista cerrada, sin `env_file`).
+  # Nunca reciben: la clave del propietario de la base de datos, las de Keycloak, ERPNext (administrador y base de datos),
+  # ni las claves internas de Langfuse (cifrado, sal, ClickHouse, MinIO…). Si el Cerebro (o un agente engañado) pudiera leer
+  # su propio entorno, no encontraría nada con lo que alterar las evidencias ni administrar otros sistemas.
+  # api/tests/test_entorno.py comprueba que esta lista y el código no se separan.
+  # Una variable nueva que lea el código (o un buzón de otro departamento) se añade aquí.
+  environment:
+    DATABASE_URL: "postgresql://cerebro_app:${CEREBRO_APP_PASSWORD}@postgres:5432/cerebro"   # rol de mínimo privilegio (db/roles.sql)
+    CEREBRO_MODO: "${CEREBRO_MODO:-produccion}"
+    PERFIL_HARDWARE: "${PERFIL_HARDWARE:-pequena}"
+    TZ: "${TZ:-Europe/Madrid}"
+    REDIS_URL: "${REDIS_URL:-redis://redis:6379/0}"
+    OLLAMA_URL: "${OLLAMA_URL:-http://ollama:11434}"
+    OLLAMA_TIMEOUT: "${OLLAMA_TIMEOUT:-}"                 # vacío = valor por defecto del código
+    OLLAMA_TIMEOUT_CONEXION: "${OLLAMA_TIMEOUT_CONEXION:-}"
+    OLLAMA_TIMEOUT_EMBEDDINGS: "${OLLAMA_TIMEOUT_EMBEDDINGS:-}"
+    OLLAMA_REINTENTOS: "${OLLAMA_REINTENTOS:-}"
+    OLLAMA_CONCURRENCIA: "${OLLAMA_CONCURRENCIA:-}"
+    OLLAMA_ESPERA_MAX: "${OLLAMA_ESPERA_MAX:-}"
+    OLLAMA_MAX_TOKENS: "${OLLAMA_MAX_TOKENS:-}"
+    OLLAMA_NUM_CTX: "${OLLAMA_NUM_CTX:-}"
+    OLLAMA_PENSAR: "${OLLAMA_PENSAR:-}"                   # vacío = razonamiento desactivado
+    OLLAMA_RESULTADO_MAX: "${OLLAMA_RESULTADO_MAX:-}"
+    OLLAMA_FALLOS_CIRCUITO: "${OLLAMA_FALLOS_CIRCUITO:-}"
+    OLLAMA_ENFRIAMIENTO: "${OLLAMA_ENFRIAMIENTO:-}"
+    # ERPNext: un token por departamento («api_key:api_secret»)
+    ERPNEXT_URL: "${ERPNEXT_URL:-}"
+    ERPNEXT_TOKEN: "${ERPNEXT_TOKEN:-}"
+    ERPNEXT_TOKEN_DIRECCION: "${ERPNEXT_TOKEN_DIRECCION:-}"
+    ERPNEXT_TOKEN_FINANZAS: "${ERPNEXT_TOKEN_FINANZAS:-}"
+    ERPNEXT_TOKEN_COMERCIAL: "${ERPNEXT_TOKEN_COMERCIAL:-}"
+    ERPNEXT_TOKEN_OPERACIONES: "${ERPNEXT_TOKEN_OPERACIONES:-}"
+    ERPNEXT_TOKEN_TELECOM: "${ERPNEXT_TOKEN_TELECOM:-}"
+    ERPNEXT_TOKEN_AREAS: "${ERPNEXT_TOKEN_AREAS:-}"
+    ERPNEXT_TOKEN_ATENCION: "${ERPNEXT_TOKEN_ATENCION:-}"
+    ERPNEXT_TOKEN_LEGAL: "${ERPNEXT_TOKEN_LEGAL:-}"
+    ERPNEXT_TOKEN_LICITACIONES: "${ERPNEXT_TOKEN_LICITACIONES:-}"
+    ERPNEXT_TOKEN_MARKETING: "${ERPNEXT_TOKEN_MARKETING:-}"
+    ERPNEXT_TOKEN_PERSONAS: "${ERPNEXT_TOKEN_PERSONAS:-}"
+    ERPNEXT_TOKEN_TECNOLOGIA: "${ERPNEXT_TOKEN_TECNOLOGIA:-}"
+    # Servicios externos
+    XAI_API_KEY: "${XAI_API_KEY:-}"
+    XAI_MODELO: "${XAI_MODELO:-grok-4}"
+    JEV_URL: "${JEV_URL:-}"
+    JEV_API_KEY: "${JEV_API_KEY:-}"
+    JEFF_URL: "${JEFF_URL:-http://jeff:8080}"
+    USAR_JEV_NUBE: "${USAR_JEV_NUBE:-false}"
+    ANONIMIZACION_NER: "${ANONIMIZACION_NER:-heuristico}"
+    ANONIMIZACION_MODELO_SPACY: "${ANONIMIZACION_MODELO_SPACY:-es_core_news_md}"
+    AGENT_REACH_URL: "${AGENT_REACH_URL:-http://agent-reach:8090}"
+    # Calendarios (los buzones de correo van por secretos/buzones.env, no por el .env)
+    CALENDARIO_USUARIO: "${CALENDARIO_USUARIO:-}"
+    CALENDARIO_CLAVE: "${CALENDARIO_CLAVE:-}"
+    # Identificación de personas (Keycloak) y trazas (Langfuse: solo el par de claves de proyecto)
+    KEYCLOAK_URL: "${KEYCLOAK_URL:-http://keycloak:8080}"
+    KEYCLOAK_REALM: "${KEYCLOAK_REALM:-cerebro}"
+    KEYCLOAK_CLIENTE: "${KEYCLOAK_CLIENTE:-cerebro-panel}"
+    LANGFUSE_HOST: "${LANGFUSE_HOST:-}"
+    LANGFUSE_PUBLIC_KEY: "${LANGFUSE_PUBLIC_KEY:-}"
+    LANGFUSE_SECRET_KEY: "${LANGFUSE_SECRET_KEY:-}"
+    LANGFUSE_REGISTRAR_CONTENIDO: "${LANGFUSE_REGISTRAR_CONTENIDO:-true}"
+  # secretos/ lleva las contraseñas de los buzones de correo (ver docs/CORREO.md); solo la API y el worker lo montan
+  volumes: ["./config:/app/config:ro", "datos:/datos", "./secretos:/run/secretos:ro"]
+  depends_on:
+    postgres: {condition: service_started}
+    redis: {condition: service_started}
+    ollama: {condition: service_started}
+    migraciones: {condition: service_completed_successfully}
+  networks: [cerebro]
+  restart: unless-stopped
+
+x-langfuse-depende: &langfuse-depende
+  langfuse-db: {condition: service_healthy}
+  langfuse-clickhouse: {condition: service_healthy}
+  langfuse-minio: {condition: service_healthy}
+  langfuse-redis: {condition: service_healthy}
+
+x-langfuse-env: &langfuse-env
+  DATABASE_URL: "postgresql://langfuse:${LANGFUSE_DB_PASSWORD}@langfuse-db:5432/langfuse"
+  SALT: "${LANGFUSE_SALT}"
+  ENCRYPTION_KEY: "${LANGFUSE_ENCRYPTION_KEY}"          # 64 caracteres hexadecimales: openssl rand -hex 32
+  TELEMETRY_ENABLED: "false"
+  CLICKHOUSE_URL: http://langfuse-clickhouse:8123
+  CLICKHOUSE_MIGRATION_URL: clickhouse://langfuse-clickhouse:9000
+  CLICKHOUSE_USER: langfuse
+  CLICKHOUSE_PASSWORD: "${LANGFUSE_CLICKHOUSE_PASSWORD}"
+  CLICKHOUSE_CLUSTER_ENABLED: "false"
+  LANGFUSE_USE_AZURE_BLOB: "false"
+  LANGFUSE_S3_EVENT_UPLOAD_BUCKET: langfuse
+  LANGFUSE_S3_EVENT_UPLOAD_REGION: auto
+  LANGFUSE_S3_EVENT_UPLOAD_ACCESS_KEY_ID: minio
+  LANGFUSE_S3_EVENT_UPLOAD_SECRET_ACCESS_KEY: "${LANGFUSE_MINIO_PASSWORD}"
+  LANGFUSE_S3_EVENT_UPLOAD_ENDPOINT: http://langfuse-minio:9000
+  LANGFUSE_S3_EVENT_UPLOAD_FORCE_PATH_STYLE: "true"
+  LANGFUSE_S3_EVENT_UPLOAD_PREFIX: events/
+  LANGFUSE_S3_MEDIA_UPLOAD_BUCKET: langfuse
+  LANGFUSE_S3_MEDIA_UPLOAD_REGION: auto
+  LANGFUSE_S3_MEDIA_UPLOAD_ACCESS_KEY_ID: minio
+  LANGFUSE_S3_MEDIA_UPLOAD_SECRET_ACCESS_KEY: "${LANGFUSE_MINIO_PASSWORD}"
+  LANGFUSE_S3_MEDIA_UPLOAD_ENDPOINT: http://langfuse-minio:9000
+  LANGFUSE_S3_MEDIA_UPLOAD_FORCE_PATH_STYLE: "true"
+  LANGFUSE_S3_MEDIA_UPLOAD_PREFIX: media/
+  REDIS_HOST: langfuse-redis
+  REDIS_PORT: "6379"
+  REDIS_AUTH: "${LANGFUSE_REDIS_PASSWORD}"
+
+services:
+  postgres:
+    image: pgvector/pgvector:pg16
+    environment: {POSTGRES_USER: cerebro, POSTGRES_PASSWORD: "${POSTGRES_PASSWORD}", POSTGRES_DB: cerebro}
+    volumes: ["pgdata:/var/lib/postgresql/data", "./db/esquema.sql:/docker-entrypoint-initdb.d/01-esquema.sql:ro"]
+    healthcheck: {test: ["CMD-SHELL", "pg_isready -U cerebro -d cerebro"], interval: 3s, timeout: 3s, retries: 20}
+    networks: [cerebro]
+    restart: unless-stopped
+
+  migraciones:              # un solo uso en cada arranque: esquema, tablas del grafo, rol y permisos (único con la clave del propietario)
+    build: {context: ., dockerfile: api/Dockerfile}
+    command: python -m cerebro.migrar
+    environment:
+      DATABASE_URL_ADMIN: "postgresql://cerebro:${POSTGRES_PASSWORD}@postgres:5432/cerebro"
+      CEREBRO_APP_PASSWORD: "${CEREBRO_APP_PASSWORD}"
+    depends_on:
+      postgres: {condition: service_healthy}
+    networks: [cerebro]
+    restart: "no"
+
+  redis:
+    image: redis:7-alpine
+    networks: [cerebro]
+    restart: unless-stopped
+
+  ollama:
+    image: ollama/ollama:latest
+    volumes: ["ollama:/root/.ollama"]
+    environment:      # los fija despliegue/desplegar.sh según la tarjeta; peticiones simultáneas × contexto = memoria de vídeo
+      OLLAMA_MAX_LOADED_MODELS: "${OLLAMA_MAX_LOADED_MODELS:-3}"
+      OLLAMA_NUM_PARALLEL: "${OLLAMA_NUM_PARALLEL:-4}"
+    deploy:
+      resources:
+        reservations:
+          devices: [{driver: nvidia, count: all, capabilities: [gpu]}]
+    networks: [cerebro]
+    restart: unless-stopped
+
+  api:
+    <<: *api
+    ports: ["127.0.0.1:8000:8000"]
+
+  worker:                 # tareas pedidas y programadas; Jarvis lo atiende la API directamente
+    <<: *api
+    command: celery -A cerebro.tareas.celery_app worker -Q peticiones,lote -c 2 -n general@%h
+
+  beat:                   # calendario de tareas programadas (a partir de las fichas): no ejecuta agentes, no necesita secretos
+    <<: *api
+    environment:
+      TZ: "${TZ:-Europe/Madrid}"
+      REDIS_URL: "${REDIS_URL:-redis://redis:6379/0}"
+    volumes: ["./config:/app/config:ro", "datos:/datos"]
+    command: celery -A cerebro.tareas.celery_app beat
+
+  redis-panel:            # sesiones del panel: Redis propio con contraseña y persistencia (la API y el worker no la tienen)
+    image: redis:7-alpine
+    command: ["sh", "-c", "exec redis-server --requirepass \"$$PANEL_REDIS_PASSWORD\" --appendonly yes --save ''"]
+    environment: {PANEL_REDIS_PASSWORD: "${PANEL_REDIS_PASSWORD:-}"}
+    volumes: ["redis-panel:/data"]
+    networks: [cerebro]
+    restart: unless-stopped
+
+  panel:
+    build: {context: ./panel}
+    environment:
+      # Con contraseña definida las sesiones van a redis-panel (cifradas con PANEL_SESION_SECRET) y sobreviven a reinicios;
+      # sin ella, en memoria (desarrollo)
+      REDIS_PANEL_URL: "${PANEL_REDIS_PASSWORD:+redis://:${PANEL_REDIS_PASSWORD}@redis-panel:6379}"
+      PANEL_SESION_SECRET: "${PANEL_SESION_SECRET:-}"
+      CEREBRO_API: "http://api:8000"
+      VOZ_API: "http://voz:8100"
+      KEYCLOAK_REALM: "${KEYCLOAK_REALM:-cerebro}"
+      KEYCLOAK_CLIENTE: "${KEYCLOAK_CLIENTE:-cerebro-panel}"
+      KEYCLOAK_URL_PUBLICA: "${KEYCLOAK_URL_PUBLICA:-http://localhost:8080}"   # la que abre el navegador
+      KEYCLOAK_URL_INTERNA: "http://keycloak:8080"                            # la que usa el panel por dentro
+      PANEL_URL: "${PANEL_URL:-http://localhost:3000}"
+      PANEL_USUARIO_DESARROLLO: "${PANEL_USUARIO_DESARROLLO:-}"               # solo con CEREBRO_MODO=desarrollo
+    ports: ["127.0.0.1:3000:3000"]
+    depends_on: [api, redis-panel]
+    networks: [cerebro]
+    restart: unless-stopped
+
+  voz:
+    build: {context: ./servicios/voz}
+    environment:
+      WHISPER_MODELO: "${WHISPER_MODELO:-large-v3-turbo}"             # con tarjetas de 12 GB o menos: small
+      WHISPER_DISPOSITIVO: "${WHISPER_DISPOSITIVO:-cuda}"             # cpu si la tarjeta no tiene memoria libre
+    volumes: ["./servicios/voz/voces:/voces:ro", "whisper:/root/.cache"]
+    deploy:
+      resources:
+        reservations:
+          devices: [{driver: nvidia, count: all, capabilities: [gpu]}]
+    networks: [cerebro]
+    restart: unless-stopped
+
+  jeff:                   # sustituto autoalojado de Jev (misma API) con el modelo «juez» local: decisiones cerradas sin que salga ningún dato
+    build: {context: ./servicios/jeff}
+    environment:
+      OLLAMA_URL: "${OLLAMA_URL:-http://ollama:11434}"
+      PERFIL_HARDWARE: "${PERFIL_HARDWARE:-pequena}"
+      OLLAMA_NUM_CTX: "${OLLAMA_NUM_CTX:-}"
+      CEREBRO_CONFIG: "/app/config"
+    volumes: ["./config:/app/config:ro"]
+    depends_on:
+      ollama: {condition: service_started}
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://localhost:8080/salud', timeout=5).status == 200 else 1)"]
+      interval: 30s
+      timeout: 8s
+      retries: 3
+      start_period: 20s
+    networks: [cerebro]
+    restart: unless-stopped
+
+  agent-reach:            # contenedor aislado, solo lectura de contenido público
+    build: {context: ./servicios/agent-reach}
+    volumes: ["agent-reach:/root/.agent-reach"]
+    networks: [cerebro]
+    restart: unless-stopped
+
+  keycloak:
+    image: quay.io/keycloak/keycloak:latest
+    command: start-dev --import-realm
+    environment:
+      KC_BOOTSTRAP_ADMIN_USERNAME: admin
+      KC_BOOTSTRAP_ADMIN_PASSWORD: "${KEYCLOAK_ADMIN_PASSWORD}"
+      # Emisor de los tokens fijo (la dirección que ve el navegador); el panel y la API lo usan también por dentro
+      KC_HOSTNAME: "${KEYCLOAK_URL_PUBLICA:-http://localhost:8080}"
+      KC_HOSTNAME_BACKCHANNEL_DYNAMIC: "true"
+    volumes: ["./config/keycloak:/opt/keycloak/data/import:ro"]
+    ports: ["127.0.0.1:8080:8080"]
+    networks: [cerebro]
+    restart: unless-stopped
+
+  # --- Langfuse v3 (registro de decisiones). Necesita PostgreSQL, ClickHouse, Redis y almacenamiento S3 (MinIO).
+  langfuse-db:
+    image: postgres:16-alpine
+    environment: {POSTGRES_USER: langfuse, POSTGRES_PASSWORD: "${LANGFUSE_DB_PASSWORD}", POSTGRES_DB: langfuse}
+    volumes: ["langfuse-db:/var/lib/postgresql/data"]
+    healthcheck: {test: ["CMD-SHELL", "pg_isready -U langfuse"], interval: 3s, timeout: 3s, retries: 10}
+    networks: [cerebro]
+    restart: unless-stopped
+
+  langfuse-clickhouse:
+    image: clickhouse/clickhouse-server:24.12
+    user: "101:101"
+    environment: {CLICKHOUSE_DB: default, CLICKHOUSE_USER: langfuse, CLICKHOUSE_PASSWORD: "${LANGFUSE_CLICKHOUSE_PASSWORD}"}
+    volumes: ["langfuse-clickhouse:/var/lib/clickhouse", "langfuse-clickhouse-logs:/var/log/clickhouse-server"]
+    healthcheck:
+      test: ["CMD-SHELL", "clickhouse-client --user langfuse --password \"$$CLICKHOUSE_PASSWORD\" -q 'SELECT 1'"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    networks: [cerebro]
+    restart: unless-stopped
+
+  langfuse-minio:           # almacenamiento S3 de Langfuse. minio/minio ya no se publica en Docker Hub:
+    # imagen congelada de Bitnami (sin parches); en producción apuntad a vuestro S3/MinIO (LANGFUSE_MINIO_IMAGEN o S3_*)
+    image: "${LANGFUSE_MINIO_IMAGEN:-bitnamilegacy/minio:2025.5.24}"
+    environment: {MINIO_ROOT_USER: minio, MINIO_ROOT_PASSWORD: "${LANGFUSE_MINIO_PASSWORD}", MINIO_DEFAULT_BUCKETS: langfuse}
+    volumes: ["langfuse-minio:/bitnami/minio/data"]
+    healthcheck: {test: ["CMD-SHELL", "bash -c 'echo > /dev/tcp/127.0.0.1/9000'"], interval: 3s, timeout: 5s, retries: 20}
+    networks: [cerebro]
+    restart: unless-stopped
+
+  langfuse-redis:           # propio: Langfuse exige contraseña y política noeviction
+    image: redis:7
+    command: --requirepass ${LANGFUSE_REDIS_PASSWORD} --maxmemory-policy noeviction
+    environment: {LANGFUSE_REDIS_PASSWORD: "${LANGFUSE_REDIS_PASSWORD}"}
+    volumes: ["langfuse-redis:/data"]
+    healthcheck: {test: ["CMD-SHELL", "redis-cli -a \"$$LANGFUSE_REDIS_PASSWORD\" ping | grep -q PONG"], interval: 3s, timeout: 5s, retries: 10}
+    networks: [cerebro]
+    restart: unless-stopped
+
+  langfuse-worker:
+    image: langfuse/langfuse-worker:3
+    environment: *langfuse-env
+    depends_on: *langfuse-depende
+    networks: [cerebro]
+    restart: unless-stopped
+
+  langfuse:                 # web y API de ingesta
+    image: langfuse/langfuse:3
+    environment:
+      <<: *langfuse-env
+      NEXTAUTH_URL: "${LANGFUSE_URL_PUBLICA:-http://localhost:3001}"
+      NEXTAUTH_SECRET: "${LANGFUSE_NEXTAUTH_SECRET}"
+      AUTH_DISABLE_SIGNUP: "true"      # nadie se da de alta solo: los usuarios los crea un administrador (rol Viewer para auditores)
+      # Alta automática de organización, proyecto, claves y usuario administrador (vacío = hacerlo a mano en la web)
+      LANGFUSE_INIT_ORG_ID: "${LANGFUSE_INIT_ORG_ID:-101cat}"
+      LANGFUSE_INIT_ORG_NAME: "${LANGFUSE_INIT_ORG_NAME:-101.cat}"
+      LANGFUSE_INIT_PROJECT_ID: "${LANGFUSE_INIT_PROJECT_ID:-cerebro}"
+      LANGFUSE_INIT_PROJECT_NAME: "${LANGFUSE_INIT_PROJECT_NAME:-Cerebro}"
+      LANGFUSE_INIT_PROJECT_PUBLIC_KEY: "${LANGFUSE_PUBLIC_KEY:-}"
+      LANGFUSE_INIT_PROJECT_SECRET_KEY: "${LANGFUSE_SECRET_KEY:-}"
+      LANGFUSE_INIT_USER_EMAIL: "${LANGFUSE_INIT_USER_EMAIL:-}"
+      LANGFUSE_INIT_USER_NAME: "${LANGFUSE_INIT_USER_NAME:-Administración}"
+      LANGFUSE_INIT_USER_PASSWORD: "${LANGFUSE_INIT_USER_PASSWORD:-}"
+    ports: ["127.0.0.1:3001:3000"]
+    depends_on: *langfuse-depende
+    networks: [cerebro]
+    restart: unless-stopped
+
+volumes: {pgdata: {}, ollama: {}, datos: {}, whisper: {}, agent-reach: {}, langfuse-db: {}, langfuse-clickhouse: {},
+  langfuse-clickhouse-logs: {}, langfuse-minio: {}, langfuse-redis: {}, redis-panel: {}}
+
+networks:
+  cerebro: {name: cerebro}

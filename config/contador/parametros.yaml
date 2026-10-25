@@ -1,0 +1,96 @@
+# Parámetros del motor de cotización, migrados del contador de instalaciones corregido
+# (CONTADOR_INSTALACIONS_corregido.xlsx, hojas «Puesta Marcha» y «Parámetros»).
+# Los valores de horas son el punto de partida: el Medidor Técnico los ajusta en cada caso
+# y el agente Tiempos Reales propone cambiarlos cuando los partes reales se desvían.
+
+factor_dos_operarios: 0.7          # tiempo de una pareja respecto a un operario
+horas_por_jornada: 8
+
+tecnicos:                          # coste → venta = coste × recargo
+  primera:  {coste_hora: 28, recargo: 1.25}
+  ayudante: {coste_hora: 22, recargo: 1.2}
+lampistas:
+  oficial:  {coste_hora: 22, recargo: 1.2}
+  ayudante: {coste_hora: 15, recargo: 1.2}
+ingeniero: {coste_hora: 20, venta_hora: 50}
+comercial: {coste_hora: 20, venta_hora: 35}
+
+desplazamiento: {coste_dia: 25, venta_dia: 35}
+dieta:          {coste_dia: 10, venta_dia: 10, fija_instaladores: 35}
+
+margen_material:                   # venta = coste / divisor
+  general: 0.7
+  cable: 0.55
+
+coste_financiero: 0.10             # sobre el coste; se repercute en el precio
+contingencia: 0.10                 # sobre el precio con coste financiero
+
+varios:
+  elevador:      {coste: 215, venta: 215}
+  documentacion_proteccion_datos: {coste: 100, venta: 150}
+
+# Horas por unidad y operario
+partidas_instalacion:
+  camara_interior: {nombre: "Colocar cámara nueva interior", horas: 0.5}
+  camara_exterior: {nombre: "Colocar cámara nueva exterior", horas: 2}
+  sai: {nombre: "Instalar SAI", horas: 0.25}
+  rack: {nombre: "Instalar rack", horas: 1}
+  fuente_alimentacion: {nombre: "Instalar fuente de alimentación", horas: 0.5}
+  volumetrico: {nombre: "Instalar volumétrico", horas: 0.5}
+  sirena_interior: {nombre: "Instalar sirena interior", horas: 0.5}
+  sirena_exterior: {nombre: "Instalar sirena exterior", horas: 2}
+  teclado: {nombre: "Instalar teclado", horas: 0.5}
+  central_alarma: {nombre: "Instalar central de alarma", horas: 1}
+  domo_interior: {nombre: "Colocar cámara domo interior", horas: 2}
+  cambiar_carcasa: {nombre: "Cambiar carcasa", horas: 0.5}
+  alargo_carcasa_exterior: {nombre: "Instalar alargo de carcasa exterior", horas: 2}
+  antena: {nombre: "Instalar antena", horas: 2}
+  transmisor_rc: {nombre: "Instalar transmisor RC", horas: 1}
+  colocar_carcasa: {nombre: "Colocar carcasa", horas: 1}
+  amplificador_senal: {nombre: "Instalar amplificador de señal", horas: 0.25}
+  cambiar_camara: {nombre: "Cambiar cámara", horas: 0.5}
+  videoportero: {nombre: "Instalar videoportero", horas: 1}
+  conectorizar: {nombre: "Grimpar o conectorizar (alimentación incluida)", horas: 0.1}
+
+# Horas por metro y operario
+cableado:
+  corrugado: 0.05
+  regleta: 0.08
+  solo_cable: 0.02
+  tubo_rigido: 0.08
+
+# Coste por metro o unidad; tipo decide el divisor de margen
+materiales:
+  corrugado_16: {nombre: "Corrugado 16 mm", coste: 0.25, tipo: general}
+  corrugado_25: {nombre: "Corrugado 25 mm protegido", coste: 0.47, tipo: general}
+  tubo_rigido_16: {nombre: "Tubo rígido 16 mm", coste: 0.85, tipo: general}
+  cantoneras: {nombre: "Cantoneras", coste: 0.35, tipo: general}
+  grapas_tubo: {nombre: "Grapas para tubo rígido", coste: 0.13, tipo: general}
+  rj45: {nombre: "Conectores RJ45", coste: 0.2, tipo: general}
+  bnc: {nombre: "Conectores BNC", coste: 0.9, tipo: general}
+  ferreteria: {nombre: "Ferretería", coste: 0.7, tipo: general}
+  rg59_2alim: {nombre: "RG59 + 2 alimentación", coste: 0.5, tipo: cable}
+  cat5_ftp: {nombre: "CAT 5 FTP", coste: 0.5, tipo: cable}
+  cat6_utp: {nombre: "CAT 6 UTP", coste: 0.6, tipo: cable}
+  rg59_2alim_plus: {nombre: "RG59 + 2 alimentación (gama alta)", coste: 1.0, tipo: general}
+  alarma_apantallado: {nombre: "Alarma apantallado 2+6 libre halógenos", coste: 1.1, tipo: general}
+  rg59_telemetria: {nombre: "RG59 + 2×0,75 + telemetría", coste: 2.1, tipo: general}
+  pequeno_material: {nombre: "Varios pequeño material", coste: 1.0, tipo: general}
+  alimentacion: {nombre: "Alimentación", coste: 1.0, tipo: general}
+
+# Horas por unidad del ingeniero
+tareas_ingenieria:
+  pc: {nombre: "Instalar PC y configurar", horas: 1}
+  sai: {nombre: "Instalar SAI", horas: 0.25}
+  central_alarma: {nombre: "Configurar central de alarma", horas: 1}
+  switch: {nombre: "Instalar switch", horas: 0.5}
+  red_wifi: {nombre: "Configurar red wifi", horas: 2}
+  grabador_4: {nombre: "Configurar grabador de 4", horas: 1}
+  grabador_8: {nombre: "Configurar grabador de 8", horas: 1}
+  enfoque_camara: {nombre: "Enfoque de cámara", horas: 0.25}
+  grabador_16: {nombre: "Configurar grabador de 16", horas: 1}
+
+condiciones_pago:
+  - {id: "30-40-30", descripcion: "30 % a la firma, 40 % a mitad de obra, 30 % al finalizar"}
+  - {id: "50-50", descripcion: "50 % a la firma, 50 % al finalizar"}
+  - {id: "prepago", descripcion: "Pago por adelantado con 5 % de descuento", descuento: 0.05}
