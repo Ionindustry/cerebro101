@@ -16,7 +16,7 @@ from pydantic import BaseModel
 from ..ajustes import ajustes
 from ..aprobaciones import bandeja
 from ..aprobaciones.logica import DecisionNoValida
-from .. import actividad, constancia, kpis, oficina
+from .. import actividad, constancia, kpis, modelos_externos, oficina
 from ..cotizador import Solicitud, calcular
 from ..grafo import construir, nodos
 from ..llm import ErrorModelo, circuito, estado_modelos
@@ -110,6 +110,44 @@ async def salud_jev(probar: bool = False):
 async def salud_modelos():
     """¿Responde Ollama y están descargados los modelos del perfil? (lo usa la verificación del despliegue)"""
     return await estado_modelos(modelos_necesarios())
+
+
+@app.get("/modelos-externos")
+async def ver_modelos_externos(probar: str | None = None, usuario: Usuario = Depends(usuario_actual)):
+    """Claude y ChatGPT para consultas complejas: si están conectados, si tienen clave y cuánto se han usado hoy. No devuelve ninguna clave.
+    `probar=claude|chatgpt` hace una pregunta de prueba (sin datos de nadie); solo Dirección."""
+    if probar:
+        _exigir_direccion(usuario)
+        if probar not in modelos_externos.CLAVES:
+            raise HTTPException(404, "Proveedor desconocido")
+    return await modelos_externos.estado(probar)
+
+
+class Interruptor(BaseModel):
+    activo: bool
+
+
+def _exigir_direccion(usuario: Usuario) -> None:
+    if "direccion" not in usuario.roles:
+        raise HTTPException(403, "Solo Dirección puede conectar o desconectar los modelos externos")
+
+
+@app.post("/modelos-externos/{proveedor}")
+async def cambiar_modelo_externo(proveedor: str, i: Interruptor, usuario: Usuario = Depends(usuario_actual)):
+    """Conecta o desconecta un modelo externo. Solo Dirección, y solo si tiene clave; queda constancia de quién y cuándo."""
+    _exigir_direccion(usuario)
+    if proveedor not in modelos_externos.CLAVES:
+        raise HTTPException(404, "Proveedor desconocido")
+    if i.activo and not modelos_externos.clave(proveedor):
+        raise HTTPException(409, f"Falta la clave de {proveedor}: ponla con «python3 scripts/modelos_activar.py {proveedor}» y recrea la API")
+    try:
+        await modelos_externos.poner(proveedor, i.activo, usuario.id)
+    except Exception as e:  # noqa: BLE001
+        log.exception("No se pudo guardar el estado de %s", proveedor)
+        raise HTTPException(503, "No se ha podido guardar el cambio (la base de datos no responde)") from e
+    await constancia.dejar_constancia(None, usuario.id, "modelos_externos", "conectar" if i.activo else "desconectar", None,
+                                      f"{proveedor} {'conectado' if i.activo else 'desconectado'} por {usuario.id}")
+    return await modelos_externos.estado()
 
 
 @app.post("/jarvis/mensaje")

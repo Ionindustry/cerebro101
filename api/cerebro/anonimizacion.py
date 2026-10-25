@@ -346,8 +346,12 @@ def _categorias_especiales(texto: str, cfg: dict) -> list[str]:
 
 
 def anonimizar(texto: str, entidades: Entidades | None = None, detector: Detector | None = None,
-               cfg: dict | None = None) -> Resultado:
-    """Sustituye los datos personales y comprueba el resultado. Si `apto` es False, no enviar a la nube."""
+               cfg: dict | None = None, sesion: dict | None = None) -> Resultado:
+    """Sustituye los datos personales y comprueba el resultado. Si `apto` es False, no enviar a la nube.
+
+    `sesion` (opcional): un dict vacío que se comparte entre varias llamadas para que la misma persona lleve la misma etiqueta en todos
+    los mensajes de una conversación y para poder deshacer la sustitución con `desanonimizar` en la respuesta. Vive solo en memoria,
+    mientras dura la consulta: no se guarda, no se registra y no sale del servidor."""
     cfg = cfg if cfg is not None else configuracion("")
     entidades = entidades or Entidades()
     detector = detector or detector_heuristico(cfg.get("no_son_nombres", []))
@@ -368,8 +372,10 @@ def anonimizar(texto: str, entidades: Entidades | None = None, detector: Detecto
             if _palabras(texto[sub[0]:sub[1]]) not in conservar:
                 elegidos = _resolver(elegidos + [sub])
 
-    etiquetas: dict[tuple[str, str], str] = {}
-    contador: dict[str, int] = {}
+    sesion = sesion if sesion is not None else {}
+    etiquetas: dict[tuple[str, str], str] = sesion.setdefault("etiquetas", {})
+    contador: dict[str, int] = sesion.setdefault("contador", {})
+    equivalencias: dict[str, str] = sesion.setdefault("equivalencias", {})
     partes, cursor, cuenta = [], 0, {}
     for ini, fin, tipo, clave in elegidos:
         if (tipo, clave) not in etiquetas:
@@ -377,6 +383,7 @@ def anonimizar(texto: str, entidades: Entidades | None = None, detector: Detecto
             etiquetas[(tipo, clave)] = f"[{tipo}_{contador[tipo]}]"
         partes.append(texto[cursor:ini])
         partes.append(etiquetas[(tipo, clave)])
+        equivalencias.setdefault(etiquetas[(tipo, clave)], texto[ini:fin])
         cuenta[tipo] = cuenta.get(tipo, 0) + 1
         cursor = fin
     partes.append(texto[cursor:])
@@ -390,3 +397,20 @@ def anonimizar(texto: str, entidades: Entidades | None = None, detector: Detecto
     return Resultado(texto=limpio, apto=not motivos, motivos=motivos, sustituciones=cuenta,
                      huella=hashlib.sha256(limpio.encode("utf-8")).hexdigest(),
                      entidades_erp=entidades.origen == "erpnext" and entidades.disponible)
+
+
+def desanonimizar(valor, sesion: dict):
+    """Devuelve `valor` (texto, lista o dict) con las etiquetas ([PERSONA_1]…) sustituidas por lo que había en el original.
+
+    Sirve para que la respuesta de un modelo externo, que solo ha visto etiquetas, llegue al resto del sistema con los datos reales
+    (por ejemplo, el destinatario de un correo que va a aprobar una persona)."""
+    tabla = sesion.get("equivalencias", {})
+    if isinstance(valor, str):
+        for etiqueta in sorted(tabla, key=len, reverse=True):
+            valor = valor.replace(etiqueta, tabla[etiqueta])
+        return valor
+    if isinstance(valor, list):
+        return [desanonimizar(v, sesion) for v in valor]
+    if isinstance(valor, dict):
+        return {k: desanonimizar(v, sesion) for k, v in valor.items()}
+    return valor

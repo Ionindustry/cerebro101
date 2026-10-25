@@ -254,3 +254,15 @@ h1 { font-size: 30px; font-weight: 300; letter-spacing: -0.6px; margin: 0 0 20px
 a.kp-fila:hover { background: var(--fondo); }
 .kp-fila small { color: var(--secundario); font-weight: 400; }
 @media (max-width: 760px) { .kp-fila { grid-template-columns: 2fr repeat(2, 1fr); } .kp-fila > :nth-child(n+4) { display: none; } }
+
+/* Interruptores de los modelos externos (Agentes) */
+.mx-fila { align-items: center !important; }
+.mx-texto { flex: 1; min-width: 0; }
+.mx-acciones { display: flex; gap: 10px; align-items: center; flex-shrink: 0; }
+.interruptor { position: relative; width: 46px; height: 26px; border: 0; border-radius: 99px; background: #c9c9c4; padding: 0; cursor: pointer; transition: background .15s; }
+.interruptor span { position: absolute; top: 3px; left: 3px; width: 20px; height: 20px; border-radius: 50%; background: #fff; transition: transform .15s; }
+.interruptor.on { background: var(--hecho); }
+.interruptor.on span { transform: translateX(20px); }
+.interruptor:disabled { opacity: .45; cursor: not-allowed; }
+.interruptor:focus-visible, .of-boton:focus-visible { outline: 2px solid var(--tinta); outline-offset: 2px; }
+.mx-aviso { color: #b3261e; font-weight: 600; }

@@ -1,0 +1,29 @@
+# Modelos de IA externos (Claude de Anthropic y ChatGPT de OpenAI) para las consultas más complejas.
+# Nunca se usan por defecto: cada uno se conecta y se desconecta desde el panel (Agentes → Modelos externos) y necesita su clave en el .env
+# (python3 scripts/modelos_activar.py). Ver docs/MODELOS_EXTERNOS.md.
+#
+# Qué sale a la nube: SOLO lo que pasa la anonimización local (config/anonimizacion.yaml) y de agentes de sensibilidad que no supere
+# `sensibilidad_maxima`. Si algo no se puede garantizar, la consulta se queda en el modelo local. La respuesta vuelve con los datos reales.
+
+orden: [claude, chatgpt]        # a quién se pregunta primero; si falla o no está conectado, al siguiente; si ninguno, el modelo local
+sensibilidad_maxima: media      # los agentes de sensibilidad «alta» (RR.HH., económico, legal…) nunca usan modelos externos
+limite_diario: 200              # llamadas por proveedor y día (tope de gasto); al llegar, vuelve al modelo local hasta mañana
+timeout_segundos: 90
+max_tokens: 2000
+
+proveedores:
+  claude:
+    nombre: "Claude (Anthropic)"
+    url: "https://api.anthropic.com"
+    modelo: "claude-opus-5-5"   # se puede cambiar con CLAUDE_MODELO en el .env
+  chatgpt:
+    nombre: "ChatGPT (OpenAI)"
+    url: "https://api.openai.com"
+    modelo: "gpt-5"             # comprobad la etiqueta vigente en platform.openai.com; se cambia con CHATGPT_MODELO en el .env
+
+# Qué es una consulta «compleja»: un texto largo o que pide análisis, comparación, redacción extensa o estrategia.
+# También se pregunta a un modelo externo cuando el modelo local no ha dado una respuesta válida ni subiendo al principal.
+complejidad:
+  caracteres: 600
+  palabras: [analiza, analiz*, compara, compar*, estrategia, estratègia, informe, redacta, redacció, propuesta, proposta, plan de,
+             evalúa, avalua, resume, resumeix, conclusiones, conclusions, riesgos, riscos, pros y contras, argumenta]

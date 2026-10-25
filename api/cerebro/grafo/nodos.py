@@ -8,7 +8,7 @@ import os
 from langgraph.types import interrupt
 
 from .. import herramientas as H
-from .. import actividad
+from .. import actividad, modelos_externos
 from ..aprobaciones import bandeja
 from ..constancia import dejar_constancia
 from ..llm import ContextoLleno, RespuestaInvalida, chat
@@ -104,6 +104,11 @@ async def _paso_del_agente(ficha, estado: dict, mensajes: list[dict]) -> dict:
     presupuesto = ctx - PASO_MAX_TOKENS - 300
     origen = estado.get("origen", "peticion")
     entrada = recortar(mensajes, presupuesto)
+    # Consulta compleja: si Dirección ha conectado Claude o ChatGPT (y los datos se pueden anonimizar), responde un modelo externo
+    if modelos_externos.es_compleja(estado["peticion"]):
+        d = await modelos_externos.consultar(ficha, entrada, ESQUEMA_AGENTE, estado.get("sensibilidad"))
+        if d and d.get("tipo") in ("herramienta", "respuesta"):
+            return d
     try:
         try:
             return await chat(asignar(ficha, origen), entrada, esquema=ESQUEMA_AGENTE, max_tokens=PASO_MAX_TOKENS)
@@ -113,7 +118,14 @@ async def _paso_del_agente(ficha, estado: dict, mensajes: list[dict]) -> dict:
     except ContextoLleno:
         raise
     except RespuestaInvalida:
-        return await chat(asignar(ficha, origen, dificil=True), entrada, esquema=ESQUEMA_AGENTE, max_tokens=PASO_MAX_TOKENS)
+        try:
+            return await chat(asignar(ficha, origen, dificil=True), entrada, esquema=ESQUEMA_AGENTE, max_tokens=PASO_MAX_TOKENS)
+        except RespuestaInvalida:
+            # Ni el modelo principal local ha dado una respuesta válida: último recurso, un modelo externo (si procede)
+            d = await modelos_externos.consultar(ficha, entrada, ESQUEMA_AGENTE, estado.get("sensibilidad"))
+            if d and d.get("tipo") in ("herramienta", "respuesta"):
+                return d
+            raise
 
 
 async def _ejecutar_agente(estado: Estado, ficha) -> Estado:
