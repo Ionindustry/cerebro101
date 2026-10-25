@@ -66,6 +66,14 @@ CREATE TABLE IF NOT EXISTS kpi_uso (
   PRIMARY KEY (agente, dia, clave)
 );
 
+-- Qué modelos externos (Claude, ChatGPT) están conectados: lo cambia Dirección desde el panel. Sin fila = desconectado.
+CREATE TABLE IF NOT EXISTS modelos_externos (
+  proveedor    text PRIMARY KEY,
+  activo       boolean NOT NULL DEFAULT false,
+  cambiado_por text,
+  cambiado     timestamptz NOT NULL DEFAULT now()
+);
+
 -- Registro de acciones ejecutadas (evidencia para ENS / ISO 27001)
 CREATE TABLE IF NOT EXISTS registro_acciones (
   id           bigserial PRIMARY KEY,

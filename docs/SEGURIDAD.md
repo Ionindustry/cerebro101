@@ -63,6 +63,12 @@ usado para ajustarlo, y ampliad los conjuntos con casos reales (sin datos reales
 - Los datos de Personas (RRHH) y todo lo de sensibilidad alta no deben ir nunca a Jev: la política ya los desvía a
   Jeff o al modelo local, y la anonimización es una segunda barrera.
 
+## Modelos externos (Claude, ChatGPT)
+
+Mismas reglas que Jev en la nube, más un interruptor por modelo que solo maneja Dirección (`docs/MODELOS_EXTERNOS.md`): desconectados por defecto, solo agentes de
+sensibilidad baja o media, anonimización local obligatoria (si no se puede garantizar, no sale nada), tope diario de llamadas y constancia de quién los conecta.
+La tabla de equivalencias para restaurar los datos en la respuesta vive solo en memoria durante la consulta. Falta el contrato de encargado de tratamiento.
+
 ## Lo que decide el sistema y no el modelo
 
 El modelo de cada agente propone la herramienta y sus argumentos, pero hay dos valores que nunca puede fijar él:

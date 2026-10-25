@@ -1,6 +1,7 @@
 "use client";
 import Link from "next/link";
 import EstadoJev from "../../componentes/EstadoJev";
+import ModelosExternos from "../../componentes/ModelosExternos";
 import { useEffect, useState } from "react";
 
 const APROBACION = { libre: "Actúa solo", simple: "Pide tu firma", doble: "Pide tu firma (solo en el panel)" };
@@ -20,6 +21,7 @@ export default function Agentes() {
     <>
       <h1>{visibles.length} agentes</h1>
       <EstadoJev />
+      <ModelosExternos />
       <div className="filtros">
         <button aria-pressed={!filtro} onClick={() => setFiltro(null)}>Todos</button>
         {Object.entries(deps).map(([id, d]) => (

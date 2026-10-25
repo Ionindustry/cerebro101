@@ -51,6 +51,11 @@ x-api: &api
     JEV_API_KEY: "${JEV_API_KEY:-}"
     JEFF_URL: "${JEFF_URL:-http://jeff:8080}"
     USAR_JEV_NUBE: "${USAR_JEV_NUBE:-false}"
+    # Modelos externos para consultas complejas (se conectan desde el panel; ver docs/MODELOS_EXTERNOS.md)
+    ANTHROPIC_API_KEY: "${ANTHROPIC_API_KEY:-}"
+    OPENAI_API_KEY: "${OPENAI_API_KEY:-}"
+    CLAUDE_MODELO: "${CLAUDE_MODELO:-}"                   # vacío = el de config/modelos_externos.yaml
+    CHATGPT_MODELO: "${CHATGPT_MODELO:-}"
     ANONIMIZACION_NER: "${ANONIMIZACION_NER:-heuristico}"
     ANONIMIZACION_MODELO_SPACY: "${ANONIMIZACION_MODELO_SPACY:-es_core_news_md}"
     AGENT_REACH_URL: "${AGENT_REACH_URL:-http://agent-reach:8090}"
