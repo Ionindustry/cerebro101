@@ -246,7 +246,10 @@ async def leer_bandeja(departamento: str, buzon: str | None = None, no_leidos: b
     ident, _ = B.resolver(departamento, buzon)
     tope = int((B.cargar().get("limites") or {}).get("mensajes_max", 20))
     mensajes = await asyncio.to_thread(_leer, ident, no_leidos, max(1, min(limite, tope)))
-    return {"buzon": ident, "aviso": AVISO_EXTERNO, "mensajes": mensajes}
+    salida = {"buzon": ident, "aviso": AVISO_EXTERNO, "mensajes": mensajes}
+    if no_leidos and not mensajes:
+        salida["nota"] = "No hay correos SIN LEER. Para ver también los ya leídos (los últimos recibidos) repite con no_leidos=false."
+    return salida
 
 
 async def preparar_borrador(departamento: str, para: list[str] | str, asunto: str, cuerpo: str, buzon: str | None = None,
@@ -340,7 +343,7 @@ registrar(Herramienta(
     externas=frozenset({"responder", "enviar"}),
     vistas={"responder": vista_responder, "enviar": vista_enviar},
     ayuda={"listar_buzones": "qué buzones puede usar tu departamento",
-           "leer_bandeja": "lee los correos (solo lectura; no los marca como leídos). Si hay varios buzones, indica «buzon»",
+           "leer_bandeja": "lee los correos (solo lectura; no los marca como leídos). Por defecto solo los no leídos: con no_leidos=false trae los últimos recibidos, leídos o no. Si hay varios buzones, indica «buzon»",
            "preparar_borrador": "guarda un borrador en la carpeta de borradores del buzón; no envía nada",
            "responder": "contesta a un mensaje recibido (message_id de leer_bandeja); la respuesta va al remitente y una persona la aprueba antes",
            "enviar": "envía un correo nuevo; una persona lo aprueba antes"},
