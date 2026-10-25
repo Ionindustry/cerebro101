@@ -2,7 +2,7 @@
 
 Los documentos vienen de terceros y no son de fiar: solo se LEE su texto, nunca se ejecuta nada (ni macros ni scripts), se comprueba que
 el contenido sea del tipo que dice el nombre, se limita el tamaño y se desconfía de los ZIP que se descomprimen enormes.
-Una imagen o un PDF escaneado no tienen texto que extraer: se avisa en vez de inventar.
+Las imágenes y los PDF escaneados se leen con OCR (ocr.py); si no hay OCR en el servidor se avisa en vez de inventar.
 """
 from __future__ import annotations
 
@@ -12,6 +12,10 @@ import re
 import zipfile
 from html.parser import HTMLParser
 from xml.etree import ElementTree
+
+from . import ocr as O
+
+OCR_AVISO = "Texto obtenido por OCR: puede tener errores, sobre todo en cifras, fechas y NIF. Comprueba los datos importantes antes de usarlos."
 
 EXTENSIONES = {".pdf", ".docx", ".xlsx", ".csv", ".txt", ".html", ".htm", ".xml", ".json", ".md"}
 IMAGENES = {".png", ".jpg", ".jpeg", ".gif", ".tif", ".tiff", ".bmp", ".webp"}
@@ -68,7 +72,16 @@ def _pdf(datos: bytes) -> tuple[str, dict]:
     if paginas > PAGINAS_MAX:
         info["aviso_paginas"] = f"Solo se han leído las {PAGINAS_MAX} primeras páginas de {paginas}"
     if len(re.sub(r"\[Página \d+\]|\s", "", texto)) < 3:
-        info["aviso_documento"] = "El PDF no tiene texto seleccionable (parece escaneado o son imágenes): hace falta OCR o que lo revise una persona"
+        # sin texto seleccionable: es un escaneo o un PDF de imágenes
+        try:
+            texto, leidas = O.ocr_pdf(datos)
+            info.update(ocr=True, aviso_ocr=OCR_AVISO)
+            if paginas > leidas:
+                info["aviso_paginas"] = f"Con OCR solo se han leído las {leidas} primeras páginas de {paginas}"
+        except O.OcrNoDisponible:
+            info["aviso_documento"] = "El PDF no tiene texto seleccionable (parece escaneado) y este servidor no tiene OCR: que lo revise una persona"
+        except O.OcrFallido as e:
+            info["aviso_documento"] = f"El PDF es un escaneo y el OCR ha fallado: {e}"
     return texto, info
 
 
@@ -156,7 +169,12 @@ def extraer_texto(nombre: str, datos: bytes) -> tuple[str, dict]:
     """(texto completo, información). Lanza DocumentoNoValido con un mensaje claro si no se puede o no se debe leer."""
     ext = extension(nombre)
     if ext in IMAGENES:
-        return "", {"aviso_documento": "Es una imagen: no tiene texto que leer sin OCR. Si es un documento escaneado, que lo revise una persona"}
+        try:
+            return O.ocr_imagen(datos, ext), {"ocr": True, "aviso_ocr": OCR_AVISO}
+        except O.OcrNoDisponible:
+            return "", {"aviso_documento": "Es una imagen y este servidor no tiene OCR: que la revise una persona"}
+        except O.OcrFallido as e:
+            raise DocumentoNoValido(str(e)) from e
     if ext not in EXTENSIONES:
         raise DocumentoNoValido(f"Tipo de fichero «{ext or 'desconocido'}» no admitido. Se leen: {', '.join(sorted(EXTENSIONES))}")
     if ext == ".pdf":

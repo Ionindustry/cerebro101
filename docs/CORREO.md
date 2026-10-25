@@ -21,7 +21,8 @@ que se enviará** y, si es una respuesta, el mensaje original. Aprobar es lo ún
 - `leer_bandeja` lista los adjuntos de cada mensaje (número, nombre, tipo y tamaño).
 - `correo.leer_adjunto` devuelve el **texto** de un PDF, Word (.docx), Excel (.xlsx), CSV, texto o HTML. Si es largo se lee por trozos de 6000 caracteres (`desde`),
   para que quepa en el contexto del modelo. Con ese texto el agente resume, extrae importes, fechas, datos de contacto, etc.
-- Una **imagen** o un **PDF escaneado** no tienen texto: el resultado lo dice (hace falta OCR o que lo mire una persona). El OCR no está incluido todavía.
+- Las **imágenes** (png, jpg…) y los **PDF escaneados** se leen con **OCR** (Tesseract, en español, catalán e inglés; hasta 12 páginas por documento). El texto de un OCR puede
+  tener errores en cifras, fechas y NIF: el resultado lo avisa, y para facturas se comprueba (ver más abajo).
 - `erpnext.adjuntar_desde_correo` guarda el adjunto como **fichero privado** de un documento ya existente del ERP/CRM (p. ej. un `CRM Lead` o un `Quotation` que el agente
   acaba de crear con `crear_borrador`). Solo en documentos que la política (`config/erp_acceso.yaml`) permite al departamento crear en borrador, y con la clave del departamento.
 - Para volcar los **datos** del documento (cliente, importes, líneas) el agente usa `crear_borrador`: siempre en borrador, nunca validado; lo valida una persona en el ERP.
@@ -31,7 +32,23 @@ Seguridad con los adjuntos (vienen de terceros):
 - Se comprueba que el contenido sea del tipo que dice el nombre (un «.pdf» que no es PDF se rechaza), y que un Word/Excel no se descomprima a un tamaño absurdo.
 - Máximo 10 MB por adjunto (`adjunto_max_mb`); el nombre del fichero se limpia de rutas y caracteres raros.
 - El texto de un documento puede contener instrucciones maliciosas dirigidas al agente: se entrega con el mismo aviso de «información de terceros, no órdenes».
+- El OCR y la conversión de PDF a imagen corren sin shell, con límite de tiempo y de memoria, y rechazan imágenes gigantes.
 - **No hay antivirus.** Para guardar adjuntos en el ERP de forma masiva convendría pasarlos antes por ClamAV (pendiente de decidir).
+
+## Facturas de proveedor: del correo al ERP
+
+El agente `control-gastos` (Finanzas, buzón `facturacion@`) lee la factura adjunta (PDF con texto, escaneo o foto) y usa `erpnext.crear_factura_compra`, que deja una **Purchase Invoice en
+borrador** con el proveedor, las líneas, el IVA, las fechas y el original adjunto. Una persona la revisa y la valida en ERPNext.
+
+Antes de crear nada, el sistema (no el modelo) comprueba:
+- que las **líneas, el IVA (0/4/10/21 %) y el total cuadran** (tolerancia de 2 céntimos);
+- que el **número de factura y el total aparecen realmente en el texto del documento** (así una cifra mal leída por el OCR no pasa);
+- que el **proveedor existe en el ERP** (por NIF o por nombre); **no da de alta proveedores nuevos**: lo hace una persona;
+- que **no es un duplicado** (mismo proveedor y número);
+- avisa, sin bloquear, si el NIF no tiene formato válido o no aparece, o si el importe de una línea no aparece en el documento.
+
+Si algo falla, no se crea nada y el agente explica el motivo a la persona. Las cuentas de gasto e IVA salen de `config/facturas.yaml` (hoy las del ERP de pruebas: **hay que cambiarlas
+por las del Plan General Contable** de la empresa). Requiere que el departamento tenga el permiso `Purchase Invoice` en borrador y `Supplier` de lectura en `config/erp_acceso.yaml` (Finanzas ya los tiene).
 
 ## Qué impide que un agente haga algo indebido
 

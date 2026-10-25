@@ -53,7 +53,7 @@ AGENTES = {
     ],
     "finanzas": [
         ("contable", "Contable", "Contabilidad", "Asientos en borrador, conciliación bancaria, cierre mensual y cuenta de resultados explicada", "principal", K + ["erpnext"], "doble", "0 4 1 * *", "alta"),
-        ("control-gastos", "Control de Gastos", "Contabilidad", "Clasifica tickets y facturas de proveedor y controla el presupuesto por departamento", "rapido", K + ["erpnext"], "simple", None, "alta"),
+        ("control-gastos", "Control de Gastos", "Contabilidad", "Lee las facturas de proveedor que llegan por correo (PDF, escaneos y fotos, con OCR), las deja en borrador en el ERP para su validación, clasifica tickets y controla el presupuesto por departamento", "principal", K + ["erpnext", "correo"], "simple", None, "alta"),
         ("tesorero", "Tesorero", "Tesorería", "Previsión de caja a 30/60/90 días, alertas de liquidez y calendario de pagos", "principal", K + ["erpnext"], "libre", "0 7 * * 1", "alta"),
         ("facturacion", "Facturación", "Facturación y cobros", "Prepara facturas en borrador según la normativa vigente para su validación", "principal", K + ["erpnext"], "doble", None, "alta"),
         ("cobros", "Cobros", "Facturación y cobros", "Detecta impagados y redacta recordatorios graduados según el historial del cliente", "principal", K + ["erpnext", "correo"], "simple", "0 9 * * 1-5", "alta"),

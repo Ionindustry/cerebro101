@@ -25,6 +25,7 @@ except ImportError:
 from cerebro.herramientas import buzones as B
 from cerebro.herramientas import correo
 from cerebro.herramientas import documentos as D
+from cerebro.herramientas import ocr as O
 
 HOST = os.environ.get("CEREBRO_PRUEBA_CORREO")
 
@@ -80,7 +81,7 @@ class TestExtraccion(unittest.TestCase):
 
     def test_pdf_sin_texto_avisa(self):
         t, info = D.extraer_texto("escaneo.pdf", pdf_con_texto(""))
-        self.assertIn("OCR", info["aviso_documento"])
+        self.assertTrue(info.get("ocr") or "OCR" in info.get("aviso_documento", ""))
 
     def test_pdf_falso_o_roto(self):
         with self.assertRaises(D.DocumentoNoValido):
@@ -123,10 +124,7 @@ class TestExtraccion(unittest.TestCase):
         t, _ = D.extraer_texto("n.txt", "acentuación ñ".encode("utf-8"))
         self.assertEqual(t, "acentuación ñ")
 
-    def test_imagen_avisa_y_ejecutable_se_rechaza(self):
-        t, info = D.extraer_texto("foto.jpg", b"\xff\xd8\xff")
-        self.assertEqual(t, "")
-        self.assertIn("imagen", info["aviso_documento"])
+    def test_ejecutables_y_tipos_no_admitidos_se_rechazan(self):
         for n in ("virus.exe", "script.js", "macro.docm", "todo.zip", "sin_extension"):
             with self.subTest(n), self.assertRaises(D.DocumentoNoValido):
                 D.extraer_texto(n, b"x")
@@ -136,6 +134,63 @@ class TestExtraccion(unittest.TestCase):
         self.assertEqual(D.nombre_seguro("C:\\Users\\x\\factura 1.pdf"), "factura 1.pdf")
         self.assertEqual(D.nombre_seguro("a<b>|c?.pdf"), "a_b__c_.pdf")
         self.assertEqual(D.nombre_seguro(""), "adjunto")
+
+
+def imagen_con_texto(lineas: list[str], formato="PNG") -> bytes:
+    from PIL import Image, ImageDraw, ImageFont
+    img = Image.new("RGB", (1400, 120 + 90 * len(lineas)), "white")
+    d = ImageDraw.Draw(img)
+    fuente = ImageFont.load_default(size=48)
+    for i, t in enumerate(lineas):
+        d.text((60, 60 + 90 * i), t, fill="black", font=fuente)
+    b = io.BytesIO()
+    img.save(b, formato)
+    return b.getvalue()
+
+
+@unittest.skipUnless(HAY_LIBS and O.disponible(), "requiere pypdf, Pillow y Tesseract (están en la imagen del Cerebro)")
+class TestOcr(unittest.TestCase):
+    LINEAS = ["Factura 2026-0142", "Proveedor: Instalaciones Roca SL", "Total 1.210,00 EUR"]
+
+    def comprobar(self, t):
+        for esperado in ("2026-0142", "Roca", "1.210,00"):
+            self.assertIn(esperado, t)
+
+    def test_imagen_png_y_jpg(self):
+        for ext, fmt in ((".png", "PNG"), (".jpg", "JPEG")):
+            with self.subTest(ext):
+                t, info = D.extraer_texto("factura" + ext, imagen_con_texto(self.LINEAS, fmt))
+                self.comprobar(t)
+                self.assertTrue(info["ocr"])
+                self.assertIn("errores", info["aviso_ocr"])
+
+    def test_pdf_escaneado_se_lee_con_ocr(self):
+        from PIL import Image
+        b = io.BytesIO()
+        Image.open(io.BytesIO(imagen_con_texto(self.LINEAS))).save(b, "PDF")
+        t, info = D.extraer_texto("escaneo.pdf", b.getvalue())
+        self.comprobar(t)
+        self.assertTrue(info["ocr"])
+
+    def test_pdf_con_texto_no_usa_ocr(self):
+        t, info = D.extraer_texto("f.pdf", pdf_con_texto("Total 5 EUR"))
+        self.assertNotIn("ocr", info)
+
+    def test_imagen_falsa_o_gigante(self):
+        with self.assertRaises(D.DocumentoNoValido):
+            D.extraer_texto("falsa.jpg", b"\xff\xd8\xff basura")
+        from PIL import Image
+        gigante = io.BytesIO()
+        Image.new("1", (9000, 9000)).save(gigante, "PNG")                 # 81 Mpíxeles, pesa poco comprimida
+        with self.assertRaises(D.DocumentoNoValido) as e:
+            D.extraer_texto("enorme.png", gigante.getvalue())
+        self.assertIn("demasiado grande", str(e.exception))
+
+    def test_sin_ocr_en_el_servidor_se_avisa(self):
+        with mock.patch.object(O, "disponible", lambda: False):
+            t, info = D.extraer_texto("f.png", imagen_con_texto(self.LINEAS))
+            self.assertEqual(t, "")
+            self.assertIn("no tiene OCR", info["aviso_documento"])
 
 
 CONFIG = {

@@ -20,7 +20,7 @@
 | Agente | Subárea | Modelo | Aprobación | Horario | Tareas |
 | --- | --- | --- | --- | --- | --- |
 | **Contable** | Contabilidad | principal | doble | 0 4 1 * * | Asientos en borrador, conciliación bancaria, cierre mensual y cuenta de resultados explicada |
-| Control de Gastos | Contabilidad | rapido | simple | bajo petición | Clasifica tickets y facturas de proveedor y controla el presupuesto por departamento |
+| Control de Gastos | Contabilidad | principal | simple | bajo petición | Lee las facturas de proveedor que llegan por correo (PDF, escaneos y fotos, con OCR), las deja en borrador en el ERP para su validación, clasifica tickets y controla el presupuesto por departamento |
 | Tesorero | Tesorería | principal | libre | 0 7 * * 1 | Previsión de caja a 30/60/90 días, alertas de liquidez y calendario de pagos |
 | Facturación | Facturación y cobros | principal | doble | bajo petición | Prepara facturas en borrador según la normativa vigente para su validación |
 | Cobros | Facturación y cobros | principal | simple | 0 9 * * 1-5 | Detecta impagados y redacta recordatorios graduados según el historial del cliente |

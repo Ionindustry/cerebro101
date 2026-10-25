@@ -13,6 +13,7 @@ import json
 import logging
 import os
 import re
+from datetime import date
 from pathlib import Path
 from typing import Any
 from urllib.parse import quote
@@ -119,15 +120,9 @@ async def crear_borrador(doctype: str, datos: dict[str, Any], departamento: str)
 EXTENSIONES_ADJUNTO = {".pdf", ".docx", ".xlsx", ".csv", ".txt", ".png", ".jpg", ".jpeg", ".doc", ".xls", ".pptx", ".odt", ".ods"}
 
 
-async def adjuntar_desde_correo(doctype: str, nombre: str, message_id: str, adjunto: int | str, departamento: str,
-                                buzon: str | None = None) -> dict:
-    """Guarda un adjunto de un correo del buzón del departamento en un documento del ERP/CRM (queda como fichero PRIVADO del documento).
-    Solo en documentos que el departamento puede crear en borrador (política), con la clave del departamento y con tipos de fichero
-    admitidos: nunca ejecutables ni comprimidos."""
-    from . import buzones as B, correo, documentos as D
-    comprobar_acceso(departamento, doctype, "borrador", nombre)
-    ident, _ = B.resolver(departamento, buzon)
-    fichero, tipo, datos = await asyncio.to_thread(correo.obtener_adjunto, ident, message_id, adjunto)
+async def _subir_fichero(doctype: str, nombre: str, fichero: str, tipo: str, datos: bytes, departamento: str) -> dict:
+    """Sube un fichero como PRIVADO de un documento. Solo tipos admitidos y que sean lo que dice su extensión."""
+    from . import documentos as D
     ext = D.extension(fichero)
     if ext not in EXTENSIONES_ADJUNTO:
         raise PermissionError(f"No se guardan en el ERP ficheros «{ext or 'sin extensión'}». Se admiten: {', '.join(sorted(EXTENSIONES_ADJUNTO))}")
@@ -141,6 +136,83 @@ async def adjuntar_desde_correo(doctype: str, nombre: str, message_id: str, adju
         raise RuntimeError(f"El ERP no ha aceptado el fichero ({r.status_code}): {r.text[:200]}")
     msg = r.json()["message"]
     return {"guardado": msg.get("file_name"), "url": msg.get("file_url"), "documento": f"{doctype} {nombre}", "bytes": len(datos)}
+
+
+async def adjuntar_desde_correo(doctype: str, nombre: str, message_id: str, adjunto: int | str, departamento: str,
+                                buzon: str | None = None) -> dict:
+    """Guarda un adjunto de un correo del buzón del departamento en un documento del ERP/CRM (queda como fichero PRIVADO del documento).
+    Solo en documentos que el departamento puede crear en borrador (política), con la clave del departamento y con tipos de fichero
+    admitidos: nunca ejecutables ni comprimidos."""
+    from . import buzones as B, correo
+    comprobar_acceso(departamento, doctype, "borrador", nombre)
+    ident, _ = B.resolver(departamento, buzon)
+    fichero, tipo, datos = await asyncio.to_thread(correo.obtener_adjunto, ident, message_id, adjunto)
+    return await _subir_fichero(doctype, nombre, fichero, tipo, datos, departamento)
+
+
+@functools.lru_cache(maxsize=2)
+def _config_facturas(dir_config: str) -> dict:
+    ruta = Path(dir_config) / "facturas.yaml"
+    return (yaml.safe_load(ruta.read_text(encoding="utf-8")) or {}).get("compra") or {} if ruta.exists() else {}
+
+
+async def crear_factura_compra(departamento: str, message_id: str, adjunto: int | str, proveedor: str, numero: str, fecha: str,
+                               lineas: list[dict], total: float | str, nif: str | None = None, iva_porcentaje: int | None = None,
+                               vencimiento: str | None = None, buzon: str | None = None) -> dict:
+    """Deja en BORRADOR una factura de proveedor leída de un adjunto del correo (PDF, escaneo o foto, con OCR si hace falta).
+    Antes de crear nada comprueba que los datos cuadran entre sí y que el número y el total aparecen de verdad en el documento;
+    busca el proveedor en el ERP (no lo da de alta), evita duplicados y adjunta el original a la factura."""
+    from decimal import Decimal
+    from . import buzones as B, correo, documentos as D, facturas as F
+    comprobar_acceso(departamento, "Purchase Invoice", "borrador")
+    comprobar_acceso(departamento, "Supplier", "leer")
+    cfg = _config_facturas(str(ajustes.dir_config))
+    if not cfg.get("cuenta_gasto") or not cfg.get("cuenta_iva"):
+        raise RuntimeError("Falta configurar las cuentas en config/facturas.yaml (cuenta_gasto y cuenta_iva)")
+    try:
+        total_d, lineas_v = F.centimos(F.a_decimal(total)), F.validar_lineas(lineas)
+        f_factura = F.a_fecha(fecha)
+        f_venc = F.a_fecha(vencimiento) if vencimiento else None
+        numero = str(numero or "").strip()
+        if not numero or not proveedor.strip():
+            raise F.DatosFactura("Faltan el proveedor o el número de factura")
+        ident, _ = B.resolver(departamento, buzon)
+        fichero, tipo, datos = await asyncio.to_thread(correo.obtener_adjunto, ident, message_id, adjunto)
+        texto, info = await asyncio.to_thread(D.extraer_texto, fichero, datos)
+        tipo_iva, base, advertencias = F.comprobar(texto, proveedor, nif, numero, total_d, lineas_v, iva_porcentaje,
+                                                   [int(x) for x in cfg.get("tipos_iva", [0, 4, 10, 21])], Decimal(str(cfg.get("tolerancia", 0.02))))
+        if info.get("ocr"):
+            advertencias.insert(0, "Leída por OCR: comprueba las cifras al validar la factura")
+        async with httpx.AsyncClient(base_url=ajustes.erpnext_url, timeout=60) as c:
+            h = _cabeceras(departamento)
+            r = await c.get("/api/resource/Supplier", params={"fields": json.dumps(["name", "supplier_name", "tax_id"]), "limit_page_length": 2000}, headers=h)
+            r.raise_for_status()
+            prov = F.buscar_proveedor(r.json()["data"], proveedor, nif)
+            r = await c.get("/api/resource/Purchase Invoice", params={"fields": json.dumps(["name", "docstatus"]), "limit_page_length": 5,
+                            "filters": json.dumps([["supplier", "=", prov["name"]], ["bill_no", "=", numero], ["docstatus", "<", 2]])}, headers=h)
+            r.raise_for_status()
+            if r.json()["data"]:
+                raise F.DatosFactura(f"Ya existe la factura {numero} de {prov['name']} en el ERP ({r.json()['data'][0]['name']}): no se duplica")
+    except F.DatosFactura as e:
+        raise ValueError(str(e)) from e
+    doc = {"supplier": prov["name"], "bill_no": numero, "bill_date": f_factura, "posting_date": date.today().isoformat(),
+           "items": [{"item_name": l["descripcion"][:140], "description": l["descripcion"], "qty": float(l["cantidad"]), "rate": float(l["precio"]),
+                      "expense_account": cfg["cuenta_gasto"]} for l in lineas_v],
+           "remarks": f"Factura leída del correo ({ident}) por el Cerebro. Pendiente de revisión y validación por una persona."}
+    if f_venc:
+        doc["due_date"] = f_venc
+    if tipo_iva:
+        doc["taxes"] = [{"charge_type": "On Net Total", "account_head": cfg["cuenta_iva"], "rate": tipo_iva, "description": f"IVA {tipo_iva}%"}]
+    creada = await crear_borrador("Purchase Invoice", doc, departamento)
+    salida = {"factura": creada["name"], "proveedor": prov["name"], "base": str(base), "iva": f"{tipo_iva}%", "total_en_erp": creada.get("grand_total"),
+              "estado": "borrador: una persona debe revisarla y validarla", "advertencias": advertencias}
+    if creada.get("grand_total") is not None and abs(Decimal(str(creada["grand_total"])) - total_d) > Decimal("0.02"):
+        salida["advertencias"].append(f"¡El ERP calcula un total de {creada['grand_total']} y la factura dice {total_d}! Revisar antes de validar")
+    try:
+        salida["original"] = (await _subir_fichero("Purchase Invoice", creada["name"], fichero, tipo, datos, departamento))["url"]
+    except Exception as e:  # noqa: BLE001 — la factura ya existe: se avisa en vez de perder el resultado
+        salida["advertencias"].append(f"No se ha podido adjuntar el original: {e}")
+    return salida
 
 
 AYUDA_DOCUMENTOS = (
@@ -157,12 +229,18 @@ registrar(Herramienta(
     nombre="erpnext",
     descripcion="ERP de la empresa: clientes, proyectos, artículos, precios, facturas, compras. Nunca valida documentos: "
                 "solo los lee o los deja en borrador para que una persona los valide.",
-    operaciones={"listar": listar, "leer": leer, "crear_borrador": crear_borrador, "adjuntar_desde_correo": adjuntar_desde_correo},
+    operaciones={"listar": listar, "leer": leer, "crear_borrador": crear_borrador, "adjuntar_desde_correo": adjuntar_desde_correo,
+                 "crear_factura_compra": crear_factura_compra},
     ayuda={"listar": "lista documentos. filtros = lista de [campo, operador, valor], p. ej. [[\"status\", \"=\", \"Open\"]]. " + AYUDA_DOCUMENTOS,
            "leer": "un documento completo por su nombre (doctype y nombre exactos, p. ej. Customer + «Comunitat Vilanova SL»)",
            "crear_borrador": "crea un documento en BORRADOR; «datos» lleva los campos del documento",
            "adjuntar_desde_correo": "guarda un adjunto de un correo (message_id y adjunto, de correo.leer_bandeja) como fichero privado de un documento "
-                                    "que ya existe (doctype y nombre exactos); úsalo después de crear_borrador, con el nombre que este devuelve"},
+                                    "que ya existe (doctype y nombre exactos); úsalo después de crear_borrador, con el nombre que este devuelve",
+           "crear_factura_compra": "pasa a BORRADOR una factura de proveedor que llegó adjunta a un correo (PDF, escaneo o foto; se lee con OCR si hace falta). "
+                                   "Primero lee el documento con correo.leer_adjunto y rellena: proveedor, nif, numero (de factura), fecha (dd/mm/aaaa), "
+                                   "lineas = [{descripcion, cantidad, precio (unitario sin IVA)}], total (con IVA, tal como sale en el documento), "
+                                   "iva_porcentaje y vencimiento si constan. Se comprueba que cuadra y que número y total están en el documento; "
+                                   "si falla, explica el motivo a la persona y no insistas"},
     ejemplos={"listar": {"doctype": "Customer", "campos": ["customer_name"], "limite": 10},
               "crear_borrador": {"doctype": "Sales Invoice", "datos": {"customer": "Comunitat Vilanova SL", "items": [{"item_code": "ART-001", "qty": 2, "rate": 150}]}}},
 ))

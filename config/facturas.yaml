@@ -1,0 +1,10 @@
+# Alta de facturas de proveedor en el ERP desde el correo (erpnext.crear_factura_compra).
+# Los agentes dejan la factura en BORRADOR; la valida siempre una persona en ERPNext.
+#
+# PENDIENTE DE REVISAR CON LA GESTORÍA: las cuentas siguientes existen en el ERP de pruebas (plan por defecto de ERPNext).
+# Con el Plan General Contable español (ver docs/PENDIENTES.md) se cambian por las cuentas reales, p. ej. «6290000 - Otros servicios - 101».
+compra:
+  cuenta_gasto: "5223 - Miscellaneous Expenses - 101"    # cuenta de gasto de cada línea cuando no hay otra mejor
+  cuenta_iva: "VAT - 101"                                  # cuenta de IVA soportado
+  tipos_iva: [0, 4, 10, 21]                                # tipos de IVA admitidos en España; otro tipo se rechaza para que lo mire una persona
+  tolerancia: 0.02                                         # euros de diferencia admitidos entre la suma de líneas con IVA y el total de la factura

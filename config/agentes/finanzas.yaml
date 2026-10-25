@@ -16,11 +16,13 @@ agentes:
 - id: control-gastos
   nombre: Control de Gastos
   subarea: Contabilidad
-  tareas: Clasifica tickets y facturas de proveedor y controla el presupuesto por departamento
-  modelo: rapido
+  tareas: Lee las facturas de proveedor que llegan por correo (PDF, escaneos y fotos, con OCR), las deja en borrador en el
+    ERP para su validación, clasifica tickets y controla el presupuesto por departamento
+  modelo: principal
   herramientas:
   - conocimiento
   - erpnext
+  - correo
   aprobacion: simple
   horario: null
   sensibilidad: alta
