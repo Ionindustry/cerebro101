@@ -55,8 +55,9 @@ def probar(p: dict, clave: str) -> tuple[bool, str]:
 
 
 def limpiar(clave: str) -> str:
-    """Quita lo que se cuela al pegar: comillas, espacios, saltos de línea y el «Bearer » o «export X=» de algún ejemplo."""
-    clave = clave.strip().strip("'\"").strip()
+    """Quita lo que se cuela al pegar: marcas invisibles de la terminal, comillas, espacios, saltos de línea y el «Bearer » o «export X=» de algún ejemplo."""
+    clave = re.sub(r"\x1b\[[0-9;]*[~A-Za-z]|\[20[01]~", "", clave)      # el «pegado entre corchetes» de algunas terminales añade ESC[200~ … ESC[201~
+    clave = "".join(c for c in clave if c.isprintable()).strip().strip("'\"").strip()
     clave = re.sub(r"^(export\s+)?[A-Z_]+=", "", clave).strip().strip("'\"")
     return re.sub(r"^Bearer\s+", "", clave).replace(" ", "").replace("\n", "")
 
