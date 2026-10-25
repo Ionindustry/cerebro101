@@ -1,5 +1,6 @@
 "use client";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { detectarIdioma, limpiarParaHablar, mensajeAudioBloqueado, mensajeErrorVoz, recortarParaHablar } from "../lib/voz";
 import { ayudaSinMicrofonos, elegir, mensajeError, mensajeTranscripcion, nivel, nombre, restricciones, soloEntradas } from "../lib/microfonos";
 
 const SUGERENCIAS = [
@@ -19,6 +20,10 @@ export default function Jarvis() {
   const [micId, setMicId] = useState("");
   const [nivelMic, setNivelMic] = useState(0);
   const [avisoMic, setAvisoMic] = useState("");
+  const [vozActiva, setVozActiva] = useState(true);       // Jarvis contesta en voz alta (también a lo escrito)
+  const [hablando, setHablando] = useState(false);
+  const audio = useRef(null);
+  const [entorno, setEntorno] = useState(null);           // lo que el navegador permite; se lee tras pintar para no chocar con el servidor
 
   const detectar = useCallback(async () => {
     try {
@@ -28,6 +33,10 @@ export default function Jarvis() {
       try { guardado = localStorage.getItem("jarvis_micro") || ""; } catch {}
       setMicId((actual) => elegir(lista, actual || guardado));
     } catch { /* sin acceso a los dispositivos: se usará el predeterminado */ }
+  }, []);
+  useEffect(() => {
+    setEntorno({ seguro: Boolean(window.isSecureContext), api: Boolean(navigator.mediaDevices) });
+    try { if (localStorage.getItem("jarvis_respuesta_voz") === "no") setVozActiva(false); } catch {}
   }, []);
   useEffect(() => {
     detectar();
@@ -70,7 +79,7 @@ export default function Jarvis() {
       }
       setHilo(d.hilo);
       setMensajes((m) => [...m, { de: "jarvis", ...d }]);
-      if (porVoz && d.respuesta) hablar(d.respuesta);
+      if (vozActiva && d.respuesta) hablar(d.respuesta);
     } catch (e) {
       const aviso = e.amigable ? e.message : `No he podido completar la petición: ${e.message}. Vuelve a intentarlo en un momento.`;
       setMensajes((m) => [...m, { de: "jarvis", respuesta: aviso }]);
@@ -79,14 +88,45 @@ export default function Jarvis() {
     }
   }
 
+  function pararAudio() {
+    if (audio.current) { audio.current.pause(); audio.current = null; }
+    setHablando(false);
+  }
+
+  function cambiarVoz() {
+    const nuevo = !vozActiva;
+    setVozActiva(nuevo);
+    if (!nuevo) pararAudio();
+    try { localStorage.setItem("jarvis_respuesta_voz", nuevo ? "si" : "no"); } catch {}
+  }
+
   async function hablar(contenido) {
-    const r = await fetch("/voz/hablar", { method: "POST", body: JSON.stringify({ texto: contenido, idioma: "es" }) });
-    if (r.ok) new Audio(URL.createObjectURL(await r.blob())).play();
+    const texto = recortarParaHablar(limpiarParaHablar(contenido));
+    if (!texto) return;
+    pararAudio();
+    try {
+      const r = await fetch("/voz/hablar", { method: "POST", headers: { "Content-Type": "application/json" },
+                                             body: JSON.stringify({ texto, idioma: detectarIdioma(texto) }) });
+      if (!r.ok) {
+        const detalle = (await r.json().catch(() => ({}))).error;
+        return setAvisoMic(mensajeErrorVoz(r.status, detalle));
+      }
+      const url = URL.createObjectURL(await r.blob());
+      const a = new Audio(url);
+      audio.current = a;
+      a.onended = a.onpause = () => { setHablando(false); URL.revokeObjectURL(url); };
+      setHablando(true);
+      await a.play();
+    } catch (e) {
+      setHablando(false);
+      setAvisoMic(e?.name === "NotAllowedError" ? mensajeAudioBloqueado : mensajeErrorVoz(0));
+    }
   }
 
   async function alternarMicrofono() {
     if (estado === "escuchando") return grabadora.current?.stop();
     setAvisoMic("");
+    pararAudio();                                        // si Jarvis está hablando y le hablas, se calla
     let flujo;
     try {
       try {
@@ -173,9 +213,13 @@ export default function Jarvis() {
           ) : (
             <button type="button" className="of-boton" onClick={pedirPermiso} disabled={estado !== "listo"}>Detectar micrófonos</button>
           )}
+          <button type="button" role="switch" aria-checked={vozActiva} className={`interruptor${vozActiva ? " on" : ""}`}
+                  aria-label="Respuesta por voz" title="Respuesta por voz" onClick={cambiarVoz}><span /></button>
+          <span className="voz-etiqueta">Respuesta por voz</span>
+          {hablando && <button type="button" className="of-boton" onClick={pararAudio}>Callar</button>}
           {estado === "escuchando" && <span className="nivel" role="meter" aria-label="Nivel del micrófono" aria-valuemin="0" aria-valuemax="1" aria-valuenow={nivelMic.toFixed(2)}><i style={{ width: `${Math.round(nivelMic * 100)}%` }} /></span>}
         </div>
-        {micros.length === 0 && !avisoMic && <div className="micro-ayuda">{ayudaSinMicrofonos(typeof window !== "undefined" && window.isSecureContext, typeof navigator !== "undefined" && Boolean(navigator.mediaDevices))}</div>}
+        {micros.length === 0 && !avisoMic && entorno && <div className="micro-ayuda">{ayudaSinMicrofonos(entorno.seguro, entorno.api)}</div>}
         {avisoMic && <div className="micro-aviso" role="alert">{avisoMic}</div>}
         <form className="compositor" onSubmit={(e) => { e.preventDefault(); enviar(texto); }}>
           <input value={texto} onChange={(e) => setTexto(e.target.value)} placeholder="Escribe o habla con Jarvis"

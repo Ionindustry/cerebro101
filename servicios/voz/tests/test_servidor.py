@@ -5,6 +5,7 @@ import sys
 import types
 import unittest
 from pathlib import Path
+from unittest import mock
 
 
 class Segmento:
@@ -77,6 +78,76 @@ class TestVoz(unittest.TestCase):
             self.assertEqual((r.status_code, r.json()), (200, {"texto": "hola Jarvis", "idioma": "es"}))
             e = c.get("/salud").json()
         self.assertEqual((e["dispositivo"], e["modelo"], e["cargado"]), ("cpu", "small", True))
+
+
+class TestHablar(unittest.TestCase):
+    """Texto a voz (Piper simulado): WAV si está la voz, errores que se entienden si no."""
+
+    def servidor(self, con_voz=True):
+        import tempfile
+        s, _ = cargar_servidor()
+        carpeta = Path(tempfile.mkdtemp())
+        voz = carpeta / "es_ES-prueba.onnx"
+        if con_voz:
+            voz.write_bytes(b"modelo")
+            Path(str(voz) + ".json").write_text("{}")
+        s.VOCES["es"] = str(voz)
+        return s
+
+    def hablar(self, s, cuerpo, piper=None):
+        from fastapi.testclient import TestClient
+        with mock.patch.object(s.subprocess, "run", piper or self.piper_ok):
+            with TestClient(s.app) as c:
+                return c.post("/hablar", json=cuerpo)
+
+    @staticmethod
+    def piper_ok(args, input, **k):
+        Path(args[args.index("--output_file") + 1]).write_bytes(b"RIFF....WAVE")
+        piper_ok.llamadas.append((args, input))
+        return types.SimpleNamespace(returncode=0)
+
+    def test_devuelve_un_wav_y_pasa_el_texto_a_piper(self):
+        piper_ok.llamadas.clear()
+        r = self.hablar(self.servidor(), {"texto": "Hola Albert", "idioma": "es"})
+        self.assertEqual((r.status_code, r.headers["content-type"], r.content), (200, "audio/wav", b"RIFF....WAVE"))
+        self.assertEqual(piper_ok.llamadas[0][1], b"Hola Albert")
+
+    def test_sin_la_voz_dice_como_descargarla(self):
+        r = self.hablar(self.servidor(con_voz=False), {"texto": "Hola", "idioma": "es"})
+        self.assertEqual(r.status_code, 503)
+        self.assertIn("scripts/voces_descargar.py", r.json()["error"])
+
+    def test_sin_texto_o_con_texto_enorme(self):
+        s = self.servidor()
+        self.assertEqual(self.hablar(s, {"texto": "  ", "idioma": "es"}).status_code, 422)
+        piper_ok.llamadas.clear()
+        self.hablar(s, {"texto": "a" * 5000, "idioma": "es"})
+        self.assertEqual(len(piper_ok.llamadas[0][1]), s.MAX_TEXTO_HABLADO)
+
+    def test_si_piper_falla_el_error_se_explica(self):
+        import subprocess
+
+        def falla(args, input, **k):
+            raise subprocess.CalledProcessError(1, args, stderr=b"boom")
+        r = self.hablar(self.servidor(), {"texto": "Hola", "idioma": "es"}, falla)
+        self.assertEqual(r.status_code, 500)
+        self.assertIn("síntesis", r.json()["error"])
+
+    def test_la_salud_dice_que_voces_hay(self):
+        from fastapi.testclient import TestClient
+        s = self.servidor(con_voz=False)
+        with TestClient(s.app) as c:
+            self.assertFalse(c.get("/salud").json()["voces"]["es"])
+
+
+def piper_ok(args, input, **k):          # noqa: F811 - la versión con registro de llamadas
+    Path(args[args.index("--output_file") + 1]).write_bytes(b"RIFF....WAVE")
+    piper_ok.llamadas.append((args, input))
+    return types.SimpleNamespace(returncode=0)
+
+
+piper_ok.llamadas = []
+TestHablar.piper_ok = staticmethod(piper_ok)
 
 
 if __name__ == "__main__":

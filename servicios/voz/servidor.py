@@ -11,9 +11,10 @@ import os
 import subprocess
 import tempfile
 import threading
+from pathlib import Path
 
 from fastapi import FastAPI, UploadFile
-from fastapi.responses import Response
+from fastapi.responses import JSONResponse, Response
 
 log = logging.getLogger("voz")
 MODELO = os.environ.get("WHISPER_MODELO") or "large-v3-turbo"
@@ -83,7 +84,7 @@ app = FastAPI(title="Voz de Jarvis", lifespan=_arranque)
 @app.get("/salud")
 async def salud():
     return {"modelo": _estado["modelo"], "dispositivo": _estado["dispositivo"], "cargado": _estado["whisper"] is not None,
-            "alternativa_por": _estado["alternativa"]}
+            "alternativa_por": _estado["alternativa"], "voces": {k: os.path.exists(v) for k, v in VOCES.items()}}
 
 
 @app.post("/transcribir")
@@ -95,10 +96,27 @@ async def transcribir(audio: UploadFile):
     return {"texto": texto, "idioma": idioma}
 
 
+MAX_TEXTO_HABLADO = 1500
+
+
 @app.post("/hablar")
 async def hablar(datos: dict):
-    voz = VOCES.get(datos.get("idioma", "es"), VOCES["es"])
+    """Texto a voz con Piper. Devuelve un WAV; si falta la voz o Piper falla, un error que se entiende (no un 500 mudo)."""
+    idioma = datos.get("idioma", "es")
+    voz = VOCES.get(idioma, VOCES["es"])
+    texto = str(datos.get("texto", "")).strip()[:MAX_TEXTO_HABLADO]
+    if not texto:
+        return JSONResponse({"error": "No hay texto que decir"}, status_code=422)
+    if not os.path.exists(voz) or not os.path.exists(voz + ".json"):
+        return JSONResponse({"error": f"Falta la voz {os.path.basename(voz)}. Descárgala en el servidor con: python3 scripts/voces_descargar.py"},
+                            status_code=503)
     with tempfile.NamedTemporaryFile(suffix=".wav") as fh:
-        subprocess.run(["piper", "--model", voz, "--output_file", fh.name],
-                       input=datos["texto"].encode(), check=True)
-        return Response(open(fh.name, "rb").read(), media_type="audio/wav")
+        try:
+            subprocess.run(["piper", "--model", voz, "--output_file", fh.name], input=texto.encode(), check=True,
+                           capture_output=True, timeout=90)
+        except subprocess.CalledProcessError as e:
+            log.error("Piper ha fallado: %s", e.stderr.decode("utf-8", "replace")[-400:])
+            return JSONResponse({"error": "La síntesis de voz ha fallado (mira el log del servicio de voz)"}, status_code=500)
+        except subprocess.TimeoutExpired:
+            return JSONResponse({"error": "La síntesis de voz ha tardado demasiado"}, status_code=504)
+        return Response(Path(fh.name).read_bytes(), media_type="audio/wav")
