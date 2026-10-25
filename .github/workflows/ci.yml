@@ -72,7 +72,7 @@ jobs:
       - name: ERPNext (docker-compose) válido
         run: docker compose -f erpnext/docker-compose.yml --env-file .env.example config -q
       - name: Sintaxis de los scripts de shell
-        run: for f in scripts/*.sh despliegue/*.sh; do bash -n "$f"; done
+        run: for f in scripts/*.sh despliegue/*.sh servicios/*/*.sh; do bash -n "$f"; done
       - name: Las fichas de los agentes están al día con scripts/generar_fichas.py
         run: |
           pip install pyyaml
