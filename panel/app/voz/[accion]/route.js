@@ -11,10 +11,15 @@ export async function POST(req, { params }) {
   const { accion } = await params;
   if (!["transcribir", "hablar"].includes(accion)) return new Response("No encontrado", { status: 404 });
   const esHablar = accion === "hablar";
-  const r = await fetch(`${VOZ}/${accion}`, {
-    method: "POST",
-    headers: esHablar ? { "Content-Type": "application/json" } : undefined,
-    body: esHablar ? await req.text() : await req.formData(),
-  });
+  let r;
+  try {
+    r = await fetch(`${VOZ}/${accion}`, {
+      method: "POST",
+      headers: esHablar ? { "Content-Type": "application/json" } : undefined,
+      body: esHablar ? await req.text() : await req.formData(),
+    });
+  } catch {            // el servicio de voz no está arrancado o no se alcanza
+    return Response.json({ error: "El servicio de voz no responde" }, { status: 503 });
+  }
   return new Response(r.body, { status: r.status, headers: { "Content-Type": r.headers.get("Content-Type") || "application/octet-stream" } });
 }
