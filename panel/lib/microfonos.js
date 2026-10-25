@@ -42,3 +42,10 @@ export function mensajeTranscripcion(estado, texto = "") {
   if (estado === 401) return "La sesión ha caducado. Recarga la página e inicia sesión de nuevo.";
   return "El servicio de voz del servidor no responde" + (estado ? ` (error ${estado})` : "") + ". El micrófono funciona, pero hay que revisar el servicio de voz: docker compose logs voz.";
 }
+
+// Texto bajo la lista cuando no hay micrófonos a la vista: sin dirección segura el navegador ni siquiera ofrece el micrófono
+export function ayudaSinMicrofonos(contextoSeguro, hayApi) {
+  if (!hayApi || !contextoSeguro)
+    return "El navegador no deja usar el micrófono en esta dirección. Abre Jarvis en http://localhost:3000 (no con una IP ni con 127.0.0.1).";
+  return "No veo ningún micrófono. Conecta la cámara o el auricular y pulsa «Detectar micrófonos»; si el navegador pregunta, elige «Permitir».";
+}
