@@ -29,3 +29,10 @@ Arranca solo con `docker compose up -d` (servicio `jeff`, solo en la red interna
 Tienen la herramienta `jev`: Director General, Prospector, Detector de Intención, Respuesta a Leads, Soporte N1, Escalado, Reseñas, Reactivación de cartera, Cobros, Control de Gastos, Jefe de Proyectos,
 Calidad, No Conformidades, Cumplimiento, RGPD, Auditor del Cerebro, y los de Licitaciones, Marca y Mercado que ya la tenían. Selección (RR.HH.) **no** la tiene a propósito: trabaja sin servicios externos. Los agentes con datos de sensibilidad alta (Cobros, Control de Gastos…) usan **jeff**
 automáticamente aunque pidan Jev. Para dársela a otro agente, se añade `"jev"` a su fila en `scripts/generar_fichas.py` y se regenera.
+
+
+## El estado en el panel (Agentes → «Decisiones (JEV)»)
+
+El estado normal es una **comprobación ligera**: ¿responde jeff y tiene su modelo?, ¿están la clave y la activación de Jev? No se hace ninguna pregunta real a los modelos, así que el chip sale al momento y no gasta tarjeta ni uso de la nube. Jev sale como «Configurado (sin probar)» hasta que se prueba.
+
+**Comprobar ahora** hace la pregunta de prueba de verdad (sin datos de nadie) a jeff y a Jev y muestra cuánto tardan. Antes el estado hacía esa pregunta cada minuto: tardaba hasta 15 s (más con el modelo cargándose) y el chip no aparecía hasta que acababa.
