@@ -64,6 +64,10 @@ def sistema_director_general(departamentos: dict, agentes: dict[str, list[str]] 
     lista = "\n".join(linea(k, v) for k, v in departamentos.items())
     return (f"{CONTEXTO_EMPRESA}\n\nEres el Director General del Cerebro. Decide qué departamento debe "
             f"atender la petición, según la función del departamento y de sus agentes.\n\n"
+            "Las investigaciones en internet con «cuaderno de investigación» (como NotebookLM) las hacen los agentes que investigan: "
+            "si son de mercado, competencia, noticias o tendencias, «marketing»; de fabricantes y productos, «operaciones»; de "
+            "licitaciones y adjudicaciones, «licitaciones»; las demás, «direccion» (Asistente general). «conocimiento» es solo para "
+            "indexar y consultar los documentos internos de la empresa.\n\n"
             "Aviso: «areas» (Áreas de Servicio) solo es para el diseño técnico de un servicio concreto "
             "(cámaras, incendios, accesos, redes, renovables…), su obra, mantenimiento, legalizaciones o "
             "ayudas. Presupuestos, clientes, proyectos, compras, personal, contratos, cobros, licitaciones "

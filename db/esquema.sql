@@ -18,6 +18,38 @@ CREATE TABLE IF NOT EXISTS documentos (
 CREATE INDEX IF NOT EXISTS documentos_embedding_idx ON documentos USING hnsw (embedding vector_cosine_ops);
 CREATE INDEX IF NOT EXISTS documentos_dep_idx ON documentos (departamento, sensibilidad);
 
+-- Cuadernos de investigación (como NotebookLM, en local): fuentes que reúne un agente y sobre las que se pregunta con citas
+CREATE TABLE IF NOT EXISTS cuadernos (
+  id            uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  titulo        text NOT NULL,
+  descripcion   text NOT NULL DEFAULT '',
+  departamento  text NOT NULL,
+  creado        timestamptz NOT NULL DEFAULT now(),
+  actualizado   timestamptz NOT NULL DEFAULT now()
+);
+CREATE UNIQUE INDEX IF NOT EXISTS cuadernos_titulo_idx ON cuadernos (departamento, lower(titulo));
+
+CREATE TABLE IF NOT EXISTS cuaderno_fuentes (
+  id            bigserial PRIMARY KEY,
+  cuaderno      uuid NOT NULL REFERENCES cuadernos(id) ON DELETE CASCADE,
+  tipo          text NOT NULL CHECK (tipo IN ('web','nota')),
+  titulo        text NOT NULL,
+  url           text NOT NULL DEFAULT '',
+  texto         text NOT NULL,
+  creado        timestamptz NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS cuaderno_fuentes_cuaderno_idx ON cuaderno_fuentes (cuaderno);
+
+CREATE TABLE IF NOT EXISTS cuaderno_trozos (
+  id            bigserial PRIMARY KEY,
+  fuente        bigint NOT NULL REFERENCES cuaderno_fuentes(id) ON DELETE CASCADE,
+  cuaderno      uuid NOT NULL REFERENCES cuadernos(id) ON DELETE CASCADE,
+  orden         integer NOT NULL,
+  texto         text NOT NULL,
+  embedding     vector(1024) NOT NULL
+);
+CREATE INDEX IF NOT EXISTS cuaderno_trozos_cuaderno_idx ON cuaderno_trozos (cuaderno);
+
 -- Bandeja de aprobaciones
 CREATE TABLE IF NOT EXISTS aprobaciones (
   id             uuid PRIMARY KEY,

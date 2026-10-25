@@ -40,6 +40,10 @@ DEPARTAMENTOS = {
 
 K = ["conocimiento"]  # herramienta base que tienen todos los agentes
 
+# Agentes que investigan: tienen cuadernos de investigación (herramienta «cuaderno», como NotebookLM pero en local)
+INVESTIGAN = {"asistente-general", "analista-noticias", "analista-competencia", "radar-tendencias",
+              "explorador-fabricantes", "inteligencia-competitiva", "viabilidad"}
+
 AGENTES = {
     "direccion": [
         ("director-general", "Director General", "Coordinación", "Recibe todas las peticiones, las enruta al departamento correcto, prioriza conflictos entre áreas y genera el resumen diario", "rapido", K + ["jev"], "libre", "0 7 * * 1-5", "media"),
@@ -197,6 +201,8 @@ def construir() -> tuple[dict, dict]:
             f = dict(zip(CAMPOS, fila))
             f["departamento"] = dep_id
             f["director"] = i == 0
+            if f["id"] in INVESTIGAN:
+                f["herramientas"] = f["herramientas"] + ["cuaderno"]
             fichas.append(f)
         subareas = list(dict.fromkeys(f["subarea"] for f in fichas))
         departamentos[dep_id] = {
