@@ -35,10 +35,10 @@ class TestPoliticas(unittest.TestCase):
         self.assertEqual(d.nivel, "simple")
         self.assertTrue(d.requiere)
 
-    def test_doble_no_se_aprueba_por_voz(self):
+    def test_doble_tambien_se_puede_aprobar_por_voz(self):
         d = nivel_para(self.r.fichas["precio-licitacion"], "presentar_licitacion")
         self.assertEqual(d.nivel, "doble")
-        self.assertFalse(d.voz_permitida)
+        self.assertTrue(d.voz_permitida)
 
     def test_todo_requiere_solo_la_firma_de_direccion(self):
         for nombre, accion in [("radar-tendencias", "enviar_correo"), ("precio-licitacion", "presentar_licitacion")]:
@@ -50,9 +50,9 @@ class TestPoliticas(unittest.TestCase):
         self.assertFalse(d.requiere)
         self.assertEqual(d.clase, "estandar")
 
-    def test_lo_reservado_es_individual_y_solo_en_el_panel(self):
+    def test_lo_reservado_es_individual(self):
         d = nivel_para(self.r.fichas["radar-tendencias"], "presentar_licitacion")
-        self.assertEqual((d.clase, d.nivel, d.voz_permitida), ("reservada", "doble", False))
+        self.assertEqual((d.clase, d.nivel, d.voz_permitida), ("reservada", "doble", True))
         d = nivel_para(self.r.fichas["radar-tendencias"], "algo", herramienta="mayorista", operacion="alta")
         self.assertEqual(d.clase, "reservada")
 

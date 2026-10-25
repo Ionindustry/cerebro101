@@ -1,7 +1,7 @@
 "use client";
 import { useCallback, useEffect, useState } from "react";
 
-const NIVELES = { simple: "Requiere tu firma", doble: "Requiere tu firma · solo en el panel" };
+const NIVELES = { simple: "Requiere tu firma", doble: "Requiere tu firma" };
 const DECISIONES = { aprobada: "Aprobada", rechazada: "Rechazada" };
 
 const fecha = (f) => (f ? new Date(f).toLocaleString("es-ES", { dateStyle: "medium", timeStyle: "short" }) : "");

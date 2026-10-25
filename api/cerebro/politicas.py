@@ -45,7 +45,7 @@ class DecisionAprobacion:
 
 
 def clase_de(accion: str, herramienta: str = "", operacion: str = "", externa: bool = False, dir_config: Path | None = None) -> str:
-    """Qué necesita una acción: `estandar` (nada), `supervisada` (tu firma) o `reservada` (firma individual, nunca por voz ni cubierta por un objetivo).
+    """Qué necesita una acción: `estandar` (nada), `supervisada` (tu firma) o `reservada` (firma individual, no cubierta por un objetivo).
     Una acción prohibida lanza AccionProhibida. Lo que no se reconoce como supervisado ni reservado es estándar, salvo que salga de la empresa."""
     pol, _ = _config(str(dir_config or ajustes.dir_config))
     if accion in pol["prohibidas"]:

@@ -4,7 +4,7 @@ import EstadoJev from "../../componentes/EstadoJev";
 import ModelosExternos from "../../componentes/ModelosExternos";
 import { useEffect, useState } from "react";
 
-const APROBACION = { libre: "Actúa solo", simple: "Pide tu firma", doble: "Pide tu firma (solo en el panel)" };
+const APROBACION = { libre: "Actúa solo", simple: "Pide tu firma", doble: "Pide tu firma" };
 
 export default function Agentes() {
   const [deps, setDeps] = useState({});

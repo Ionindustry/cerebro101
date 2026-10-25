@@ -11,9 +11,9 @@ niveles:
     aprobadores: [direccion]
     voz_permitida: true
   doble:
-    descripcion: "Pagos, facturas, contratos, precios, ofertas, firma y presentación de licitaciones (firma de Dirección, solo en el panel)"
+    descripcion: "Pagos, facturas, contratos, precios, ofertas, firma y presentación de licitaciones (firma de Dirección, en el panel o por voz)"
     aprobadores: [direccion]
-    voz_permitida: false        # lo más delicado se firma solo en el panel con usuario identificado, no por voz
+    voz_permitida: true         # por decisión de Dirección, también lo delicado puede firmarse por voz
 
 # Acciones que ningún agente puede ejecutar nunca, sea cual sea su ficha.
 prohibidas:
@@ -25,7 +25,7 @@ prohibidas:
 # QUÉ NECESITA FIRMA. Se decide por la operación, no por el agente:
 #   estándar    → no pide firma: lecturas, borradores, propuestas, resúmenes… (todo lo que no está en las dos listas de abajo ni sale de la empresa)
 #   supervisada → pide tu firma: todo lo que sale de la empresa (operaciones marcadas como externas en su herramienta + `impacto_externo`) y lo que añadas en `supervisadas`
-#   reservada   → compromisos económicos o legales: firma individual, solo en el panel (no por voz) y NO se puede cubrir con una autorización por objetivo
+#   reservada   → compromisos económicos o legales: firma individual (también por voz) y NO se puede cubrir con una autorización por objetivo
 # Se escribe como «herramienta.operacion» (p. ej. correo.enviar) o como nombre de acción (p. ej. publicar).
 supervision:
   supervisadas: []

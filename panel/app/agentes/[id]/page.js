@@ -3,7 +3,7 @@ import Link from "next/link";
 import { use, useCallback, useEffect, useState } from "react";
 import { Actividad, Aprobaciones, Herramientas, Tarjeta } from "../../../componentes/Kpi";
 
-const APROBACION = { libre: "Actúa solo", simple: "Pide tu firma", doble: "Pide tu firma (solo en el panel)" };
+const APROBACION = { libre: "Actúa solo", simple: "Pide tu firma", doble: "Pide tu firma" };
 const PERIODOS = [7, 14, 30, 90];
 // En estos KPI subir es malo: el color de la variación no debe parecer una buena noticia
 const MALOS = new Set(["rechazadas", "pendientes", "decision"]);
