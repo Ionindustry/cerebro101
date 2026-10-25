@@ -290,6 +290,14 @@ class TestEnElGrafo(unittest.TestCase):
         r, n = self.paso("¿Qué hora es?", {"tipo": "respuesta", "respuesta": "externo"}, {"tipo": "respuesta", "respuesta": "local"})
         self.assertEqual((r["respuesta"], n), ("local", {"externo": 0, "local": 1}))
 
+    def test_una_respuesta_externa_vacia_o_sin_herramienta_se_descarta(self):
+        local = {"tipo": "respuesta", "respuesta": "local"}
+        for vacia in ({"tipo": "respuesta"}, {"tipo": "respuesta", "respuesta": "  "}, {"tipo": "herramienta"}):
+            r, n = self.paso("Analiza la propuesta", vacia, local)
+            self.assertEqual((r["respuesta"], n["local"]), ("local", 1), vacia)
+        r, n = self.paso("Analiza la propuesta", {"tipo": "herramienta", "herramienta": "erpnext", "operacion": "leer"}, local)
+        self.assertEqual((r["herramienta"], n["local"]), ("erpnext", 0))
+
     def test_una_respuesta_externa_sin_tipo_valido_se_descarta(self):
         r, n = self.paso("Analiza la propuesta", {"respuesta": "rara"}, {"tipo": "respuesta", "respuesta": "local"})
         self.assertEqual(r["respuesta"], "local")
