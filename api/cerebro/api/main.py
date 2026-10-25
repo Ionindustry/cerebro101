@@ -16,7 +16,7 @@ from pydantic import BaseModel
 from ..ajustes import ajustes
 from ..aprobaciones import bandeja
 from ..aprobaciones.logica import DecisionNoValida
-from .. import actividad, constancia, oficina
+from .. import actividad, constancia, kpis, oficina
 from ..cotizador import Solicitud, calcular
 from ..grafo import construir, nodos
 from ..llm import ErrorModelo, circuito, estado_modelos
@@ -129,6 +129,14 @@ async def ver_aprobaciones(usuario: Usuario = Depends(usuario_actual)):
     return await bandeja.pendientes(deps)
 
 
+@app.get("/aprobaciones/historial")
+async def ver_historial(decision: str | None = None, q: str | None = None, pagina: int = 0, limite: int = 30,
+                        usuario: Usuario = Depends(usuario_actual)):
+    """Aprobaciones ya resueltas (aprobadas y rechazadas): se guardan todas. Dirección las ve todas; el resto, las de sus departamentos."""
+    deps = None if "direccion" in usuario.roles else usuario.departamentos
+    return await bandeja.historial(deps, decision, q, limite, pagina)
+
+
 @app.post("/aprobaciones/{sid}")
 async def decidir(sid: str, d: Decision, usuario: Usuario = Depends(usuario_actual)):
     try:
@@ -171,6 +179,23 @@ async def ver_agente(agente: str, usuario: Usuario = Depends(usuario_actual)):
         log.warning("No se pudo leer el detalle de %s", agente, exc_info=True)
         snap = {"actividad": None, "pasos": [], "acciones": [], "pendientes": []}
     return oficina.detalle(ficha, snap, usuario.roles, usuario.departamentos)
+
+
+@app.get("/agentes/{agente}/kpis")
+async def kpis_del_agente(agente: str, dias: int = 30, usuario: Usuario = Depends(usuario_actual)):
+    """El panel de KPI de un agente: rendimiento y KPI de su cargo (con cifras del ERP/CRM). Solo para dirección y el departamento del agente."""
+    ficha = registro().fichas.get(agente)
+    if ficha is None:
+        raise HTTPException(404, "Agente no encontrado")
+    if "direccion" not in usuario.roles and ficha.departamento not in usuario.departamentos:
+        raise HTTPException(403, "Los KPI de este agente solo los ven su departamento y la dirección")
+    try:
+        return await kpis.calcular(ficha, kpis.cargar_config(str(ajustes.dir_config)), dias, kpis.Fuente())
+    except ValueError as e:
+        raise HTTPException(422, str(e)) from e
+    except Exception as e:  # noqa: BLE001
+        log.warning("No se pudieron calcular los KPI de %s", agente, exc_info=True)
+        raise HTTPException(503, "No se han podido calcular los KPI ahora mismo") from e
 
 
 @app.get("/departamentos")

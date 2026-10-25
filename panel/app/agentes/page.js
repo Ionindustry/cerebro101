@@ -1,7 +1,8 @@
 "use client";
+import Link from "next/link";
 import { useEffect, useState } from "react";
 
-const APROBACION = { libre: "Actúa solo", simple: "Pide una firma", doble: "Pide dos firmas" };
+const APROBACION = { libre: "Actúa solo", simple: "Pide tu firma", doble: "Pide tu firma (solo en el panel)" };
 
 export default function Agentes() {
   const [deps, setDeps] = useState({});
@@ -25,13 +26,14 @@ export default function Agentes() {
       </div>
       <div className="agentes">
         {visibles.map((a) => (
-          <article key={a.id} className="tarjeta">
+          <Link key={a.id} href={`/agentes/${a.id}`} className="tarjeta tarjeta-enlace" aria-label={`Ver los KPI de ${a.nombre}`}>
             {a.director && <div className="director">Dirige {deps[a.departamento]?.nombre}</div>}
             <h2>{a.nombre}</h2>
             <div className="meta">{a.subarea}</div>
             <p>{a.tareas}</p>
             <p>{APROBACION[a.aprobacion]}.{a.horario ? " Trabaja también de forma programada." : ""}</p>
-          </article>
+            <span className="ver-kpi">Ver KPI →</span>
+          </Link>
         ))}
       </div>
     </>

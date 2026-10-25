@@ -135,6 +135,8 @@ async def _ejecutar_agente(estado: Estado, ficha) -> Estado:
                                      sensibilidad=estado.get("sensibilidad"), **args)
         except Exception as e:  # el error vuelve al modelo para que corrija o cambie de plan
             resultado = {"error": str(e)}
+        clave = f"{d.get('herramienta', '?')}.{d.get('operacion', '?')}"
+        await actividad.contar(ficha.id, ("error:" if isinstance(resultado, dict) and "error" in resultado else "uso:") + clave)
         pasos.append({"herramienta": d.get("herramienta"), "operacion": d.get("operacion"),
                       "ok": not (isinstance(resultado, dict) and "error" in resultado)})
         mensajes += [{"role": "assistant", "content": json.dumps(d, ensure_ascii=False)},
@@ -148,6 +150,7 @@ async def ejecutar_agente(estado: Estado, config=None) -> Estado:
     ficha = registro().fichas[estado["agente"]]
     hilo = (config or {}).get("configurable", {}).get("thread_id") if config else None
     await actividad.marcar(ficha.id, "Empieza a trabajar", hilo)
+    await actividad.contar(ficha.id, "peticion")
     try:
         r = await _ejecutar_agente(estado, ficha)
     except BaseException:
@@ -192,6 +195,7 @@ async def registrar_aprobaciones(estado: Estado, config) -> Estado:
                                   d.aprobadores, d.voz_permitida, datos)
         acciones.append({**a, "solicitud_id": sid, "estado": "pendiente"})
         await actividad.evento(ficha.id, f"Propone «{a['accion']}» y espera aprobación", hilo)
+        await actividad.contar(ficha.id, f"propuesta:{a.get('herramienta') or '?'}.{a.get('operacion') or '?'}")
     return {"acciones": acciones}
 
 

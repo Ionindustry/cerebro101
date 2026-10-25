@@ -40,6 +40,11 @@ class TestPoliticas(unittest.TestCase):
         self.assertEqual(d.nivel, "doble")
         self.assertFalse(d.voz_permitida)
 
+    def test_todo_requiere_solo_la_firma_de_direccion(self):
+        for nombre, accion in [("radar-tendencias", "enviar_correo"), ("precio-licitacion", "presentar_licitacion")]:
+            d = nivel_para(self.r.fichas[nombre], accion)
+            self.assertEqual(d.aprobadores, ("direccion",), nombre)
+
     def test_acciones_prohibidas(self):
         with self.assertRaises(AccionProhibida):
             nivel_para(self.r.fichas["contable"], "validar_documento_erp")

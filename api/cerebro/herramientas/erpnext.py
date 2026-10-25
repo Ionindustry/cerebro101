@@ -117,6 +117,45 @@ async def crear_borrador(doctype: str, datos: dict[str, Any], departamento: str)
     return r.json()["data"]
 
 
+_METRICAS: dict[str, tuple[float, Any]] = {}          # caché breve: un panel de KPI no debe llamar al ERP en cada refresco
+_CAMPO = re.compile(r"^[a-z_][a-z0-9_]{0,60}$")
+
+
+async def metrica(departamento: str, doctype: str, filtros: list | None = None, agregado: str = "contar", campo: str | None = None,
+                  campo_fecha: str | None = None, desde: str | None = None, hasta: str | None = None, ttl: int = 60) -> float:
+    """Una cifra del ERP/CRM para un KPI: cuántos documentos hay (contar) o la suma de un campo (sumar), con la clave y la política del departamento.
+    `desde`/`hasta` (aaaa-mm-dd, hasta excluido) acotan por `campo_fecha`. Lee en el ERP; no escribe nada."""
+    import time as _t
+    comprobar_acceso(departamento, doctype, "leer")
+    f = [list(x) for x in (filtros or [])]
+    if campo_fecha:
+        if not _CAMPO.match(campo_fecha):
+            raise PermissionError("campo de fecha no válido")
+        if desde:
+            f.append([campo_fecha, ">=", desde])
+        if hasta:
+            f.append([campo_fecha, "<", hasta])
+    if agregado == "sumar" and not (campo and _CAMPO.match(campo)):
+        raise PermissionError("campo de suma no válido")
+    clave = json.dumps([departamento, doctype, f, agregado, campo], sort_keys=True, default=str)
+    hit = _METRICAS.get(clave)
+    if hit and _t.monotonic() - hit[0] < ttl:
+        return hit[1]
+    async with httpx.AsyncClient(base_url=ajustes.erpnext_url, timeout=30) as c:
+        if agregado == "contar":
+            r = await c.get("/api/method/frappe.client.get_count", params={"doctype": doctype, "filters": json.dumps(f)}, headers=_cabeceras(departamento))
+            r.raise_for_status()
+            valor = float(r.json().get("message") or 0)
+        else:
+            r = await c.get(f"/api/resource/{quote(doctype, safe='')}", headers=_cabeceras(departamento),
+                            params={"fields": json.dumps([{"SUM": campo, "as": "v"}]), "filters": json.dumps(f), "limit_page_length": 1})
+            r.raise_for_status()
+            datos = r.json().get("data") or [{}]
+            valor = float(datos[0].get("v") or 0)
+    _METRICAS[clave] = (_t.monotonic(), valor)
+    return valor
+
+
 EXTENSIONES_ADJUNTO = {".pdf", ".docx", ".xlsx", ".csv", ".txt", ".png", ".jpg", ".jpeg", ".doc", ".xls", ".pptx", ".odt", ".ods"}
 
 

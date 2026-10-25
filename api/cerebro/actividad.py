@@ -55,6 +55,16 @@ async def evento(agente: str, texto: str, hilo: str | None = None) -> None:
         log.debug("No se pudo anotar el evento de %s: %s", agente, e)
 
 
+async def contar(agente: str, clave: str, n: int = 1) -> None:
+    """Suma al contador diario del agente (KPI). Claves: peticion, uso:<herramienta>.<operacion>, error:<herramienta>.<operacion>, propuesta:<herramienta>.<operacion>."""
+    try:
+        await asyncio.wait_for(_escribir(
+            """INSERT INTO kpi_uso (agente, dia, clave, n) VALUES (%s, (now() AT TIME ZONE 'Europe/Madrid')::date, %s, %s)
+               ON CONFLICT (agente, dia, clave) DO UPDATE SET n = kpi_uso.n + EXCLUDED.n""", (agente, clave[:120], n)), 3)
+    except Exception as e:  # noqa: BLE001
+        log.debug("No se pudo contar %s de %s: %s", clave, agente, e)
+
+
 async def reposo(agente: str, ultima: str | None = None) -> None:
     try:
         await asyncio.wait_for(_escribir(

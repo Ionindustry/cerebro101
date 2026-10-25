@@ -57,6 +57,15 @@ CREATE TABLE IF NOT EXISTS actividad_eventos (
 );
 CREATE INDEX IF NOT EXISTS actividad_eventos_agente_idx ON actividad_eventos (agente, id DESC);
 
+-- Contadores diarios por agente para los KPI de su panel (peticiones, usos de herramientas, errores, propuestas). Solo cifras, nunca contenido.
+CREATE TABLE IF NOT EXISTS kpi_uso (
+  agente  text NOT NULL,
+  dia     date NOT NULL,
+  clave   text NOT NULL,
+  n       integer NOT NULL DEFAULT 0,
+  PRIMARY KEY (agente, dia, clave)
+);
+
 -- Registro de acciones ejecutadas (evidencia para ENS / ISO 27001)
 CREATE TABLE IF NOT EXISTS registro_acciones (
   id           bigserial PRIMARY KEY,

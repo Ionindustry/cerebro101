@@ -1,13 +1,16 @@
 """Reglas de la bandeja de aprobaciones (sin base de datos, para poder probarlas).
 
-- simple: basta el responsable del departamento.
-- doble: responsable del departamento y dirección, dos personas distintas.
+Qué firma hace falta lo dice config/politicas_aprobacion.yaml (hoy: solo Dirección, una persona). El motor admite varios firmantes: cada rol pendiente lo
+cubre una persona distinta.
+- responsable_departamento: un responsable del departamento de la solicitud.
+- direccion: una persona con el rol de dirección.
 - La voz solo vale para aprobaciones simples; las dobles se confirman en el panel.
 - Un rechazo de cualquiera de los aprobadores rechaza la acción.
 """
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from datetime import datetime, timezone
 
 
 class DecisionNoValida(PermissionError):
@@ -37,7 +40,7 @@ def decidir(s: Solicitud, usuario: str, roles_usuario: set[str], departamentos_u
     if s.estado != "pendiente":
         raise DecisionNoValida(f"La solicitud ya está {s.estado}")
     if canal == "voz" and not s.voz_permitida:
-        raise DecisionNoValida("Esta aprobación es doble: confírmala en el panel")
+        raise DecisionNoValida("Esta aprobación es delicada: se firma en el panel, no por voz")
     if any(d["usuario"] == usuario for d in s.decisiones):
         raise DecisionNoValida("Ya has decidido sobre esta solicitud; la segunda firma la hace otra persona")
     pendientes = [r for r in s.aprobadores if r not in roles_cubiertos(s)]
@@ -53,7 +56,7 @@ def decidir(s: Solicitud, usuario: str, roles_usuario: set[str], departamentos_u
     if rol is None:
         raise DecisionNoValida("No tienes el rol que falta para esta aprobación")
     s.decisiones.append({"usuario": usuario, "rol": rol, "aprobado": aprobado,
-                         "canal": canal, "comentario": comentario})
+                         "canal": canal, "comentario": comentario, "fecha": datetime.now(timezone.utc).isoformat()})
     if not aprobado:
         s.estado = "rechazada"
     elif set(s.aprobadores) <= roles_cubiertos(s):

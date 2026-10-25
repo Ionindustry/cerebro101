@@ -3,14 +3,17 @@ niveles:
   libre:
     descripcion: "Analizar, resumir, clasificar y redactar borradores internos"
     aprobadores: []
+  # FIRMA ÚNICA: todo lo que requiere aprobación lo firma Dirección, una sola persona, sin importar el departamento. (Antes «doble» pedía además
+  # al responsable del departamento y a una segunda persona.) El motor sigue admitiendo varios firmantes por si se quiere volver a exigirlos:
+  # basta con poner [responsable_departamento, direccion] en el nivel que corresponda.
   simple:
     descripcion: "Enviar a clientes, publicar, responder reseñas, contactar terceros"
-    aprobadores: [responsable_departamento]
+    aprobadores: [direccion]
     voz_permitida: true
   doble:
-    descripcion: "Pagos, facturas, contratos, precios, ofertas, firma y presentación de licitaciones"
-    aprobadores: [responsable_departamento, direccion]
-    voz_permitida: false        # solo en el panel con usuario identificado
+    descripcion: "Pagos, facturas, contratos, precios, ofertas, firma y presentación de licitaciones (firma de Dirección, solo en el panel)"
+    aprobadores: [direccion]
+    voz_permitida: false        # lo más delicado se firma solo en el panel con usuario identificado, no por voz
 
 # Acciones que ningún agente puede ejecutar nunca, sea cual sea su ficha.
 prohibidas:

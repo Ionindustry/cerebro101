@@ -37,6 +37,32 @@ async def pendientes(departamentos: set[str] | None = None) -> list[dict]:
     return [f for f in filas if not departamentos or f["departamento"] in departamentos]
 
 
+async def historial(departamentos: set[str] | None = None, decision: str | None = None, texto: str | None = None,
+                    limite: int = 30, pagina: int = 0) -> dict:
+    """Solicitudes ya resueltas (aprobadas o rechazadas), de la más reciente a la más antigua, con lo que se ejecutó al aprobarlas.
+    `departamentos` None = todas (dirección). `decision`: «aprobada» | «rechazada» | None. `texto` busca en la acción, el resumen y el agente."""
+    cond, params = ["a.estado IN ('aprobada','rechazada')"], []
+    if departamentos is not None:
+        cond.append("a.departamento = ANY(%s)")
+        params.append(sorted(departamentos))
+    if decision in ("aprobada", "rechazada"):
+        cond.append("a.estado = %s")
+        params.append(decision)
+    if texto and texto.strip():
+        cond.append("(a.accion ILIKE %s OR a.agente ILIKE %s OR a.datos->>'resumen' ILIKE %s)")
+        params += [f"%{texto.strip()[:80]}%"] * 3
+    donde = " AND ".join(cond)
+    limite = max(1, min(int(limite), 100))
+    async with await psycopg.AsyncConnection.connect(ajustes.database_url, row_factory=dict_row) as conn:
+        total = (await (await conn.execute(f"SELECT count(*) AS n FROM aprobaciones a WHERE {donde}", params)).fetchone())["n"]
+        cur = await conn.execute(
+            f"""SELECT a.*, (SELECT r.resultado FROM registro_acciones r WHERE r.aprobacion = a.id ORDER BY r.id DESC LIMIT 1) AS resultado
+                FROM aprobaciones a WHERE {donde} ORDER BY a.actualizado DESC LIMIT %s OFFSET %s""",
+            params + [limite, max(0, int(pagina)) * limite])
+        filas = await cur.fetchall()
+    return {"total": total, "pagina": max(0, int(pagina)), "limite": limite, "items": filas}
+
+
 async def registrar_decision(sid: str, usuario: str, roles: set[str], departamentos: set[str],
                              aprobado: bool, canal: str, comentario: str = "") -> tuple[Solicitud, str]:
     async with await psycopg.AsyncConnection.connect(ajustes.database_url, row_factory=dict_row) as conn:

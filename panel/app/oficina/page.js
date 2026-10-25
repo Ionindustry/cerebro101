@@ -4,7 +4,7 @@ import Link from "next/link";
 import { ESTADOS, estadoDemo } from "../../lib/oficina";
 
 const REFRESCO = 4000;
-const APROBACION = { libre: "Actúa solo", simple: "Pide una firma", doble: "Pide dos firmas" };
+const APROBACION = { libre: "Actúa solo", simple: "Pide tu firma", doble: "Pide tu firma (solo en el panel)" };
 
 function hace(fecha) {
   if (!fecha) return "";
@@ -200,6 +200,7 @@ function DetalleAgente({ d, demo, sim, volver }) {
       </div>
 
       {d.tareas && <><h3>Qué hace</h3><p>{d.tareas}</p></>}
+      {d.detalle_visible !== false && <Link className="of-kpi" href={`/agentes/${d.id}`}>Ver sus KPI →</Link>}
       {d.herramientas && (
         <>
           <h3>Herramientas</h3>
