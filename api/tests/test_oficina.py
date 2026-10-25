@@ -66,5 +66,35 @@ class TestOficina(unittest.TestCase):
         self.assertEqual(r["eventos"], [])
 
 
+class TestDetalle(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.f = cargar().fichas["cobros"]
+        cls.snap = {"actividad": {"estado": "trabajando", "detalle": "Usando erpnext · listar", "actualizado": AHORA, "ultima": "x", "ultima_fecha": AHORA},
+                    "pasos": [{"texto": "Pensando", "creado": AHORA}, {"texto": "Empieza a trabajar", "creado": AHORA}],
+                    "acciones": [{"herramienta": "erpnext", "operacion": "listar", "creado": AHORA, "ok": True}],
+                    "pendientes": [{"id": "abc", "accion": "enviar_correo", "nivel": "simple", "datos": {"resumen": "Contestar a Ana", "vista": {"titulo": "t", "campos": []}}, "creado": AHORA}]}
+
+    def test_el_departamento_ve_todo(self):
+        d = oficina.detalle(self.f, self.snap, {"responsable"}, {"finanzas"})
+        self.assertEqual((d["estado"], d["ahora"]), ("trabajando", "Usando erpnext · listar"))
+        self.assertEqual([p["texto"] for p in d["pasos"]], ["Pensando", "Empieza a trabajar"])
+        self.assertEqual(d["acciones"][0]["texto"], "erpnext · listar")
+        self.assertEqual(d["pendientes"][0]["resumen"], "Contestar a Ana")
+        self.assertIn("erpnext", d["herramientas"])
+
+    def test_otro_departamento_solo_ve_la_ficha(self):
+        d = oficina.detalle(self.f, self.snap, {"responsable"}, {"comercial"})
+        self.assertFalse(d["detalle_visible"])
+        self.assertEqual(d["estado"], "trabajando")
+        for k in ("ahora", "pasos", "acciones", "pendientes", "ultima"):
+            self.assertNotIn(k, d)
+        self.assertTrue(d["tareas"])
+
+    def test_direccion_ve_todo_y_sin_datos_no_rompe(self):
+        d = oficina.detalle(self.f, {"actividad": None, "pasos": [], "acciones": [], "pendientes": []}, {"direccion"}, set())
+        self.assertEqual((d["estado"], d["ahora"], d["pasos"], d["pendientes"]), ("reposo", None, [], []))
+
+
 if __name__ == "__main__":
     unittest.main()

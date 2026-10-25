@@ -159,6 +159,20 @@ async def ver_oficina(usuario: Usuario = Depends(usuario_actual)):
     return oficina.construir(registro(), snap, usuario.roles, usuario.departamentos)
 
 
+@app.get("/oficina/agentes/{agente}")
+async def ver_agente(agente: str, usuario: Usuario = Depends(usuario_actual)):
+    """La ficha de un agente y, si es de tu departamento (o eres de dirección), lo que está haciendo y ha hecho."""
+    ficha = registro().fichas.get(agente)
+    if ficha is None:
+        raise HTTPException(404, "Agente no encontrado")
+    try:
+        snap = await actividad.detalle_agente(agente)
+    except Exception:  # noqa: BLE001
+        log.warning("No se pudo leer el detalle de %s", agente, exc_info=True)
+        snap = {"actividad": None, "pasos": [], "acciones": [], "pendientes": []}
+    return oficina.detalle(ficha, snap, usuario.roles, usuario.departamentos)
+
+
 @app.get("/departamentos")
 async def departamentos():
     return registro().departamentos

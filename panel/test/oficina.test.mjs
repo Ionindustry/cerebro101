@@ -1,81 +1,77 @@
 // node --test panel/test
 import assert from "node:assert/strict";
 import test from "node:test";
-import { COLUMNAS, SALA, COLOR, crearEscena, estadoDemo, iso } from "../lib/oficina.js";
+import { COLUMNAS, HUECO, PUESTOS, SALA, distribucion, estadoDemo, puesto } from "../lib/oficina.js";
 
 const dep = (id, n, conDirector = true) => ({ id, nombre: id.toUpperCase(),
-  agentes: Array.from({ length: n }, (_, i) => ({ id: `${id}-${i}`, director: conDirector && i === 0 })) });
+  agentes: Array.from({ length: n }, (_, i) => ({ id: `${id}-${i}`, director: conDirector && i === n - 1 })) });
 const REAL = [["direccion", 8], ["finanzas", 6], ["comercial", 11], ["marketing", 10], ["atencion", 4], ["operaciones", 15], ["personas", 5], ["legal", 12],
   ["tecnologia", 4], ["conocimiento", 3], ["licitaciones", 12], ["telecom", 10], ["areas", 14]].map(([i, n]) => dep(i, n));
 
 test("todos los agentes de la oficina real tienen puesto, sin repetir", () => {
-  const e = crearEscena(REAL);
-  const agentes = e.objetos.filter((o) => o.tipo === "agente");
-  assert.equal(agentes.length, 114);
-  assert.equal(new Set(agentes.map((a) => a.id)).size, 114);
-  assert.equal(new Set(agentes.map((a) => `${a.cx},${a.cy}`)).size, 114, "dos agentes en el mismo sitio");
-  assert.equal(e.salas.length, 13);
+  const d = distribucion(REAL);
+  assert.equal(d.agentes.length, 114);
+  assert.equal(new Set(d.agentes.map((a) => a.id)).size, 114);
+  assert.equal(new Set(d.agentes.map((a) => `${a.pos.x.toFixed(2)},${a.pos.z.toFixed(2)}`)).size, 114, "dos agentes en el mismo sitio");
+  assert.equal(new Set(d.agentes.map((a) => `${a.mesa.x.toFixed(2)},${a.mesa.z.toFixed(2)}`)).size, 114, "dos mesas en el mismo sitio");
+  assert.equal(d.salas.length, 13);
+  assert.equal(d.jardines.length, COLUMNAS * COLUMNAS - 13);
 });
 
-test("cada agente tiene su mesa con pantalla", () => {
-  const e = crearEscena(REAL);
-  const pantallas = new Set(e.objetos.filter((o) => o.tipo === "pantalla").map((o) => o.agente));
-  assert.equal(pantallas.size, 114);
-});
-
-test("el director es el primero de su sala", () => {
-  const e = crearEscena([dep("a", 5)]);
-  const ag = e.objetos.filter((o) => o.tipo === "agente");
-  const director = ag.find((a) => a.director);
-  assert.equal(ag.filter((a) => a.director).length, 1);
-  // el puesto 0 es el de menor profundidad (más al fondo) de la sala
-  assert.equal(director.profundidad, Math.min(...ag.map((a) => a.profundidad)));
-});
-
-test("el orden de dibujo va de lo lejano a lo cercano", () => {
-  const e = crearEscena(REAL);
-  for (let i = 1; i < e.objetos.length; i++) assert.ok(e.objetos[i].profundidad >= e.objetos[i - 1].profundidad);
-});
-
-test("todo cabe en el encuadre", () => {
-  const e = crearEscena(REAL);
-  const [x, y, w, h] = e.viewBox;
-  for (const o of e.objetos.filter((o) => o.tipo === "agente")) {
-    assert.ok(o.cx > x && o.cx < x + w && o.cy - 40 > y && o.cy < y + h, o.id);
-  }
-  for (const s of e.salas) {
-    assert.ok(s.etiqueta.x - 60 > x && s.etiqueta.x + 60 < x + w && s.etiqueta.y + 10 < y + h, s.id);
-    assert.ok(s.caja[2] > 0 && s.caja[3] > 0);
+test("cada agente queda dentro de su sala", () => {
+  const d = distribucion(REAL);
+  for (const a of d.agentes) {
+    const s = d.salas.find((x) => x.id === a.sala);
+    assert.ok(a.pos.x > s.x && a.pos.x < s.x + SALA && a.pos.z > s.z && a.pos.z < s.z + SALA, a.id);
+    assert.ok(a.mesa.x > s.x && a.mesa.x + 1.3 < s.x + SALA, `la mesa de ${a.id} se sale de la sala`);
   }
 });
 
-test("las salas no se solapan y las salas vacías son jardines", () => {
-  const e = crearEscena(REAL);
-  assert.equal(new Set(e.salas.map((s) => `${s.ox},${s.oy}`)).size, 13);
-  assert.ok(e.objetos.some((o) => o.tipo === "arbol"));
-  const solo = crearEscena([]);
-  assert.equal(solo.salas.length, 0);
-  assert.equal(solo.objetos.filter((o) => o.tipo === "agente").length, 0);
+test("el agente está delante de su mesa, centrado, donde iría la silla", () => {
+  for (const a of distribucion(REAL).agentes) {
+    assert.ok(Math.abs(a.pos.x - (a.mesa.x + 0.65)) < 1e-9, "centrado con la mesa");
+    assert.ok(a.pos.z - a.mesa.z > 0.8 && a.pos.z - a.mesa.z < 1.2, "delante de la mesa (fuera del tablero)");
+  }
 });
 
-test("una sala con más de 16 agentes no desborda su cuadrícula", () => {
-  const e = crearEscena([dep("grande", 20)]);
-  assert.equal(e.objetos.filter((o) => o.tipo === "agente").length, 16);
+test("el director ocupa el puesto 0", () => {
+  const d = distribucion([dep("a", 5)]);
+  const dir = d.agentes.find((a) => a.director);
+  assert.equal(dir.puesto, 0);
+  assert.equal(d.agentes.filter((a) => a.director).length, 1);
 });
 
-test("la proyección isométrica es la esperada", () => {
-  const [x, y] = iso(0, 0, 0);
-  assert.deepEqual([x, y], [0, 0]);
-  const [a] = iso(1, 0), [b] = iso(0, 1);
-  assert.ok(a > 0 && b < 0, "x va hacia la derecha e y hacia la izquierda");
-  assert.ok(iso(0, 0, 1)[1] < 0, "z sube");
-  assert.ok(COLUMNAS * SALA > 0 && COLOR.senal.startsWith("#"));
+test("las salas no se solapan", () => {
+  const d = distribucion(REAL);
+  assert.equal(new Set(d.salas.map((s) => `${s.x},${s.z}`)).size, 13);
+  for (const a of d.salas) for (const b of d.salas) if (a !== b) {
+    assert.ok(Math.abs(a.x - b.x) >= SALA + HUECO - 1e-9 || Math.abs(a.z - b.z) >= SALA + HUECO - 1e-9);
+  }
+});
+
+test("una sala con más de 16 agentes no desborda su cuadrícula; sin departamentos todo son jardines", () => {
+  assert.equal(distribucion([dep("grande", 20)]).agentes.length, PUESTOS * PUESTOS);
+  const v = distribucion([]);
+  assert.equal(v.salas.length, 0);
+  assert.equal(v.jardines.length, 16);
+});
+
+test("la cuadrícula de puestos cabe en la sala", () => {
+  for (let k = 0; k < PUESTOS * PUESTOS; k++) {
+    const p = puesto(k);
+    assert.ok(p.x + 1.3 < SALA && p.z + 1.0 + 0.2 < SALA);
+  }
+});
+
+test("el centro de la oficina es el de su cuadrícula", () => {
+  const d = distribucion(REAL);
+  assert.equal(d.ancho, COLUMNAS * SALA + (COLUMNAS - 1) * HUECO);
+  assert.ok(Math.abs(d.centro.x - d.ancho / 2) < 1e-9);
 });
 
 test("la demostración da estados variados y estables para el mismo instante", () => {
   const a = estadoDemo(REAL, 3), b = estadoDemo(REAL, 3);
   assert.deepEqual(a, b);
-  const estados = new Set(Object.values(a).map((v) => v.estado));
-  assert.deepEqual([...estados].sort(), ["esperando", "reposo", "trabajando"]);
+  assert.deepEqual([...new Set(Object.values(a).map((v) => v.estado))].sort(), ["esperando", "reposo", "trabajando"]);
   assert.notDeepEqual(estadoDemo(REAL, 3), estadoDemo(REAL, 4));
 });

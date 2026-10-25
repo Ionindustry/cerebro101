@@ -38,11 +38,21 @@ async def _escribir_ya(sql: str, params: tuple) -> None:
 async def marcar(agente: str, detalle: str, hilo: str | None = None) -> None:
     try:
         await asyncio.wait_for(_escribir(
-            """INSERT INTO actividad_agentes (agente, estado, detalle, hilo, actualizado) VALUES (%s,'trabajando',%s,%s,now())
+            """WITH e AS (INSERT INTO actividad_eventos (agente, texto, hilo) VALUES (%s,%s,%s)),
+                    p AS (DELETE FROM actividad_eventos WHERE agente=%s AND id < (SELECT COALESCE(max(id),0) - 40 FROM actividad_eventos WHERE agente=%s))
+               INSERT INTO actividad_agentes (agente, estado, detalle, hilo, actualizado) VALUES (%s,'trabajando',%s,%s,now())
                ON CONFLICT (agente) DO UPDATE SET estado='trabajando', detalle=EXCLUDED.detalle, hilo=EXCLUDED.hilo, actualizado=now()""",
-            (agente, detalle[:120], hilo)), 3)
+            (agente, detalle[:120], hilo, agente, agente, agente, detalle[:120], hilo)), 3)
     except Exception as e:  # noqa: BLE001
         log.debug("No se pudo marcar la actividad de %s: %s", agente, e)
+
+
+async def evento(agente: str, texto: str, hilo: str | None = None) -> None:
+    """Anota un paso en el historial del agente sin cambiar su estado (p. ej. «propone enviar_correo», «ejecuta una acción aprobada»)."""
+    try:
+        await asyncio.wait_for(_escribir("INSERT INTO actividad_eventos (agente, texto, hilo) VALUES (%s,%s,%s)", (agente, texto[:120], hilo)), 3)
+    except Exception as e:  # noqa: BLE001
+        log.debug("No se pudo anotar el evento de %s: %s", agente, e)
 
 
 async def reposo(agente: str, ultima: str | None = None) -> None:
@@ -69,3 +79,16 @@ async def instantanea() -> dict:
             """SELECT id, agente, herramienta, operacion, creado, (resultado LIKE 'OK%%') AS ok FROM registro_acciones
                ORDER BY id DESC LIMIT 25""")).fetchall()
     return {"actividad": {a["agente"]: a for a in act}, "pendientes": {p["agente"]: p["n"] for p in pend}, "ultimas": ult}
+
+
+async def detalle_agente(agente: str) -> dict:
+    """Pasos recientes, últimas acciones registradas y aprobaciones pendientes de un agente."""
+    from psycopg.rows import dict_row
+    async with await psycopg.AsyncConnection.connect(ajustes.database_url, row_factory=dict_row, connect_timeout=3) as c:
+        act = await (await c.execute("SELECT estado, detalle, actualizado, ultima, ultima_fecha FROM actividad_agentes WHERE agente=%s", (agente,))).fetchone()
+        pasos = await (await c.execute("SELECT texto, creado FROM actividad_eventos WHERE agente=%s ORDER BY id DESC LIMIT 15", (agente,))).fetchall()
+        acciones = await (await c.execute(
+            """SELECT herramienta, operacion, creado, (resultado LIKE 'OK%%') AS ok FROM registro_acciones WHERE agente=%s ORDER BY id DESC LIMIT 10""", (agente,))).fetchall()
+        pend = await (await c.execute(
+            """SELECT id, accion, nivel, datos, creado FROM aprobaciones WHERE agente=%s AND estado='pendiente' ORDER BY creado""", (agente,))).fetchall()
+    return {"actividad": act, "pasos": pasos, "acciones": acciones, "pendientes": pend}

@@ -47,6 +47,16 @@ CREATE TABLE IF NOT EXISTS actividad_agentes (
   ultima_fecha  timestamptz
 );
 
+-- Pasos recientes de cada agente (detalle de la pestaña «Oficina»). Solo qué herramienta usa, nunca el contenido de lo que trabaja. Se recorta solo.
+CREATE TABLE IF NOT EXISTS actividad_eventos (
+  id       bigserial PRIMARY KEY,
+  agente   text NOT NULL,
+  texto    text NOT NULL,
+  hilo     text,
+  creado   timestamptz NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS actividad_eventos_agente_idx ON actividad_eventos (agente, id DESC);
+
 -- Registro de acciones ejecutadas (evidencia para ENS / ISO 27001)
 CREATE TABLE IF NOT EXISTS registro_acciones (
   id           bigserial PRIMARY KEY,

@@ -191,6 +191,7 @@ async def registrar_aprobaciones(estado: Estado, config) -> Estado:
         sid = await bandeja.crear(hilo, ficha.id, ficha.departamento, a["accion"], d.nivel,
                                   d.aprobadores, d.voz_permitida, datos)
         acciones.append({**a, "solicitud_id": sid, "estado": "pendiente"})
+        await actividad.evento(ficha.id, f"Propone «{a['accion']}» y espera aprobación", hilo)
     return {"acciones": acciones}
 
 
@@ -224,6 +225,7 @@ async def ejecutar_acciones(estado: Estado, config) -> Estado:
             resultado.append(a)
             continue
         args = inyectar(ficha, estado, a["herramienta"], a.get("argumentos") or {})
+        await actividad.marcar(ficha.id, f"Ejecuta {a['herramienta']} · {a['operacion']} (aprobada)", hilo)
         try:
             r = await H.usar(ficha, a["herramienta"], a["operacion"], sensibilidad=estado.get("sensibilidad"),
                              aprobada=True, **args)
@@ -232,4 +234,6 @@ async def ejecutar_acciones(estado: Estado, config) -> Estado:
         except Exception as e:
             aviso = await _dejar_constancia(hilo, ficha, a, f"ERROR: {type(e).__name__}: {e}")
             resultado.append({**a, "estado": "error", "resultado": str(e), **aviso})
+    if any(a.get("estado") in ("ejecutada", "error") and a.get("solicitud_id") for a in resultado):
+        await actividad.reposo(ficha.id, "Ejecutó una acción aprobada")
     return {"acciones": resultado}

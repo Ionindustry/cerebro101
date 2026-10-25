@@ -44,3 +44,27 @@ def construir(reg: Registro, snap: dict, roles: set[str], departamentos: set[str
                         "ok": bool(u["ok"]), "cuando": u["creado"]})
     return {"departamentos": deps, "resumen": {"total": total, "trabajando": trabajando, "esperando": esperando},
             "eventos": eventos, "hora": datetime.now(timezone.utc).isoformat()}
+
+
+def detalle(ficha, snap: dict, roles: set[str], departamentos: set[str]) -> dict:
+    """Ficha de un agente + lo que hace ahora. El detalle de lo que hace solo lo ve dirección o su departamento; los demás ven solo la ficha pública."""
+    visible = "direccion" in roles or ficha.departamento in departamentos
+    base = {"id": ficha.id, "nombre": ficha.nombre, "departamento": ficha.departamento, "subarea": ficha.subarea, "director": ficha.director,
+            "tareas": ficha.tareas, "herramientas": list(ficha.herramientas), "aprobacion": ficha.aprobacion, "modelo": ficha.modelo,
+            "programado": ficha.horario, "sensibilidad": ficha.sensibilidad, "detalle_visible": visible}
+    a = snap.get("actividad") or {}
+    pend = snap.get("pendientes") or []
+    estado = "trabajando" if a.get("estado") == "trabajando" else ("esperando" if pend else "reposo")
+    base["estado"] = estado
+    if not visible:
+        return base
+    base.update({
+        "ahora": a.get("detalle") if estado == "trabajando" else None,
+        "desde": a.get("actualizado") if estado == "trabajando" else a.get("ultima_fecha"),
+        "ultima": a.get("ultima"),
+        "pasos": [{"texto": p["texto"], "cuando": p["creado"]} for p in snap.get("pasos", [])],
+        "acciones": [{"texto": f"{x['herramienta']} · {x['operacion']}", "ok": bool(x["ok"]), "cuando": x["creado"]} for x in snap.get("acciones", [])],
+        "pendientes": [{"id": str(p["id"]), "accion": p["accion"], "nivel": p["nivel"], "resumen": (p["datos"] or {}).get("resumen"),
+                        "vista": (p["datos"] or {}).get("vista"), "cuando": p["creado"]} for p in pend],
+    })
+    return base
