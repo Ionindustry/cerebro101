@@ -6,6 +6,7 @@ transcribe más despacio, pero transcribe.
 """
 from __future__ import annotations
 
+import json
 import logging
 import os
 import subprocess
@@ -20,8 +21,10 @@ log = logging.getLogger("voz")
 MODELO = os.environ.get("WHISPER_MODELO") or "large-v3-turbo"
 DISPOSITIVO = os.environ.get("WHISPER_DISPOSITIVO") or "cuda"
 MODELO_CPU = os.environ.get("WHISPER_MODELO_CPU") or "small"
-VOCES = {"ca": os.environ.get("PIPER_VOZ_CA", "/voces/ca_ES-upc_ona-medium.onnx"),
-         "es": os.environ.get("PIPER_VOZ_ES", "/voces/es_ES-davefx-medium.onnx")}
+# La voz de cada idioma se cambia con PIPER_VOZ_ES / PIPER_VOZ_CA (ruta del .onnx); si el modelo tiene varios locutores, PIPER_LOCUTOR_ES / _CA elige uno
+# por nombre (p. ej. «F») o por número. Vacío = los de siempre.
+VOCES = {"ca": os.environ.get("PIPER_VOZ_CA") or "/voces/ca_ES-upc_ona-medium.onnx",
+         "es": os.environ.get("PIPER_VOZ_ES") or "/voces/es_ES-davefx-medium.onnx"}
 
 _estado = {"modelo": MODELO, "dispositivo": DISPOSITIVO, "whisper": None, "alternativa": None}
 _cerrojo = threading.Lock()
@@ -99,6 +102,19 @@ async def transcribir(audio: UploadFile):
 MAX_TEXTO_HABLADO = 1500
 
 
+def _locutor(ruta_modelo: str, valor: str) -> str | None:
+    """Número de locutor para Piper a partir de un nombre («F») o un número. None si no se ha pedido ninguno."""
+    valor = (valor or "").strip()
+    if not valor:
+        return None
+    if valor.isdigit():
+        return valor
+    mapa = json.loads(Path(ruta_modelo + ".json").read_text(encoding="utf-8")).get("speaker_id_map") or {}
+    if valor in mapa:
+        return str(mapa[valor])
+    raise ValueError(f"Esta voz no tiene el locutor «{valor}». Locutores: {', '.join(mapa) or 'ninguno (una sola voz)'}")
+
+
 @app.post("/hablar")
 async def hablar(datos: dict):
     """Texto a voz con Piper. Devuelve un WAV; si falta la voz o Piper falla, un error que se entiende (no un 500 mudo)."""
@@ -110,9 +126,14 @@ async def hablar(datos: dict):
     if not os.path.exists(voz) or not os.path.exists(voz + ".json"):
         return JSONResponse({"error": f"Falta la voz {os.path.basename(voz)}. Descárgala en el servidor con: python3 scripts/voces_descargar.py"},
                             status_code=503)
+    try:
+        locutor = _locutor(voz, os.environ.get(f"PIPER_LOCUTOR_{idioma.upper()}", ""))
+    except (ValueError, OSError) as e:
+        return JSONResponse({"error": str(e)}, status_code=500)
     with tempfile.NamedTemporaryFile(suffix=".wav") as fh:
         try:
-            subprocess.run(["piper", "--model", voz, "--output_file", fh.name], input=texto.encode(), check=True,
+            subprocess.run(["piper", "--model", voz, "--output_file", fh.name, *(["--speaker", locutor] if locutor else [])],
+                           input=texto.encode(), check=True,
                            capture_output=True, timeout=90)
         except subprocess.CalledProcessError as e:
             log.error("Piper ha fallado: %s", e.stderr.decode("utf-8", "replace")[-400:])

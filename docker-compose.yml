@@ -204,6 +204,10 @@ services:
     environment:
       WHISPER_MODELO: "${WHISPER_MODELO:-large-v3-turbo}"             # con tarjetas de 12 GB o menos: small
       WHISPER_DISPOSITIVO: "${WHISPER_DISPOSITIVO:-cuda}"             # cpu si la tarjeta no tiene memoria libre
+      PIPER_VOZ_ES: "${PIPER_VOZ_ES:-}"                               # vacío = /voces/es_ES-davefx-medium.onnx; ver docs/VOZ.md para una voz femenina
+      PIPER_VOZ_CA: "${PIPER_VOZ_CA:-}"
+      PIPER_LOCUTOR_ES: "${PIPER_LOCUTOR_ES:-}"                       # locutor de las voces con varios (nombre, p. ej. F, o número)
+      PIPER_LOCUTOR_CA: "${PIPER_LOCUTOR_CA:-}"
     volumes: ["./servicios/voz/voces:/voces:ro", "whisper:/root/.cache"]
     deploy:
       resources:
