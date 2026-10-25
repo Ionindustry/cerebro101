@@ -154,15 +154,24 @@ def _alternar(mensajes: list[dict]) -> list[dict]:
 def _error_http(nombre: str, r: httpx.Response) -> ErrorExterno:
     motivo = {401: "la clave es incorrecta o ha caducado", 403: "la clave no tiene permiso", 429: "se ha superado el límite de uso o de saldo",
               400: "la petición no es válida", 404: "el modelo no existe o no está disponible para esta clave"}.get(r.status_code, f"error {r.status_code}")
-    return ErrorExterno(f"{nombre}: {motivo}")
+    try:                                   # el proveedor explica el motivo (nunca lleva la clave ni nuestros datos)
+        detalle = (r.json().get("error") or {}).get("message", "")
+    except ValueError:
+        detalle = ""
+    return ErrorExterno(f"{nombre}: {motivo}" + (f" — {detalle[:240]}" if detalle else ""))
 
 
 async def _claude(cfg: dict, modelo_: str, sistema: str, mensajes: list[dict], esquema: dict, transporte) -> dict:
     cuerpo = {"model": modelo_, "max_tokens": cfg["max_tokens"], "system": sistema, "messages": _alternar(mensajes),
               "tools": [{"name": "responder", "description": "Entrega la respuesta con el formato pedido.", "input_schema": esquema}],
               "tool_choice": {"type": "tool", "name": "responder"}}
+    cabeceras = {"x-api-key": clave("claude"), "anthropic-version": "2023-06-01"}
     async with httpx.AsyncClient(base_url=cfg["proveedores"]["claude"]["url"], timeout=cfg["timeout_segundos"], transport=transporte) as c:
-        r = await c.post("/v1/messages", json=cuerpo, headers={"x-api-key": clave("claude"), "anthropic-version": "2023-06-01"})
+        r = await c.post("/v1/messages", json=cuerpo, headers=cabeceras)
+        if r.status_code == 400:
+            # Algunos modelos no admiten forzar la herramienta (p. ej. con razonamiento activado): se le pide que la use, sin forzarla
+            cuerpo = {**cuerpo, "tool_choice": {"type": "auto"}, "system": cuerpo["system"] + "\n\nResponde SIEMPRE llamando a la herramienta «responder»."}
+            r = await c.post("/v1/messages", json=cuerpo, headers=cabeceras)
     if r.status_code != 200:
         raise _error_http("Claude", r)
     for bloque in r.json().get("content", []):

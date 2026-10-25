@@ -158,6 +158,28 @@ class TestConsultar(unittest.TestCase):
         self.assertEqual(r["tipo"], "respuesta")
         self.assertEqual(len(visto), 1)
 
+    def test_si_claude_rechaza_forzar_la_herramienta_se_reintenta_sin_forzar(self):
+        cuerpos: list = []
+
+        def manejar(req):
+            cuerpo = json.loads(req.content)
+            cuerpos.append(cuerpo)
+            if cuerpo["tool_choice"]["type"] == "tool":
+                return httpx.Response(400, json={"error": {"message": "tool_choice no se admite con thinking"}})
+            return httpx.Response(200, json={"content": [{"type": "tool_use", "name": "responder", "input": {"tipo": "respuesta", "respuesta": "ok"}}]})
+        with entorno(ANTHROPIC_API_KEY="k"):
+            r = consultar(Ficha(), msgs(), {"claude": True}, httpx.MockTransport(manejar))
+        self.assertEqual(r["respuesta"], "ok")
+        self.assertEqual([c["tool_choice"]["type"] for c in cuerpos], ["tool", "auto"])
+        self.assertIn("llamando a la herramienta", cuerpos[1]["system"])
+
+    def test_un_error_del_proveedor_explica_el_motivo(self):
+        malo = httpx.MockTransport(lambda req: httpx.Response(400, json={"error": {"message": "max_tokens demasiado alto para este modelo"}}))
+        with entorno(ANTHROPIC_API_KEY="k"):
+            e = asyncio.run(m.probar("claude", malo))
+        self.assertFalse(e["prueba"]["ok"])
+        self.assertIn("max_tokens demasiado alto", e["prueba"]["detalle"])
+
     def test_si_todos_fallan_devuelve_none_y_sigue_el_modelo_local(self):
         caido = httpx.MockTransport(lambda req: httpx.Response(500, json={}))
         with entorno(ANTHROPIC_API_KEY="a"):
