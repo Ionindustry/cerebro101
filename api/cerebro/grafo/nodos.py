@@ -9,7 +9,7 @@ from langgraph.types import interrupt
 
 from .. import herramientas as H
 from .. import actividad, modelos_externos
-from ..aprobaciones import bandeja
+from ..aprobaciones import bandeja, objetivos
 from ..constancia import dejar_constancia
 from ..llm import ContextoLleno, RespuestaInvalida, chat
 from .contexto import limite_resultado, recortar
@@ -211,6 +211,16 @@ async def registrar_aprobaciones(estado: Estado, config) -> Estado:
         if not d.requiere:
             acciones.append({**a, "estado": "aprobada"})
             continue
+        if d.clase == "supervisada" and herramienta and operacion:      # un objetivo permanente vigente ya la cubre: sin nueva firma
+            try:
+                oid = await objetivos.consumir(ficha.departamento, ficha.id, herramienta, operacion)
+            except Exception:  # noqa: BLE001 — si no se puede comprobar, se pide la firma como siempre
+                log.warning("No se pudo comprobar los objetivos permanentes", exc_info=True)
+                oid = None
+            if oid:
+                acciones.append({**a, "estado": "aprobada", "objetivo_id": oid})
+                await actividad.evento(ficha.id, f"«{a['accion']}» cubierta por un objetivo permanente", hilo)
+                continue
         datos = {"resumen": a["resumen"], "argumentos": a.get("argumentos", {})}
         if herramienta and operacion:
             try:
@@ -263,6 +273,8 @@ def esperar_aprobaciones(estado: Estado) -> Estado:
 
 
 async def _dejar_constancia(hilo: str, ficha, a: dict, resultado: str) -> dict:
+    if a.get("objetivo_id"):
+        resultado = f"[objetivo {a['objetivo_id']}] {resultado}"
     """Escribe en registro_acciones con reintentos y cola local (ver constancia.py). Si no queda constancia en la base,
     devuelve un aviso para la persona; la acción ya se ejecutó y su resultado no se pierde."""
     estado = await dejar_constancia(hilo, ficha.id, a["herramienta"], a["operacion"], a.get("solicitud_id"), resultado)
