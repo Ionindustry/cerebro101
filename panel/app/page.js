@@ -1,5 +1,6 @@
 "use client";
-import { useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { elegir, mensajeError, nivel, nombre, restricciones, soloEntradas } from "../lib/microfonos";
 
 const SUGERENCIAS = [
   "¿Hay concursos nuevos que nos interesen?",
@@ -14,6 +15,31 @@ export default function Jarvis() {
   const [estado, setEstado] = useState("listo"); // listo | escuchando | pensando
   const [hilo, setHilo] = useState(null);
   const grabadora = useRef(null);
+  const [micros, setMicros] = useState([]);       // micrófonos disponibles (el de una webcam USB, el del portátil…)
+  const [micId, setMicId] = useState("");
+  const [nivelMic, setNivelMic] = useState(0);
+  const [avisoMic, setAvisoMic] = useState("");
+
+  const detectar = useCallback(async () => {
+    try {
+      const lista = soloEntradas(await navigator.mediaDevices.enumerateDevices());
+      setMicros(lista);
+      let guardado = "";
+      try { guardado = localStorage.getItem("jarvis_micro") || ""; } catch {}
+      setMicId((actual) => elegir(lista, actual || guardado));
+    } catch { /* sin acceso a los dispositivos: se usará el predeterminado */ }
+  }, []);
+  useEffect(() => {
+    detectar();
+    navigator.mediaDevices?.addEventListener?.("devicechange", detectar);      // al enchufar o quitar la webcam
+    return () => navigator.mediaDevices?.removeEventListener?.("devicechange", detectar);
+  }, [detectar]);
+
+  function cambiarMicro(id) {
+    setMicId(id);
+    setAvisoMic("");
+    try { localStorage.setItem("jarvis_micro", id); } catch {}
+  }
 
   async function enviar(contenido, porVoz = false) {
     if (!contenido.trim()) return;
@@ -49,18 +75,43 @@ export default function Jarvis() {
 
   async function alternarMicrofono() {
     if (estado === "escuchando") return grabadora.current?.stop();
-    const flujo = await navigator.mediaDevices.getUserMedia({ audio: true });
+    setAvisoMic("");
+    let flujo;
+    try {
+      try {
+        flujo = await navigator.mediaDevices.getUserMedia(restricciones(micId));
+      } catch (e) {
+        if (e.name !== "OverconstrainedError" && e.name !== "NotFoundError") throw e;
+        setMicId("");                                    // el micrófono guardado ya no está: se prueba con el predeterminado
+        flujo = await navigator.mediaDevices.getUserMedia({ audio: true });
+        setAvisoMic("El micrófono elegido no está conectado: uso el predeterminado.");
+      }
+    } catch (e) {
+      setAvisoMic(mensajeError(e));
+      return;
+    }
+    detectar();                                          // con permiso concedido, el navegador ya da los nombres reales
     const rec = new MediaRecorder(flujo);
     const trozos = [];
+    let medidor = null;
+    try {                                                // barra de nivel: se ve si el micrófono recoge sonido
+      const ctx = new AudioContext();
+      const analizador = ctx.createAnalyser();
+      ctx.createMediaStreamSource(flujo).connect(analizador);
+      const muestras = new Uint8Array(analizador.fftSize);
+      const t = setInterval(() => { analizador.getByteTimeDomainData(muestras); setNivelMic(nivel(muestras)); }, 100);
+      medidor = () => { clearInterval(t); ctx.close(); setNivelMic(0); };
+    } catch { /* sin medidor: se graba igual */ }
     rec.ondataavailable = (e) => trozos.push(e.data);
     rec.onstop = async () => {
+      medidor?.();
       flujo.getTracks().forEach((t) => t.stop());
       setEstado("pensando");
       const fd = new FormData();
       fd.append("audio", new Blob(trozos, { type: "audio/webm" }), "voz.webm");
       const r = await fetch("/voz/transcribir", { method: "POST", body: fd });
       const d = r.ok ? await r.json() : { texto: "" };
-      d.texto ? enviar(d.texto, true) : setEstado("listo");
+      d.texto ? enviar(d.texto, true) : (setAvisoMic("No he entendido nada. Comprueba que la barra de nivel se mueve cuando hablas."), setEstado("listo"));
     };
     grabadora.current = rec;
     rec.start();
@@ -97,6 +148,16 @@ export default function Jarvis() {
         )}
       </div>
       <div className="barra">
+        {micros.length > 0 && (
+          <div className="micro-selector">
+            <label htmlFor="micro">Micrófono</label>
+            <select id="micro" value={micId} onChange={(e) => cambiarMicro(e.target.value)} disabled={estado !== "listo"}>
+              {micros.map((d, i) => <option key={d.deviceId} value={d.deviceId}>{nombre(d, i)}</option>)}
+            </select>
+            {estado === "escuchando" && <span className="nivel" role="meter" aria-label="Nivel del micrófono" aria-valuemin="0" aria-valuemax="1" aria-valuenow={nivelMic.toFixed(2)}><i style={{ width: `${Math.round(nivelMic * 100)}%` }} /></span>}
+          </div>
+        )}
+        {avisoMic && <div className="micro-aviso" role="alert">{avisoMic}</div>}
         <form className="compositor" onSubmit={(e) => { e.preventDefault(); enviar(texto); }}>
           <input value={texto} onChange={(e) => setTexto(e.target.value)} placeholder="Escribe o habla con Jarvis"
                  aria-label="Mensaje para Jarvis" disabled={estado === "pensando"} />
