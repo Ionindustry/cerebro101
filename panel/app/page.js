@@ -1,6 +1,6 @@
 "use client";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { elegir, mensajeError, mensajeTranscripcion, nivel, nombre, restricciones, soloEntradas } from "../lib/microfonos";
+import { ayudaSinMicrofonos, elegir, mensajeError, mensajeTranscripcion, nivel, nombre, restricciones, soloEntradas } from "../lib/microfonos";
 
 const SUGERENCIAS = [
   "¿Hay concursos nuevos que nos interesen?",
@@ -34,6 +34,17 @@ export default function Jarvis() {
     navigator.mediaDevices?.addEventListener?.("devicechange", detectar);      // al enchufar o quitar la webcam
     return () => navigator.mediaDevices?.removeEventListener?.("devicechange", detectar);
   }, [detectar]);
+
+  async function pedirPermiso() {                      // el navegador solo enseña los micrófonos tras dar permiso una vez
+    setAvisoMic("");
+    try {
+      const flujo = await navigator.mediaDevices.getUserMedia({ audio: true });
+      flujo.getTracks().forEach((t) => t.stop());
+    } catch (e) {
+      setAvisoMic(mensajeError(e));
+    }
+    detectar();
+  }
 
   function cambiarMicro(id) {
     setMicId(id);
@@ -153,15 +164,18 @@ export default function Jarvis() {
         )}
       </div>
       <div className="barra">
-        {micros.length > 0 && (
-          <div className="micro-selector">
-            <label htmlFor="micro">Micrófono</label>
+        <div className="micro-selector">
+          <label htmlFor="micro">Micrófono</label>
+          {micros.length > 0 ? (
             <select id="micro" value={micId} onChange={(e) => cambiarMicro(e.target.value)} disabled={estado !== "listo"}>
-              {micros.map((d, i) => <option key={d.deviceId} value={d.deviceId}>{nombre(d, i)}</option>)}
+              {micros.map((d, i) => <option key={d.deviceId || i} value={d.deviceId}>{nombre(d, i)}</option>)}
             </select>
-            {estado === "escuchando" && <span className="nivel" role="meter" aria-label="Nivel del micrófono" aria-valuemin="0" aria-valuemax="1" aria-valuenow={nivelMic.toFixed(2)}><i style={{ width: `${Math.round(nivelMic * 100)}%` }} /></span>}
-          </div>
-        )}
+          ) : (
+            <button type="button" className="of-boton" onClick={pedirPermiso} disabled={estado !== "listo"}>Detectar micrófonos</button>
+          )}
+          {estado === "escuchando" && <span className="nivel" role="meter" aria-label="Nivel del micrófono" aria-valuemin="0" aria-valuemax="1" aria-valuenow={nivelMic.toFixed(2)}><i style={{ width: `${Math.round(nivelMic * 100)}%` }} /></span>}
+        </div>
+        {micros.length === 0 && !avisoMic && <div className="micro-ayuda">{ayudaSinMicrofonos(typeof window !== "undefined" && window.isSecureContext, typeof navigator !== "undefined" && Boolean(navigator.mediaDevices))}</div>}
         {avisoMic && <div className="micro-aviso" role="alert">{avisoMic}</div>}
         <form className="compositor" onSubmit={(e) => { e.preventDefault(); enviar(texto); }}>
           <input value={texto} onChange={(e) => setTexto(e.target.value)} placeholder="Escribe o habla con Jarvis"

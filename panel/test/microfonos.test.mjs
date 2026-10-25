@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { elegir, mensajeError, mensajeTranscripcion, nivel, nombre, restricciones, soloEntradas } from "../lib/microfonos.js";
+import { ayudaSinMicrofonos, elegir, mensajeError, mensajeTranscripcion, nivel, nombre, restricciones, soloEntradas } from "../lib/microfonos.js";
 
 const disp = [
   { kind: "audioinput", deviceId: "default", label: "Predeterminado" },
@@ -55,4 +55,10 @@ test("al transcribir se distingue «no se oye nada» de «el servicio de voz no 
   assert.match(mensajeTranscripcion(503), /docker compose logs voz/);
   assert.match(mensajeTranscripcion(0), /no responde\./);
   assert.match(mensajeTranscripcion(401), /sesión ha caducado/);
+});
+
+test("sin micrófonos a la vista se explica por qué", () => {
+  assert.match(ayudaSinMicrofonos(false, true), /localhost:3000/);
+  assert.match(ayudaSinMicrofonos(true, false), /localhost:3000/);
+  assert.match(ayudaSinMicrofonos(true, true), /Detectar micrófonos/);
 });
