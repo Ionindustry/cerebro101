@@ -83,14 +83,14 @@ class TestVoz(unittest.TestCase):
 class TestHablar(unittest.TestCase):
     """Texto a voz (Piper simulado): WAV si está la voz, errores que se entienden si no."""
 
-    def servidor(self, con_voz=True):
+    def servidor(self, con_voz=True, config="{}"):
         import tempfile
         s, _ = cargar_servidor()
         carpeta = Path(tempfile.mkdtemp())
         voz = carpeta / "es_ES-prueba.onnx"
         if con_voz:
             voz.write_bytes(b"modelo")
-            Path(str(voz) + ".json").write_text("{}")
+            Path(str(voz) + ".json").write_text(config)
         s.VOCES["es"] = str(voz)
         return s
 
@@ -132,6 +132,39 @@ class TestHablar(unittest.TestCase):
         r = self.hablar(self.servidor(), {"texto": "Hola", "idioma": "es"}, falla)
         self.assertEqual(r.status_code, 500)
         self.assertIn("síntesis", r.json()["error"])
+
+    def test_se_elige_el_locutor_por_nombre_o_por_numero(self):
+        import os
+        s = self.servidor(config='{"speaker_id_map": {"M": 0, "F": 1}}')
+        for valor, esperado in (("F", "1"), ("M", "0"), ("1", "1")):
+            piper_ok.llamadas.clear()
+            with mock.patch.dict(os.environ, {"PIPER_LOCUTOR_ES": valor}):
+                self.assertEqual(self.hablar(s, {"texto": "Hola", "idioma": "es"}).status_code, 200)
+            args = piper_ok.llamadas[0][0]
+            self.assertEqual(args[args.index("--speaker") + 1], esperado, valor)
+
+    def test_sin_locutor_no_se_pide_ninguno(self):
+        import os
+        piper_ok.llamadas.clear()
+        with mock.patch.dict(os.environ, {"PIPER_LOCUTOR_ES": ""}):
+            self.hablar(self.servidor(config='{"speaker_id_map": {"M": 0, "F": 1}}'), {"texto": "Hola", "idioma": "es"})
+        self.assertNotIn("--speaker", piper_ok.llamadas[0][0])
+
+    def test_un_locutor_que_no_existe_dice_cuales_hay(self):
+        import os
+        with mock.patch.dict(os.environ, {"PIPER_LOCUTOR_ES": "X"}):
+            r = self.hablar(self.servidor(config='{"speaker_id_map": {"M": 0, "F": 1}}'), {"texto": "Hola", "idioma": "es"})
+        self.assertEqual(r.status_code, 500)
+        self.assertIn("M, F", r.json()["error"])
+        with mock.patch.dict(os.environ, {"PIPER_LOCUTOR_ES": "X"}):
+            r = self.hablar(self.servidor(), {"texto": "Hola", "idioma": "es"})
+        self.assertIn("ninguno", r.json()["error"])
+
+    def test_la_voz_se_cambia_con_el_entorno(self):
+        import os
+        with mock.patch.dict(os.environ, {"PIPER_VOZ_ES": "/voces/otra.onnx", "PIPER_VOZ_CA": ""}):
+            s, _ = cargar_servidor()
+        self.assertEqual((s.VOCES["es"], s.VOCES["ca"]), ("/voces/otra.onnx", "/voces/ca_ES-upc_ona-medium.onnx"))
 
     def test_la_salud_dice_que_voces_hay(self):
         from fastapi.testclient import TestClient

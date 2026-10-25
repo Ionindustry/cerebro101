@@ -20,6 +20,25 @@ Jarvis te escucha (voz a texto con Whisper) y te contesta en voz alta (texto a v
 
   Si falta la voz, Jarvis lo dice en pantalla en vez de quedarse mudo.
 
+## Cambiar la voz (por ejemplo, una voz femenina en castellano)
+
+La voz de salida en catalán (`upc_ona`) es femenina. La de castellano que se instala por defecto (`davefx`) es masculina. Hay una alternativa con locutora, `es_ES-sharvard-medium`, que trae dos locutores (M y F):
+
+```bash
+python3 scripts/voces_descargar.py --solo es-sharvard
+```
+
+Después, en el `.env`:
+
+```
+PIPER_VOZ_ES=/voces/es_ES-sharvard-medium.onnx
+PIPER_LOCUTOR_ES=F
+```
+
+y `docker compose up -d --force-recreate voz`. Si la voz no suena como esperas, prueba `PIPER_LOCUTOR_ES=M`, o los números `0` y `1`. Si el nombre del locutor no existe, Jarvis dice en pantalla cuáles hay. Para volver a la de siempre, borra esas dos líneas y recrea la voz. Otras voces: https://huggingface.co/rhasspy/piper-voices (cada una son dos ficheros, `.onnx` y `.onnx.json`, que van a `servicios/voz/voces/`).
+
+*Sin verificar:* la voz `sharvard` y sus locutores no se han podido oír desde el entorno de desarrollo; si ninguno te convence, dímelo y se prueba otra.
+
 ## Si algo falla
 
 | Síntoma | Mira |
