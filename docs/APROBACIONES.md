@@ -4,7 +4,17 @@
 **Todo lo que requiere aprobación lo firma Dirección, una sola persona**, sea cual sea el departamento. Es la política actual de `config/politicas_aprobacion.yaml`
 (`simple` y `doble` piden `[direccion]`). Antes «doble» exigía además al responsable del departamento y una segunda persona; el motor sigue admitiendo varios firmantes
 (se vuelve a exigir poniendo `[responsable_departamento, direccion]` en el nivel que se quiera) y sigue impidiendo que una misma persona firme dos veces.
-Lo más delicado (nivel «doble») se firma solo en el panel, no por voz.
+Todo, también lo más delicado (nivel «doble»), se puede firmar en el panel o por voz (`voz_permitida` en `niveles`).
+
+## Qué necesita firma
+La firma depende de **la operación**, no del agente (`supervision` en `config/politicas_aprobacion.yaml`):
+- **Estándar:** lecturas, consultas, borradores, propuestas, cálculos… No piden firma, se ejecutan.
+- **Supervisada:** lo que sale de la empresa o tiene impacto externo (enviar correo, crear cita…). Pide la firma de Dirección.
+- **Reservada:** compromisos económicos o legales (`presentar_licitacion`, `pedido_proveedor`, `mayorista.alta`…). Firma individual (no se agrupa en un objetivo); también por voz.
+
+## Firmar un objetivo, no cada subtarea
+Si una petición genera **varias acciones supervisadas**, el sistema crea **una sola solicitud** con el objetivo y la lista completa de acciones: se revisa y se firma una vez,
+y se ejecutan todas. Las reservadas siguen siendo individuales. Rechazar la solicitud rechaza todo el objetivo.
 
 ## Pantalla «Aprobaciones»
 - **Pendientes:** lo que falta por decidir. Cada solicitud es una etiqueta; **al pulsarla se despliega toda la información** para verificarla antes de decidir:

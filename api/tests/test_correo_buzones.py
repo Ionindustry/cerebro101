@@ -338,6 +338,25 @@ class TestAprobacionDeCorreo(Base):
         self.assertEqual(campos["Para"], "cli@ejemplo.es")
         self.assertIn("factura 123", campos["Mensaje"])
 
+    def test_varias_acciones_supervisadas_son_una_sola_firma(self):
+        from unittest import mock
+        ficha = next(f for f in registro().fichas.values() if f.departamento == "finanzas" and "correo" in f.herramientas)
+        creadas = []
+
+        async def crear(hilo, agente, departamento, accion, nivel, aprobadores, voz, datos):
+            creadas.append({"accion": accion, "datos": datos})
+            return f"sid-{len(creadas)}"
+        mail = lambda n: {"accion": f"envio_{n}", "herramienta": "correo", "operacion": "enviar", "resumen": f"correo {n}",
+                          "argumentos": {"para": f"c{n}@ejemplo.es", "asunto": "x", "cuerpo": "y"}}
+        estado = {"agente": ficha.id, "peticion": "Reclamar las facturas vencidas", "acciones": [mail(1), mail(2)]}
+        with mock.patch.object(nodos.bandeja, "crear", crear):
+            r = ejecutar(nodos.registrar_aprobaciones(estado, {"configurable": {"thread_id": "h"}}))
+        self.assertEqual(len(creadas), 1)
+        self.assertEqual(creadas[0]["accion"], "objetivo")
+        self.assertEqual(len(creadas[0]["datos"]["acciones"]), 2)
+        self.assertEqual(creadas[0]["datos"]["objetivo"], "Reclamar las facturas vencidas")
+        self.assertEqual({a["solicitud_id"] for a in r["acciones"]}, {"sid-1"})
+
     def test_enviar_a_un_buzon_ajeno_no_llega_a_la_bandeja(self):
         a, creadas = self.preparar("enviar", {"para": "cli@ejemplo.es", "asunto": "x", "cuerpo": "y", "buzon": "rrhh"})
         self.assertEqual(a["estado"], "error")

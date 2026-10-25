@@ -4,7 +4,7 @@ import Link from "next/link";
 import { ESTADOS, estadoDemo } from "../../lib/oficina";
 
 const REFRESCO = 4000;
-const APROBACION = { libre: "Actúa solo", simple: "Pide tu firma", doble: "Pide tu firma (solo en el panel)" };
+const APROBACION = { libre: "Actúa solo", simple: "Pide tu firma", doble: "Pide tu firma" };
 
 function hace(fecha) {
   if (!fecha) return "";
