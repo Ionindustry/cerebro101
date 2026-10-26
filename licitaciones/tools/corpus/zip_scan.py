@@ -14,7 +14,12 @@ from zip_stream import entries as zip_entries  # noqa: E402
 
 ATOM = "{http://www.w3.org/2005/Atom}"
 TOMB = "{http://purl.org/atompub/tombstones/1.0}"
-OUR_CPV = ("3512", "3232", "3162", "3511", "4534", "4531", "3241", "6420", "0933", "5061")
+# CPV decididos por Dirección el 26/10/2026 (§12.1 del proyecto). Se compara por prefijo (CPV sin
+# ceros finales), así un CPV hijo de uno de la lista también cuenta (propuesta de jerarquía, por validar).
+OUR_CPV_LIST = ("72000000", "72200000", "72230000", "72262000", "72267000", "32323500", "32235000",
+                "32234000", "35125300", "35120000", "34970000", "34923000", "34971000", "34972000",
+                "63712710", "45316210", "42961000", "42961100", "32420000", "32441100")
+OUR_CPV = tuple(sorted({c.rstrip("0") for c in OUR_CPV_LIST}))
 
 TR_FIELDS = [
     "cbc:ResultCode", "cbc:AwardDate", "cbc:ReceivedTenderQuantity", "cbc:LowerTenderAmount",
