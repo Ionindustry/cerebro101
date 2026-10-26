@@ -42,7 +42,7 @@ trabajo de Go nuevo). Estructura de §12.8: `cmd/api`, `cmd/ingestor`, `internal
                 │
                 ├─► panel del Cerebro (pantalla «Licitaciones»)
                 ├─► herramienta «licitaciones» de los agentes (Rastreador, Viabilidad, Inteligencia Competitiva, Precio…)
-                └─► eventos «licitacion.nueva / modificada / adjudicada» ─► alertas y resumen diario de las 7:00
+                └─► eventos «licitacion.nueva / modificada / adjudicada» ─► alertas y resumen diario de las 16:00
 ```
 El S3 conserva la evidencia; el grafo y OpenSearch son **proyecciones reconstruibles** desde S3 y el log de NATS (§12.6).
 
@@ -204,7 +204,7 @@ módulos con pruebas, y si un pliego trae una fórmula nueva, se añade como mó
   `organismo`, `competidores`, `contratos_que_vencen`, `novedades_desde` y `simular` (devuelve la curva probabilidad-precio-margen;
   no decide). `plataformas_contratacion` conserva `descargar_documento` y `preparar_paquete`.
 - **Eventos → Cerebro**: un consumidor en el Cerebro recibe `licitacion.nueva` con encaje alto y la registra en el embudo; el
-  **Rastreador** (6:00) pide a **Viabilidad** el informe ir/no ir; el **Director de Licitaciones** recibe el resumen a las 7:00 en el panel.
+  **Rastreador** (6:00) pide a **Viabilidad** el informe ir/no ir; el **Director de Licitaciones** prepara el resumen que Dirección recibe a las 16:00 en el panel.
 - **Panel**: pantalla «Licitaciones» (buscador con facetas, ficha, alertas guardadas, panel operativo), a través de la pasarela del panel.
 - **Seguridad**: tokens de Keycloak validados en la API Go; la API no se publica fuera (como la del Cerebro); registro de accesos.
 - Las aprobaciones no cambian: presentarse y firmar siguen siendo decisiones humanas.
@@ -222,7 +222,7 @@ Búsqueda p95 < 100 ms y p99 < 250 ms; vecindad del grafo (1–2 saltos) p95 < 5
 | **1. Datos** | 3 semanas | Esqueleto Go (`cmd/*`, `internal/*`), MinIO y NATS en el compose; conector PLACSP 643/1044 incremental con **anuncios y adjudicaciones** (adjudicatario por NIF, importes, bajas, nº de ofertas, formalización y fin del contrato); parser CODICE versionado con pruebas de contrato; originales con SHA-256; proyector de grafo | Repetir la ingesta no duplica; cada registro tiene original, hash y URL; carga histórica de **5 años** de licitaciones y adjudicaciones |
 | **2. Más fuentes** | 2 semanas | Conector TED v3 (eForms); reconciliación PLACSP–TED conservadora (identificadores, evidencia y confianza); contraste con Cataluña | Un expediente presente en PLACSP y TED aparece una vez, con la evidencia del enlace |
 | **3. Búsqueda y API** | 3 semanas | Proyector de OpenSearch (híbrido BM25 + semántico); puntuación de encaje; API Go con OpenAPI, Keycloak, paginación por cursor, límites y caché Redis | Búsqueda por texto, CPV, zona, organismo, fechas y estado; contrato OpenAPI publicado |
-| **4. Cerebro y panel** | 3 semanas | Herramienta `licitaciones`; consumidor de eventos; nuevo Rastreador y resumen de las 7:00; pantalla «Licitaciones» (buscador, ficha, alertas, panel operativo) | Criterios del MVP del documento (§9) cumplidos y el resumen diario llega solo |
+| **4. Cerebro y panel** | 3 semanas | Herramienta `licitaciones`; consumidor de eventos; nuevo Rastreador y resumen de las 16:00; pantalla «Licitaciones» (buscador, ficha, alertas, panel operativo) | Criterios del MVP del documento (§9) cumplidos y el resumen diario llega solo |
 | **5. Pliegos y competencia** | 3 semanas | Descarga bajo demanda con antivirus; cuaderno por expediente con matriz de cumplimiento citada; fichas de competidor y de organismo, cuotas de mercado, **contratos que vencen** y alertas de competencia (§5); actas de mesa (licitadores y puntuaciones) cuando se publican; plazos al calendario | El Analista de Pliegos cita página y fragmento; la ficha de un competidor cuadra con una muestra revisada a mano |
 | **5b. Simulador de ofertas** | 3 semanas | Módulo `internal/simulation` (§6): fórmulas de puntuación con pruebas, baja anormal, Monte Carlo, curva probabilidad-precio-margen; *backtesting* con concursos ya adjudicados; botón «Simular» en el panel; uso por Precio, Evaluador y Viabilidad | El *backtesting* alcanza la precisión acordada con Licitaciones antes de usarse para decidir |
 | **6. Producción** | 2 semanas | OpenTofu; OpenTelemetry y paneles; pruebas k6/Vegeta reproducibles; copias y ensayo de restauración (RPO/RTO); reindexado completo desde S3 | SLO medidos y cumplidos; restauración ensayada |
@@ -238,7 +238,7 @@ hasta la decisión ir/no ir.
 
 ## 12. Decisiones que necesito de 101.cat (fase 0)
 
-Decididas por Dirección el 26/10/2026: 1, 2 y 5.
+Decididas por Dirección el 26/10/2026: todas. La 8 se decide con los resultados del banco de pruebas (ADR 0006).
 
 1. **CPV de interés** (decidido; sustituye a la propuesta inicial): 72000000-5, 72200000-7, 72230000-6, 72262000-9,
    72267000-4 (servicios TI, desarrollo y mantenimiento de software); 32323500-8, 32235000-9, 32234000-2, 35125300-2,
@@ -248,12 +248,15 @@ Decididas por Dirección el 26/10/2026: 1, 2 y 5.
    Propuesta por validar: puntuar también la jerarquía (un CPV hijo de uno de la lista encaja; p. ej. 72000000 cubriría toda la división 72).
 2. **Zona prioritaria** (decidido): **España y Andorra**. Se ingesta todo y se puntúa por zona. Andorra no publica en PLACSP
    ni en TED (no es UE): su fuente de contratación pública está **POR VERIFICAR** en la fase 0.
-3. **Histórico**: propuesta de **5 años** de licitaciones y adjudicaciones (necesario para el análisis de competencia y el simulador).
-4. **Importes** mínimo y máximo según la solvencia.
+3. **Histórico** (decidido): **5 años** de licitaciones y adjudicaciones (carga inicial en la fase 1).
+4. **Importes** (decidido): **hasta 1 000 000 €**, sin mínimo. Se ingesta todo; el límite cuenta en la puntuación de encaje y
+   en el resumen diario. POR CONFIRMAR: que se aplique al presupuesto base de licitación **sin IVA** de cada lote.
 5. **Contratos menores** (decidido): **sí se incluyen**. Su fuente se verifica en la fase 0.
-6. **Quién recibe el resumen diario** y a qué hora (propuesta: Dirección y Licitaciones, 7:00).
-7. **Servidor**: memoria disponible para OpenSearch y el grafo junto a Ollama (ver riesgos); ¿mismo servidor o uno aparte?
+6. **Resumen diario** (decidido): lo recibe **Dirección (Albert)** a las **16:00**, con lo publicado desde las 16:00 del día anterior.
+7. **Servidor** (decidido): **este mismo servidor** (62 GB compartidos con el Cerebro y Ollama). Cada servicio del motor lleva
+   límite de memoria y CPU (NORMAS) y el presupuesto se fija con el banco de pruebas.
 8. **Licencias**: Neo4j Community (sin clúster) o Enterprise; Memgraph Community (BSL). Afecta a la alta disponibilidad.
+   Se decide con los resultados del banco (ADR 0006).
 
 ## 13. Riesgos
 

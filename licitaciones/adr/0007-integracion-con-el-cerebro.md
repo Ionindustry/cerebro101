@@ -29,7 +29,7 @@ Lo que ya existe y se reutiliza (comprobado en el repositorio el 26/10/2026):
 | Identidad | Keycloak del Cerebro, mismo realm | Usuarios propios del motor: dos inicios de sesión y dos políticas de permisos |
 | Agentes → motor | Herramienta Python que llama a la API HTTP del motor | Acceso directo a OpenSearch/grafo desde Python: salta la autorización y duplica consultas |
 | Motor → Cerebro (novedades) | Consumidor NATS **ligero** que solo escribe en Postgres | Encolar una tarea de Celery (o una ejecución de agente) por evento: es exactamente el atasco de octubre (1,1 M tareas) |
-| Resumen diario | Tarea programada que **consulta** la API a las 7:00 | Construirlo a partir de eventos: frágil si se pierde un consumo; la consulta es idempotente |
+| Resumen diario | Tarea programada que **consulta** la API a las 16:00 | Construirlo a partir de eventos: frágil si se pierde un consumo; la consulta es idempotente |
 | Panel | Segunda pasarela en el panel hacia la API del motor | Llamar al motor desde el navegador: obligaría a publicar la API |
 
 ## Decisión
@@ -96,9 +96,9 @@ para auditoría**: nunca amplían permisos.
   `motor_id uuid UNIQUE`, `motor_version int`, `encaje numeric`.
 - El **Rastreador** (6:00, ya programado por su ficha) lee el embudo y pide a **Viabilidad** el informe ir/no ir de las
   `detectada` — el trabajo con modelos sigue en la cola `lote`, acotado por el número de expedientes del día.
-- **Resumen de las 7:00**: lo genera la tarea del **Director de Licitaciones** consultando la API
-  (`GET /tenders?publicada_desde=<ayer 07:00>&encaje_min=…&orden=encaje&limit=50`); destinatarios y hora,
-  POR DECIDIR por 101.cat (§12.6 del proyecto). Si el motor no responde, el resumen lo dice en vez de salir vacío.
+- **Resumen de las 16:00**: lo genera la tarea del **Director de Licitaciones** consultando la API
+  (`GET /tenders?publicada_desde=<ayer 16:00>&encaje_min=…&orden=encaje&limit=50`); lo recibe Dirección (decidido por
+  101.cat el 26/10/2026, §12.6 del proyecto). Si el motor no responde, el resumen lo dice en vez de salir vacío.
 
 ### 4. Pantalla «Licitaciones» del panel
 - Pasarela nueva `panel/app/licitaciones-api/[...ruta]/route.js`, copia de la existente con `LICITACIONES_API`
