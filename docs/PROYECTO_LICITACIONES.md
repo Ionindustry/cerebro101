@@ -238,14 +238,19 @@ hasta la decisión ir/no ir.
 
 ## 12. Decisiones que necesito de 101.cat (fase 0)
 
-1. **CPV de interés.** Propuesta para validar con Licitaciones: 35125000 (sistemas de vigilancia), 32323500 (videovigilancia),
-   31625200 (detección de incendios), 35111000 (equipos de extinción), 45343000 (instalación de prevención de incendios),
-   45312000 (sistemas de alarma y antenas), 45314000 (equipos de telecomunicaciones), 32412000 (redes de comunicaciones),
-   64200000 (servicios de telecomunicaciones), 09332000 (instalaciones solares), 50610000 (mantenimiento de equipos de seguridad).
-2. **Zona prioritaria** para la puntuación (se ingesta todo): ¿Cataluña, Cataluña y limítrofes, toda España?
+Decididas por Dirección el 26/10/2026: 1, 2 y 5.
+
+1. **CPV de interés** (decidido; sustituye a la propuesta inicial): 72000000-5, 72200000-7, 72230000-6, 72262000-9,
+   72267000-4 (servicios TI, desarrollo y mantenimiento de software); 32323500-8, 32235000-9, 32234000-2, 35125300-2,
+   35120000-1 (videovigilancia, cámaras y sistemas de vigilancia y seguridad); 34970000-7, 34923000-3, 34971000-4,
+   34972000-1, 63712710-3, 45316210-0 (control, vigilancia y medición del tráfico, y su instalación); 42961000-0,
+   42961100-1 (mando y control, control de accesos); 32420000-3 (equipos de red); 32441100-7 (vigilancia telemétrica).
+   Propuesta por validar: puntuar también la jerarquía (un CPV hijo de uno de la lista encaja; p. ej. 72000000 cubriría toda la división 72).
+2. **Zona prioritaria** (decidido): **España y Andorra**. Se ingesta todo y se puntúa por zona. Andorra no publica en PLACSP
+   ni en TED (no es UE): su fuente de contratación pública está **POR VERIFICAR** en la fase 0.
 3. **Histórico**: propuesta de **5 años** de licitaciones y adjudicaciones (necesario para el análisis de competencia y el simulador).
 4. **Importes** mínimo y máximo según la solvencia.
-5. **Contratos menores**: ¿sí?
+5. **Contratos menores** (decidido): **sí se incluyen**. Su fuente se verifica en la fase 0.
 6. **Quién recibe el resumen diario** y a qué hora (propuesta: Dirección y Licitaciones, 7:00).
 7. **Servidor**: memoria disponible para OpenSearch y el grafo junto a Ollama (ver riesgos); ¿mismo servidor o uno aparte?
 8. **Licencias**: Neo4j Community (sin clúster) o Enterprise; Memgraph Community (BSL). Afecta a la alta disponibilidad.

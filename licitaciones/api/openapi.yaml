@@ -1,0 +1,1254 @@
+openapi: 3.1.0
+info:
+  title: API del motor de licitaciones (101.cat)
+  version: 0.1.0-borrador
+  summary: Búsqueda de licitaciones, adjudicaciones, competencia, alertas y simulador de ofertas.
+  description: |
+    **Borrador de la fase 0** (26/10/2026). Contrato entre el motor (Go, `cmd/api`) y sus clientes: el panel del Cerebro
+    (a través de su pasarela) y la herramienta `licitaciones` de los agentes. Ver `licitaciones/adr/0007-integracion-con-el-cerebro.md`.
+
+    Convenciones:
+    - Solo en la red interna; **no se publica fuera** (ADR 0007).
+    - Autenticación: token de Keycloak (realm `cerebro`) con audiencia `licitaciones-api`. Autorización por grupo
+      (departamento) y rol en cada endpoint; la matriz está en ADR 0007 y se resume en cada operación (`x-permisos`).
+    - Paginación **por cursor** (`limit` + `cursor` opaco). Sin `offset`. `limit` máximo 100.
+    - Importes como **texto decimal** (sin coma flotante) con moneda, impuestos y significado (`Importe`).
+    - Fechas en RFC 3339; fechas sin hora como `YYYY-MM-DD` (zona Europe/Madrid salvo que se indique).
+    - Errores en `application/problem+json` (RFC 9457).
+    - Los campos de texto en castellano; los identificadores en minúsculas con guion bajo.
+    - Los campos de CODICE/eForms se fijan con el corpus real (`licitaciones/testdata`); los marcados «POR VERIFICAR»
+      pueden cambiar antes de la v1.
+  contact:
+    name: Equipo del motor de licitaciones
+servers:
+  - url: http://licitaciones-api:8080/api/v1
+    description: Red interna Docker (producción y desarrollo)
+  - url: http://127.0.0.1:8090/api/v1
+    description: Desarrollo local (solo 127.0.0.1)
+security:
+  - bearer: []
+tags:
+  - name: licitaciones
+    description: Búsqueda, ficha e historial de expedientes
+  - name: adjudicaciones
+    description: Adjudicaciones y contratos
+  - name: competencia
+    description: Organismos, competidores y contratos que vencen
+  - name: alertas
+    description: Alertas guardadas
+  - name: simulador
+    description: Simulación de presentación de ofertas (§6 del proyecto)
+
+paths:
+  /tenders:
+    get:
+      tags: [licitaciones]
+      operationId: buscarLicitaciones
+      summary: Buscar licitaciones (texto, CPV, zona, organismo, fechas, estado)
+      description: |
+        Búsqueda híbrida (BM25 + semántica) sobre el índice `tenders` (un documento por expediente y lote).
+        Sin `q`, ordena por `orden`. Paginación con `search_after` codificado en `cursor`; sin consistencia entre páginas
+        si el índice cambia entretanto (se documenta, no se garantiza).
+        `novedades_desde` de la herramienta de los agentes = `actualizada_desde` + `orden=actualizacion`.
+      x-permisos: grupos licitaciones, direccion, comercial, telecom, areas; cuenta servicio
+      parameters:
+        - $ref: '#/components/parameters/q'
+        - $ref: '#/components/parameters/cpv'
+        - $ref: '#/components/parameters/nuts'
+        - $ref: '#/components/parameters/comprador'
+        - name: estado
+          in: query
+          description: Estado normalizado (varios valores = O).
+          style: form
+          explode: true
+          schema:
+            type: array
+            maxItems: 7
+            items: {$ref: '#/components/schemas/EstadoLicitacion'}
+        - name: procedimiento
+          in: query
+          style: form
+          explode: true
+          schema:
+            type: array
+            maxItems: 10
+            items: {$ref: '#/components/schemas/Procedimiento'}
+        - $ref: '#/components/parameters/fuente'
+        - $ref: '#/components/parameters/importe_min'
+        - $ref: '#/components/parameters/importe_max'
+        - name: publicada_desde
+          in: query
+          schema: {type: string, format: date-time}
+        - name: publicada_hasta
+          in: query
+          schema: {type: string, format: date-time}
+        - name: actualizada_desde
+          in: query
+          description: Expedientes con alguna versión nueva desde esta fecha (para «novedades desde»).
+          schema: {type: string, format: date-time}
+        - name: plazo_desde
+          in: query
+          description: Fin del plazo de presentación a partir de esta fecha.
+          schema: {type: string, format: date-time}
+        - name: plazo_hasta
+          in: query
+          schema: {type: string, format: date-time}
+        - name: encaje_min
+          in: query
+          description: Puntuación mínima de encaje para 101.cat (0–100).
+          schema: {type: number, minimum: 0, maximum: 100}
+        - name: orden
+          in: query
+          schema:
+            type: string
+            enum: [relevancia, encaje, plazo, publicacion, actualizacion, importe]
+            default: relevancia
+        - name: facetas
+          in: query
+          description: Facetas a devolver (solo en la primera página).
+          style: form
+          explode: false
+          schema:
+            type: array
+            maxItems: 6
+            items: {type: string, enum: [cpv, nuts, estado, procedimiento, comprador, fuente]}
+        - $ref: '#/components/parameters/limit'
+        - $ref: '#/components/parameters/cursor'
+      responses:
+        '200':
+          description: Página de resultados
+          headers:
+            RateLimit-Remaining: {$ref: '#/components/headers/RateLimit-Remaining'}
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Pagina'
+                  - type: object
+                    required: [items]
+                    properties:
+                      items:
+                        type: array
+                        items: {$ref: '#/components/schemas/LicitacionResumen'}
+                      facetas:
+                        type: object
+                        additionalProperties:
+                          type: array
+                          items: {$ref: '#/components/schemas/Faceta'}
+        '400': {$ref: '#/components/responses/Invalida'}
+        '401': {$ref: '#/components/responses/NoAutenticado'}
+        '403': {$ref: '#/components/responses/Prohibido'}
+        '429': {$ref: '#/components/responses/DemasiadasPeticiones'}
+        '503': {$ref: '#/components/responses/NoDisponible'}
+
+  /tenders/{id}:
+    get:
+      tags: [licitaciones]
+      operationId: fichaLicitacion
+      summary: Ficha completa de un expediente (precalculada)
+      description: Lectura por id desde Redis/OpenSearch, sin tocar el grafo ni S3 (SLO p95 < 75 ms). Admite `If-None-Match`.
+      x-permisos: grupos licitaciones, direccion, comercial, telecom, areas; cuenta servicio
+      parameters:
+        - $ref: '#/components/parameters/tenderId'
+        - name: If-None-Match
+          in: header
+          schema: {type: string}
+      responses:
+        '200':
+          description: Ficha
+          headers:
+            ETag:
+              description: '"<uuid>-v<version_entidad>"'
+              schema: {type: string}
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/LicitacionFicha'}
+        '304': {description: Sin cambios desde el ETag indicado}
+        '401': {$ref: '#/components/responses/NoAutenticado'}
+        '403': {$ref: '#/components/responses/Prohibido'}
+        '404': {$ref: '#/components/responses/NoEncontrado'}
+        '429': {$ref: '#/components/responses/DemasiadasPeticiones'}
+
+  /tenders/{id}/history:
+    get:
+      tags: [licitaciones]
+      operationId: historialLicitacion
+      summary: Versiones del expediente con su evidencia (original en S3, hash, URL, parser)
+      x-permisos: grupos licitaciones, direccion, comercial, telecom, areas; cuenta servicio
+      parameters:
+        - $ref: '#/components/parameters/tenderId'
+        - $ref: '#/components/parameters/limit'
+        - $ref: '#/components/parameters/cursor'
+      responses:
+        '200':
+          description: Versiones, de la más reciente a la más antigua
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Pagina'
+                  - type: object
+                    required: [items]
+                    properties:
+                      items:
+                        type: array
+                        items: {$ref: '#/components/schemas/VersionLicitacion'}
+        '401': {$ref: '#/components/responses/NoAutenticado'}
+        '403': {$ref: '#/components/responses/Prohibido'}
+        '404': {$ref: '#/components/responses/NoEncontrado'}
+        '429': {$ref: '#/components/responses/DemasiadasPeticiones'}
+
+  /awards:
+    get:
+      tags: [adjudicaciones]
+      operationId: buscarAdjudicaciones
+      summary: Adjudicaciones por lote (para análisis de mercado y precios)
+      x-permisos: grupos licitaciones, direccion, comercial, telecom, areas; cuenta servicio. NIF de personas físicas solo para licitaciones y direccion
+      parameters:
+        - $ref: '#/components/parameters/q'
+        - $ref: '#/components/parameters/cpv'
+        - $ref: '#/components/parameters/nuts'
+        - $ref: '#/components/parameters/comprador'
+        - name: adjudicatario
+          in: query
+          description: Id de organización (`OrganizacionId`).
+          schema: {$ref: '#/components/schemas/OrganizacionId'}
+        - $ref: '#/components/parameters/fuente'
+        - $ref: '#/components/parameters/importe_min'
+        - $ref: '#/components/parameters/importe_max'
+        - name: adjudicada_desde
+          in: query
+          schema: {type: string, format: date}
+        - name: adjudicada_hasta
+          in: query
+          schema: {type: string, format: date}
+        - name: procedimiento
+          in: query
+          style: form
+          explode: true
+          schema:
+            type: array
+            maxItems: 10
+            items: {$ref: '#/components/schemas/Procedimiento'}
+        - name: orden
+          in: query
+          schema: {type: string, enum: [fecha, importe, baja], default: fecha}
+        - $ref: '#/components/parameters/limit'
+        - $ref: '#/components/parameters/cursor'
+      responses:
+        '200':
+          description: Página de adjudicaciones
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Pagina'
+                  - type: object
+                    required: [items]
+                    properties:
+                      items:
+                        type: array
+                        items: {$ref: '#/components/schemas/Adjudicacion'}
+        '400': {$ref: '#/components/responses/Invalida'}
+        '401': {$ref: '#/components/responses/NoAutenticado'}
+        '403': {$ref: '#/components/responses/Prohibido'}
+        '429': {$ref: '#/components/responses/DemasiadasPeticiones'}
+
+  /organizations/{id}:
+    get:
+      tags: [competencia]
+      operationId: fichaOrganizacion
+      summary: Ficha de organismo (comprador) o de competidor (proveedor) con estadísticas
+      description: |
+        `id` admite el UUID interno o un identificador oficial con prefijo: `nif:B12345678`, `dir3:L01080193`,
+        `vat:FR12345678901`. Nunca se busca por nombre.
+      x-permisos: compradores como /tenders; proveedores solo licitaciones, direccion y servicio (acceso registrado)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: {$ref: '#/components/schemas/OrganizacionId'}
+        - name: desde
+          in: query
+          description: Inicio del periodo de las estadísticas (por defecto, hace 5 años).
+          schema: {type: string, format: date}
+        - name: hasta
+          in: query
+          schema: {type: string, format: date}
+        - $ref: '#/components/parameters/cpv'
+      responses:
+        '200':
+          description: Ficha
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Organizacion'}
+        '400': {$ref: '#/components/responses/Invalida'}
+        '401': {$ref: '#/components/responses/NoAutenticado'}
+        '403': {$ref: '#/components/responses/Prohibido'}
+        '404': {$ref: '#/components/responses/NoEncontrado'}
+        '429': {$ref: '#/components/responses/DemasiadasPeticiones'}
+
+  /competitors:
+    get:
+      tags: [competencia]
+      operationId: competidores
+      summary: Ranking de competidores en un mercado (CPV, zona, organismo, importe, periodo)
+      description: Al menos uno de `cpv`, `nuts` o `comprador` es obligatorio (evita listados masivos).
+      x-permisos: licitaciones, direccion; cuenta servicio (acceso registrado)
+      parameters:
+        - $ref: '#/components/parameters/cpv'
+        - $ref: '#/components/parameters/nuts'
+        - $ref: '#/components/parameters/comprador'
+        - $ref: '#/components/parameters/importe_min'
+        - $ref: '#/components/parameters/importe_max'
+        - name: desde
+          in: query
+          schema: {type: string, format: date}
+        - name: hasta
+          in: query
+          schema: {type: string, format: date}
+        - name: orden
+          in: query
+          schema: {type: string, enum: [importe, contratos, cuota], default: importe}
+        - $ref: '#/components/parameters/limit'
+        - $ref: '#/components/parameters/cursor'
+      responses:
+        '200':
+          description: Competidores
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Pagina'
+                  - type: object
+                    required: [items, muestra]
+                    properties:
+                      items:
+                        type: array
+                        items: {$ref: '#/components/schemas/Competidor'}
+                      muestra:
+                        $ref: '#/components/schemas/Muestra'
+        '400': {$ref: '#/components/responses/Invalida'}
+        '401': {$ref: '#/components/responses/NoAutenticado'}
+        '403': {$ref: '#/components/responses/Prohibido'}
+        '429': {$ref: '#/components/responses/DemasiadasPeticiones'}
+
+  /expiring-contracts:
+    get:
+      tags: [competencia]
+      operationId: contratosQueVencen
+      summary: Contratos formalizados que terminan en un periodo (el concurso volverá a salir)
+      x-permisos: grupos licitaciones, direccion, comercial, telecom, areas; cuenta servicio
+      parameters:
+        - $ref: '#/components/parameters/cpv'
+        - $ref: '#/components/parameters/nuts'
+        - $ref: '#/components/parameters/comprador'
+        - $ref: '#/components/parameters/importe_min'
+        - name: vence_desde
+          in: query
+          description: Por defecto, hoy + 3 meses.
+          schema: {type: string, format: date}
+        - name: vence_hasta
+          in: query
+          description: Por defecto, hoy + 12 meses. Máximo 36 meses desde `vence_desde`.
+          schema: {type: string, format: date}
+        - name: con_prorrogas
+          in: query
+          description: Si es true, usa la fecha de fin con las prórrogas posibles.
+          schema: {type: boolean, default: false}
+        - $ref: '#/components/parameters/limit'
+        - $ref: '#/components/parameters/cursor'
+      responses:
+        '200':
+          description: Contratos
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Pagina'
+                  - type: object
+                    required: [items]
+                    properties:
+                      items:
+                        type: array
+                        items: {$ref: '#/components/schemas/ContratoQueVence'}
+        '400': {$ref: '#/components/responses/Invalida'}
+        '401': {$ref: '#/components/responses/NoAutenticado'}
+        '403': {$ref: '#/components/responses/Prohibido'}
+        '429': {$ref: '#/components/responses/DemasiadasPeticiones'}
+
+  /alerts:
+    get:
+      tags: [alertas]
+      operationId: listarAlertas
+      summary: Alertas visibles para el usuario (las suyas y las de sus departamentos)
+      x-permisos: cualquier usuario con acceso a /tenders
+      parameters:
+        - name: ambito
+          in: query
+          schema: {type: string, enum: [personal, departamento]}
+        - $ref: '#/components/parameters/limit'
+        - $ref: '#/components/parameters/cursor'
+      responses:
+        '200':
+          description: Alertas
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Pagina'
+                  - type: object
+                    required: [items]
+                    properties:
+                      items:
+                        type: array
+                        items: {$ref: '#/components/schemas/Alerta'}
+        '401': {$ref: '#/components/responses/NoAutenticado'}
+        '403': {$ref: '#/components/responses/Prohibido'}
+    post:
+      tags: [alertas]
+      operationId: crearAlerta
+      summary: Crear una alerta
+      x-permisos: personal, cualquier usuario con acceso; departamento, rol responsable de ese departamento o direccion
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/AlertaEntrada'}
+      responses:
+        '201':
+          description: Creada
+          headers:
+            Location: {schema: {type: string}}
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Alerta'}
+        '400': {$ref: '#/components/responses/Invalida'}
+        '401': {$ref: '#/components/responses/NoAutenticado'}
+        '403': {$ref: '#/components/responses/Prohibido'}
+        '409': {$ref: '#/components/responses/Conflicto'}
+        '422': {$ref: '#/components/responses/NoProcesable'}
+
+  /alerts/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: {type: string, format: uuid}
+    get:
+      tags: [alertas]
+      operationId: verAlerta
+      summary: Ver una alerta
+      responses:
+        '200':
+          description: Alerta
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Alerta'}
+        '401': {$ref: '#/components/responses/NoAutenticado'}
+        '403': {$ref: '#/components/responses/Prohibido'}
+        '404': {$ref: '#/components/responses/NoEncontrado'}
+    patch:
+      tags: [alertas]
+      operationId: cambiarAlerta
+      summary: Cambiar una alerta (JSON Merge Patch)
+      parameters:
+        - name: If-Match
+          in: header
+          required: true
+          description: ETag de la alerta (evita pisar cambios de otra persona).
+          schema: {type: string}
+      requestBody:
+        required: true
+        content:
+          application/merge-patch+json:
+            schema: {$ref: '#/components/schemas/AlertaCambio'}
+      responses:
+        '200':
+          description: Alerta cambiada
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Alerta'}
+        '400': {$ref: '#/components/responses/Invalida'}
+        '401': {$ref: '#/components/responses/NoAutenticado'}
+        '403': {$ref: '#/components/responses/Prohibido'}
+        '404': {$ref: '#/components/responses/NoEncontrado'}
+        '412': {$ref: '#/components/responses/PrecondicionFallida'}
+    delete:
+      tags: [alertas]
+      operationId: borrarAlerta
+      summary: Borrar una alerta
+      responses:
+        '204': {description: Borrada}
+        '401': {$ref: '#/components/responses/NoAutenticado'}
+        '403': {$ref: '#/components/responses/Prohibido'}
+        '404': {$ref: '#/components/responses/NoEncontrado'}
+
+  /simulations:
+    post:
+      tags: [simulador]
+      operationId: simular
+      summary: Simular la presentación de una oferta (curva probabilidad-precio-margen)
+      description: |
+        Cálculo **determinista** (Monte Carlo con `semilla`) en `internal/simulation`; objetivo < 1 s para 10 000
+        escenarios. Exige reglas del pliego **validadas por una persona** (`reglas.validadas_por`). No decide: devuelve
+        la curva, el riesgo de baja anormal, la incertidumbre y si el simulador es apto para decidir según su
+        *backtesting*. La simulación se guarda (entrada y resultado) y solo la ve el departamento que la pidió.
+      x-permisos: licitaciones, direccion; cuenta servicio
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/SimulacionEntrada'}
+      responses:
+        '201':
+          description: Simulación hecha
+          headers:
+            Location: {schema: {type: string}}
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Simulacion'}
+        '400': {$ref: '#/components/responses/Invalida'}
+        '401': {$ref: '#/components/responses/NoAutenticado'}
+        '403': {$ref: '#/components/responses/Prohibido'}
+        '404': {$ref: '#/components/responses/NoEncontrado'}
+        '422': {$ref: '#/components/responses/NoProcesable'}
+        '429': {$ref: '#/components/responses/DemasiadasPeticiones'}
+
+  /simulations/{id}:
+    get:
+      tags: [simulador]
+      operationId: verSimulacion
+      summary: Ver una simulación guardada
+      x-permisos: departamento que la pidió (licitaciones, direccion); cuenta servicio
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: {type: string, format: uuid}
+      responses:
+        '200':
+          description: Simulación
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Simulacion'}
+        '401': {$ref: '#/components/responses/NoAutenticado'}
+        '403': {$ref: '#/components/responses/Prohibido'}
+        '404': {$ref: '#/components/responses/NoEncontrado'}
+
+components:
+  securitySchemes:
+    bearer:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: |
+        Token de acceso de Keycloak, realm `cerebro`. Se valida firma (RS256, JWKS), `iss`, `aud` ∋ `licitaciones-api`,
+        `exp`/`nbf` (±30 s) y `azp` ∈ {`cerebro-panel`, `cerebro-agentes`}. Roles: `realm_access.roles`;
+        departamentos: `groups`.
+
+  headers:
+    RateLimit-Remaining:
+      description: Peticiones que quedan en la ventana actual.
+      schema: {type: integer, minimum: 0}
+    Retry-After:
+      description: Segundos que hay que esperar.
+      schema: {type: integer, minimum: 1}
+
+  parameters:
+    q:
+      name: q
+      in: query
+      description: Texto libre (castellano o catalán). Se trata como texto, nunca como sintaxis de consulta.
+      schema: {type: string, minLength: 2, maxLength: 200}
+    cpv:
+      name: cpv
+      in: query
+      description: |
+        Códigos CPV de 8 cifras o prefijos (2–8 cifras; un prefijo incluye los descendientes). Varios = O.
+      style: form
+      explode: true
+      schema:
+        type: array
+        maxItems: 20
+        items: {type: string, pattern: '^[0-9]{2,8}$'}
+    nuts:
+      name: nuts
+      in: query
+      description: Códigos NUTS (p. ej. `ES51` Cataluña, `ES512` Girona). Un código incluye sus subniveles. Varios = O.
+      style: form
+      explode: true
+      schema:
+        type: array
+        maxItems: 20
+        items: {type: string, pattern: '^[A-Z]{2}[0-9A-Z]{0,3}$'}
+    comprador:
+      name: comprador
+      in: query
+      description: Organismo comprador (`OrganizacionId`). Varios = O.
+      style: form
+      explode: true
+      schema:
+        type: array
+        maxItems: 20
+        items: {$ref: '#/components/schemas/OrganizacionId'}
+    fuente:
+      name: fuente
+      in: query
+      style: form
+      explode: true
+      schema:
+        type: array
+        maxItems: 5
+        items: {$ref: '#/components/schemas/Fuente'}
+    importe_min:
+      name: importe_min
+      in: query
+      description: Importe mínimo en euros, sin IVA, sobre el valor estimado (licitaciones) o el adjudicado (adjudicaciones).
+      schema: {type: string, pattern: '^[0-9]{1,12}(\.[0-9]{1,2})?$'}
+    importe_max:
+      name: importe_max
+      in: query
+      schema: {type: string, pattern: '^[0-9]{1,12}(\.[0-9]{1,2})?$'}
+    limit:
+      name: limit
+      in: query
+      description: Tamaño de página. Más de 100 → 400 (no se recorta en silencio).
+      schema: {type: integer, minimum: 1, maximum: 100, default: 20}
+    cursor:
+      name: cursor
+      in: query
+      description: |
+        Cursor opaco devuelto en `siguiente_cursor`. Firmado (HMAC) y ligado a los filtros de la consulta: usarlo con
+        otros filtros devuelve 400 `cursor_invalido`. Caduca a las 24 h.
+      schema: {type: string, maxLength: 1024, pattern: '^[A-Za-z0-9_-]+$'}
+    tenderId:
+      name: id
+      in: path
+      required: true
+      description: UUID interno y estable del expediente.
+      schema: {type: string, format: uuid}
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: false
+      description: Repetir la petición con la misma clave en 24 h devuelve el mismo resultado sin crear otro recurso.
+      schema: {type: string, format: uuid}
+
+  responses:
+    Invalida:
+      description: Parámetros no válidos (incluye `limit` > 100 y cursor no válido)
+      content:
+        application/problem+json:
+          schema: {$ref: '#/components/schemas/Problema'}
+    NoAutenticado:
+      description: Falta el token o no es válido
+      headers:
+        WWW-Authenticate: {schema: {type: string}}
+      content:
+        application/problem+json:
+          schema: {$ref: '#/components/schemas/Problema'}
+    Prohibido:
+      description: El usuario no tiene permiso para este recurso
+      content:
+        application/problem+json:
+          schema: {$ref: '#/components/schemas/Problema'}
+    NoEncontrado:
+      description: No existe (o no es visible para el usuario)
+      content:
+        application/problem+json:
+          schema: {$ref: '#/components/schemas/Problema'}
+    Conflicto:
+      description: Conflicto (p. ej. `Idempotency-Key` reutilizada con otro cuerpo)
+      content:
+        application/problem+json:
+          schema: {$ref: '#/components/schemas/Problema'}
+    PrecondicionFallida:
+      description: El recurso ha cambiado (ETag distinto)
+      content:
+        application/problem+json:
+          schema: {$ref: '#/components/schemas/Problema'}
+    NoProcesable:
+      description: Petición bien formada pero imposible (p. ej. reglas del pliego sin validar)
+      content:
+        application/problem+json:
+          schema: {$ref: '#/components/schemas/Problema'}
+    DemasiadasPeticiones:
+      description: |
+        Límite de tasa superado. Propuesta inicial por usuario: 10 peticiones/s (ráfaga 20) en búsqueda y fichas;
+        2/s en `/awards`, `/competitors`, `/organizations`; 10/min en `/simulations`.
+      headers:
+        Retry-After: {$ref: '#/components/headers/Retry-After'}
+      content:
+        application/problem+json:
+          schema: {$ref: '#/components/schemas/Problema'}
+    NoDisponible:
+      description: Un almacén necesario no responde (OpenSearch); reintentar más tarde
+      headers:
+        Retry-After: {$ref: '#/components/headers/Retry-After'}
+      content:
+        application/problem+json:
+          schema: {$ref: '#/components/schemas/Problema'}
+
+  schemas:
+    Problema:
+      type: object
+      description: RFC 9457. `detail` es apto para mostrar a una persona y nunca contiene secretos ni trazas internas.
+      required: [type, title, status, codigo]
+      properties:
+        type: {type: string, format: uri-reference, examples: ['https://licitaciones.101.cat/errores/parametro_invalido']}
+        title: {type: string}
+        status: {type: integer}
+        detail: {type: string}
+        instance: {type: string, description: Id de la petición (también en la cabecera `X-Request-Id`).}
+        codigo:
+          type: string
+          enum: [parametro_invalido, cursor_invalido, limite_excedido, no_autenticado, sin_permiso, no_encontrado,
+                 conflicto, precondicion_fallida, reglas_sin_validar, datos_insuficientes, demasiadas_peticiones,
+                 no_disponible, error_interno]
+        errores:
+          type: array
+          description: Detalle por campo en errores de validación.
+          items:
+            type: object
+            required: [campo, mensaje]
+            properties:
+              campo: {type: string}
+              mensaje: {type: string}
+
+    Pagina:
+      type: object
+      required: [siguiente_cursor, total]
+      properties:
+        siguiente_cursor:
+          type: [string, 'null']
+          description: null en la última página.
+        total:
+          type: object
+          required: [valor, relacion]
+          description: Total de resultados; exacto hasta 10 000, después «al menos».
+          properties:
+            valor: {type: integer, minimum: 0}
+            relacion: {type: string, enum: [eq, gte]}
+
+    Faceta:
+      type: object
+      required: [valor, cuenta]
+      properties:
+        valor: {type: string}
+        etiqueta: {type: string}
+        cuenta: {type: integer}
+
+    Fuente:
+      type: string
+      enum: [placsp, placsp_agregadas, ted, cat, placsp_menores]
+
+    EstadoLicitacion:
+      type: string
+      description: |
+        Estado normalizado. El estado de origen se conserva en `estado_origen` (p. ej. códigos CODICE PUB, EV, ADJ, RES,
+        ANUL, PRE — mapeo POR VERIFICAR con el corpus).
+      enum: [anuncio_previo, abierta, cerrada, adjudicada, formalizada, anulada, desierta]
+
+    Procedimiento:
+      type: string
+      description: Normalizado; mapeo desde CODICE/eForms POR VERIFICAR.
+      enum: [abierto, abierto_simplificado, abierto_simplificado_abreviado, restringido, negociado_con_publicidad,
+             negociado_sin_publicidad, dialogo_competitivo, asociacion_innovacion, licitacion_con_negociacion,
+             basado_en_acuerdo_marco, menor, otro]
+
+    OrganizacionId:
+      type: string
+      description: UUID interno o identificador oficial con prefijo (`nif:`, `dir3:`, `vat:`).
+      pattern: '^([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}|nif:[0-9A-Z]{9}|dir3:[0-9A-Z]{9,10}|vat:[A-Z]{2}[0-9A-Z]{2,13})$'
+
+    Importe:
+      type: object
+      description: Un importe siempre con moneda, impuestos y significado (`NORMAS.md`).
+      required: [valor, moneda, impuestos, significado]
+      properties:
+        valor: {type: string, pattern: '^-?[0-9]{1,15}(\.[0-9]{1,4})?$', examples: ['125000.00']}
+        moneda: {type: string, pattern: '^[A-Z]{3}$', default: EUR}
+        impuestos: {type: string, enum: [sin_iva, con_iva, desconocido]}
+        significado:
+          type: string
+          enum: [valor_estimado, presupuesto_base, adjudicado, oferta_mas_baja, oferta_mas_alta, modificacion, total_con_modificaciones]
+
+    Evidencia:
+      type: object
+      description: Dónde está el original y cómo se obtuvo (ADR 0003 y 0004).
+      required: [fuente, id_origen, url_origen, capturado_en, sha256, clave_raw]
+      properties:
+        fuente: {$ref: '#/components/schemas/Fuente'}
+        id_origen: {type: string}
+        url_origen: {type: string, format: uri}
+        capturado_en: {type: string, format: date-time}
+        sha256: {type: string, pattern: '^[0-9a-f]{64}$'}
+        clave_raw: {type: string, description: 'Clave en el bucket `raw` (§12.5).'}
+        version_parser: {type: string, examples: [codice-v1]}
+        licencia: {type: string}
+
+    OrganizacionRef:
+      type: object
+      required: [id, nombre]
+      properties:
+        id: {type: string, format: uuid}
+        nombre: {type: string}
+        nif:
+          type: [string, 'null']
+          description: null si es persona física y el usuario no tiene permiso.
+        dir3: {type: [string, 'null']}
+        persona_fisica: {type: boolean}
+
+    Lote:
+      type: object
+      required: [numero]
+      properties:
+        numero: {type: string, description: Número o identificador del lote en origen («1» si no hay lotes).}
+        objeto: {type: string}
+        cpv: {type: array, items: {type: string, pattern: '^[0-9]{8}$'}}
+        nuts: {type: array, items: {type: string}}
+        importes: {type: array, items: {$ref: '#/components/schemas/Importe'}}
+        estado: {$ref: '#/components/schemas/EstadoLicitacion'}
+
+    LicitacionResumen:
+      type: object
+      required: [id, titulo, estado, fuentes, version_entidad]
+      properties:
+        id: {type: string, format: uuid}
+        expediente: {type: string, description: Número de expediente del órgano.}
+        titulo: {type: string}
+        comprador: {$ref: '#/components/schemas/OrganizacionRef'}
+        cpv: {type: array, items: {type: string}}
+        nuts: {type: array, items: {type: string}}
+        procedimiento: {$ref: '#/components/schemas/Procedimiento'}
+        estado: {$ref: '#/components/schemas/EstadoLicitacion'}
+        importe: {$ref: '#/components/schemas/Importe'}
+        publicada_en: {type: string, format: date-time}
+        actualizada_en: {type: string, format: date-time}
+        plazo_presentacion: {type: [string, 'null'], format: date-time}
+        encaje:
+          type: [number, 'null']
+          minimum: 0
+          maximum: 100
+          description: Puntuación de encaje para 101.cat (§7.9); null si no se ha calculado.
+        lote: {type: [string, 'null'], description: Lote que coincide con la búsqueda, si aplica.}
+        fuentes: {type: array, items: {$ref: '#/components/schemas/Fuente'}}
+        url_origen: {type: string, format: uri}
+        version_entidad: {type: integer, minimum: 1}
+        resaltado:
+          type: object
+          description: Fragmentos con coincidencias (texto plano; las marcas se indican con desplazamientos, no con HTML).
+          additionalProperties:
+            type: array
+            items: {type: string}
+
+    LicitacionFicha:
+      allOf:
+        - $ref: '#/components/schemas/LicitacionResumen'
+        - type: object
+          properties:
+            estado_origen: {type: string}
+            descripcion: {type: string}
+            lotes: {type: array, items: {$ref: '#/components/schemas/Lote'}}
+            importes: {type: array, items: {$ref: '#/components/schemas/Importe'}}
+            plazos:
+              type: object
+              properties:
+                presentacion: {type: [string, 'null'], format: date-time}
+                aclaraciones: {type: [string, 'null'], format: date-time}
+                apertura: {type: [string, 'null'], format: date-time}
+            criterios:
+              type: array
+              description: Criterios de adjudicación cuando la fuente los estructura (si no, en el pliego).
+              items:
+                type: object
+                properties:
+                  descripcion: {type: string}
+                  tipo: {type: string, enum: [precio, calidad_automatica, calidad_juicio_valor, otro]}
+                  peso: {type: [number, 'null']}
+            documentos:
+              type: array
+              items:
+                type: object
+                required: [nombre, url_origen]
+                properties:
+                  nombre: {type: string}
+                  tipo: {type: string, examples: [pliego_administrativo, pliego_tecnico, anuncio, acta]}
+                  url_origen: {type: string, format: uri}
+                  descargado: {type: boolean}
+            adjudicaciones: {type: array, items: {$ref: '#/components/schemas/Adjudicacion'}}
+            encaje_detalle:
+              type: object
+              description: Componentes de la puntuación (CPV, zona, importe, días hasta el cierre, procedimiento).
+              additionalProperties: {type: number}
+            evidencia: {$ref: '#/components/schemas/Evidencia'}
+            relacionados:
+              type: array
+              description: Expedientes enlazados (PLACSP↔TED) con la evidencia del enlace y su confianza (fase 2).
+              items:
+                type: object
+                properties:
+                  id: {type: string, format: uuid}
+                  motivo: {type: string}
+                  confianza: {type: number, minimum: 0, maximum: 1}
+
+    VersionLicitacion:
+      type: object
+      required: [version_entidad, tipo_evento, capturado_en, evidencia]
+      properties:
+        version_entidad: {type: integer, minimum: 1}
+        tipo_evento: {type: string, enum: [licitacion.nueva, licitacion.modificada, licitacion.adjudicada, licitacion.formalizada, licitacion.anulada]}
+        publicado_en_origen: {type: [string, 'null'], format: date-time}
+        capturado_en: {type: string, format: date-time}
+        hash_normalizado: {type: string, pattern: '^[0-9a-f]{64}$'}
+        cambios:
+          type: array
+          items:
+            type: object
+            required: [campo]
+            properties:
+              campo: {type: string, description: Ruta del campo normalizado (p. ej. `plazos.presentacion`).}
+              antes: {}
+              despues: {}
+        evidencia: {$ref: '#/components/schemas/Evidencia'}
+
+    Adjudicacion:
+      type: object
+      required: [id, licitacion_id, lote, resultado]
+      properties:
+        id: {type: string, format: uuid}
+        licitacion_id: {type: string, format: uuid}
+        expediente: {type: string}
+        titulo: {type: string}
+        lote: {type: string}
+        comprador: {$ref: '#/components/schemas/OrganizacionRef'}
+        resultado: {type: string, enum: [adjudicado, desierto]}
+        adjudicatario: {$ref: '#/components/schemas/OrganizacionRef'}
+        importes:
+          type: array
+          description: adjudicado (sin y con IVA), presupuesto_base, valor_estimado, ofertas más baja y más alta si se publican.
+          items: {$ref: '#/components/schemas/Importe'}
+        baja:
+          type: [number, 'null']
+          description: 1 − adjudicado/presupuesto_base (ambos sin IVA). null si falta un dato.
+        ofertas_recibidas: {type: [integer, 'null']}
+        baja_anormal: {type: [boolean, 'null']}
+        fecha_adjudicacion: {type: [string, 'null'], format: date}
+        fecha_formalizacion: {type: [string, 'null'], format: date}
+        fecha_fin_contrato: {type: [string, 'null'], format: date}
+        procedimiento: {$ref: '#/components/schemas/Procedimiento'}
+        cpv: {type: array, items: {type: string}}
+        nuts: {type: array, items: {type: string}}
+        confianza: {type: number, minimum: 0, maximum: 1, description: Confianza en la extracción del dato.}
+        evidencia: {$ref: '#/components/schemas/Evidencia'}
+
+    Muestra:
+      type: object
+      description: Cuántos datos hay detrás de una estadística (siempre visible, §6).
+      required: [adjudicaciones]
+      properties:
+        adjudicaciones: {type: integer}
+        desde: {type: string, format: date}
+        hasta: {type: string, format: date}
+
+    EstadisticasMercado:
+      type: object
+      properties:
+        contratos: {type: integer}
+        importe_total: {$ref: '#/components/schemas/Importe'}
+        baja_media: {type: [number, 'null']}
+        baja_p25: {type: [number, 'null']}
+        baja_p50: {type: [number, 'null']}
+        baja_p75: {type: [number, 'null']}
+        ofertas_medias: {type: [number, 'null']}
+        por_cpv:
+          type: array
+          items:
+            type: object
+            properties:
+              cpv: {type: string}
+              contratos: {type: integer}
+              cuota: {type: number}
+        por_trimestre:
+          type: array
+          items:
+            type: object
+            properties:
+              trimestre: {type: string, pattern: '^[0-9]{4}-T[1-4]$'}
+              contratos: {type: integer}
+              importe: {$ref: '#/components/schemas/Importe'}
+        muestra: {$ref: '#/components/schemas/Muestra'}
+
+    Organizacion:
+      type: object
+      required: [id, nombre, identificadores, roles]
+      properties:
+        id: {type: string, format: uuid}
+        nombre: {type: string}
+        nombres_alternativos: {type: array, items: {type: string}, description: Cómo la escriben los distintos órganos (informativo; nunca se usa para fusionar).}
+        identificadores:
+          type: array
+          items:
+            type: object
+            required: [esquema, valor]
+            properties:
+              esquema: {type: string, enum: [NIF, DIR3, VAT, OTRO]}
+              valor: {type: string}
+        persona_fisica: {type: boolean}
+        roles: {type: array, items: {type: string, enum: [comprador, proveedor]}}
+        nuts: {type: array, items: {type: string}}
+        como_comprador:
+          allOf:
+            - $ref: '#/components/schemas/EstadisticasMercado'
+            - type: object
+              properties:
+                principales_adjudicatarios:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      organizacion: {$ref: '#/components/schemas/OrganizacionRef'}
+                      contratos: {type: integer}
+                      cuota: {type: number}
+                repeticion_adjudicatario:
+                  type: [number, 'null']
+                  description: Proporción de contratos adjudicados al adjudicatario más frecuente.
+        como_proveedor:
+          allOf:
+            - $ref: '#/components/schemas/EstadisticasMercado'
+            - type: object
+              properties:
+                principales_compradores:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      organizacion: {$ref: '#/components/schemas/OrganizacionRef'}
+                      contratos: {type: integer}
+
+    Competidor:
+      type: object
+      required: [organizacion, contratos_ganados, cuota]
+      properties:
+        organizacion: {$ref: '#/components/schemas/OrganizacionRef'}
+        contratos_ganados: {type: integer}
+        importe_adjudicado: {$ref: '#/components/schemas/Importe'}
+        cuota: {type: number, minimum: 0, maximum: 1, description: Cuota por importe adjudicado en el mercado filtrado.}
+        baja_media: {type: [number, 'null']}
+        baja_p50: {type: [number, 'null']}
+        tendencia:
+          type: string
+          enum: [sube, estable, baja, sin_datos]
+        ultima_adjudicacion: {type: [string, 'null'], format: date}
+
+    ContratoQueVence:
+      type: object
+      required: [adjudicacion_id, licitacion_id, fecha_fin]
+      properties:
+        adjudicacion_id: {type: string, format: uuid}
+        licitacion_id: {type: string, format: uuid}
+        expediente: {type: string}
+        titulo: {type: string}
+        lote: {type: string}
+        comprador: {$ref: '#/components/schemas/OrganizacionRef'}
+        adjudicatario: {$ref: '#/components/schemas/OrganizacionRef'}
+        importe_adjudicado: {$ref: '#/components/schemas/Importe'}
+        fecha_formalizacion: {type: [string, 'null'], format: date}
+        fecha_fin: {type: string, format: date}
+        prorrogas_posibles: {type: [boolean, 'null']}
+        fecha_fin_con_prorrogas: {type: [string, 'null'], format: date}
+        cpv: {type: array, items: {type: string}}
+        nuts: {type: array, items: {type: string}}
+        confianza: {type: number, minimum: 0, maximum: 1, description: Confianza en la fecha de fin (calculada o publicada).}
+
+    FiltroLicitaciones:
+      type: object
+      description: Los mismos filtros que `GET /tenders` (sin paginación ni orden).
+      additionalProperties: false
+      properties:
+        q: {type: string, minLength: 2, maxLength: 200}
+        cpv: {type: array, maxItems: 20, items: {type: string, pattern: '^[0-9]{2,8}$'}}
+        nuts: {type: array, maxItems: 20, items: {type: string, pattern: '^[A-Z]{2}[0-9A-Z]{0,3}$'}}
+        comprador: {type: array, maxItems: 20, items: {$ref: '#/components/schemas/OrganizacionId'}}
+        procedimiento: {type: array, maxItems: 10, items: {$ref: '#/components/schemas/Procedimiento'}}
+        fuente: {type: array, maxItems: 5, items: {$ref: '#/components/schemas/Fuente'}}
+        importe_min: {type: string, pattern: '^[0-9]{1,12}(\.[0-9]{1,2})?$'}
+        importe_max: {type: string, pattern: '^[0-9]{1,12}(\.[0-9]{1,2})?$'}
+        encaje_min: {type: number, minimum: 0, maximum: 100}
+
+    AlertaEntrada:
+      type: object
+      required: [nombre, ambito, filtro, eventos, canal]
+      additionalProperties: false
+      properties:
+        nombre: {type: string, minLength: 1, maxLength: 120}
+        ambito: {type: string, enum: [personal, departamento]}
+        departamento:
+          type: string
+          description: Obligatorio si `ambito = departamento`; debe ser un grupo del usuario.
+        filtro: {$ref: '#/components/schemas/FiltroLicitaciones'}
+        eventos:
+          type: array
+          minItems: 1
+          uniqueItems: true
+          items: {type: string, enum: [licitacion.nueva, licitacion.modificada, licitacion.adjudicada, licitacion.formalizada, licitacion.anulada]}
+        competidores:
+          type: array
+          maxItems: 50
+          description: Alerta de competencia (§5.6) — avisar cuando estos proveedores ganan algo que encaja con el filtro.
+          items: {$ref: '#/components/schemas/OrganizacionId'}
+        canal: {type: string, enum: [panel, correo, resumen_diario]}
+        activa: {type: boolean, default: true}
+
+    AlertaCambio:
+      type: object
+      additionalProperties: false
+      properties:
+        nombre: {type: string, minLength: 1, maxLength: 120}
+        filtro: {$ref: '#/components/schemas/FiltroLicitaciones'}
+        eventos:
+          type: array
+          minItems: 1
+          uniqueItems: true
+          items: {type: string, enum: [licitacion.nueva, licitacion.modificada, licitacion.adjudicada, licitacion.formalizada, licitacion.anulada]}
+        competidores: {type: array, maxItems: 50, items: {$ref: '#/components/schemas/OrganizacionId'}}
+        canal: {type: string, enum: [panel, correo, resumen_diario]}
+        activa: {type: boolean}
+
+    Alerta:
+      allOf:
+        - $ref: '#/components/schemas/AlertaEntrada'
+        - type: object
+          required: [id, propietario, creada_en, etag]
+          properties:
+            id: {type: string, format: uuid}
+            propietario: {type: string}
+            creada_en: {type: string, format: date-time}
+            cambiada_en: {type: string, format: date-time}
+            ultima_entrega: {type: [string, 'null'], format: date-time}
+            etag: {type: string}
+
+    Rango:
+      type: object
+      required: [min, probable, max]
+      properties:
+        min: {type: number}
+        probable: {type: number}
+        max: {type: number}
+
+    SimulacionEntrada:
+      type: object
+      required: [licitacion_id, lote, reglas, puntuacion_tecnica_propia, coste, precios]
+      additionalProperties: false
+      properties:
+        licitacion_id: {type: string, format: uuid}
+        lote: {type: string}
+        reglas:
+          type: object
+          description: Reglas del pliego extraídas con cita por el Analista de Pliegos y **validadas por una persona**.
+          required: [formula_economica, peso_precio, peso_calidad, baja_anormal, validadas_por, validadas_en, cita]
+          additionalProperties: false
+          properties:
+            formula_economica:
+              type: string
+              description: Id del módulo de fórmula implementado en `internal/simulation` (lista cerrada; una fórmula nueva = módulo nuevo).
+              examples: [proporcional_inversa, lineal_baja_maxima]
+            parametros_formula:
+              type: object
+              additionalProperties: {type: number}
+            peso_precio: {type: number, minimum: 0, maximum: 100}
+            peso_calidad: {type: number, minimum: 0, maximum: 100}
+            puntuacion_maxima: {type: number, default: 100}
+            baja_anormal:
+              type: object
+              required: [origen]
+              properties:
+                origen: {type: string, enum: [pliego, reglamentario]}
+                parametros:
+                  type: object
+                  additionalProperties: {type: number}
+            validadas_por: {type: string, minLength: 1}
+            validadas_en: {type: string, format: date-time}
+            cita: {type: string, description: Referencia al fragmento del pliego (cuaderno de investigación).}
+        puntuacion_tecnica_propia: {$ref: '#/components/schemas/Rango'}
+        coste:
+          $ref: '#/components/schemas/Importe'
+          description: Coste real (agente Costes). Dato sensible; solo lo ve el departamento que simula.
+        precios:
+          type: object
+          description: Precios de 101.cat a evaluar (sin IVA); como mucho 200 puntos.
+          required: [desde, hasta, paso]
+          properties:
+            desde: {type: string, pattern: '^[0-9]{1,12}(\.[0-9]{1,2})?$'}
+            hasta: {type: string, pattern: '^[0-9]{1,12}(\.[0-9]{1,2})?$'}
+            paso: {type: string, pattern: '^[0-9]{1,12}(\.[0-9]{1,2})?$'}
+        riesgo_baja_anormal_max:
+          type: number
+          minimum: 0
+          maximum: 1
+          description: Riesgo máximo aceptado (lo fija Dirección) para señalar el precio de mejor margen esperado.
+        supuestos:
+          type: object
+          properties:
+            incluir_competidores: {type: array, maxItems: 30, items: {$ref: '#/components/schemas/OrganizacionId'}}
+            excluir_competidores: {type: array, maxItems: 30, items: {$ref: '#/components/schemas/OrganizacionId'}}
+            ofertas_esperadas: {$ref: '#/components/schemas/Rango'}
+        escenarios: {type: integer, minimum: 1000, maximum: 20000, default: 10000}
+        semilla: {type: integer, description: Para reproducir el resultado; si falta, la elige el servidor y la devuelve.}
+
+    PuntoCurva:
+      type: object
+      required: [precio, prob_ganar, riesgo_baja_anormal, margen_esperado]
+      properties:
+        precio: {type: string}
+        prob_ganar: {$ref: '#/components/schemas/Rango'}
+        riesgo_baja_anormal: {type: number, minimum: 0, maximum: 1}
+        margen_esperado: {$ref: '#/components/schemas/Rango'}
+
+    Simulacion:
+      type: object
+      required: [id, creada_en, creada_por, entrada, resultado]
+      properties:
+        id: {type: string, format: uuid}
+        creada_en: {type: string, format: date-time}
+        creada_por: {type: string}
+        departamento: {type: string}
+        entrada: {$ref: '#/components/schemas/SimulacionEntrada'}
+        resultado:
+          type: object
+          required: [curva, competidores_probables, muestra, apto_para_decidir, semilla, version_simulador]
+          properties:
+            curva: {type: array, items: {$ref: '#/components/schemas/PuntoCurva'}}
+            precio_mejor_margen_dentro_de_riesgo:
+              type: [string, 'null']
+              description: Señalado, no decidido. null si ningún precio cumple el riesgo máximo.
+            competidores_probables:
+              type: array
+              items:
+                type: object
+                required: [organizacion, prob_presentarse, datos]
+                properties:
+                  organizacion: {$ref: '#/components/schemas/OrganizacionRef'}
+                  prob_presentarse: {type: number, minimum: 0, maximum: 1}
+                  baja_media: {type: [number, 'null']}
+                  datos: {type: integer, description: Concursos parecidos en los que se basa.}
+                  origen_distribucion: {type: string, enum: [propia, mercado]}
+            muestra: {$ref: '#/components/schemas/Muestra'}
+            apto_para_decidir:
+              type: boolean
+              description: false mientras el *backtesting* no alcance la precisión acordada con Licitaciones (§6).
+            precision_backtesting:
+              type: [object, 'null']
+              properties:
+                metrica: {type: string}
+                valor: {type: number}
+                medida_en: {type: string, format: date}
+            avisos: {type: array, items: {type: string}}
+            semilla: {type: integer}
+            version_simulador: {type: string}
+            duracion_ms: {type: integer}
