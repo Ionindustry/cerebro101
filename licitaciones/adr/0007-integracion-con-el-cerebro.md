@@ -3,8 +3,9 @@
 - **Estado**: Aceptado como diseño; la matriz de permisos está **POR VALIDAR** con Licitaciones y Dirección
 - **Fecha**: 26/10/2026
 - **Autor**: arquitecto del motor · **Aprueba**: responsable del motor y quien mantiene el Cerebro
-- **Relacionados**: 0002 (consumidor `cerebro-embudo`), 0003 (idempotencia), `api/openapi.yaml`, `api/eventos.md`,
-  §8 del proyecto
+- **Relacionados**: 0002 (consumidor `cerebro-embudo`), 0003 (idempotencia), 0005 (caché del dashboard),
+  `api/openapi.yaml`, `api/eventos.md`, §8 del proyecto («Interfaz y dashboard»)
+- **Revisado**: 26/10/2026, §4 con la sección «Licitaciones» y el dashboard decididos por Dirección
 
 ## Contexto
 Lo que ya existe y se reutiliza (comprobado en el repositorio el 26/10/2026):
@@ -60,6 +61,11 @@ Lo que ya existe y se reutiliza (comprobado en el repositorio el 26/10/2026):
 | `POST /simulations`, `GET /simulations/{id}` | `licitaciones`, `direccion`; `servicio`. Una simulación solo la ve su departamento (contiene el coste propio) |
 | `/alerts` ámbito `personal` | el propio usuario |
 | `/alerts` ámbito `departamento` | crear/cambiar: rol `responsable` de ese departamento o `direccion`; ver: miembros del departamento |
+| `GET /dashboard/opportunities` | como `/tenders` (no contiene datos personales) |
+| `GET /dashboard/market` | como `/awards`; el apartado `top_competidores` solo para `licitaciones`, `direccion` y `servicio` (como `/competitors`, acceso registrado); a los demás les llega `null` con `alcance = sin_competidores` |
+| `GET /ops/status` alcance `resumen` (estado global, motivos, fuentes, estado de cada componente) | como `/tenders`: todo el que ve el dashboard tiene que ver cuándo las cifras no son fiables |
+| `GET /ops/status` alcance `detalle` (colas, DLQ, proyecciones, indicadores de cada almacén) | rol `direccion`, grupo `tecnologia`, rol `responsable` del grupo `licitaciones`; cuenta `servicio` |
+| API del Cerebro `GET /licitaciones/embudo/resumen` (§4) | rol `direccion` y grupo `licitaciones` (`comercial`: POR VALIDAR) |
 
 Registro de accesos: cada petición deja usuario, `azp`, ruta, parámetros (sin datos personales), resultado y duración
 (registro estructurado + traza OTel). Las peticiones de agentes llevan `X-Agente` y `X-Traza` (id de Langfuse) **solo
@@ -100,14 +106,84 @@ para auditoría**: nunca amplían permisos.
   (`GET /tenders?publicada_desde=<ayer 16:00>&encaje_min=…&orden=encaje&limit=50`); lo recibe Dirección (decidido por
   101.cat el 26/10/2026, §12.6 del proyecto). Si el motor no responde, el resumen lo dice en vez de salir vacío.
 
-### 4. Pantalla «Licitaciones» del panel
+### 4. Sección «Licitaciones» del panel (decidida por Dirección el 26/10/2026, §8 del proyecto)
+
+#### Pasarela
 - Pasarela nueva `panel/app/licitaciones-api/[...ruta]/route.js`, copia de la existente con `LICITACIONES_API`
-  (`http://licitaciones-api:8080/api/v1`) y **lista blanca** de rutas (`tenders`, `awards`, `organizations`,
-  `competitors`, `expiring-contracts`, `alerts`, `simulations`) y de métodos (GET, POST, PATCH, DELETE). Reenvía el token de
-  la sesión; en desarrollo, las cabeceras de prueba.
-- Páginas en `panel/app/licitaciones/` (buscador con facetas, ficha, alertas, simulación, panel operativo). El navegador
-  nunca habla con la API del motor directamente.
-- `Content-Type` y código de estado se reenvían tal cual (problem+json incluido).
+  (`http://licitaciones-api:8080/api/v1`) y **lista blanca por prefijo y método**: `tenders`, `awards`, `organizations`,
+  `competitors`, `expiring-contracts`, **`dashboard`**, **`ops`** → solo GET; `alerts` → GET, POST, PATCH, DELETE;
+  `simulations` → GET, POST. Cualquier otra combinación → 404 en la pasarela, sin llegar al motor. Reenvía el token de la
+  sesión; en desarrollo, las cabeceras de prueba.
+- `Content-Type` y código de estado se reenvían tal cual (problem+json incluido). Plazo de la pasarela hacia el motor: 5 s
+  (30 s para `simulations`); si se agota, 504 problem+json.
+- El navegador nunca habla con la API del motor directamente. El bloque del embudo va por la pasarela que ya existe
+  (`/cerebro/...`) a la API del Cerebro.
+
+#### Pestañas y rutas del panel (`panel/app/licitaciones/`)
+| Pestaña | Ruta del panel | Datos de | Fase |
+|---|---|---|---|
+| **Dashboard** | `/licitaciones` (`?periodo=hoy\|7d\|30d\|90d`, por defecto `7d`) | ver «Bloques» | 3 (Oportunidades, Estado del motor) · 4 (Competencia y mercado, Embudo propio) |
+| **Buscador** | `/licitaciones/buscar?<parámetros de GET /tenders>` | `GET /tenders` (facetas en la primera página) | 3 |
+| **Ficha** | `/licitaciones/expedientes/[id]` | `GET /tenders/{id}`, `/tenders/{id}/history` | 3 básica (resumen, lotes, importes con significado, plazos, enlaces a las fuentes originales, encaje explicado) · 4 completa (historial de versiones, documentos, adjudicaciones, botón «Estudiar») · 5b «Simular» |
+| **Competencia** | `/licitaciones/competencia` (ranking), `/licitaciones/competencia/adjudicaciones?<parámetros de GET /awards>`, `/licitaciones/competencia/vencen?<parámetros de GET /expiring-contracts>`, `/licitaciones/organizaciones/[id]` | `/competitors`, `/awards`, `/expiring-contracts`, `/organizations/{id}` | 4 (listados y ranking) · 5 (fichas de competidor y organismo completas, actas, alertas de competencia) |
+| **Alertas** | `/licitaciones/alertas` | `/alerts` | 4 |
+| **Estado del motor** | `/licitaciones/estado` | `GET /ops/status` (alcance según rol) | 3 (mismo endpoint que el bloque del dashboard: no añade backend) |
+| (embudo, desde el bloque 3) | `/licitaciones/embudo?estado=…` | API del Cerebro `GET /licitaciones?estado=…` (fase 4, a proponer con la migración) | 4 |
+
+Los enlaces del dashboard llegan como `EnlaceListado` (`ruta` del motor + `parametros` exactos). El panel traduce solo la
+ruta (`/tenders` → `/licitaciones/buscar`, `/awards` → `/licitaciones/competencia/adjudicaciones`, `/expiring-contracts`
+→ `/licitaciones/competencia/vencen`, `/competitors` → `/licitaciones/competencia`) y copia los parámetros a la query:
+la URL de cada listado se puede compartir y reproduce la cifra.
+
+#### Bloques del dashboard y de dónde sale cada uno
+| Bloque | Endpoint | Fuente de datos | Caché | Fase |
+|---|---|---|---|---|
+| 1. Oportunidades | motor `GET /dashboard/opportunities?periodo=` | OpenSearch `tenders` (agregaciones sobre campos precalculados en la proyección) | Redis `lic:dash:op:*`, 5 min (ADR 0005) | 3 |
+| 2. Competencia y mercado | motor `GET /dashboard/market?periodo=` | OpenSearch `awards` (sin grafo) | Redis `lic:dash:mer:*`, 15 min, con el alcance de permisos en la clave | 4 |
+| 3. Embudo propio | **Cerebro** `GET /licitaciones/embudo/resumen?dias=` | tabla `licitaciones` del Cerebro | ninguna (consulta pequeña en Postgres) | 4 |
+| 4. Estado del motor | motor `GET /ops/status` | instantánea en memoria de `cmd/api` (cada 15 s): `ingestion_runs`, NATS `:8222`, salud de OpenSearch, grafo, MinIO, Redis y Postgres | sin Redis (tiene que poder decir que Redis está caído) | 3 |
+
+**Un endpoint por bloque, no uno compuesto.** Motivos:
+- *Permisos*: cada bloque tiene una regla distinta (Oportunidades como `/tenders`; Mercado con competidores restringidos;
+  `/ops/status` con dos alcances; el embudo en otra API). Uno compuesto obligaría a mezclar reglas en una respuesta y a
+  multiplicar las variantes de caché.
+- *Caché*: cada bloque se invalida con una cosa distinta (generación de `tenders`, de `awards`, nada) y tiene un TTL
+  distinto (5 min, 15 min, 15 s en memoria). Compuesto, el TTL sería el del más corto y se recalcularía todo.
+- *Latencia y fallos*: el panel pide los cuatro en paralelo; el p95 de la carga es el del más lento, no la suma, y un
+  bloque lento o caído no tumba los demás (cada uno muestra su error). Coste: 4 peticiones por carga a través de la
+  pasarela (~1–2 ms cada una en la red interna), asumible.
+
+**Reglas comunes**: periodo `hoy`/`7d`/`30d`/`90d` con límites a medianoche (Europe/Madrid); universo = nuestras áreas
+CPV (`AreaCpv`, los 20 CPV de §12.1 en 5 áreas) y España; unidad de cuenta el **lote** (como `/tenders`, para que cifra =
+`total` del listado); importes siempre `Importe` con significado e IVA (presupuesto base sin IVA en Oportunidades,
+adjudicado sin IVA en Mercado) y sin mezclar: lo que no tiene ese dato se cuenta aparte. Cada bloque lleva `frescura`
+(`calculado_en`, generación del índice, `estado_motor`); si `/ops/status` dice `caido`, el panel pinta el bloque en rojo
+y **no muestra cifras** (§8). Ninguna cifra la calcula la IA.
+
+**Embudo propio (Cerebro, fase 4, sin implementar)**. Endpoint propuesto en `api/cerebro/api/main.py`, mismo estilo que
+`/aprobaciones/resumen`:
+```python
+@app.get("/licitaciones/embudo/resumen")
+async def resumen_embudo(dias: int = 30, usuario: Usuario = Depends(usuario_actual)):
+    """Dashboard de Licitaciones, bloque «Embudo propio»: por estado, en el periodo, tasa de éxito y motivos de pérdida."""
+    # 403 si no es rol direccion ni grupo licitaciones
+    return await embudo.resumen(dias)   # api/cerebro/licitaciones/embudo.py: consulta + calcular_resumen(filas, dias, zona) pura y probada sola
+```
+`dias` = 1 (hoy, desde las 00:00 en la zona de la empresa), 7, 30 o 90 (el panel traduce el periodo), acotado a 1–365 como
+en Aprobaciones. Respuesta: `{dias, por_estado: {detectada, en_estudio, presentada, ganada, perdida, descartada}` (foto
+actual), `en_periodo: {detectadas, presentadas, ganadas, perdidas, descartadas}`, `tasa_exito: {valor, ganadas, decididas}`
+(ganadas / (ganadas + perdidas) resueltas en el periodo; `valor` null con menos de 5 decididas), `motivos_perdida: [{motivo,
+total}]` (top 5), `horas_hasta_decision_p50` (indicador del §11)`}`. Requiere ampliar la migración de la fase 4 (§3): además
+de `motor_id`, `motor_version` y `encaje`, `estado` con `CHECK` sobre esos seis valores, `motivo_perdida text` (lista
+cerrada a acordar con Licitaciones), `actualizado`, `decidida_en`, `presentada_en` y `resuelta_en` (`timestamptz`).
+
+#### Primera versión (final de la fase 3) y resto
+- **Fase 3**, solo lectura: pasarela con la lista blanca completa (los prefijos aún sin *handler* devuelven 404 del motor);
+  Dashboard con **Oportunidades** y **Estado del motor**; Buscador; Ficha básica; pestaña Estado del motor. Los bloques 2 y
+  3 no se muestran (ni con datos de ejemplo).
+- **Fase 4**: bloques Competencia y mercado y Embudo propio; pestañas Competencia (listados y ranking) y Alertas; Ficha
+  completa con «Estudiar» (crea o actualiza la fila del embudo vía la API del Cerebro).
+- **Fase 5**: fichas completas de competidor y organismo, actas, alertas de competencia. **5b**: «Simular».
 
 ### 5. Red Docker y qué se publica
 - Red nueva **`licitaciones`** con `internal: true` (sin salida a internet): `nats`, `licitaciones-minio`,
@@ -132,8 +208,25 @@ para auditoría**: nunca amplían permisos.
   pasarela del panel.
 - Dependencia nueva en el Cerebro: `nats-py`.
 - Si el motor cae, el Cerebro sigue funcionando: la herramienta devuelve un error claro y el resumen avisa.
+- **Índices de OpenSearch** (lo implementa quien lleve la búsqueda en la fase 3): para que los agregados del dashboard
+  sean agregaciones simples sin *scripts* y cada cifra coincida con su listado, la proyección precalcula en `tenders` y
+  `awards`: `areas` (keyword, de `config/areas_cpv.yaml`, con la regla de jerarquía de CPV en un solo sitio); `nuts` con
+  **todos sus ancestros y el país** (`ES512` → `ES`, `ES5`, `ES51`, `ES512`), y `ES` también en los documentos de
+  PLACSP y Cataluña sin NUTS (así `nuts=ES` no pierde el ~13 % sin lugar); `provincia` (NUTS 3 o vacío); importes
+  normalizados en céntimos (`long`) por significado e IVA (`presupuesto_base_sin_iva`, `adjudicado_sin_iva`); en
+  `awards`, `resultado`, `baja`, `fecha_adjudicacion` y `fecha_fin_contrato`. Parámetro nuevo `area` en `/tenders`,
+  `/awards`, `/competitors`, `/expiring-contracts` y en el filtro de alertas; `resultado` en `/awards`.
+- La caché del dashboard añade dos tipos de clave a ADR 0005.
 
 ## Cómo se revisará
 - Fase 3: pruebas de la API con tokens reales del realm de desarrollo (aud, iss, caducado, grupo sin permiso → 403).
+- Fase 3, dashboard: (1) prueba de contrato «cifra = total del enlace» para cada `Cifra` con `cuenta_igual_a_total`;
+  (2) k6 sobre el corpus con la caché **fría y caliente**: p95 de cada endpoint del dashboard (objetivo de la carga
+  completa p95 < 300 ms, medido como el máximo de los cuatro en paralelo a través de la pasarela). La decisión de calcular
+  los agregados al vuelo es **provisional**: si en frío `/dashboard/opportunities` o `/dashboard/market` pasan de 250 ms
+  de p95, se añade un índice de resumen diario (`tenders_resumen_diario`, un documento por día × área × provincia ×
+  tramo de encaje, recalculado por el proyector para los días tocados) o el precalentado de las 4 claves de periodo al
+  cambiar la franja; no antes. (3) `/ops/status` p95 < 20 ms con todos los almacenes parados (prueba de caos con el
+  compose).
 - Fase 4: la matriz validada por Licitaciones y Dirección; medir el retraso de `cerebro-embudo` y cuántos expedientes entran
   al día al embudo (si son > 50/día, revisar el umbral de encaje antes de que Viabilidad se sature).

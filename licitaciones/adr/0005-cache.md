@@ -39,8 +39,17 @@ Criterio decisivo: la caché tiene que poder **desalojar sin riesgo** y **no com
 | `lic:busq:{g}:{sha256(consulta normalizada + ámbito de permisos)}` | Primera página de resultados y facetas | API | 60 s | Por generación `{g}` y TTL |
 | `lic:agg:{g_awards}:{sha256(parámetros)}` | Competidores, cuotas, bajas, contratos que vencen | API | 1 h | Por generación de `awards` y TTL |
 | `lic:org:{g_awards}:{org_id}:{sha256(parámetros)}` | Estadísticas de organismo/competidor | API | 1 h | Igual |
+| `lic:dash:op:{g_tenders}:{periodo}:{franja_5min}` | Bloque «Oportunidades» del dashboard (`/dashboard/opportunities`); sin datos personales, igual para todos | API | 5 min | Por generación de `tenders`, por franja (la ventana de «cierran en 7 días» parte de la franja) y TTL |
+| `lic:dash:mer:{g_awards}:{periodo}:{alcance}:{dia}` | Bloque «Competencia y mercado» (`/dashboard/market`); `alcance` = `completo` o `sin_competidores` | API | 15 min | Por generación de `awards`, por día y TTL |
 | `lic:rl:{usuario}:{ventana}` | Contadores de límite de tasa | API | duración de la ventana | — |
 | `lic:gen:tenders`, `lic:gen:awards` | Número de generación del índice | Proyector | sin TTL | Se incrementa al cambiar el alias (reindexado) |
+
+El dashboard (§8 del proyecto, ADR 0007 §4) añade las dos claves `lic:dash:*`: como mucho 4 periodos × 1 franja activa
+(y × 2 alcances en Mercado), unos KB cada una. Se calculan con *singleflight* en el proceso (una petición calcula y las
+demás esperan) para que el primer acceso tras un cambio de franja no lance la misma agregación varias veces. Un TTL de 5
+min no son «cifras viejas» frente a un objetivo de frescura de 2 h; aun así cada respuesta dice `calculado_en` y
+`desde_cache`. `/ops/status` **no usa Redis** (instantánea en memoria de la API cada 15 s): tiene que funcionar y decir
+que Redis está caído cuando lo esté.
 
 **No** se cachean: páginas con cursor más allá de la primera (cambian con cada escritura), simulaciones (se guardan en
 Postgres), datos de alertas, ni nada que contenga el coste propio de 101.cat.
@@ -66,5 +75,9 @@ quedan huérfanas y las desaloja el LRU/TTL. Sin `FLUSH` ni barridos.
 - El proyector depende de Redis solo de forma «blanda»: si Redis no está, aplica en OpenSearch y sigue.
 
 ## Cómo se revisará
+Dashboard: tasa de aciertos de `lic:dash:*` y p95 en frío de los dos endpoints (objetivo de la carga completa p95 <
+300 ms, ADR 0007 §4). Si en frío pasan de 250 ms, primero precalentado de las claves al cambiar la franja; si no basta,
+índice de resumen diario en OpenSearch.
+
 Fase 3, con k6 sobre el corpus: medir ficha y búsqueda **con y sin** caché. Si OpenSearch solo ya cumple los SLO con
 margen (p95 < 50 % del objetivo), se elimina la caché de búsqueda y se deja solo la de agregaciones (menos piezas).

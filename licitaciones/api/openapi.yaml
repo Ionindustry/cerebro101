@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: API del motor de licitaciones (101.cat)
-  version: 0.1.0-borrador
+  version: 0.2.0-borrador
   summary: Búsqueda de licitaciones, adjudicaciones, competencia, alertas y simulador de ofertas.
   description: |
     **Borrador de la fase 0** (26/10/2026). Contrato entre el motor (Go, `cmd/api`) y sus clientes: el panel del Cerebro
@@ -18,6 +18,10 @@ info:
     - Los campos de texto en castellano; los identificadores en minúsculas con guion bajo.
     - Los campos de CODICE/eForms se fijan con el corpus real (`licitaciones/testdata`); los marcados «POR VERIFICAR»
       pueden cambiar antes de la v1.
+    - `x-fase`: fase del proyecto en la que se implementa el endpoint (§10). `x-cache`: clave y TTL en Redis (ADR 0005).
+    - **Dashboard** (§8 «Interfaz y dashboard»): un endpoint por bloque (`/dashboard/opportunities`, `/dashboard/market`,
+      `/ops/status`); el bloque «Embudo propio» lo sirve la API del Cerebro, no el motor (ADR 0007 §4). Cada cifra lleva un
+      `enlace` con los filtros exactos del listado que la origina.
   contact:
     name: Equipo del motor de licitaciones
 servers:
@@ -38,6 +42,10 @@ tags:
     description: Alertas guardadas
   - name: simulador
     description: Simulación de presentación de ofertas (§6 del proyecto)
+  - name: dashboard
+    description: Agregados del dashboard de la sección «Licitaciones» del panel (§8, ADR 0007 §4)
+  - name: operaciones
+    description: Estado del motor (indicadores operativos del §11)
 
 paths:
   /tenders:
@@ -54,6 +62,7 @@ paths:
       parameters:
         - $ref: '#/components/parameters/q'
         - $ref: '#/components/parameters/cpv'
+        - $ref: '#/components/parameters/area'
         - $ref: '#/components/parameters/nuts'
         - $ref: '#/components/parameters/comprador'
         - name: estado
@@ -207,6 +216,7 @@ paths:
       parameters:
         - $ref: '#/components/parameters/q'
         - $ref: '#/components/parameters/cpv'
+        - $ref: '#/components/parameters/area'
         - $ref: '#/components/parameters/nuts'
         - $ref: '#/components/parameters/comprador'
         - name: adjudicatario
@@ -222,6 +232,10 @@ paths:
         - name: adjudicada_hasta
           in: query
           schema: {type: string, format: date}
+        - name: resultado
+          in: query
+          description: Sin indicar, ambos. El dashboard enlaza con `resultado=adjudicado` o `resultado=desierto`.
+          schema: {type: string, enum: [adjudicado, desierto]}
         - name: procedimiento
           in: query
           style: form
@@ -293,10 +307,11 @@ paths:
       tags: [competencia]
       operationId: competidores
       summary: Ranking de competidores en un mercado (CPV, zona, organismo, importe, periodo)
-      description: Al menos uno de `cpv`, `nuts` o `comprador` es obligatorio (evita listados masivos).
+      description: Al menos uno de `cpv`, `area`, `nuts` o `comprador` es obligatorio (evita listados masivos).
       x-permisos: licitaciones, direccion; cuenta servicio (acceso registrado)
       parameters:
         - $ref: '#/components/parameters/cpv'
+        - $ref: '#/components/parameters/area'
         - $ref: '#/components/parameters/nuts'
         - $ref: '#/components/parameters/comprador'
         - $ref: '#/components/parameters/importe_min'
@@ -341,6 +356,7 @@ paths:
       x-permisos: grupos licitaciones, direccion, comercial, telecom, areas; cuenta servicio
       parameters:
         - $ref: '#/components/parameters/cpv'
+        - $ref: '#/components/parameters/area'
         - $ref: '#/components/parameters/nuts'
         - $ref: '#/components/parameters/comprador'
         - $ref: '#/components/parameters/importe_min'
@@ -540,6 +556,134 @@ paths:
         '403': {$ref: '#/components/responses/Prohibido'}
         '404': {$ref: '#/components/responses/NoEncontrado'}
 
+  /dashboard/opportunities:
+    get:
+      tags: [dashboard]
+      operationId: dashboardOportunidades
+      summary: Bloque «Oportunidades» del dashboard (licitaciones nuevas, encaje alto, importes, plazos, reparto)
+      description: |
+        **Universo**: lotes del índice `tenders` (un documento por expediente y lote, como `/tenders`) de **nuestras
+        áreas** (cualquier `AreaCpv`) y **España** (`nuts=ES`). La unidad de cuenta es el **lote**: así cada cifra coincide
+        con el `total` del listado enlazado.
+
+        - `nuevas`: publicados dentro de `ventana` (`publicada_desde = ventana.desde`).
+        - `nuevas_encaje_alto`: además, `encaje ≥ umbral_encaje_alto` (configuración `LIC_ENCAJE_ALTO`; 70 POR VALIDAR).
+        - `importe_total`: suma del **presupuesto base de licitación sin IVA** de cada lote, en EUR (el mismo importe al
+          que se aplica el límite de 1 M€, §12.4). Los lotes sin ese dato no se suman y se cuentan en `lotes_sin_importe`;
+          nunca se mezclan significados ni impuestos.
+        - `cierran_7_dias`: lotes `abierta` cuyo plazo de presentación termina entre `calculado_en` y +7 días (no depende
+          del periodo).
+        - `por_area` y `por_provincia`: reparto de `nuevas` (y su parte con encaje alto). Provincia = NUTS 3; los lotes
+          publicados solo con `ES`, NUTS 1/2 o `ESZZZ` van al cubo `nuts: null` (sin enlace propio).
+
+        Agregaciones de OpenSearch sobre campos **precalculados en la proyección** (`areas`, `nuts` con sus ancestros,
+        `provincia`, `encaje`, importe en céntimos); sin *scripts*, sin grafo ni S3. Respuesta cacheada en Redis.
+        Garantía comprobable: con la misma generación del índice, `Cifra.valor` = `total.valor` del `enlace` (pruebas de
+        contrato en la fase 3).
+      x-fase: 3
+      x-permisos: como /tenders (grupos licitaciones, direccion, comercial, telecom, areas; cuenta servicio)
+      x-cache: '`lic:dash:op:{g_tenders}:{periodo}:{franja_5min}`, TTL 5 min (ADR 0005). Igual para todos los usuarios con permiso: no contiene datos personales.'
+      parameters:
+        - $ref: '#/components/parameters/periodo'
+      responses:
+        '200':
+          description: Agregados del bloque
+          headers:
+            RateLimit-Remaining: {$ref: '#/components/headers/RateLimit-Remaining'}
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/DashboardOportunidades'}
+        '400': {$ref: '#/components/responses/Invalida'}
+        '401': {$ref: '#/components/responses/NoAutenticado'}
+        '403': {$ref: '#/components/responses/Prohibido'}
+        '429': {$ref: '#/components/responses/DemasiadasPeticiones'}
+        '503': {$ref: '#/components/responses/NoDisponible'}
+
+  /dashboard/market:
+    get:
+      tags: [dashboard]
+      operationId: dashboardMercado
+      summary: Bloque «Competencia y mercado» del dashboard (adjudicaciones, competidores, bajas, contratos que vencen)
+      description: |
+        **Universo**: adjudicaciones por lote del índice `awards` de nuestras áreas y España (como el bloque anterior).
+
+        - `adjudicaciones`: con `fecha_adjudicacion` dentro de `ventana` (el periodo elegido).
+        - `top_competidores`, `mercado_total` y `bajas_por_area`: sobre `ventana_mercado`, **12 meses cerrados** hasta
+          ayer, sea cual sea el periodo (con 7 días no hay muestra para hablar de cuotas ni de bajas). Cuota = importe
+          adjudicado sin IVA del competidor / `mercado_total`. Una baja fuera de [−0,20; 0,80] se excluye como probable
+          error de dato (IVA mezclado, importe mal publicado) y se cuenta en `excluidas` (umbrales POR VALIDAR con
+          Licitaciones). Con menos de `minimo_muestra` adjudicaciones, la baja es `null`.
+        - `contratos_que_vencen`: `fecha_fin_contrato` entre hoy + 3 meses y hoy + 12 meses (sin prórrogas), como los
+          valores por defecto de `/expiring-contracts`.
+
+        Si el usuario no puede ver competidores (`/competitors`), `alcance = sin_competidores` y `top_competidores` es
+        `null`; en `adjudicaciones.ultimas`, el NIF de personas físicas sigue las reglas de `/awards`. La clave de caché
+        incluye el alcance (ADR 0005: dos permisos distintos nunca comparten entrada).
+      x-fase: 4
+      x-permisos: como /awards; top_competidores solo licitaciones, direccion y cuenta servicio (acceso registrado, como /competitors)
+      x-cache: '`lic:dash:mer:{g_awards}:{periodo}:{alcance}:{dia}`, TTL 15 min (ADR 0005)'
+      parameters:
+        - $ref: '#/components/parameters/periodo'
+      responses:
+        '200':
+          description: Agregados del bloque
+          headers:
+            RateLimit-Remaining: {$ref: '#/components/headers/RateLimit-Remaining'}
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/DashboardMercado'}
+        '400': {$ref: '#/components/responses/Invalida'}
+        '401': {$ref: '#/components/responses/NoAutenticado'}
+        '403': {$ref: '#/components/responses/Prohibido'}
+        '429': {$ref: '#/components/responses/DemasiadasPeticiones'}
+        '503': {$ref: '#/components/responses/NoDisponible'}
+
+  /ops/status:
+    get:
+      tags: [operaciones]
+      operationId: estadoMotor
+      summary: Estado del motor (frescura por fuente, ingestas, parsers, colas de NATS, salud de los almacenes)
+      description: |
+        Devuelve la **última instantánea** que un comprobador en segundo plano de `cmd/api` toma cada 15 s (consultas en
+        paralelo con 1 s de plazo cada una): `ingestion_runs` en Postgres (lo escribe el consumidor `ops`, ADR 0002),
+        monitorización de NATS (`:8222/jsz`), `_cluster/health` de OpenSearch, `RETURN 1` en el grafo,
+        `/minio/health/live` y `PING` a Redis. La petición **no espera** a ningún almacén y **no usa Redis** (tiene que
+        poder decir que Redis está caído): responde en milisegundos aunque todo lo demás falle.
+
+        Siempre 200 mientras la API viva, también con `estado = caido`. Si la instantánea tiene más de 60 s (el
+        comprobador se ha parado), `estado = caido` con el motivo `instantanea_antigua`. Si la API no responde, la pasarela
+        devuelve 502/504 y el panel lo pinta como caído. El panel **no** muestra cifras de un bloque cuando este endpoint
+        dice `caido`.
+
+        Reglas del estado global (umbrales en `umbrales`, configurables, POR VALIDAR en la fase 3):
+        - `caido`: OpenSearch no responde o en rojo; instantánea antigua; o ninguna de las fuentes principales
+          (`placsp`, `placsp_agregadas`) con una ingesta correcta en `umbrales.fuente_caida_s` (6 h).
+        - `degradado`: cualquier fuente fuera del objetivo de frescura (2 h, §11); OpenSearch en amarillo; grafo, MinIO,
+          Redis, NATS o Postgres sin responder (la lectura sigue funcionando); un consumidor por encima de su umbral de
+          retraso (ADR 0002: `proy-busqueda` > 15 min o > 5 000 mensajes); mensajes en la DLQ en la última hora; tasa
+          de errores de parser > `umbrales.errores_parser_tasa` en 24 h.
+        - `ok`: nada de lo anterior.
+
+        Dos alcances: `resumen` (estado global, motivos, fuentes y estado de cada componente) para todos los que ven el
+        dashboard; `detalle` (además consumidores, DLQ, proyecciones e indicadores de cada componente) para quien opera.
+        Nunca incluye nombres de host, IP, credenciales ni mensajes de error crudos.
+      x-fase: 3
+      x-permisos: resumen como /tenders; detalle rol direccion, grupo tecnologia, rol responsable del grupo licitaciones y cuenta servicio
+      x-cache: Sin Redis. Instantánea en memoria del proceso (cada 15 s).
+      responses:
+        '200':
+          description: Estado del motor
+          headers:
+            Cache-Control:
+              description: '`no-store`'
+              schema: {type: string}
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/EstadoMotor'}
+        '401': {$ref: '#/components/responses/NoAutenticado'}
+        '403': {$ref: '#/components/responses/Prohibido'}
+        '429': {$ref: '#/components/responses/DemasiadasPeticiones'}
+
 components:
   securitySchemes:
     bearer:
@@ -626,6 +770,23 @@ components:
         Cursor opaco devuelto en `siguiente_cursor`. Firmado (HMAC) y ligado a los filtros de la consulta: usarlo con
         otros filtros devuelve 400 `cursor_invalido`. Caduca a las 24 h.
       schema: {type: string, maxLength: 1024, pattern: '^[A-Za-z0-9_-]+$'}
+    area:
+      name: area
+      in: query
+      description: Área de negocio de 101.cat (`AreaCpv`, agrupa los CPV de §12.1). Varios = O. Se combina con `cpv` con Y.
+      style: form
+      explode: true
+      schema:
+        type: array
+        maxItems: 5
+        uniqueItems: true
+        items: {$ref: '#/components/schemas/AreaCpv'}
+    periodo:
+      name: periodo
+      in: query
+      schema:
+        $ref: '#/components/schemas/Periodo'
+        default: 7d
     tenderId:
       name: id
       in: path
@@ -680,7 +841,8 @@ components:
     DemasiadasPeticiones:
       description: |
         Límite de tasa superado. Propuesta inicial por usuario: 10 peticiones/s (ráfaga 20) en búsqueda y fichas;
-        2/s en `/awards`, `/competitors`, `/organizations`; 10/min en `/simulations`.
+        2/s en `/awards`, `/competitors`, `/organizations`; 10/min en `/simulations`; 2/s (ráfaga 6) en `/dashboard/*`;
+        1/s (ráfaga 3) en `/ops/status`, con contador en memoria del proceso (no depende de Redis).
       headers:
         Retry-After: {$ref: '#/components/headers/Retry-After'}
       content:
@@ -836,7 +998,7 @@ components:
           minimum: 0
           maximum: 100
           description: Puntuación de encaje para 101.cat (§7.9); null si no se ha calculado.
-        lote: {type: [string, 'null'], description: Lote que coincide con la búsqueda, si aplica.}
+        lote: {type: [string, 'null'], description: 'Lote que coincide con la búsqueda, si aplica.'}
         fuentes: {type: array, items: {$ref: '#/components/schemas/Fuente'}}
         url_origen: {type: string, format: uri}
         version_entidad: {type: integer, minimum: 1}
@@ -1073,6 +1235,7 @@ components:
       properties:
         q: {type: string, minLength: 2, maxLength: 200}
         cpv: {type: array, maxItems: 20, items: {type: string, pattern: '^[0-9]{2,8}$'}}
+        area: {type: array, maxItems: 5, uniqueItems: true, items: {$ref: '#/components/schemas/AreaCpv'}}
         nuts: {type: array, maxItems: 20, items: {type: string, pattern: '^[A-Z]{2}[0-9A-Z]{0,3}$'}}
         comprador: {type: array, maxItems: 20, items: {$ref: '#/components/schemas/OrganizacionId'}}
         procedimiento: {type: array, maxItems: 10, items: {$ref: '#/components/schemas/Procedimiento'}}
@@ -1199,7 +1362,7 @@ components:
             excluir_competidores: {type: array, maxItems: 30, items: {$ref: '#/components/schemas/OrganizacionId'}}
             ofertas_esperadas: {$ref: '#/components/schemas/Rango'}
         escenarios: {type: integer, minimum: 1000, maximum: 20000, default: 10000}
-        semilla: {type: integer, description: Para reproducir el resultado; si falta, la elige el servidor y la devuelve.}
+        semilla: {type: integer, description: 'Para reproducir el resultado; si falta, la elige el servidor y la devuelve.'}
 
     PuntoCurva:
       type: object
@@ -1252,3 +1415,350 @@ components:
             semilla: {type: integer}
             version_simulador: {type: string}
             duracion_ms: {type: integer}
+
+    AreaCpv:
+      type: string
+      description: |
+        Área de negocio de 101.cat; agrupa los 20 CPV decididos (§12.1 del proyecto). La pertenencia se calcula **en la
+        proyección** (campo `areas` de `tenders` y `awards`) con la tabla de `config/areas_cpv.yaml` del motor, un único
+        sitio para la regla de jerarquía de CPV (§12.1, propuesta por validar). Un lote puede estar en varias áreas.
+        - `ti`: 72000000-5, 72200000-7, 72230000-6, 72262000-9, 72267000-4
+        - `videovigilancia`: 32323500-8, 32235000-9, 32234000-2, 35125300-2, 35120000-1, 32441100-7 (vigilancia
+          telemétrica: asignación POR VALIDAR con Licitaciones)
+        - `trafico`: 34970000-7, 34923000-3, 34971000-4, 34972000-1, 63712710-3, 45316210-0
+        - `control_accesos`: 42961000-0, 42961100-1
+        - `redes`: 32420000-3
+      enum: [ti, videovigilancia, trafico, control_accesos, redes]
+
+    Periodo:
+      type: string
+      description: |
+        Periodo del dashboard. `hoy` = desde las 00:00 de hoy (Europe/Madrid); `7d`/`30d`/`90d` = hoy y los 6/29/89 días
+        anteriores, desde las 00:00. Los límites caen en medianoche para que la caché sea estable.
+      enum: [hoy, 7d, 30d, 90d]
+
+    Ventana:
+      type: object
+      required: [desde, hasta, zona_horaria]
+      properties:
+        periodo: {$ref: '#/components/schemas/Periodo'}
+        desde: {type: string, format: date-time}
+        hasta: {type: string, format: date-time, description: Instante del cálculo (o fin del día de ayer en ventanas cerradas).}
+        zona_horaria: {type: string, const: Europe/Madrid}
+
+    EnlaceListado:
+      type: object
+      description: |
+        Listado que origina una cifra: endpoint del motor y sus parámetros **exactos** (los mismos nombres y formatos que
+        en ese endpoint, valores en texto; un array = parámetro repetido). El panel lo traduce a su ruta
+        (`/tenders` → `/licitaciones/buscar`, ver ADR 0007 §4) sin reinterpretar filtros.
+      required: [ruta, parametros, cuenta_igual_a_total]
+      properties:
+        ruta:
+          type: string
+          enum: [/tenders, /awards, /expiring-contracts, /competitors]
+        parametros:
+          type: object
+          additionalProperties:
+            oneOf:
+              - {type: string}
+              - {type: array, items: {type: string}}
+          examples:
+            - {area: [ti, videovigilancia, trafico, control_accesos, redes], nuts: [ES], publicada_desde: '2026-10-20T00:00:00+02:00', encaje_min: '70', orden: encaje}
+        cuenta_igual_a_total:
+          type: boolean
+          description: true si la cifra es igual al `total.valor` del listado (con la misma generación del índice).
+
+    Cifra:
+      type: object
+      required: [valor, enlace]
+      properties:
+        valor: {type: integer, minimum: 0}
+        enlace:
+          oneOf:
+            - $ref: '#/components/schemas/EnlaceListado'
+            - type: 'null'
+
+    ImporteAgregado:
+      type: object
+      description: Suma de un único significado e impuesto (nunca mezclados). Los lotes sin ese dato se cuentan aparte.
+      required: [importe, lotes_con_importe, lotes_sin_importe]
+      properties:
+        importe: {$ref: '#/components/schemas/Importe'}
+        lotes_con_importe: {type: integer, minimum: 0}
+        lotes_sin_importe: {type: integer, minimum: 0}
+
+    EstadoGlobal:
+      type: string
+      enum: [ok, degradado, caido]
+
+    Frescura:
+      type: object
+      description: De cuándo son las cifras de un bloque. El panel pinta el bloque en rojo si `estado_motor` no es `ok`.
+      required: [calculado_en, generacion_indice, estado_motor]
+      properties:
+        calculado_en: {type: string, format: date-time}
+        generacion_indice: {type: integer, description: '`lic:gen:tenders` o `lic:gen:awards` (ADR 0005).'}
+        datos_hasta:
+          type: [string, 'null']
+          format: date-time
+          description: Última ingesta correcta más antigua entre las fuentes principales (ver `/ops/status`).
+        estado_motor: {$ref: '#/components/schemas/EstadoGlobal'}
+        desde_cache: {type: boolean}
+
+    DashboardOportunidades:
+      type: object
+      required: [ventana, umbral_encaje_alto, nuevas, nuevas_encaje_alto, importe_total, cierran_7_dias, por_area, por_provincia, mejores, frescura]
+      properties:
+        ventana: {$ref: '#/components/schemas/Ventana'}
+        umbral_encaje_alto: {type: number, minimum: 0, maximum: 100}
+        nuevas: {$ref: '#/components/schemas/Cifra'}
+        nuevas_encaje_alto: {$ref: '#/components/schemas/Cifra'}
+        importe_total:
+          type: object
+          description: Presupuesto base de licitación sin IVA, en EUR.
+          required: [nuevas, encaje_alto]
+          properties:
+            nuevas: {$ref: '#/components/schemas/ImporteAgregado'}
+            encaje_alto: {$ref: '#/components/schemas/ImporteAgregado'}
+        cierran_7_dias:
+          type: object
+          required: [todas, encaje_alto]
+          properties:
+            todas: {$ref: '#/components/schemas/Cifra'}
+            encaje_alto: {$ref: '#/components/schemas/Cifra'}
+        por_area:
+          type: array
+          maxItems: 5
+          items:
+            type: object
+            required: [area, etiqueta, nuevas, encaje_alto, importe]
+            properties:
+              area: {$ref: '#/components/schemas/AreaCpv'}
+              etiqueta: {type: string, examples: [Videovigilancia]}
+              nuevas: {$ref: '#/components/schemas/Cifra'}
+              encaje_alto: {$ref: '#/components/schemas/Cifra'}
+              importe: {$ref: '#/components/schemas/ImporteAgregado'}
+        por_provincia:
+          type: array
+          maxItems: 60
+          description: De más a menos lotes; incluye el cubo `nuts = null` (sin provincia) si tiene lotes.
+          items:
+            type: object
+            required: [nuts, etiqueta, nuevas, encaje_alto]
+            properties:
+              nuts: {type: [string, 'null'], pattern: '^ES[0-9A-Z]{3}$', examples: [ES512]}
+              etiqueta: {type: string, examples: [Girona, Sin provincia]}
+              nuevas: {$ref: '#/components/schemas/Cifra'}
+              encaje_alto: {$ref: '#/components/schemas/Cifra'}
+        mejores:
+          type: object
+          description: Las 10 nuevas con más encaje (el `enlace` lleva al listado completo con `orden=encaje`).
+          required: [items, enlace]
+          properties:
+            items:
+              type: array
+              maxItems: 10
+              items: {$ref: '#/components/schemas/LicitacionResumen'}
+            enlace: {$ref: '#/components/schemas/EnlaceListado'}
+        frescura: {$ref: '#/components/schemas/Frescura'}
+
+    BajaPorArea:
+      type: object
+      required: [area, etiqueta, baja_media, baja_p50, muestra, excluidas, enlace]
+      properties:
+        area: {$ref: '#/components/schemas/AreaCpv'}
+        etiqueta: {type: string}
+        baja_media: {type: [number, 'null'], description: 'Media de `Adjudicacion.baja` (0,15 = 15 %). null si la muestra es menor que `minimo_muestra`.'}
+        baja_p50: {type: [number, 'null']}
+        muestra: {$ref: '#/components/schemas/Muestra'}
+        excluidas: {type: integer, minimum: 0, description: Bajas fuera del rango admitido (probable error de dato).}
+        enlace: {$ref: '#/components/schemas/EnlaceListado'}
+
+    DashboardMercado:
+      type: object
+      required: [ventana, ventana_mercado, alcance, minimo_muestra, adjudicaciones, top_competidores, mercado_total, bajas_por_area, contratos_que_vencen, frescura]
+      properties:
+        ventana: {$ref: '#/components/schemas/Ventana'}
+        ventana_mercado: {$ref: '#/components/schemas/Ventana'}
+        alcance: {type: string, enum: [completo, sin_competidores]}
+        minimo_muestra: {type: integer, minimum: 1, default: 10}
+        adjudicaciones:
+          type: object
+          required: [adjudicadas, desiertas, importe_adjudicado, por_area, ultimas]
+          properties:
+            adjudicadas: {$ref: '#/components/schemas/Cifra'}
+            desiertas: {$ref: '#/components/schemas/Cifra'}
+            importe_adjudicado:
+              $ref: '#/components/schemas/ImporteAgregado'
+              description: Importe adjudicado sin IVA, en EUR (`significado = adjudicado`).
+            por_area:
+              type: array
+              maxItems: 5
+              items:
+                type: object
+                required: [area, etiqueta, adjudicadas, importe_adjudicado]
+                properties:
+                  area: {$ref: '#/components/schemas/AreaCpv'}
+                  etiqueta: {type: string}
+                  adjudicadas: {$ref: '#/components/schemas/Cifra'}
+                  importe_adjudicado: {$ref: '#/components/schemas/ImporteAgregado'}
+            ultimas:
+              type: array
+              maxItems: 5
+              description: Las 5 adjudicaciones más recientes (mismas reglas de datos personales que `/awards`).
+              items: {$ref: '#/components/schemas/Adjudicacion'}
+        top_competidores:
+          type: [object, 'null']
+          description: null si `alcance = sin_competidores`.
+          required: [items, enlace]
+          properties:
+            items:
+              type: array
+              maxItems: 10
+              items:
+                type: object
+                required: [competidor, enlace]
+                properties:
+                  competidor: {$ref: '#/components/schemas/Competidor'}
+                  enlace:
+                    $ref: '#/components/schemas/EnlaceListado'
+                    description: '`/awards` de ese adjudicatario en la ventana de mercado (`contratos_ganados` = total).'
+            enlace:
+              $ref: '#/components/schemas/EnlaceListado'
+              description: '`/competitors` con los mismos filtros y `orden=cuota`.'
+        mercado_total:
+          $ref: '#/components/schemas/ImporteAgregado'
+          description: Denominador de las cuotas (adjudicado sin IVA en la ventana de mercado).
+        bajas_por_area:
+          type: array
+          maxItems: 5
+          items: {$ref: '#/components/schemas/BajaPorArea'}
+        contratos_que_vencen:
+          type: object
+          required: [vence_desde, vence_hasta, total, importe_adjudicado, por_area]
+          properties:
+            vence_desde: {type: string, format: date}
+            vence_hasta: {type: string, format: date}
+            total: {$ref: '#/components/schemas/Cifra'}
+            importe_adjudicado: {$ref: '#/components/schemas/ImporteAgregado'}
+            por_area:
+              type: array
+              maxItems: 5
+              items:
+                type: object
+                required: [area, etiqueta, total]
+                properties:
+                  area: {$ref: '#/components/schemas/AreaCpv'}
+                  etiqueta: {type: string}
+                  total: {$ref: '#/components/schemas/Cifra'}
+        frescura: {$ref: '#/components/schemas/Frescura'}
+
+    Motivo:
+      type: object
+      required: [componente, codigo, severidad, mensaje]
+      properties:
+        componente: {type: string, examples: [placsp, opensearch, proy-busqueda, api]}
+        codigo:
+          type: string
+          enum: [fuente_sin_ingesta, frescura_fuera_de_objetivo, errores_parser, componente_no_responde, cluster_amarillo,
+                 cluster_rojo, retraso_consumidor, mensajes_en_dlq, instantanea_antigua]
+        severidad: {type: string, enum: [degradado, caido]}
+        mensaje: {type: string, description: 'Apto para mostrar; sin hosts, IP ni errores crudos.'}
+        desde: {type: [string, 'null'], format: date-time}
+
+    EstadoFuente:
+      type: object
+      required: [fuente, estado, ultima_ingesta_correcta, antiguedad_s, objetivo_frescura_s]
+      properties:
+        fuente: {$ref: '#/components/schemas/Fuente'}
+        estado: {$ref: '#/components/schemas/EstadoGlobal'}
+        ultima_ingesta_correcta: {type: [string, 'null'], format: date-time}
+        antiguedad_s: {type: [integer, 'null'], description: Segundos desde la última ingesta correcta.}
+        ultima_ingesta:
+          type: [object, 'null']
+          properties:
+            inicio: {type: string, format: date-time}
+            fin: {type: [string, 'null'], format: date-time}
+            resultado: {type: string, enum: [en_curso, correcta, con_errores, fallida]}
+        retraso_publicacion_p95_s:
+          type: [integer, 'null']
+          description: p95 en 24 h de publicación oficial → ingesta (indicador de frescura del §11).
+        objetivo_frescura_s: {type: integer, default: 7200}
+        documentos_24h: {type: integer, minimum: 0}
+        errores_parser_24h: {type: integer, minimum: 0}
+        campos_desconocidos_24h: {type: integer, minimum: 0, description: Avisos de campos no reconocidos (cambio de formato).}
+
+    EstadoComponente:
+      type: object
+      required: [nombre, estado, comprobado_en]
+      properties:
+        nombre: {type: string, enum: [opensearch, grafo, minio, redis, nats, postgres]}
+        estado: {$ref: '#/components/schemas/EstadoGlobal'}
+        comprobado_en: {type: string, format: date-time}
+        latencia_ms: {type: [integer, 'null'], description: Solo en `detalle`.}
+        indicadores:
+          type: object
+          description: |
+            Solo en `detalle`. Números o textos cortos y fijos por componente (p. ej. `cluster: amarillo`,
+            `disco_usado_pct`, `memoria_usada_pct`, `evicted_keys_1h`). Nunca hosts, IP ni credenciales.
+          additionalProperties:
+            oneOf: [{type: number}, {type: string, maxLength: 40}]
+
+    EstadoConsumidor:
+      type: object
+      required: [nombre, stream, estado, pendientes, en_vuelo]
+      properties:
+        nombre: {type: string, examples: [proy-busqueda, proy-grafo, alertas, cerebro-embudo, ops]}
+        stream: {type: string, examples: [LICITACIONES]}
+        estado: {$ref: '#/components/schemas/EstadoGlobal'}
+        pendientes: {type: integer, minimum: 0, description: '`num_pending`'}
+        en_vuelo: {type: integer, minimum: 0, description: '`num_ack_pending`'}
+        reentregados: {type: integer, minimum: 0, description: '`num_redelivered`'}
+        edad_mas_antiguo_s: {type: [integer, 'null'], description: Edad del mensaje más antiguo sin confirmar.}
+
+    EstadoMotor:
+      type: object
+      required: [estado, calculado_en, alcance, motivos, fuentes, componentes, umbrales]
+      properties:
+        estado: {$ref: '#/components/schemas/EstadoGlobal'}
+        calculado_en: {type: string, format: date-time, description: Momento de la instantánea.}
+        alcance: {type: string, enum: [resumen, detalle]}
+        motivos:
+          type: array
+          description: Vacío si `estado = ok`; ordenados de más a menos grave.
+          items: {$ref: '#/components/schemas/Motivo'}
+        fuentes:
+          type: array
+          items: {$ref: '#/components/schemas/EstadoFuente'}
+        componentes:
+          type: array
+          items: {$ref: '#/components/schemas/EstadoComponente'}
+        consumidores:
+          type: [array, 'null']
+          description: Solo en `detalle` (consumidores de ADR 0002).
+          items: {$ref: '#/components/schemas/EstadoConsumidor'}
+        dlq:
+          type: [object, 'null']
+          description: Solo en `detalle`.
+          properties:
+            mensajes_1h: {type: integer, minimum: 0}
+            mensajes_total: {type: integer, minimum: 0}
+        proyecciones:
+          type: [object, 'null']
+          description: Solo en `detalle`. Generación y documentos de cada índice (ADR 0003 y 0005).
+          additionalProperties:
+            type: object
+            properties:
+              generacion: {type: integer}
+              documentos: {type: integer}
+        umbrales:
+          type: object
+          description: Umbrales con los que se ha calculado el estado (configurables).
+          properties:
+            frescura_objetivo_s: {type: integer, default: 7200}
+            fuente_caida_s: {type: integer, default: 21600}
+            errores_parser_tasa: {type: number, default: 0.01}
+            retraso_consumidor_s: {type: integer, default: 900}
+            retraso_consumidor_mensajes: {type: integer, default: 5000}
+            instantanea_max_s: {type: integer, default: 60}

@@ -236,7 +236,8 @@ departamento, mismo aspecto). El navegador nunca habla con la API del motor: pas
 objetivo de carga del dashboard p95 < 300 ms. Ninguna cifra del dashboard la calcula la IA.
 
 **Entregas**: primera versión **adelantada al final de la fase 3** (Dashboard con Oportunidades y Estado del motor, Buscador y
-Ficha básica, solo lectura); el resto (Competencia, Embudo, Alertas, Ficha completa) en la fase 4 y «Simular» en la 5b.
+Ficha básica, solo lectura); en la fase 4, Embudo, Alertas, Ficha completa y Competencia en forma de listados y ranking
+(bloque «Competencia y mercado»); las fichas completas de competidor y de organismo llegan con la fase 5, y «Simular» en la 5b.
 
 ## 9. Objetivos de rendimiento (SLO del documento, §12.1)
 
