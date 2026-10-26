@@ -1,0 +1,417 @@
+{
+  "versio" : "1.0.0",
+  "codiExpedient" : "CTTI-2026-131",
+  "idExpedient" : "1acf5b60-6c70-481c-9b25-0d942cc8ca5e",
+  "dataPublicacioPlanificada" : "2026-10-23T13:58:55.711Z",
+  "organ" : {
+    "nom" : "Centre de Telecomunicacions i Tecnologies de la Informació de la Generalitat de Catalunya (CTTI)",
+    "nif" : "Q5856338H",
+    "direccioPostal" : "Carrer Salvador Espriu, 45-51",
+    "localitat" : "Barcelona, Hospitalet de Llobregat, l'",
+    "codiPostal" : "08908",
+    "nuts" : "ES511",
+    "web" : "http://ctti.gencat.cat/ca/inici/",
+    "telefon" : "935574000",
+    "fax" : "935574025",
+    "email" : "contractaciotic.ctti@gencat.cat",
+    "personesContacte" : [ {
+      "nom" : "Sergi",
+      "cognom" : "Rubí Carnacea",
+      "carrec" : "Director de Compra",
+      "telefon" : "935574000",
+      "email" : "contractaciotic.ctti@gencat.cat"
+    } ],
+    "centralCompres" : false,
+    "tipusPoderAdjudicador" : 1500006,
+    "observacions" : {
+      "ca" : "El CTTI és mitjà propi, creat per la Generalitat per aprovisionar-se, gestionar i governar tots els seus serveis, solucions i infraestructures TIC d'acord amb l'art. 1.4 de la seva Llei 15/1993."
+    },
+    "horari" : {
+      "ca" : "Dilluns a dijous, de 8:30-14h i de 15-17h. Divendres de 8:30-14h. Horari d'estiu: del 1r divendres de juny fins l'últim divendres de setembre, de 8-15h.\\rPer a consultes: contractaciotic.ctti@gencat."
+    },
+    "organContractacioId" : 11110,
+    "activitatPrincipalOrgan" : {
+      "id" : 1051261,
+      "ca" : "Altre activitat",
+      "es" : "Otra actividad"
+    }
+  },
+  "publicacio" : {
+    "fase" : {
+      "id" : 1000042,
+      "ca" : "Adjudicació",
+      "es" : "Adjudicación",
+      "en" : "Adjudication",
+      "oc" : "Adjudicacion"
+    },
+    "expedientId" : "1acf5b60-6c70-481c-9b25-0d942cc8ca5e",
+    "teLots" : false,
+    "dadesBasiquesPublicacio" : {
+      "fasePublicacio" : {
+        "id" : 1000042,
+        "ca" : "Adjudicació",
+        "es" : "Adjudicación",
+        "en" : "Adjudication",
+        "oc" : "Adjudicacion"
+      },
+      "normativaAplicable" : {
+        "id" : 1008186,
+        "ca" : "LCSP (contractes del sector públic)",
+        "en" : "LCSP (public sector contracts)",
+        "oc" : "LCSP (contractes deth sector public)"
+      },
+      "codiExpedient" : "CTTI-2026-131",
+      "denominacio" : {
+        "ca" : "Servei d'una oficina per a la preparació de serveis"
+      },
+      "descripcio" : {
+        "ca" : "Contracte específic: Servei d'una oficina per al suport al govern del procés de gestió TIC: \"Preparar el servei\""
+      },
+      "observacions" : { },
+      "tipusPublicacioExpedient" : {
+        "id" : 1000000,
+        "ca" : "Contracte",
+        "en" : "Contract",
+        "oc" : "Contracte"
+      },
+      "tipusTramitacio" : {
+        "id" : 470,
+        "ca" : "Ordinària",
+        "es" : "Ordinaria",
+        "en" : "Ordinary",
+        "oc" : "Ordinària"
+      },
+      "racionalitzacioContractacio" : {
+        "id" : 1000002,
+        "ca" : "Específic de Sistema Dinàmic d'adquisició",
+        "es" : "Específico de Sistema Dinámico de Adquisición",
+        "en" : "Specific to the Dynamic Purchasing System",
+        "oc" : "Especific de Sistèma Dinamic d'aquesiment"
+      },
+      "tipusContracte" : {
+        "id" : 393,
+        "ca" : "Serveis",
+        "es" : "Servicios",
+        "en" : "Services",
+        "oc" : "Servicis"
+      },
+      "modalitat" : {
+        "id" : 294,
+        "ca" : "Contracte Públic",
+        "en" : "Public Contract",
+        "oc" : "Contracte Public"
+      },
+      "publicacioAgregada" : false,
+      "accesExclusiu" : false,
+      "tipusOfertaElectronica" : {
+        "id" : 413,
+        "ca" : "Sobre digital",
+        "es" : "Sobre digital",
+        "en" : "Digital envelope",
+        "oc" : "Envolopa digitau"
+      },
+      "descripcioAltres" : { },
+      "compraPublicaInnovacio" : false,
+      "compraPublicaPrecomercial" : false,
+      "contracteMixt" : false,
+      "justificacioTramitacioUrgencia" : { },
+      "metodologiaBim" : false
+    },
+    "dadesPublicacio" : {
+      "pressupostLicitacio" : 2365522.1,
+      "observacions" : { },
+      "valorEstimatContracte" : 7096566.31,
+      "iva" : 21,
+      "varisTipusIva" : false,
+      "pressupostBaseLicitacioAmbIVA" : 2862281.75,
+      "contracteRelacionatFinanciatFonsUnioEuropea" : false,
+      "contractacioConjunta" : false
+    },
+    "dadesPublicacioLot" : [ {
+      "pressupostLicitacio" : 2365522.1,
+      "publicacioExpedientId" : 300918251,
+      "expedientIdReferencia" : "43ced24f-d1ae-4950-88cb-51ac72424929",
+      "codiExpedientReferencia" : "CTTI-2025-96",
+      "numeroLotExpedientReferencia" : 0,
+      "denominacioExpedientReferencia" : {
+        "ca" : "SDA serveis de definició, gestió, construcció, manteniment i operació, i el suport a les solucions TIC pel CTTI"
+      },
+      "nomOrganContractacioReferencia" : "Centre de Telecomunicacions i Tecnologies de la Informació de la Generalitat de Catalunya",
+      "dataAdjudicacio" : "2026-10-15T22:00:00.000Z",
+      "terminiFormalitzacioContracte" : {
+        "ca" : "5"
+      },
+      "importAdjudicacio" : 2126604.36,
+      "ofertaAdjudicatariaIncursa" : false,
+      "observacions" : { },
+      "peuDeRecurs" : {
+        "ca" : "Contra aquesta Resolució, es pot interposar potestativament recurs especial en matèria de contractació o bé recurs contenciós administratiu, de conformitat amb allò que es preveu a l'article 44 i següents del de la Llei 9/2017, de 8 de novembre, de Contractes del Sector Públic. El recurs especial en matèria de contractació s'ha d'interposar davant de l'òrgan de contractació o de l'òrgan competent per a la resolució del recurs (Tribunal Català de Contractes del Sector Públic), en el termini de quinze dies hàbils a comptar des de l'endemà de la remissió de la notificació de l'acte impugnat. Contra la resolució del recurs especial en matèria de contractació només procedeix interposar recurs contenciós administratiu, de conformitat  amb allò que es preveu en la Llei 29/1998, de 13 de juliol, reguladora de la jurisdicció contenciosa administrativa. El recurs contenciós administratiu  s'interposarà davant el Jutjat Contenciós Administratiu, en el termini de dos mesos a comptar des de l'endemà de la notificació de l'acte impugnat, sens perjudici que es pugui interposar qualsevol altre recurs que es consideri procedent. "
+      },
+      "adrecaEnllacMesInformacioRecurs" : { },
+      "empresesAdjudicataries" : [ {
+        "denominacio" : "CAPGEMINI ESPAÑA SL",
+        "tipusIdentificador" : {
+          "id" : 542,
+          "ca" : "NIF",
+          "en" : "NIF (Tax Identification Number)",
+          "oc" : "NIF"
+        },
+        "identificador" : "B08377715",
+        "tipusEmpresaUnificat" : [ {
+          "id" : 749,
+          "ca" : "No PIME",
+          "en" : "No SME",
+          "oc" : "Non PIME"
+        }, {
+          "id" : 1008406,
+          "ca" : "Cap de les anteriors",
+          "es" : "Ninguna de las anteriores",
+          "en" : "None of the the previous options",
+          "oc" : "Cap des anteriors"
+        } ],
+        "pais" : {
+          "id" : 65,
+          "ca" : "Espanya",
+          "es" : "España",
+          "en" : "Spain"
+        },
+        "provincia" : {
+          "id" : 323,
+          "ca" : "Madrid",
+          "es" : "Madrid"
+        },
+        "municipi" : {
+          "id" : 1004416,
+          "ca" : "Madrid"
+        },
+        "informacioUte" : [ ],
+        "telefon" : "916577000",
+        "email" : "notificaciones-dge.bts.es@capgemini.com",
+        "codiPostal" : "28050"
+      } ],
+      "resolucioAdjudicacio" : {
+        "ca" : [ {
+          "id" : 302716884,
+          "titol" : "30_2026131E2_RE_Adj_e-copy.pdf",
+          "path" : "SqjYaP89LZrM2yKI0MNeehqoBB8u6azUBfE6sQ662mZVywPoCjeqe3YxdPPy4MxBuwrFJ38AWvXOohKYHoIYCoV8IZgLZ1IjIuait5XVgUhnlVXmw_JrRi-4v6WdoisNcr832OJkVyKXZ4HLm3FO_ix-RbTGohxn-axCYvGHii-F4LOEp59FFgKW9JQVPmYgXDMktB40utyHYf5DsmQZGa4s5SZRd__m1rptLGw-Szui04bPD5iAF85JZYBQZ7OPXuZ9vFxiySqPMhei2nPINXJlWIHXKF4H8aNoyTNVXpUyscuqiMk_AvSOSEekN6cGWuSgzXuT0unHchOPCGsclg==",
+          "hash" : "2D41FB593C236A7E37FD9C289C3A4A38",
+          "idioma" : "ca",
+          "mida" : 290489
+        } ],
+        "es" : [ ],
+        "en" : [ ],
+        "oc" : [ ]
+      },
+      "altraDocumentacio" : {
+        "ca" : [ ],
+        "es" : [ ],
+        "en" : [ ],
+        "oc" : [ ]
+      },
+      "importAdjudicacioIva" : 2573191.28,
+      "ivaAdjudicacio" : 21,
+      "varisTipusIvaAdjudicacio" : false,
+      "valorEstimatContracte" : 7096566.31,
+      "iva" : 21,
+      "varisTipusIva" : false,
+      "pressupostBaseLicitacioAmbIVA" : 2862281.75,
+      "cpvPrincipal" : {
+        "codi" : "72000000-5",
+        "ca" : "Serveis de TI: assessorament, desenvolupament de programari, Internet i suport",
+        "es" : "Servicios TI: consultoría, desarrollo de software, Internet y apoyo",
+        "en" : "IT services: consulting, software development, Internet and support",
+        "oc" : "Servicis de TI: assessorament, desvolopament de programari, Internet e supòrt"
+      },
+      "cpvsSecundaris" : [ ],
+      "llocExecucio" : {
+        "codiNuts" : "ES51",
+        "ca" : "Catalunya",
+        "es" : "Cataluña",
+        "en" : "Catalonia",
+        "oc" : "null"
+      },
+      "reservaSocial" : false,
+      "duradaTermini" : {
+        "anys" : 2,
+        "mesos" : 0,
+        "dies" : 0,
+        "iniciTermini" : "2026-11-30T23:00:00.000Z",
+        "fiTermini" : "2027-11-29T23:00:00.000Z",
+        "observacions" : { }
+      },
+      "teDiversosCriterisAdjudicacio" : true,
+      "criterisAdjudicacio" : [ {
+        "index" : 2,
+        "criteri" : {
+          "id" : 1008427,
+          "ca" : "Preu"
+        },
+        "ponderacio" : 30,
+        "observacions" : { },
+        "desglossament" : [ {
+          "tipusCriteri" : {
+            "id" : 1008359,
+            "ca" : "Preu",
+            "es" : "Precio",
+            "en" : "Price",
+            "oc" : "Prètz"
+          },
+          "puntuacio" : 30,
+          "descripcioCriteri" : { },
+          "identificador" : "580253919027471"
+        } ]
+      }, {
+        "index" : 0,
+        "criteri" : {
+          "id" : 1008428,
+          "ca" : "Resta de criteris de valoració automàtica"
+        },
+        "ponderacio" : 40,
+        "observacions" : { },
+        "desglossament" : [ {
+          "tipusCriteri" : {
+            "id" : 1008373,
+            "ca" : "Altres criteris qualitatius",
+            "es" : "Otros criterios cualitativos",
+            "en" : "Other qualitative criteria",
+            "oc" : "D’auti critèris qualitatius"
+          },
+          "puntuacio" : 40,
+          "descripcioCriteri" : { },
+          "identificador" : "580253919015124"
+        } ]
+      }, {
+        "index" : 1,
+        "criteri" : {
+          "id" : 1008429,
+          "ca" : "Criteris de valoració sotmesos a judici de valor",
+          "es" : "Criterios de valoración sometidos a juicio de valor",
+          "en" : "Valuation criteria subject to value judgment",
+          "oc" : "Critèris d'avaloracion sometudi a jutjament de valor"
+        },
+        "ponderacio" : 30,
+        "observacions" : { },
+        "desglossament" : [ {
+          "tipusCriteri" : {
+            "id" : 1008373,
+            "ca" : "Altres criteris qualitatius",
+            "es" : "Otros criterios cualitativos",
+            "en" : "Other qualitative criteria",
+            "oc" : "D’auti critèris qualitatius"
+          },
+          "puntuacio" : 3,
+          "descripcioCriteri" : {
+            "ca" : "Model organitzatiu"
+          },
+          "identificador" : "580253919023159"
+        }, {
+          "tipusCriteri" : {
+            "id" : 1008373,
+            "ca" : "Altres criteris qualitatius",
+            "es" : "Otros criterios cualitativos",
+            "en" : "Other qualitative criteria",
+            "oc" : "D’auti critèris qualitatius"
+          },
+          "puntuacio" : 12,
+          "descripcioCriteri" : {
+            "ca" : "Accions que aportin valor"
+          },
+          "identificador" : "580253919023664"
+        }, {
+          "tipusCriteri" : {
+            "id" : 1008373,
+            "ca" : "Altres criteris qualitatius",
+            "es" : "Otros criterios cualitativos",
+            "en" : "Other qualitative criteria",
+            "oc" : "D’auti critèris qualitatius"
+          },
+          "puntuacio" : 15,
+          "descripcioCriteri" : {
+            "ca" : "Indicadors per un quadre de comandament"
+          },
+          "identificador" : "580253919024094"
+        } ]
+      } ],
+      "revisioPreus" : {
+        "id" : 1008438,
+        "ca" : "No prevista revisió de preus"
+      },
+      "preuUnitari" : false,
+      "prescripcionsTecniquesSocials" : true,
+      "prescripcionsTecniquesAmbientals" : false,
+      "totalOfertesRebudes" : 10,
+      "estudisDictamens" : false,
+      "clausulaLinguistica" : true,
+      "clausulaEtica" : true,
+      "plurianualitats" : [ {
+        "anyAdjudicacio" : "2026",
+        "importAdjudicacio" : 1063302.18
+      }, {
+        "anyAdjudicacio" : "2027",
+        "importAdjudicacio" : 1063302.18
+      } ],
+      "llistatPrescripcionsTecniquesSocials" : [ {
+        "prescripcioTecnicaSocial" : {
+          "id" : 1600845,
+          "ca" : "Condicions laborals",
+          "es" : "Condiciones laborales",
+          "en" : "Working conditions",
+          "oc" : "Condicions laboraus"
+        }
+      }, {
+        "prescripcioTecnicaSocial" : {
+          "id" : 1600846,
+          "ca" : "Igualtat de gènere",
+          "es" : "Igualdad de género",
+          "en" : "Gender equality",
+          "oc" : "Igualtat de genre"
+        }
+      } ],
+      "descripcioLicitacio" : {
+        "ca" : "Contracte específic: Servei d'una oficina per al suport al govern del procés de gestió TIC: \"Preparar el servei\""
+      },
+      "numeroEmpresesConvidades" : 25,
+      "ofertesRebudesEconomics" : 0,
+      "ofertesRebudesAltresEstatPaisTercer" : 0,
+      "ofertesRebudesElectronica" : 10,
+      "subcontractacio" : false,
+      "subcontractacions" : [ ],
+      "canonExplotacio" : { },
+      "metodeUtilitzatCalculValorEstimat" : { }
+    } ],
+    "dadesExpedient" : {
+      "idiomaPerDefecte" : {
+        "id" : 1000031,
+        "ca" : "Català",
+        "es" : "Catalan",
+        "en" : "Catalan",
+        "oc" : "Catalan"
+      },
+      "expedientId" : "1acf5b60-6c70-481c-9b25-0d942cc8ca5e",
+      "lleiAssociada" : "Llei 2017/2019",
+      "esPublicacioAntiga" : false,
+      "tipusOfertaElectronica" : 413,
+      "esReduit" : false
+    },
+    "publicacionsOficials" : [ ],
+    "motiuEsmena" : { }
+  },
+  "pathPdf" : "PI7eIy6AF-O58o_uIrXRoAlIdsm_6b4UAH3mKAthGFiEORO8wqOI8_kNzpiXV90-Rnmj7dydkfostSmzUZkvGk69W8Ki3hZqPdM4vX5sFybdxoZE2evha2N9SNfy2ydgHwvU-dUZyDWeb-jj-6CO1r9XULLiuwD1h0XhbF3dHUWTOBhdxXXTZXMm-yQNKyj2u5m-AdTXrb7K1oI72zukFKdhsEgoAf2C0KZXSd0sIJGj9p7xiFU96InLQvDJyn7tFEuHZ4kxnDcfGu6Q2GjuAMYD-LKQ5ByYXJLTs606LAnqflcbYV2H-AcMuknGMc-BDZRb770-VdGlDJDts-Wwvg==",
+  "pathCertificacio" : "Vojq0QFkVrFaAbYG_6V2f-iLFhpBMviUPFP-TEIzOdMcoz4-h70nyq6p7nIiqz6TSooB0qEkkVQyLARVZBH8FfTXM-eRkOCSGXSqgBoPkiFLGY3TmARVifFidLBcXoZ4vpH9GVzBVQcv0Fi0HULdy8ElOjWd6Lieq8KrExlvtoZtGXOe99VcnzTgSVUhyjYcH_pEgUdp2XbyZeY5YSobtw2qZRF74D0uxOHXA_FYJrdmHV_wYnkq7wJNS1qp148OCZlg15e-o2RPi-If4A6-acAENMOt6WMcQYnjNNAIPrzwSSjf5HZr_Jmj5sdoW4wnRy5u0eVtvAW1uo7YUj-QRg==",
+  "pathJson" : "f47_hfuTS0YJzE7s8bzYjxiHnbJD3ieF6ySf3-6cMSfTMybODyX8DS4eQG_c_RckOXoTEaa3rnGuLqBasbdCB709VwPbt6uu8tUrif1hWfw50NbFaTwWaaKmeT1qz6nHiDp5V3OKGbsstDMcSe0YopGU8lg18mSodCJ87WDh7BTE1AQJkF0TQ6nO-cYTDAkiqMM9qJ7hMpoLSz7JPHQ-JD4j85iplRSN1vO4SF9mEEwC-RkSSCVSgc_8Wj0dEOtEXKNesOIR4GjSSZKOQWghY6LBGaoyiWilCS81IGxT2CwxIP_qOiQtw_rCV4YfthfxgSKosEhkcUhLtjPX9Zc95w==",
+  "dataPublicacioReal" : "2026-10-23T14:02:09.253Z",
+  "dadesExpedient" : {
+    "idiomaPerDefecte" : {
+      "id" : 1000031,
+      "ca" : "Català",
+      "es" : "Catalan",
+      "en" : "Catalan",
+      "oc" : "Catalan"
+    },
+    "expedientId" : "1acf5b60-6c70-481c-9b25-0d942cc8ca5e",
+    "lleiAssociada" : "Llei 2017/2019",
+    "esPublicacioAntiga" : false,
+    "tipusOfertaElectronica" : 413,
+    "esReduit" : false
+  }
+}
