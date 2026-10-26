@@ -250,7 +250,7 @@ Decididas por Dirección el 26/10/2026: todas. La 8 se decide con los resultados
    ni en TED (no es UE): su fuente de contratación pública está **POR VERIFICAR** en la fase 0.
 3. **Histórico** (decidido): **5 años** de licitaciones y adjudicaciones (carga inicial en la fase 1).
 4. **Importes** (decidido): **hasta 1 000 000 €**, sin mínimo. Se ingesta todo; el límite cuenta en la puntuación de encaje y
-   en el resumen diario. POR CONFIRMAR: que se aplique al presupuesto base de licitación **sin IVA** de cada lote.
+   en el resumen diario. Se aplica al **presupuesto base de licitación sin IVA de cada lote** (confirmado por Dirección).
 5. **Contratos menores** (decidido): **sí se incluyen**. Su fuente se verifica en la fase 0.
 6. **Resumen diario** (decidido): lo recibe **Dirección (Albert)** a las **16:00**, con lo publicado desde las 16:00 del día anterior.
 7. **Servidor** (decidido): **este mismo servidor** (62 GB compartidos con el Cerebro y Ollama). Cada servicio del motor lleva
