@@ -246,8 +246,9 @@ Decididas por Dirección el 26/10/2026: todas. La 8 se decide con los resultados
    34972000-1, 63712710-3, 45316210-0 (control, vigilancia y medición del tráfico, y su instalación); 42961000-0,
    42961100-1 (mando y control, control de accesos); 32420000-3 (equipos de red); 32441100-7 (vigilancia telemétrica).
    Propuesta por validar: puntuar también la jerarquía (un CPV hijo de uno de la lista encaja; p. ej. 72000000 cubriría toda la división 72).
-2. **Zona prioritaria** (decidido): **España y Andorra**. Se ingesta todo y se puntúa por zona. Andorra no publica en PLACSP
-   ni en TED (no es UE): su fuente de contratación pública está **POR VERIFICAR** en la fase 0.
+2. **Zona prioritaria** (decidido): **España**. Se ingesta todo y se puntúa por zona. **Andorra queda fuera** (decidido el
+   26/10/2026): su fuente (`contractacio.govern.ad`, registro exportable sin NIF ni CPV) no permite la reutilización sin
+   autorización escrita del Govern. Se puede replantear si se obtiene (ver `licitaciones/testdata/andorra/PROCEDENCIA.md`).
 3. **Histórico** (decidido): **5 años** de licitaciones y adjudicaciones (carga inicial en la fase 1).
 4. **Importes** (decidido): **hasta 1 000 000 €**, sin mínimo. Se ingesta todo; el límite cuenta en la puntuación de encaje y
    en el resumen diario. Se aplica al **presupuesto base de licitación sin IVA de cada lote** (confirmado por Dirección).
