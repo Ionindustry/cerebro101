@@ -86,6 +86,18 @@ jobs:
     defaults:
       run:
         working-directory: licitaciones
+    services:
+      postgres:                       # base efímera para las pruebas de internal/storage/pg
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: lic_test
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U postgres -d lic_test"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      LICITACIONES_TEST_PG: postgres://postgres:postgres@localhost:5432/lic_test
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
