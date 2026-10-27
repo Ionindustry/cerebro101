@@ -49,16 +49,16 @@ Corpus: ~10 millones de nodos y ~19 millones de relaciones.
 - **Criterio 1 (p95 < 50 ms)**: **no se cumple**. q3 es la consulta central de la competencia y con 20 consultas por segundo se satura (24 s). q4a y q6 se quedan
   ligeramente por encima. Es posible que mejore con otro plan de consulta (hay un `explain.txt` del banco), pero **no se ha comprobado**.
 - **Criterio 3 (RAM ≤ 10 GB)**: cumple (6,7 GB residentes, 9,0 GB como máximo en la carga). **Disco**: 7,2 a 7,7 GB.
-- **Criterio 5 (ingesta)**: 38.482 entidades/s en inserciones nuevas, por encima de las 2.000/s exigidas.
-- **Calentamiento**: tras reiniciar tarda unos **24 s** por tanda y el p95 máximo baja de ~780 ms (criterio 2: tiempo hasta caliente < 5 min, cumple).
+- **Criterio 5 (ingesta)**: 38.482 entidades/s en inserciones nuevas y entre 30.000 y 45.000 elementos/s en la carga masiva (según el registro del banco), por encima de las 2.000/s exigidas.
+- **Calentamiento**: tras reiniciar, cada tanda de calentamiento tarda unos **24 s** y el p95 máximo ronda los 780 ms (el tiempo total hasta estar caliente, criterio 2, **no se ha medido**).
 - **Recuperación tras `kill -9` (criterio 7)**: arranque en 18 s; de 50.000 expedientes en vuelo, 17.000 quedaron enteros, **1.000 a medias** y 32.000 sin escribir.
   Lo no confirmado puede perderse; lo **a medias** no debería existir si cada expediente va en una transacción.
-- Hay un registro de caída de Java (`hs_err_pid7.log`, SIGSEGV) y un `verify-after-sigsegv.txt`: ver «Fiabilidad de las medidas».
+- Hay un registro de caída de la JVM (`hs_err_pid7.log`) y un `verify-after-sigsegv.txt`: ver «Fiabilidad de las medidas».
 
 ### Memgraph (sin resumen)
 Se ejecutó dos veces (`run-memgraph-1000000*.out`). La RAM residente llegó a **7,9 GB** y el uso del contenedor tocó los **10 GB** del límite
-(10.737.721.344 bytes), con la carga completa. Sin resumen no hay cifras de latencia a 1 M. El proceso se cayó varias veces con fallos que no
-son de un programa en buen estado (ver siguiente apartado).
+(10.737.721.344 bytes), con la carga completa. Sin resumen no hay cifras de latencia a 1 M. El `dmesg` del equipo registra caídas de Memgraph con fallos que no
+son de un programa en buen estado (ver siguiente apartado); no se ha verificado cuáles coinciden con estas ejecuciones.
 
 ### Postgres
 **No se ha ejecutado a 1 millón.** Es la medida que falta para aplicar la regla 2 del ADR 0006.
@@ -72,7 +72,7 @@ no de un error de software:
 |---|---|
 | Memgraph (2 veces) | `general protection fault` dentro de `libc.so.6` |
 | Memgraph | `trap invalid opcode` (instrucción inválida) en el propio binario |
-| ClickHouse (el de Langfuse) | `segfault` con `ip 0x0` y en otro caso en CPU 8; ambos «likely on CPU 8/16» |
+| ClickHouse (el de Langfuse), 2 veces | `segfault` en el hilo `MergeMutate`, una en la CPU 8 y otra en la CPU 16 (la segunda con `ip 0x0`) |
 
 Además, en el mismo equipo fallaron al construir imágenes de Docker procesos de Python con `Illegal instruction` (SIGILL), `exit code -11` (SIGSEGV)
 y una capa de imagen con `invalid tar header`. Los fallos son aleatorios, de programas independientes y en CPU distintas.
