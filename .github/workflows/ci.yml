@@ -71,6 +71,8 @@ jobs:
         run: docker compose --env-file .env.example config -q
       - name: ERPNext (docker-compose) válido
         run: docker compose -f erpnext/docker-compose.yml --env-file .env.example config -q
+      - name: Infraestructura de licitaciones (compose) válida
+        run: docker compose -f licitaciones/compose.yaml --env-file .env.example config -q
       - name: Sintaxis de los scripts de shell
         run: for f in scripts/*.sh despliegue/*.sh servicios/*/*.sh; do bash -n "$f"; done
       - name: Las fichas de los agentes están al día con scripts/generar_fichas.py
@@ -98,8 +100,19 @@ jobs:
           --health-interval 5s --health-timeout 5s --health-retries 10
     env:
       LICITACIONES_TEST_PG: postgres://postgres:postgres@localhost:5432/lic_test
+      LICITACIONES_TEST_S3: localhost:9000
+      LICITACIONES_TEST_S3_USER: prueba-minio
+      LICITACIONES_TEST_S3_KEY: prueba-minio-clave
     steps:
       - uses: actions/checkout@v4
+      - name: MinIO efímero para las pruebas de internal/storage/s3
+        working-directory: .
+        run: |
+          docker run -d --name minio-prueba -p 9000:9000 \
+            -e MINIO_ROOT_USER="$LICITACIONES_TEST_S3_USER" -e MINIO_ROOT_PASSWORD="$LICITACIONES_TEST_S3_KEY" \
+            bitnamilegacy/minio:2025.5.24
+          for i in $(seq 1 30); do (echo > /dev/tcp/127.0.0.1/9000) 2>/dev/null && exit 0; sleep 2; done
+          docker logs minio-prueba; exit 1
       - uses: actions/setup-go@v5
         with:
           go-version-file: licitaciones/go.mod
