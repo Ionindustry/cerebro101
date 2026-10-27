@@ -7,6 +7,11 @@ info:
     **Borrador de la fase 0** (26/10/2026). Contrato entre el motor (Go, `cmd/api`) y sus clientes: el panel del Cerebro
     (a través de su pasarela) y la herramienta `licitaciones` de los agentes. Ver `licitaciones/adr/0007-integracion-con-el-cerebro.md`.
 
+    **Estado de la implementación (27/10/2026, ADR 0009):** `cmd/api` sirve hoy `/tenders`, `/tenders/{id}` y `/ops/status` (subconjunto) sobre
+    un modelo de lectura en Postgres, con un token compartido en lugar de Keycloak. De `/tenders` aún no existen `area`, `facetas`, `encaje_min`,
+    `publicada_desde/hasta`, `orden=encaje|publicacion` ni el filtro `comprador` por UUID (solo `nif:` y `dir3:`): dan 400 `parametro_invalido`.
+    Sin implementar: `/tenders/{id}/history`, `/awards`, `/organizations`, `/competitors`, `/expiring-contracts`, `/alerts`, `/simulations`, `/dashboard/*`.
+
     Convenciones:
     - Solo en la red interna; **no se publica fuera** (ADR 0007).
     - Autenticación: token de Keycloak (realm `cerebro`) con audiencia `licitaciones-api`. Autorización por grupo
