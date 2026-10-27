@@ -48,7 +48,7 @@ func Run(ctx context.Context, c Config, log *slog.Logger) error {
 	}
 	defer closeBus()
 
-	fc, err := fetch.New(fetch.Options{AllowedHosts: []string{sourceHost}, UserAgent: userAgent(c.Contact)})
+	fc, err := fetch.New(fetch.Options{AllowedHosts: []string{sourceHost}, UserAgent: userAgent(c.Contact), Timeout: c.Timeout})
 	if err != nil {
 		return err
 	}

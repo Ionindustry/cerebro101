@@ -77,6 +77,7 @@ services:
       LIC_NATS_PASSWORD: "${LIC_NATS_PASSWORD}"
       LIC_FUENTES: "${LIC_FUENTES:-placsp-643}"
       LIC_INTERVALO: "${LIC_INTERVALO:-1h}"
+      LIC_TIMEOUT_DESCARGA: "${LIC_TIMEOUT_DESCARGA:-5m}"
       LIC_CONTACTO: "${LIC_CONTACTO:-}"
     mem_limit: 256m
     cpus: 0.5

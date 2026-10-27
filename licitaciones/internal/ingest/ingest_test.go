@@ -333,6 +333,46 @@ func TestUnFalloDeDescargaNoAvanzaElPuntoDeControl(t *testing.T) {
 	}
 }
 
+// Regresión: tras un fallo a mitad de camino, la ejecución siguiente debe llegar a las páginas que quedaron sin ingerir aunque la primera
+// ya sea conocida (y aunque la fuente responda 304 a los validadores de la ejecución buena anterior).
+func TestTrasUnFalloSeRecuperanLasPaginasQueQuedaronAtras(t *testing.T) {
+	const p2url = "https://contrataciondelestado.es/p2.atom"
+	conNext := func(b []byte) []byte {
+		return bytes.Replace(b, []byte(`<entry>`), []byte(`<link href="`+p2url+`" rel="next"/><entry>`), 1)
+	}
+	f := &fakeFetcher{paginas: map[string][]byte{inicio: pagina(entrada("1", "2026-10-25T10:00:00.000+01:00", "PUB"))}, etag: `"v1"`}
+	d, _, st := deps(f)
+	if _, err := Run(context.Background(), d, src, inicio, RunOptions{}); err != nil { // ejecución buena: queda punto de control con validadores
+		t.Fatal(err)
+	}
+	// Llegan novedades: la primera página trae una nueva y enlaza a otra con dos más, que se cae al descargarla.
+	f.etag = `"v2"`
+	f.paginas[inicio] = conNext(pagina(entrada("2", "2026-10-26T10:00:00.000+01:00", "PUB"), entrada("1", "2026-10-25T10:00:00.000+01:00", "PUB")))
+	f.paginas[p2url] = pagina(entrada("3", "2026-10-24T10:00:00.000+01:00", "PUB"), entrada("4", "2026-10-23T10:00:00.000+01:00", "PUB"))
+	caida := errors.New("tiempo de espera agotado")
+	f.errs = map[string]error{p2url: caida}
+	if _, err := Run(context.Background(), d, src, inicio, RunOptions{}); !errors.Is(err, caida) {
+		t.Fatalf("debía fallar: %v", err)
+	}
+	if cp, _ := st.Checkpoint(context.Background(), src); !cp.LastRun.IsZero() || cp.Validators.ETag != "" {
+		t.Fatalf("tras el fallo el punto de control debe quedar vacío: %+v", cp)
+	}
+	// Recuperado el servidor, la siguiente ejecución llega a la segunda página y no deja nada atrás.
+	delete(f.errs, p2url)
+	s, err := Run(context.Background(), d, src, inicio, RunOptions{})
+	if err != nil || s.Pages != 2 || s.New != 2 {
+		t.Fatalf("recuperación: %+v %v", s, err)
+	}
+	if n := len(st.Events()); n != 4 {
+		t.Fatalf("eventos = %d, quería 4 (uno por expediente)", n)
+	}
+	// Y ahora sí vuelve a bastar con la primera página.
+	s, err = Run(context.Background(), d, src, inicio, RunOptions{})
+	if err != nil || !s.NotModified {
+		t.Fatalf("ejecución en régimen: %+v %v", s, err)
+	}
+}
+
 func TestXMLNoValidoEnLaPaginaDevuelveError(t *testing.T) {
 	f := &fakeFetcher{paginas: map[string][]byte{inicio: []byte(`<feed><entry>`)}}
 	d, _, _ := deps(f)

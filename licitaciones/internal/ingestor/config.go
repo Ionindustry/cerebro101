@@ -23,10 +23,11 @@ const (
 	EnvNATS       = "LIC_NATS_URL"     // obligatoria
 	EnvNATSUser   = "LIC_NATS_USUARIO" // vacía = sin autenticación
 	EnvNATSClave  = "LIC_NATS_PASSWORD"
-	EnvSources    = "LIC_FUENTES"     // fuentes separadas por comas; por defecto placsp-643
-	EnvInterval   = "LIC_INTERVALO"   // entre ingestas; por defecto 1h, mínimo 5m (no se castiga a la fuente)
-	EnvMaxPages   = "LIC_MAX_PAGINAS" // tope de páginas por ejecución; por defecto 50
-	EnvContact    = "LIC_CONTACTO"    // correo o web que se anuncia en el User-Agent, para que la fuente sepa a quién avisar
+	EnvSources    = "LIC_FUENTES"          // fuentes separadas por comas; por defecto placsp-643
+	EnvInterval   = "LIC_INTERVALO"        // entre ingestas; por defecto 1h, mínimo 5m (no se castiga a la fuente)
+	EnvMaxPages   = "LIC_MAX_PAGINAS"      // tope de páginas por ejecución; por defecto 50
+	EnvTimeout    = "LIC_TIMEOUT_DESCARGA" // plazo por descarga; por defecto 5m (PLACSP sirve las páginas despacio), entre 30s y 15m
+	EnvContact    = "LIC_CONTACTO"         // correo o web que se anuncia en el User-Agent, para que la fuente sepa a quién avisar
 )
 
 // MinInterval es el intervalo mínimo permitido entre ingestas de una misma fuente.
@@ -51,6 +52,7 @@ type Config struct {
 	Sources                    []string
 	Interval                   time.Duration
 	MaxPages                   int
+	Timeout                    time.Duration
 	Contact                    string
 }
 
@@ -59,7 +61,7 @@ func FromEnv(getenv func(string) string) (Config, error) {
 	c := Config{
 		PG: getenv(EnvPG), S3Endpoint: getenv(EnvS3Endpoint), S3User: getenv(EnvS3User), S3Pass: getenv(EnvS3Clave),
 		NATS: getenv(EnvNATS), NATSUser: getenv(EnvNATSUser), NATSPass: getenv(EnvNATSClave),
-		Interval: time.Hour, MaxPages: 50, Contact: strings.TrimSpace(getenv(EnvContact)),
+		Interval: time.Hour, MaxPages: 50, Timeout: 5 * time.Minute, Contact: strings.TrimSpace(getenv(EnvContact)),
 	}
 	var missing []string
 	for name, v := range map[string]string{EnvPG: c.PG, EnvS3Endpoint: c.S3Endpoint, EnvS3User: c.S3User, EnvS3Clave: c.S3Pass, EnvNATS: c.NATS} {
@@ -96,6 +98,13 @@ func FromEnv(getenv func(string) string) (Config, error) {
 			return c, fmt.Errorf("%s no válido: un número entre 1 y 1000", EnvMaxPages)
 		}
 		c.MaxPages = n
+	}
+	if v := getenv(EnvTimeout); v != "" {
+		d, err := time.ParseDuration(v)
+		if err != nil || d < 30*time.Second || d > 15*time.Minute {
+			return c, fmt.Errorf("%s no válido: una duración entre 30s y 15m", EnvTimeout)
+		}
+		c.Timeout = d
 	}
 	list := getenv(EnvSources)
 	if strings.TrimSpace(list) == "" {
