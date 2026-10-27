@@ -34,7 +34,7 @@ go test -race -count=1 ./...
 go run ./cmd/api                          # escucha en 127.0.0.1:8081
 curl -s localhost:8081/healthz            # {"estado":"ok","servicio":"api","version":"dev"}
 ```
-Las pruebas de PostgreSQL necesitan una base de pruebas (`LICITACIONES_TEST_PG=postgres://usuario:clave@host/base`; sin la variable se omiten; cada prueba usa un esquema propio y lo borra).
+Las pruebas de PostgreSQL necesitan una base de pruebas (la variable `LICITACIONES_TEST_PG` con la dirección de conexión de una base vacía; sin ella se omiten; cada prueba usa un esquema propio y lo borra).
 `golangci-lint` v2.15.0 (la CI usa la misma versión): `go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.15.0 && golangci-lint run`.
 
 ## Configuración (variables de entorno)

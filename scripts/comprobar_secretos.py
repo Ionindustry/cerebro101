@@ -39,7 +39,9 @@ def hallazgos(texto: str, nombre: str, base_linea: int = 0):
             valor = m.group(1) if m.groups() else m.group(0)
             if tipo.startswith("dirección"):
                 u = re.search(r"://([^:@/]+):([^@/]+)@", valor)
-                if u and u.group(1) == u.group(2):                  # usuario:usuario@ es la contraseña de desarrollo, no un secreto
+                # usuario:usuario@ es la contraseña de desarrollo, y una contraseña que es un marcador evidente («clave», «prueba…», «changeme»…)
+                # no cuenta, igual que en las asignaciones: así lo dice la cabecera de este fichero.
+                if u and (u.group(1) == u.group(2) or FALSOS.match(u.group(2))):
                     continue
             if FALSOS.match(valor.strip("'\" ")) or valor.startswith(("os.environ", "_env", "ajustes.")):
                 continue

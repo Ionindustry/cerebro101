@@ -16,7 +16,7 @@ import (
 	"github.com/ionindustry/cerebro101/licitaciones/internal/ingest"
 )
 
-// Estas pruebas necesitan un PostgreSQL de pruebas: LICITACIONES_TEST_PG=postgres://usuario:clave@host/base. Sin la variable se omiten.
+// Estas pruebas necesitan un PostgreSQL de pruebas: LICITACIONES_TEST_PG con la dirección de conexión de una base de pruebas. Sin la variable se omiten.
 // Cada prueba trabaja en un esquema propio (search_path), que se borra al terminar.
 func conectar(t *testing.T) (*pgxpool.Pool, *Store) {
 	t.Helper()
