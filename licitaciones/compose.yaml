@@ -1,5 +1,5 @@
-# Infraestructura del motor de licitaciones: almacén de originales (MinIO) y bus de eventos (NATS JetStream).
-# Pensado para el servidor de producción, NO para el PC de desarrollo. Red interna: no se publica ningún puerto ni la consola de MinIO.
+# Infraestructura del motor de licitaciones: almacén de originales (S3: RustFS) y bus de eventos (NATS JetStream).
+# Pensado para el servidor de producción, NO para el PC de desarrollo. Red interna: no se publica ningún puerto ni la consola del almacén.
 # Uso: docker compose -f licitaciones/compose.yaml --env-file .env up -d
 name: licitaciones
 
@@ -10,18 +10,20 @@ x-endurecido: &endurecido
   networks: [interna]
 
 services:
-  minio:
+  rustfs:
     <<: *endurecido
-    # POR VERIFICAR (ADR 0004): minio/minio ya no se publica; esta imagen congelada de Bitnami no recibe parches.
-    # El código habla S3 estándar: se puede sustituir por otro MinIO o por un S3 propio cambiando solo la imagen o el destino.
-    image: "${LIC_MINIO_IMAGEN:-bitnamilegacy/minio:2025.5.24}"
+    # POR VERIFICAR (ADR 0004): RustFS (Apache 2.0, S3 en Rust, mantenido) sustituye a MinIO, que ya no publica imágenes ni recibe parches.
+    # Fijar la etiqueta exacta (o su @sha256) al desplegar. Funciona sobre el contenedor como usuario 10001: el volumen debe ser escribible por él.
+    # El código habla S3 estándar: cambiar de almacén es cambiar la imagen o el destino.
+    image: "${LIC_S3_IMAGEN:-rustfs/rustfs:1.0.4}"
     environment:
-      MINIO_ROOT_USER: "${LIC_MINIO_USUARIO:?define LIC_MINIO_USUARIO}"
-      MINIO_ROOT_PASSWORD: "${LIC_MINIO_PASSWORD:?define LIC_MINIO_PASSWORD}"
-      MINIO_DEFAULT_BUCKETS: ""            # los cubos los crea el ingestor (EnsureBuckets), el de originales con Object Lock
-      MINIO_CONSOLE_PORT_NUMBER: "0"       # sin consola web
-    volumes: ["minio-datos:/bitnami/minio/data"]
-    healthcheck: {test: ["CMD-SHELL", "bash -c 'echo > /dev/tcp/127.0.0.1/9000'"], interval: 5s, timeout: 5s, retries: 20}
+      RUSTFS_ACCESS_KEY: "${LIC_S3_USUARIO:?define LIC_S3_USUARIO}"
+      RUSTFS_SECRET_KEY: "${LIC_S3_PASSWORD:?define LIC_S3_PASSWORD}"
+      RUSTFS_VOLUMES: /data
+      RUSTFS_ADDRESS: ":9000"
+      RUSTFS_CONSOLE_ENABLE: "false"       # sin consola web; los cubos los crea el ingestor (EnsureBuckets), el de originales con Object Lock
+    volumes: ["s3-datos:/data"]
+    # Sin healthcheck propio hasta confirmar qué herramientas trae la imagen; el ingestor reintenta la conexión al arrancar.
     mem_limit: 1g
     cpus: 1.0
 
@@ -43,5 +45,5 @@ networks:
   interna: {internal: true}      # sin salida a Internet ni acceso desde fuera; el ingestor y el proyector se unirán a esta red
 
 volumes:
-  minio-datos:
+  s3-datos:
   nats-datos:

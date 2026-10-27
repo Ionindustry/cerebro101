@@ -101,18 +101,19 @@ jobs:
     env:
       LICITACIONES_TEST_PG: postgres://postgres:postgres@localhost:5432/lic_test
       LICITACIONES_TEST_S3: localhost:9000
-      LICITACIONES_TEST_S3_USER: prueba-minio
-      LICITACIONES_TEST_S3_KEY: prueba-minio-clave
+      LICITACIONES_TEST_S3_USER: prueba-s3
+      LICITACIONES_TEST_S3_KEY: prueba-s3-clave
     steps:
       - uses: actions/checkout@v4
-      - name: MinIO efímero para las pruebas de internal/storage/s3
+      - name: RustFS efímero para las pruebas de internal/storage/s3
         working-directory: .
         run: |
-          docker run -d --name minio-prueba -p 9000:9000 \
-            -e MINIO_ROOT_USER="$LICITACIONES_TEST_S3_USER" -e MINIO_ROOT_PASSWORD="$LICITACIONES_TEST_S3_KEY" \
-            bitnamilegacy/minio:2025.5.24
+          docker run -d --name s3-prueba -p 9000:9000 \
+            -e RUSTFS_ACCESS_KEY="$LICITACIONES_TEST_S3_USER" -e RUSTFS_SECRET_KEY="$LICITACIONES_TEST_S3_KEY" \
+            -e RUSTFS_VOLUMES=/data -e RUSTFS_ADDRESS=":9000" -e RUSTFS_CONSOLE_ENABLE=false \
+            rustfs/rustfs:1.0.4
           for i in $(seq 1 30); do (echo > /dev/tcp/127.0.0.1/9000) 2>/dev/null && exit 0; sleep 2; done
-          docker logs minio-prueba; exit 1
+          docker logs s3-prueba; exit 1
       - uses: actions/setup-go@v5
         with:
           go-version-file: licitaciones/go.mod
