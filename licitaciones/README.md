@@ -5,7 +5,7 @@ las normas del equipo, en `NORMAS.md`; las decisiones de arquitectura, en `adr/`
 
 **Estado: fase 1.** Existen los tres binarios con arranque, `/healthz` y parada ordenada, la CI de Go, el **parser de PLACSP** (643, 1044 y 1143),
 el **cliente HTTP seguro**, la **lógica de ingesta idempotente** (original como evidencia, versiones y outbox) y el **estado en PostgreSQL**
-(vistas, outbox transaccional y puntos de control) con su relay. Todo probado contra las muestras reales de `testdata/`. MinIO, NATS, el planificador,
+(vistas, outbox transaccional y puntos de control) con su relay. Todo probado contra las muestras reales de `testdata/`. Almacén S3 (RustFS), NATS, el planificador,
 la API y los proyectores llegan en los PR siguientes.
 
 ## Estructura

@@ -1,4 +1,4 @@
-// Package s3 guarda los originales (la evidencia) en un almacén compatible con S3: MinIO en el propio servidor, o AWS S3 cambiando solo la
+// Package s3 guarda los originales (la evidencia) en un almacén compatible con S3: RustFS en el propio servidor, o AWS S3 cambiando solo la
 // configuración (ADR 0004). Un original no se sobrescribe nunca: la escritura es condicional (If-None-Match: *) y su clave lleva el SHA-256 del contenido.
 package s3
 
@@ -27,7 +27,7 @@ const (
 
 // Config es la conexión. Secure activa TLS (en producción, dentro de la red de Docker, puede ir sin él y con el puerto sin publicar).
 type Config struct {
-	Endpoint  string // «minio:9000»
+	Endpoint  string // «rustfs:9000»
 	AccessKey string
 	SecretKey string
 	Secure    bool

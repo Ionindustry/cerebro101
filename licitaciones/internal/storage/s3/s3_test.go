@@ -45,7 +45,7 @@ func TestNewExigeConfiguracion(t *testing.T) {
 	}
 }
 
-// Las pruebas siguientes necesitan un servidor S3 de pruebas (MinIO): LICITACIONES_TEST_S3 = «servidor:puerto» y las claves en
+// Las pruebas siguientes necesitan un servidor S3 de pruebas (RustFS): LICITACIONES_TEST_S3 = «servidor:puerto» y las claves en
 // LICITACIONES_TEST_S3_USER y LICITACIONES_TEST_S3_KEY. Sin ellas se omiten.
 func conectar(t *testing.T) *Store {
 	t.Helper()

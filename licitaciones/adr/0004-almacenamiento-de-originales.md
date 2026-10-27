@@ -5,6 +5,13 @@
 - **Autor**: arquitecto del motor · **Aprueba**: responsable del motor
 - **Relacionados**: 0003 (evidencia y recuperación), `docs/SEGURIDAD.md` del motor (modelo de amenazas, en curso)
 
+
+> **Actualización (decisión del propietario):** el almacén del motor pasa de MinIO a **RustFS** (Apache 2.0, S3 escrito en Rust, mantenido).
+> Motivo: la imagen de MinIO que usamos está congelada y sin parches. El código no cambia (habla S3 estándar con un cliente S3). Siguen
+> **POR VERIFICAR**: etiqueta/`@sha256` exacta de la imagen, y que Object Lock (cubo `raw` creado con bloqueo) y la escritura condicional
+> `If-None-Match` se comporten igual; las pruebas de integración de CI contra RustFS lo comprueban en cada cambio. Donde este ADR dice «MinIO»,
+> léase «el almacén S3 (RustFS)»; las políticas IAM por servicio hay que revisarlas contra la API de RustFS antes de producción.
+
 ## Contexto
 - §12.5: originales inmutables en S3 con SHA-256, URL, fecha de captura, versión del parser y licencia; clave
   `raw/{fuente}/{año}/{mes}/{id}/{sha256}.xml`.
