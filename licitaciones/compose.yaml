@@ -82,6 +82,28 @@ services:
     mem_limit: 256m
     cpus: 0.5
 
+  proyector:
+    restart: unless-stopped
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    networks: [interna]                                 # sin salida a Internet: solo lee del almacén y del bus y escribe en su base
+    image: licitaciones:local                           # la misma imagen que construye el ingestor
+    entrypoint: ["/proyector"]
+    read_only: true
+    tmpfs: ["/tmp"]
+    depends_on: {lic-db: {condition: service_healthy}, ingestor: {condition: service_started}}
+    environment:
+      LICITACIONES_ADDR: "0.0.0.0:8081"
+      LIC_PG_URL: "postgres://lic:${LIC_PG_PASSWORD}@lic-db:5432/licitaciones?sslmode=disable"
+      LIC_S3_ENDPOINT: rustfs:9000
+      LIC_S3_USUARIO: "${LIC_S3_USUARIO}"
+      LIC_S3_PASSWORD: "${LIC_S3_PASSWORD}"
+      LIC_NATS_URL: nats://nats:4222
+      LIC_NATS_USUARIO: "${LIC_NATS_USUARIO}"
+      LIC_NATS_PASSWORD: "${LIC_NATS_PASSWORD}"
+    mem_limit: 256m
+    cpus: 0.5
+
 networks:
   interna: {internal: true}      # sin salida a Internet ni acceso desde fuera
   salida: {}                     # solo el ingestor, para descargar de PLACSP

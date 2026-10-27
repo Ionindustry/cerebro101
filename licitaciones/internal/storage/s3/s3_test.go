@@ -115,6 +115,22 @@ func TestPutRawGuardaLaProcedenciaYElContenidoIntacto(t *testing.T) {
 	}
 }
 
+func TestGetRawDevuelveLoGuardadoYFallaSiNoExiste(t *testing.T) {
+	s := conectar(t)
+	ctx := context.Background()
+	o := objeto("placsp-643/2026/10/79/leer.xml", "<entry>para leer</entry>")
+	if _, err := s.PutRaw(ctx, o); err != nil {
+		t.Fatal(err)
+	}
+	got, err := s.GetRaw(ctx, o.Key)
+	if err != nil || string(got) != "<entry>para leer</entry>" {
+		t.Fatalf("GetRaw = %q, %v", got, err)
+	}
+	if _, err := s.GetRaw(ctx, "placsp-643/no/existe.xml"); err == nil {
+		t.Fatal("un objeto que no existe debe dar error")
+	}
+}
+
 func TestEnsureBucketsEsIdempotente(t *testing.T) {
 	s := conectar(t)
 	if err := s.EnsureBuckets(context.Background()); err != nil {

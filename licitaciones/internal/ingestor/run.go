@@ -15,6 +15,7 @@ import (
 	"github.com/ionindustry/cerebro101/licitaciones/internal/connectors/fetch"
 	"github.com/ionindustry/cerebro101/licitaciones/internal/events"
 	"github.com/ionindustry/cerebro101/licitaciones/internal/ingest"
+	"github.com/ionindustry/cerebro101/licitaciones/internal/startup"
 	"github.com/ionindustry/cerebro101/licitaciones/internal/storage/pg"
 	"github.com/ionindustry/cerebro101/licitaciones/internal/storage/s3"
 )
@@ -22,7 +23,7 @@ import (
 // Run abre las conexiones, espera el cerrojo de líder y trabaja hasta que se cancela ctx (devuelve entonces nil). Un fallo de arranque (base,
 // almacén o bus que no responden tras los reintentos) se devuelve como error: el orquestador reinicia el contenedor.
 func Run(ctx context.Context, c Config, log *slog.Logger) error {
-	pool, err := retry(ctx, log, "postgres", func() (*pgxpool.Pool, error) { return pg.Connect(ctx, c.PG) })
+	pool, err := startup.Retry(ctx, log, "postgres", func() (*pgxpool.Pool, error) { return pg.Connect(ctx, c.PG) })
 	if err != nil {
 		return err
 	}
@@ -31,7 +32,7 @@ func Run(ctx context.Context, c Config, log *slog.Logger) error {
 		return err
 	}
 
-	raw, err := retry(ctx, log, "almacén S3", func() (*s3.Store, error) {
+	raw, err := startup.Retry(ctx, log, "almacén S3", func() (*s3.Store, error) {
 		s, err := s3.New(s3.Config{Endpoint: c.S3Endpoint, AccessKey: c.S3User, SecretKey: c.S3Pass, Secure: c.S3Secure})
 		if err != nil {
 			return nil, err
@@ -93,7 +94,7 @@ func Work(ctx context.Context, deps ingest.Deps, d events.Drainer, publish event
 				"nuevas", stats.New, "modificadas", stats.Modified, "sin_cambios", stats.Unchanged, "bajas", stats.Removed,
 				"originales_nuevos", stats.RawCreated, "sin_cambios_en_origen", stats.NotModified)
 		}
-		if err := sleep(ctx, c.Interval); err != nil {
+		if err := startup.Sleep(ctx, c.Interval); err != nil {
 			break
 		}
 	}
@@ -105,7 +106,7 @@ func openBus(ctx context.Context, log *slog.Logger, c Config) (*bus.Publisher, f
 		p     *bus.Publisher
 		close func()
 	}
-	o, err := retry(ctx, log, "bus NATS", func() (opened, error) {
+	o, err := startup.Retry(ctx, log, "bus NATS", func() (opened, error) {
 		nc, err := bus.Connect(bus.Config{URL: c.NATS, User: c.NATSUser, Password: c.NATSPass})
 		if err != nil {
 			return opened{}, err
@@ -129,26 +130,6 @@ func userAgent(contact string) string {
 		ua += "; " + contact
 	}
 	return ua + ")"
-}
-
-// retry repite op con espera creciente (hasta 6 intentos, ~1 min) para tolerar el arranque simultáneo de los servicios del compose.
-func retry[T any](ctx context.Context, log *slog.Logger, what string, op func() (T, error)) (T, error) {
-	var zero T
-	wait := time.Second
-	var last error
-	for attempt := 1; attempt <= 6; attempt++ {
-		v, err := op()
-		if err == nil {
-			return v, nil
-		}
-		last = err
-		log.Warn("servicio no disponible, se reintenta", "servicio", what, "intento", attempt, "error", err, "espera", wait.String())
-		if err := sleep(ctx, wait); err != nil {
-			return zero, err
-		}
-		wait = min(wait*2, 20*time.Second)
-	}
-	return zero, fmt.Errorf("%s no responde: %w", what, last)
 }
 
 // acquireLeader toma el cerrojo de sesión de Postgres que garantiza un único escritor (ADR 0003). Espera si otro ingestor lo tiene.
@@ -178,20 +159,9 @@ func acquireLeader(ctx context.Context, pool *pgxpool.Pool, log *slog.Logger) (f
 			}, nil
 		}
 		log.Info("otro ingestor es el líder: se espera")
-		if err := sleep(ctx, 15*time.Second); err != nil {
+		if err := startup.Sleep(ctx, 15*time.Second); err != nil {
 			conn.Release()
 			return nil, nil
 		}
-	}
-}
-
-func sleep(ctx context.Context, d time.Duration) error {
-	t := time.NewTimer(d)
-	defer t.Stop()
-	select {
-	case <-t.C:
-		return nil
-	case <-ctx.Done():
-		return ctx.Err()
 	}
 }

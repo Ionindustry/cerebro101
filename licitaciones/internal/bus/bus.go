@@ -101,6 +101,18 @@ type payload struct {
 	RawKey    string `json:"clave_original"`
 }
 
+// Decode es la operación inversa de Publish: reconstruye el evento a partir del mensaje.
+func Decode(data []byte) (ingest.Event, error) {
+	var p payload
+	if err := json.Unmarshal(data, &p); err != nil {
+		return ingest.Event{}, fmt.Errorf("%w: mensaje no válido: %w", ErrPermanent, err)
+	}
+	if p.ID == "" || p.Type == "" || p.Source == "" || p.RawKey == "" || p.Version < 1 {
+		return ingest.Event{}, fmt.Errorf("%w: al mensaje le faltan campos obligatorios", ErrPermanent)
+	}
+	return ingest.Event{ID: p.ID, Type: p.Type, Source: p.Source, SourceID: p.SourceID, Version: p.Version, RawSHA256: p.RawSHA256, RawKey: p.RawKey}, nil
+}
+
 // Publish publica el evento y vuelve cuando JetStream lo ha confirmado. Un duplicado dentro de la ventana cuenta como éxito.
 func (p *Publisher) Publish(ctx context.Context, e ingest.Event) error {
 	subj, err := Subject(e)

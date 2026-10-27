@@ -66,10 +66,10 @@ func TestMigrarEsIdempotente(t *testing.T) {
 		t.Fatalf("segunda vez: %v", err)
 	}
 	var n int
-	if err := pool.QueryRow(ctx, `SELECT count(*) FROM schema_migraciones`).Scan(&n); err != nil || n != 1 {
+	if err := pool.QueryRow(ctx, `SELECT count(*) FROM schema_migraciones`).Scan(&n); err != nil || n != 2 {
 		t.Fatalf("migraciones aplicadas = %d, %v", n, err)
 	}
-	for _, tabla := range []string{"vistas", "outbox", "puntos_control"} {
+	for _, tabla := range []string{"vistas", "outbox", "puntos_control", "expedientes"} {
 		if _, err := pool.Exec(ctx, "SELECT 1 FROM "+tabla); err != nil {
 			t.Fatalf("falta la tabla %s: %v", tabla, err)
 		}
