@@ -1,0 +1,42 @@
+# golangci-lint v2 (ADR 0008). Sin //nolint sin motivo escrito en la misma línea.
+version: "2"
+
+run:
+  timeout: 5m
+  tests: true
+
+linters:
+  default: none
+  enable:
+    - govet
+    - staticcheck
+    - errcheck
+    - ineffassign
+    - unused
+    - gosec
+    - bodyclose
+    - noctx
+    - errorlint
+    - contextcheck
+    - sqlclosecheck
+    - rowserrcheck
+  settings:
+    errcheck:
+      check-type-assertions: true
+    govet:
+      enable-all: true
+      disable:
+        - fieldalignment   # ruido sin beneficio: no se optimiza el tamaño de las estructuras
+        - shadow
+  exclusions:
+    presets:
+      - std-error-handling
+    rules:
+      - path: _test\.go
+        linters:
+          - gosec          # en las pruebas se leen y escriben datos de prueba, sin superficie de ataque
+
+formatters:
+  enable:
+    - gofmt
+    - goimports

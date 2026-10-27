@@ -1,0 +1,9 @@
+# Solo el código del módulo entra en la imagen.
+bench
+testdata
+tools
+docs
+adr
+api/openapi.yaml
+*.md
+.golangci.yml
