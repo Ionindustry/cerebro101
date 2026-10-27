@@ -16,8 +16,8 @@
 ## Ficheros
 | Fichero | Bytes | SHA-256 | Capturado (UTC) | URL | Notas |
 |---|---|---|---|---|---|
-| `licitacionesPerfilesContratanteCompleto3_20261026T103532Z.atom` | 1970633 | `c15cf7144811345e9f547cc9b4a86e9054831bdc8c84481bdb830ca81ddb0da4` | 2026-10-26T10:35:32Z | https://contrataciondelestado.es/sindicacion/sindicacion_643/licitacionesPerfilesContratanteCompleto3.atom | original íntegro; página 1 (cabeza del feed) |
-| `extracto_licitacionesPerfilesContratanteCompleto3_20261025_200314.atom` | 751476 | `be8625b6e7b5f2739adfe56dd3f9eaa08bd5febb5f2cb83e725aa7841af796a5` | 2026-10-26T10:36:17Z | https://contrataciondelestado.es/sindicacion/sindicacion_643/licitacionesPerfilesContratanteCompleto3_20261025_200314.atom | extracto de un original de 14803061 B, SHA-256 `809daf8a57348c1bfed874c5f804ea3b2003357a3f6763a1b928ab358d24b6bc`; página 2 (rel=next de la 1) |
+| `licitacionesPerfilesContratanteCompleto3_20261026T103532Z.atom` | 1970633 | `bf61f709d90d6ea1d4dff6eb36c808cd1c242f3b88a4c4e94a78c6778624899b` | 2026-10-26T10:35:32Z | https://contrataciondelestado.es/sindicacion/sindicacion_643/licitacionesPerfilesContratanteCompleto3.atom | original íntegro; página 1 (cabeza del feed) |
+| `extracto_licitacionesPerfilesContratanteCompleto3_20261025_200314.atom` | 751476 | `38aa4cf2b3ce390399dc709c8657b01c5bd01ec92fee809bd946fc8166d6ab6d` | 2026-10-26T10:36:17Z | https://contrataciondelestado.es/sindicacion/sindicacion_643/licitacionesPerfilesContratanteCompleto3_20261025_200314.atom | extracto de un original de 14803061 B, SHA-256 `809daf8a57348c1bfed874c5f804ea3b2003357a3f6763a1b928ab358d24b6bc`; página 2 (rel=next de la 1) |
 
 - La página 1 (cabeza del feed) se guarda **entera** (68 entradas): sirve de prueba de paginación (`rel="next"` →
   `…Completo3_20261025_200314.atom`) y de muestra realista. La página 2 (14,8 MB, 499 entradas + 1 baja) se recorta.
@@ -65,3 +65,10 @@ actualización; no sugerir participación ni patrocinio del Ministerio; conserva
 condiciones de reutilización). Uso bajo la propia responsabilidad; el Ministerio no garantiza la continuidad del servicio.
 Las entradas contienen **datos personales públicos** (nombre y NIF de adjudicatarios que son personas físicas): solo para
 pruebas; ver §5 «Datos personales» del proyecto.
+
+## Seudonimización adicional (27/10/2026)
+Revisión previa a fusionar la fase 0 en un repositorio público: se sustituyeron por valores ficticios los **nombres de personas físicas** que seguían en claro
+(adjudicatarios autónomos: «Persona Ficticia Tres» a «Persona Ficticia Siete») y las **direcciones de correo con nombre de persona** de los datos de contacto
+(`contacto.ficticio.NN@example.invalid`). Los correos genéricos de los órganos de contratación (contratacion@…, secretaria@…) se conservan. Los NIF de personas físicas ya vienen
+enmascarados en origen (`***6795**`). El SHA-256 y el tamaño de la tabla son los del archivo seudonimizado.
+Archivos afectados: los dos archivos .atom.

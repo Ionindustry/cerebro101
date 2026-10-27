@@ -16,7 +16,7 @@
 ## Ficheros
 | Fichero | Bytes | SHA-256 | Capturado (UTC) | URL | Notas |
 |---|---|---|---|---|---|
-| `extracto_contratosMenoresPerfilesContratantes_20261026.atom` | 149917 | `394071eb35467e49e9fc7ef452c941d44d49a6b7af6b7fcae632c24bc1427733` | 2026-10-26T10:33:48Z | https://contrataciondelsectorpublico.gob.es/sindicacion/sindicacion_1143/contratosMenoresPerfilesContratantes.atom | extracto de un original de 4377427 B, SHA-256 `cd79fa12957d0756aa253213216962e50bb42e58a5569070e3e3c20c210c230f`; página 1 |
+| `extracto_contratosMenoresPerfilesContratantes_20261026.atom` | 149917 | `3f90c33cd8aa6014b83e2f8d4ebf3058045e9df4f278bfd4e6f664e3590f1caf` | 2026-10-26T10:33:48Z | https://contrataciondelsectorpublico.gob.es/sindicacion/sindicacion_1143/contratosMenoresPerfilesContratantes.atom | extracto de un original de 4377427 B, SHA-256 `cd79fa12957d0756aa253213216962e50bb42e58a5569070e3e3c20c210c230f`; página 1 |
 
 
 ## Entradas del extracto
@@ -60,3 +60,10 @@ pruebas; ver §5 «Datos personales» del proyecto.
 El repositorio es público: en `extracto_contratosMenoresPerfilesContratantes_20261026.atom` se han sustituido datos de personas físicas (2 adjudicatarios persona física: NIF y nombre) por valores
 ficticios con formato válido (DNI `99999001S`–`99999004H`, nombres «Persona Ficticia …»). El resto del archivo es
 idéntico al descargado. SHA-256 del original descargado: `e38fdb21e10c7ad49f439b3740db4ab9d5b0efe88eb7bc9d2361ac4d18e846ca` (149923 bytes); el de la tabla es el del archivo seudonimizado.
+
+## Seudonimización adicional (27/10/2026)
+Revisión previa a fusionar la fase 0 en un repositorio público: se sustituyeron por valores ficticios los **nombres de personas físicas** que seguían en claro
+(adjudicatarios autónomos: «Persona Ficticia Tres» a «Persona Ficticia Siete») y las **direcciones de correo con nombre de persona** de los datos de contacto
+(`contacto.ficticio.NN@example.invalid`). Los correos genéricos de los órganos de contratación (contratacion@…, secretaria@…) se conservan. Los NIF de personas físicas ya vienen
+enmascarados en origen (`***6795**`). El SHA-256 y el tamaño de la tabla son los del archivo seudonimizado.
+Archivos afectados: el archivo .atom.

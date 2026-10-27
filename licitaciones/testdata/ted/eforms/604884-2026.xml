@@ -537,7 +537,7 @@
                         </cac:PartyLegalEntity>
                         <cac:Contact>
                            <cbc:Telephone>+34 954937000</cbc:Telephone>
-                           <cbc:ElectronicMail>josem.romero@grupocox.com</cbc:ElectronicMail>
+                           <cbc:ElectronicMail>contacto.ficticio.08@example.invalid</cbc:ElectronicMail>
                         </cac:Contact>
                      </efac:Company>
                   </efac:Organization>
@@ -564,7 +564,7 @@
                         </cac:PartyLegalEntity>
                         <cac:Contact>
                            <cbc:Telephone>+34 944720214</cbc:Telephone>
-                           <cbc:ElectronicMail>e.tijero@radimer.es</cbc:ElectronicMail>
+                           <cbc:ElectronicMail>contacto.ficticio.09@example.invalid</cbc:ElectronicMail>
                         </cac:Contact>
                      </efac:Company>
                   </efac:Organization>
@@ -591,7 +591,7 @@
                         </cac:PartyLegalEntity>
                         <cac:Contact>
                            <cbc:Telephone>+34 944155881</cbc:Telephone>
-                           <cbc:ElectronicMail>Saioa.urrutia@actemium.com</cbc:ElectronicMail>
+                           <cbc:ElectronicMail>contacto.ficticio.10@example.invalid</cbc:ElectronicMail>
                         </cac:Contact>
                      </efac:Company>
                   </efac:Organization>

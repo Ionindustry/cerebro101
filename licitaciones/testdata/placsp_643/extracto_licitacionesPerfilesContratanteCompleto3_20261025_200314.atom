@@ -8310,7 +8310,7 @@ documentación acreditativa  según lo indicado en el apartado F del cuadro de c
                         <cbc:Name>Departamento de Salud de Valencia Clínico. Dirección Económica-Gerencia</cbc:Name>
                         <cbc:Telephone>961973553</cbc:Telephone>
                         <cbc:Telefax>961973560</cbc:Telefax>
-                        <cbc:ElectronicMail>hernandez_beg@gva.es</cbc:ElectronicMail>
+                        <cbc:ElectronicMail>contacto.ficticio.06@example.invalid</cbc:ElectronicMail>
                     </cac:Contact>
                 </cac:Party>
                 <cac-place-ext:ParentLocatedParty>

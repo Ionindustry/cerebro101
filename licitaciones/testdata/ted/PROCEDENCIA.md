@@ -16,13 +16,13 @@
 | `busqueda_ES_cpv_seguridad_trafico_iter2.json` | 207413 | `e3ddf6a0f096bfa2bfa42a275d6a5d28bb8a11bba115f585beb7d07eedf9e320` | 2026-10-26T11:04:44Z | https://api.ted.europa.eu/v3/notices/search | original íntegro; POST con `consulta_busqueda_ES_cpv_seguridad_trafico_iter2.json` (iterationNextToken) |
 | `reconciliacion_uuid_placsp.json` | 4741 | `217dbc0252a3922f0c81c576976184b1f9061d0a1698e657c678b23b6a384f19` | 2026-10-26T10:55:25Z | https://api.ted.europa.eu/v3/notices/search | original íntegro; POST con `consulta_reconciliacion_uuid_placsp.json` |
 | `602980-2026.xml` | 25289 | `771b074e898bb5cd5a77f61f2ec7ef637a76b92e87be618b3bf51497747d416e` | 2026-10-26T10:52:54Z | https://ted.europa.eu/en/notice/602980-2026/xml | original íntegro |
-| `604884-2026.xml` | 44955 | `d68d666b1de9a03a87b65a3eec6a75dfe5508b7ccaea62d0cb3f678a0e5ab480` | 2026-10-26T10:52:58Z | https://ted.europa.eu/en/notice/604884-2026/xml | original íntegro |
+| `604884-2026.xml` | 44955 | `89d59874cf13621366b876424b56665e7b195f0a0ec1ba953fd3b49849992d3b` | 2026-10-26T10:52:58Z | https://ted.europa.eu/en/notice/604884-2026/xml | original íntegro |
 | `610695-2026.xml` | 13457 | `c586b630e97d09deca51289afc86445dccba1a6f8ec03a4487bd704b804e85da` | 2026-10-26T10:53:02Z | https://ted.europa.eu/en/notice/610695-2026/xml | original íntegro |
 | `634191-2026.xml` | 69863 | `7adae191d0183d3925881f237b063a0d8538725e31625173d703782e0632c1af` | 2026-10-26T10:52:50Z | https://ted.europa.eu/en/notice/634191-2026/xml | original íntegro |
 | `645693-2026.xml` | 16911 | `5ee60a022bd30b33c49b4c30feb02a4ee6faac2ac9a1ada5c96ee656019d21bf` | 2026-10-26T10:53:00Z | https://ted.europa.eu/en/notice/645693-2026/xml | original íntegro |
-| `650664-2026.xml` | 26763 | `1e9ca2995fba591a7e217cda0e82a95c14829917c73b99ecf1afebdda22f2a76` | 2026-10-26T10:52:59Z | https://ted.europa.eu/en/notice/650664-2026/xml | original íntegro |
+| `650664-2026.xml` | 26763 | `8f5896a3bf26496b17b4ded383ebf675620c3670899ea8c4f45cb33bc10e3f96` | 2026-10-26T10:52:59Z | https://ted.europa.eu/en/notice/650664-2026/xml | original íntegro |
 | `652787-2026.xml` | 16981 | `0cc5c7643442e152297e3610ffab983b206731c3b957947c9a252fd2af9daf7e` | 2026-10-26T10:52:51Z | https://ted.europa.eu/en/notice/652787-2026/xml | original íntegro |
-| `662840-2026.xml` | 24860 | `42afc91f8934110cbf87afe103dd57617ec0a56323004545b1ea88be47e0a526` | 2026-10-26T10:52:55Z | https://ted.europa.eu/en/notice/662840-2026/xml | original íntegro |
+| `662840-2026.xml` | 24860 | `d2db16bc02b0438c00a233b78ad6165b75f0b0ec4940734864bc57f2a781b71d` | 2026-10-26T10:52:55Z | https://ted.europa.eu/en/notice/662840-2026/xml | original íntegro |
 | `663510-2026.xml` | 32679 | `233a08a3d9378a0c1abbaa299946de633d9f4b0145a2a054d0454f5d38412be2` | 2026-10-26T10:52:56Z | https://ted.europa.eu/en/notice/663510-2026/xml | original íntegro |
 | `674346-2026.xml` | 17325 | `62945bba29012d5a754ae4d71b940034ec942fe98cbd22423d4d6859b947c438` | 2026-10-26T10:52:53Z | https://ted.europa.eu/en/notice/674346-2026/xml | original íntegro |
 | `675574-2026.xml` | 19718 | `07ec4726ec04968822ba762d8ce5b926dfc6eb76fb5bfaa8610e6e0ef035ce95` | 2026-10-26T10:53:03Z | https://ted.europa.eu/en/notice/675574-2026/xml | original íntegro |
@@ -54,3 +54,10 @@ Los anuncios pueden contener nombres de personas físicas (adjudicatarios, benef
 El repositorio es público: en `eforms/675574-2026.xml` se han sustituido datos de personas físicas (1 `CompanyID` con formato de DNI (el nombre es de una S.L. y se conserva)) por valores
 ficticios con formato válido (DNI `99999001S`–`99999004H`, nombres «Persona Ficticia …»). El resto del archivo es
 idéntico al descargado. SHA-256 del original descargado: `05b66a0617788e7e4b3549c0206d6c00e4128d8aa0b5544f45ef83d5ebaf8c9a` (19718 bytes); el de la tabla es el del archivo seudonimizado.
+
+## Seudonimización adicional (27/10/2026)
+Revisión previa a fusionar la fase 0 en un repositorio público: se sustituyeron por valores ficticios los **nombres de personas físicas** que seguían en claro
+(adjudicatarios autónomos: «Persona Ficticia Tres» a «Persona Ficticia Siete») y las **direcciones de correo con nombre de persona** de los datos de contacto
+(`contacto.ficticio.NN@example.invalid`). Los correos genéricos de los órganos de contratación (contratacion@…, secretaria@…) se conservan. Los NIF de personas físicas ya vienen
+enmascarados en origen (`***6795**`). El SHA-256 y el tamaño de la tabla son los del archivo seudonimizado.
+Archivos afectados: eforms/604884-2026.xml, 650664-2026.xml y 662840-2026.xml.

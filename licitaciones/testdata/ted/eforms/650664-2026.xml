@@ -123,7 +123,7 @@
                         <cac:Contact>
                            <cbc:Name>Susana Iguacel</cbc:Name>
                            <cbc:Telephone>951308199</cbc:Telephone>
-                           <cbc:ElectronicMail>susana.iguacel@juntadeandalucia.es</cbc:ElectronicMail>
+                           <cbc:ElectronicMail>contacto.ficticio.07@example.invalid</cbc:ElectronicMail>
                         </cac:Contact>
                      </efac:Company>
                   </efac:Organization>

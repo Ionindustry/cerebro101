@@ -5335,7 +5335,7 @@ Opción c: Sustitución inmediata. La ausencia no afecta ningún día a las rati
                     <cac:Contact>
                         <cbc:Name>Junta Directiva de la Asociación de Municipios Turísticos de Canarias</cbc:Name>
                         <cbc:Telephone>661791384</cbc:Telephone>
-                        <cbc:ElectronicMail>david.ruiz@icam.es</cbc:ElectronicMail>
+                        <cbc:ElectronicMail>contacto.ficticio.05@example.invalid</cbc:ElectronicMail>
                     </cac:Contact>
                 </cac:Party>
                 <cac-place-ext:ParentLocatedParty>
@@ -7667,7 +7667,7 @@ No se admitirán ofertas presentadas a través de otros medios o sistemas.</cbc:
                         <cbc:Name>Alcaldía del Concello de Santa Comba</cbc:Name>
                         <cbc:Telephone>981880075</cbc:Telephone>
                         <cbc:Telefax>981880716</cbc:Telefax>
-                        <cbc:ElectronicMail>evaristo.lois@santacomba.es</cbc:ElectronicMail>
+                        <cbc:ElectronicMail>contacto.ficticio.02@example.invalid</cbc:ElectronicMail>
                     </cac:Contact>
                 </cac:Party>
                 <cac-place-ext:ParentLocatedParty>
@@ -24300,7 +24300,7 @@ civil patrimonial, el aseguramiento de daños materiales a bienes muebles e inmu
                     <cac:Contact>
                         <cbc:Name>Alcaldía del Ayuntamiento de Loja</cbc:Name>
                         <cbc:Telephone>958321156</cbc:Telephone>
-                        <cbc:ElectronicMail>vgomez@aytoloja.org</cbc:ElectronicMail>
+                        <cbc:ElectronicMail>contacto.ficticio.03@example.invalid</cbc:ElectronicMail>
                     </cac:Contact>
                 </cac:Party>
                 <cac-place-ext:ParentLocatedParty>

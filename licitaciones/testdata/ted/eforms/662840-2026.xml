@@ -187,7 +187,7 @@
                         </cac:PartyLegalEntity>
                         <cac:Contact>
                            <cbc:Telephone>+34 913874700</cbc:Telephone>
-                           <cbc:ElectronicMail>antonio.pizzano@inetum.com</cbc:ElectronicMail>
+                           <cbc:ElectronicMail>contacto.ficticio.04@example.invalid</cbc:ElectronicMail>
                         </cac:Contact>
                      </efac:Company>
                   </efac:Organization>
@@ -223,7 +223,7 @@
                      <cbc:FamilyName>INETUM ELECTRONIC SECURITY, S.A.</cbc:FamilyName>
                      <cac:Contact>
                         <cbc:Telephone>+34 913874700</cbc:Telephone>
-                        <cbc:ElectronicMail>antonio.pizzano@inetum.com</cbc:ElectronicMail>
+                        <cbc:ElectronicMail>contacto.ficticio.04@example.invalid</cbc:ElectronicMail>
                      </cac:Contact>
                   </efac:UltimateBeneficialOwner>
                </efac:Organizations>
