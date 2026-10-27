@@ -41,73 +41,40 @@ func (m *MemRaw) Len() int {
 	return len(m.Objects)
 }
 
-type view struct {
-	version int
-	hash    string
-	last    Observation
-	flags   Flags
-}
-
 // MemState es un State en memoria con outbox, para pruebas y desarrollo.
 type MemState struct {
 	mu          sync.Mutex
-	views       map[string]*view
+	views       map[string]View
 	Outbox      []Event
 	checkpoints map[string]Checkpoint
 }
 
 // NewMemState crea un estado vacío.
 func NewMemState() *MemState {
-	return &MemState{views: map[string]*view{}, checkpoints: map[string]Checkpoint{}}
+	return &MemState{views: map[string]View{}, checkpoints: map[string]Checkpoint{}}
 }
 
-// Observe aplica la regla de la ingesta (ADR 0003, paso 4).
+// Observe aplica la regla de la ingesta (Decide) sobre la memoria.
 func (m *MemState) Observe(_ context.Context, o Observation) (Outcome, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	k := o.Source + "\x00" + o.SourceID
-	v := m.views[k]
-
-	if o.Removed {
-		if v == nil || v.flags&FlagAnnulled != 0 {
-			return Outcome{Kind: KindUnchanged}, nil // baja de algo desconocido o ya anulado
-		}
-		v.version++
-		v.flags |= FlagAnnulled
-		return m.emit(o, v, "licitacion.anulada", KindModified), nil
+	var prev *View
+	if v, ok := m.views[k]; ok {
+		prev = &v
 	}
-	if v == nil {
-		v = &view{version: 1, hash: o.Hash, last: o, flags: o.Flags}
-		m.views[k] = v
-		return m.emit(o, v, "licitacion.nueva", KindNew), nil
+	d := Decide(prev, o)
+	if d.Write {
+		m.views[k] = d.View
 	}
-	if o.Updated.Before(v.last.Updated) {
-		return Outcome{Kind: KindStale, Version: v.version}, nil
+	out := d.Outcome(o)
+	if out.Event != nil {
+		m.Outbox = append(m.Outbox, *out.Event)
 	}
-	if o.Hash == v.hash {
-		v.last = o // se recuerda la fecha más reciente; el contenido no cambió
-		return Outcome{Kind: KindUnchanged, Version: v.version}, nil
+	if d.Kind == KindStale && prev != nil {
+		out.Version = prev.Version
 	}
-	nuevas := o.Flags &^ v.flags
-	v.version++
-	v.hash, v.last, v.flags = o.Hash, o, v.flags|o.Flags
-	typ := "licitacion.modificada"
-	switch {
-	case nuevas&FlagAnnulled != 0:
-		typ = "licitacion.anulada"
-	case nuevas&FlagFormalized != 0:
-		typ = "licitacion.formalizada"
-	case nuevas&FlagAwarded != 0:
-		typ = "licitacion.adjudicada"
-	}
-	return m.emit(o, v, typ, KindModified), nil
-}
-
-func (m *MemState) emit(o Observation, v *view, typ string, kind Kind) Outcome {
-	e := Event{ID: eventID(typ, o.Source, o.SourceID, v.version), Type: typ, Source: o.Source, SourceID: o.SourceID,
-		Version: v.version, RawSHA256: o.RawSHA256, RawKey: o.RawKey}
-	m.Outbox = append(m.Outbox, e)
-	return Outcome{Kind: kind, Version: v.version, Event: &e}
+	return out, nil
 }
 
 // Checkpoint devuelve el punto de control de una fuente (vacío si no hay).
