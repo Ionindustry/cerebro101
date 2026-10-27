@@ -7,6 +7,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"net/url"
 	"strings"
@@ -107,6 +108,26 @@ func (s *Store) PutRaw(ctx context.Context, o ingest.RawObject) (bool, error) {
 		return false, fmt.Errorf("s3: la clave %s ya existe con otro SHA-256 (%q frente a %q)", o.Key, got, o.SHA256)
 	}
 	return false, nil
+}
+
+// MaxRawBytes es el tamaño máximo de un original que se lee de vuelta (una entrada tiene un tope menor: placsp.DefaultMaxEntryBytes).
+const MaxRawBytes = 16 << 20
+
+// GetRaw lee un original. Con un objeto por encima de MaxRawBytes devuelve error en vez de cargarlo entero.
+func (s *Store) GetRaw(ctx context.Context, key string) ([]byte, error) {
+	obj, err := s.cli.GetObject(ctx, s.raw, key, minio.GetObjectOptions{})
+	if err != nil {
+		return nil, fmt.Errorf("s3: abrir %s: %w", key, err)
+	}
+	defer obj.Close()
+	b, err := io.ReadAll(io.LimitReader(obj, MaxRawBytes+1))
+	if err != nil {
+		return nil, fmt.Errorf("s3: leer %s: %w", key, err)
+	}
+	if len(b) > MaxRawBytes {
+		return nil, fmt.Errorf("s3: %s supera %d bytes", key, MaxRawBytes)
+	}
+	return b, nil
 }
 
 func preconditionFailed(err error) bool {

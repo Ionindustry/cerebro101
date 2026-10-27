@@ -7,7 +7,8 @@ las normas del equipo, en `NORMAS.md`; las decisiones de arquitectura, en `adr/`
 el **cliente HTTP seguro**, la **lógica de ingesta idempotente** (original como evidencia, versiones y outbox) y el **estado en PostgreSQL**
 (vistas, outbox transaccional y puntos de control) con su relay. Todo probado contra las muestras reales de `testdata/`. El **ingestor** ya trabaja de punta a punta: descarga PLACSP cada hora,
 guarda los originales en el almacén S3 (RustFS), el estado en su propio Postgres y publica los eventos en NATS JetStream
-(`compose.yaml`). La API y los proyectores llegan en los PR siguientes.
+(`compose.yaml`). El **proyector** consume esos eventos y mantiene el modelo de lectura de los expedientes en Postgres (tabla `expedientes`, con
+búsqueda de texto en castellano y catalán). La API llega en el PR siguiente.
 
 **Arrancarlo** (desde la raíz del repositorio; credenciales `LIC_*` en `.env`, ver `.env.example`):
 ```bash
@@ -21,7 +22,7 @@ Credenciales: de momento el ingestor usa la del almacén y la del bus tal cual (
 ```
 cmd/api        API REST (contrato en api/openapi.yaml; endpoints en la fase 3)
 cmd/ingestor   servicio de ingesta (internal/ingestor: configuración, cerrojo de líder, planificador y relay)
-cmd/proyector  proyectores de grafo y de búsqueda
+cmd/proyector  proyector del modelo de lectura (internal/projector); los de grafo y búsqueda llegarán después (ADR 0009)
 internal/domain    modelo normalizado (licitación, lotes, resultados, bajas); importes con moneda y significado, sin datos de contacto
 internal/connectors/placsp   lector en streaming de las sindicaciones Atom + CODICE: límites de tamaño, sin DTD, fragmento original y SHA-256 por entrada
 internal/connectors/fetch   cliente HTTP anti-SSRF: https, lista blanca, IP públicas comprobadas al conectar, redirecciones validadas, tope de tamaño, reintentos
@@ -29,6 +30,7 @@ internal/ingest    ingesta de una fuente: página → original (RawStore) → re
 internal/storage/pg   estado de la ingesta en PostgreSQL: migraciones, vistas, outbox (Drain con SKIP LOCKED) y puntos de control; usa ingest.Decide
 internal/bus       publicador NATS JetStream (flujo LICITACIONES, Nats-Msg-Id = id del evento, espera de PubAck)
 internal/storage/s3   originales en un almacén S3 (If-None-Match, Object Lock en el cubo de originales)
+internal/projector   evento → original (S3, con comprobación de SHA-256) → parser → tabla `expedientes` (idempotente, solo avanza de versión)
 internal/events    relay del outbox: publica en orden, borra solo lo confirmado, reintenta con espera creciente
 internal/service   arranque común: registro JSON (slog), entorno, /healthz, parada con SIGINT/SIGTERM
 internal/version   versión del binario (se fija al compilar)

@@ -34,6 +34,17 @@ func (m *MemRaw) PutRaw(_ context.Context, o RawObject) (bool, error) {
 	return true, nil
 }
 
+// GetRaw lee un original guardado (para las pruebas de los proyectores).
+func (m *MemRaw) GetRaw(_ context.Context, key string) ([]byte, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	o, ok := m.Objects[key]
+	if !ok {
+		return nil, fmt.Errorf("no existe %s", key)
+	}
+	return o.Data, nil
+}
+
 // Len devuelve cuántos originales hay.
 func (m *MemRaw) Len() int {
 	m.mu.Lock()
