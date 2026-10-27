@@ -31,6 +31,7 @@ class TestDetector(unittest.TestCase):
                       "DATABASE_URL=postgresql://cerebro_app:${CEREBRO_APP_PASSWORD}@postgres:5432/cerebro",
                       "PG=postgres://postgres:prueba@localhost:5432/lic_test", "PG=postgres://usuario:clave@host/base",
                       "PG=postgres://postgres:changeme@db/x",
+                      'const token = "token-de-pruebas-con-al-menos-32-caracteres"',
                       'EnvNATSClave = "LIC_NATS_PASSWORD"', 'EnvPG = "LIC_PG_URL"', "TOKEN_VAR = 'LIC_API_TOKEN_SECRET'"):
             with self.subTest(texto[:30]):
                 self.assertEqual(encontrados(texto), [], texto)
