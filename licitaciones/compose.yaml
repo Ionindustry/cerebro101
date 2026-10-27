@@ -1,0 +1,47 @@
+# Infraestructura del motor de licitaciones: almacén de originales (MinIO) y bus de eventos (NATS JetStream).
+# Pensado para el servidor de producción, NO para el PC de desarrollo. Red interna: no se publica ningún puerto ni la consola de MinIO.
+# Uso: docker compose -f licitaciones/compose.yaml --env-file .env up -d
+name: licitaciones
+
+x-endurecido: &endurecido
+  restart: unless-stopped
+  cap_drop: [ALL]
+  security_opt: ["no-new-privileges:true"]
+  networks: [interna]
+
+services:
+  minio:
+    <<: *endurecido
+    # POR VERIFICAR (ADR 0004): minio/minio ya no se publica; esta imagen congelada de Bitnami no recibe parches.
+    # El código habla S3 estándar: se puede sustituir por otro MinIO o por un S3 propio cambiando solo la imagen o el destino.
+    image: "${LIC_MINIO_IMAGEN:-bitnamilegacy/minio:2025.5.24}"
+    environment:
+      MINIO_ROOT_USER: "${LIC_MINIO_USUARIO:?define LIC_MINIO_USUARIO}"
+      MINIO_ROOT_PASSWORD: "${LIC_MINIO_PASSWORD:?define LIC_MINIO_PASSWORD}"
+      MINIO_DEFAULT_BUCKETS: ""            # los cubos los crea el ingestor (EnsureBuckets), el de originales con Object Lock
+      MINIO_CONSOLE_PORT_NUMBER: "0"       # sin consola web
+    volumes: ["minio-datos:/bitnami/minio/data"]
+    healthcheck: {test: ["CMD-SHELL", "bash -c 'echo > /dev/tcp/127.0.0.1/9000'"], interval: 5s, timeout: 5s, retries: 20}
+    mem_limit: 1g
+    cpus: 1.0
+
+  nats:
+    <<: *endurecido
+    image: "${LIC_NATS_IMAGEN:-nats:2.11-alpine}"      # POR VERIFICAR: etiqueta exacta a fijar al desplegar
+    command: ["-c", "/etc/nats/nats.conf"]
+    environment:
+      NATS_USER: "${LIC_NATS_USUARIO:?define LIC_NATS_USUARIO}"
+      NATS_PASSWORD: "${LIC_NATS_PASSWORD:?define LIC_NATS_PASSWORD}"
+    volumes: ["nats-datos:/data", "./deploy/nats.conf:/etc/nats/nats.conf:ro"]
+    read_only: true
+    tmpfs: ["/tmp"]
+    healthcheck: {test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:8222/healthz | grep -q ok"], interval: 5s, timeout: 5s, retries: 20}
+    mem_limit: 512m
+    cpus: 1.0
+
+networks:
+  interna: {internal: true}      # sin salida a Internet ni acceso desde fuera; el ingestor y el proyector se unirán a esta red
+
+volumes:
+  minio-datos:
+  nats-datos:
