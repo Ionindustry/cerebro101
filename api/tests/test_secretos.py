@@ -30,12 +30,17 @@ class TestDetector(unittest.TestCase):
                       "PASSWORD: ${POSTGRES_PASSWORD}", 'CEREBRO_APP_PASSWORD: "${CEREBRO_APP_PASSWORD}"',
                       "DATABASE_URL=postgresql://cerebro_app:${CEREBRO_APP_PASSWORD}@postgres:5432/cerebro",
                       "PG=postgres://postgres:prueba@localhost:5432/lic_test", "PG=postgres://usuario:clave@host/base",
-                      "PG=postgres://postgres:changeme@db/x"):
+                      "PG=postgres://postgres:changeme@db/x",
+                      'EnvNATSClave = "LIC_NATS_PASSWORD"', 'EnvPG = "LIC_PG_URL"', "TOKEN_VAR = 'LIC_API_TOKEN_SECRET'"):
             with self.subTest(texto[:30]):
                 self.assertEqual(encontrados(texto), [], texto)
 
     def test_una_contrasena_real_en_una_direccion_sigue_saltando(self):
         self.assertEqual(len(encontrados("PG=postgres://postgres:Zx8mQ2vL9pTr4Ws@localhost/x")), 1)
+
+    def test_una_clave_real_con_guiones_bajos_sigue_saltando(self):
+        # solo se ignoran los NOMBRES de variable (mayúsculas y guiones bajos); una clave mezclada salta aunque lleve guiones bajos
+        self.assertTrue(encontrados("API_KEY = 'q9Zr4kLm_2PxV7tBw8NcYdE3h'"))
 
     def test_no_imprime_el_secreto_entero(self):
         h = encontrados("JEV_API_KEY=" + "q9Zr4kLm2PxV7tBw8NcYdE3h")[0]

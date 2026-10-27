@@ -25,6 +25,8 @@ PATRONES = [
 ]
 # valores que son marcadores o de prueba
 FALSOS = re.compile(r"(?i)^(x+|clave[-_a-z0-9]*|changeme.*|password|contrasena|ejemplo.*|test.*|prueba.*|dummy.*|\$\{.*\}|<.*>|\*+|none|null|false|true|sin[-_ ]clave|vacio|secreto|clave-de-prueba|.*cambia.*)$")
+# Un valor que es el NOMBRE de una variable de entorno (LIC_NATS_PASSWORD, en mayúsculas y con guiones bajos) no es un secreto: es a qué variable se llama.
+NOMBRE_ENTORNO = re.compile(r"^[A-Z][A-Z0-9]*(?:_[A-Z0-9]+)+$")
 OMITIR = re.compile(r"(^|/)(package-lock\.json|.*\.(png|jpg|jpeg|pdf|onnx|ico|woff2?))$|^api/tests/|^panel/test/")
 
 
@@ -43,7 +45,8 @@ def hallazgos(texto: str, nombre: str, base_linea: int = 0):
                 # no cuenta, igual que en las asignaciones: así lo dice la cabecera de este fichero.
                 if u and (u.group(1) == u.group(2) or FALSOS.match(u.group(2))):
                     continue
-            if FALSOS.match(valor.strip("'\" ")) or valor.startswith(("os.environ", "_env", "ajustes.")):
+            limpio = valor.strip("'\" ")
+            if FALSOS.match(limpio) or NOMBRE_ENTORNO.match(limpio) or valor.startswith(("os.environ", "_env", "ajustes.")):
                 continue
             tapado = valor[:3] + "…" + f"({len(valor)} caracteres)"
             yield f"{nombre}:{base_linea + n}: {tipo} [{tapado}]"
