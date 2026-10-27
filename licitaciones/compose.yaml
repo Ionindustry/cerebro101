@@ -104,6 +104,23 @@ services:
     mem_limit: 256m
     cpus: 0.5
 
+  api:
+    restart: unless-stopped
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    networks: [interna]                                 # sin salida a Internet y sin puertos publicados (para probar en local: compose.dev.yaml)
+    image: licitaciones:local
+    entrypoint: ["/api"]
+    read_only: true
+    tmpfs: ["/tmp"]
+    depends_on: {lic-db: {condition: service_healthy}, proyector: {condition: service_started}}
+    environment:
+      LICITACIONES_ADDR: "0.0.0.0:8080"
+      LIC_PG_URL: "postgres://lic:${LIC_PG_PASSWORD}@lic-db:5432/licitaciones?sslmode=disable"
+      LIC_API_TOKEN: "${LIC_API_TOKEN:?define LIC_API_TOKEN (mínimo 32 caracteres: openssl rand -hex 32)}"
+    mem_limit: 256m
+    cpus: 0.5
+
 networks:
   interna: {internal: true}      # sin salida a Internet ni acceso desde fuera
   salida: {}                     # solo el ingestor, para descargar de PLACSP

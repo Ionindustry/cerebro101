@@ -80,6 +80,8 @@ jobs:
         run: docker compose -f erpnext/docker-compose.yml --env-file .env.example config -q
       - name: Infraestructura de licitaciones (compose) válida
         run: docker compose -f licitaciones/compose.yaml --env-file .env.example config -q
+      - name: Licitaciones con el puerto de desarrollo (compose) válido
+        run: docker compose -f licitaciones/compose.yaml -f licitaciones/compose.dev.yaml --env-file .env.example config -q
       - name: Sintaxis de los scripts de shell
         run: for f in scripts/*.sh despliegue/*.sh servicios/*/*.sh; do bash -n "$f"; done
       - name: Las fichas de los agentes están al día con scripts/generar_fichas.py

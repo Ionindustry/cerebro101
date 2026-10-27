@@ -1,0 +1,6 @@
+# Solo para probar la API desde el propio equipo: la publica en 127.0.0.1:8090 (nunca en otras interfaces). No usar en producción.
+# docker compose -f licitaciones/compose.yaml -f licitaciones/compose.dev.yaml --env-file .env up -d
+services:
+  api:
+    networks: [interna, salida]      # un puerto publicado necesita una red con salida; la «interna» no tiene
+    ports: ["127.0.0.1:8090:8080"]
