@@ -78,3 +78,36 @@ jobs:
           pip install pyyaml
           python3 scripts/generar_fichas.py
           git diff --exit-code -- config docs/AGENTES.md
+
+  licitaciones:
+    name: Licitaciones · Go
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: licitaciones
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: licitaciones/go.mod
+          cache-dependency-path: licitaciones/go.sum
+      - name: go.mod y go.sum ordenados
+        run: go mod tidy -diff
+      - name: Formato (gofmt)
+        run: test -z "$(gofmt -l .)" || { gofmt -l .; exit 1; }
+      - name: go vet
+        run: go vet ./...
+      - name: staticcheck
+        run: go tool staticcheck ./...
+      - name: golangci-lint (versión fijada, compilada con el Go del módulo)
+        run: |
+          go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.15.0
+          "$(go env GOPATH)/bin/golangci-lint" run
+      - name: Pruebas (detector de carreras, sin caché)
+        run: go test -race -count=1 -timeout 10m ./...
+      - name: Vulnerabilidades conocidas (govulncheck)
+        run: go tool govulncheck ./...
+      - name: Imagen (solo construir, sin publicar)
+        working-directory: .
+        run: docker build -f licitaciones/Dockerfile --build-arg VERSION=${{ github.sha }} -t licitaciones:ci licitaciones
