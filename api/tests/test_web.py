@@ -60,6 +60,13 @@ class TestBuscar(unittest.TestCase):
         q = dict(vistas[0].url.params)
         self.assertEqual((q["categories"], q["time_range"]), ("news", "month"))
 
+    def test_periodo_escrito_de_otra_forma_se_entiende_y_uno_raro_se_rechaza(self):
+        _, vistas = self.buscar(periodo="último año")
+        self.assertEqual(dict(vistas[0].url.params)["time_range"], "year")
+        with entidades(), con_transporte(lambda req: httpx.Response(200, json={"results": []})):
+            with self.assertRaisesRegex(ValueError, "periodo debe ser"):
+                ejecutar(web.buscar("hora en Tokio", periodo="desde siempre"))
+
     def test_el_numero_de_resultados_tiene_tope(self):
         filas = [{"title": str(i), "url": f"https://x/{i}", "content": ""} for i in range(30)]
         r, _ = self.buscar(respuesta={"results": filas}, max_resultados=99)

@@ -66,6 +66,23 @@ class TestPaginasWeb(unittest.TestCase):
         self.assertEqual(buscar.await_args.kwargs["max_resultados"], 6)
 
 
+class TestPeriodo(unittest.TestCase):
+    def test_entiende_como_lo_escriben_los_modelos(self):
+        for texto, esperado in [("mes", "month"), ("último año", "year"), ("Último AÑO", "year"), ("past week", "week"), ("últimos 7 días", "week"),
+                                ("24 horas", "day"), ("hoy", "day"), ("30 días", "month"), ("", None), ("siempre", None)]:
+            self.assertEqual(cuaderno.web.periodo_de(texto), esperado, texto)
+
+    def test_investigar_sigue_aunque_el_periodo_no_se_entienda(self):
+        with mock.patch.object(cuaderno.web, "buscar", mock.AsyncMock(return_value={"resultados": []})) as buscar:
+            asyncio.run(cuaderno.investigar("Tema", "cámaras", departamento="marketing", periodo="desde siempre"))
+        self.assertEqual(buscar.await_args.kwargs["periodo"], "")
+
+    def test_investigar_conserva_el_periodo_que_se_entiende(self):
+        with mock.patch.object(cuaderno.web, "buscar", mock.AsyncMock(return_value={"resultados": []})) as buscar:
+            asyncio.run(cuaderno.investigar("Tema", "cámaras", departamento="marketing", periodo="último año"))
+        self.assertEqual(buscar.await_args.kwargs["periodo"], "último año")
+
+
 class TestAsignacion(unittest.TestCase):
     def test_la_tienen_los_agentes_que_investigan_y_son_de_sensibilidad_baja(self):
         con = {f.id for f in registro().fichas.values() if "cuaderno" in f.herramientas}

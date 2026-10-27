@@ -159,6 +159,8 @@ async def investigar(cuaderno: str, tema: str, departamento: str, sensibilidad: 
     """Busca el tema en internet y guarda en el cuaderno las primeras páginas que se pueden leer, todo en un paso."""
     _solo_baja(sensibilidad)
     max_fuentes = max(1, min(int(max_fuentes), 8))
+    if periodo and web.periodo_de(periodo) is None:      # el periodo es un filtro de comodidad: si no se entiende, se busca sin él
+        periodo = ""
     encontrados = await web.buscar(tema, tipo=tipo, periodo=periodo, max_resultados=max_fuentes * 2)
     guardadas, descartadas = [], []
     for r in encontrados["resultados"]:
