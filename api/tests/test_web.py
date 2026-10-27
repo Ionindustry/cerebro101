@@ -8,7 +8,7 @@ import _sin_servicios  # noqa: F401
 import httpx
 
 from cerebro.entidades import Entidades
-from cerebro.grafo.prompts import ahora_texto, sistema_agente, sistema_director_general
+from cerebro.grafo.prompts import ahora_texto, sistema_agente, sistema_director_departamento, sistema_director_general
 from cerebro.herramientas import web
 from cerebro.registro import registro
 
@@ -220,6 +220,14 @@ class TestFechaYAgente(unittest.TestCase):
         texto = sistema_director_general(r.departamentos)
         self.assertIn("dudas generales", texto)
         self.assertIn("Asistente general", texto)
+        self.assertIn("aunque trate del sector", texto)
+
+    def test_el_director_de_departamento_manda_lo_de_internet_a_quien_puede_buscar(self):
+        r = registro()
+        direccion = [f for f in r.fichas.values() if f.departamento == "direccion"]
+        self.assertIn("elige asistente-general", sistema_director_departamento("Dirección", direccion))
+        finanzas = [f for f in r.fichas.values() if f.departamento == "finanzas"]
+        self.assertNotIn("buscar en internet", sistema_director_departamento("Finanzas", finanzas))
 
     def test_las_fichas_con_datos_sensibles_no_pueden_usar_internet(self):
         r = registro()

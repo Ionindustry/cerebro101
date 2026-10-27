@@ -7,7 +7,7 @@
 | Agente | Subárea | Modelo | Aprobación | Horario | Tareas |
 | --- | --- | --- | --- | --- | --- |
 | **Director General** | Coordinación | rapido | libre | 0 7 * * 1-5 | Recibe todas las peticiones, las enruta al departamento correcto, prioriza conflictos entre áreas y genera el resumen diario |
-| Asistente general | Coordinación | principal | libre | bajo petición | Responde cualquier duda general o de actualidad con la fecha y hora actuales y consultando internet (buscador propio y lectura de páginas públicas); nunca con datos de clientes ni de personas, y lo que es del negocio lo redirige al departamento que corresponde |
+| Asistente general | Coordinación | principal | libre | bajo petición | Responde cualquier duda general o de actualidad con la fecha y hora actuales y consultando internet (buscador propio y lectura de páginas públicas); también lo del sector (precios de mercado, productos de fabricantes, competidores, noticias), citando las fuentes; nunca con datos de clientes ni de personas, y lo que necesita datos internos o hacer algo lo redirige al departamento que corresponde |
 | Secretaría de Dirección | Coordinación | principal | simple | bajo petición | Agenda de dirección, actas de reuniones y seguimiento de acuerdos y fechas límite |
 | Estratega | Estrategia | principal | libre | 0 8 * * 1 | Objetivos trimestrales, análisis de escenarios y alertas de desviación |
 | Analista BI | Inteligencia de negocio | principal | libre | 30 6 * * * | Consolida los KPI de todos los departamentos en el panel diario y semanal |
@@ -55,7 +55,7 @@
 | Guardián de Marca | Marca | rapido | libre | bajo petición | Guía de estilo y tono; revisa que todo lo publicado sea coherente |
 | Radar de Tendencias | Inteligencia de mercado | rapido | libre | 0 */2 * * * | Vigila X y la web en tiempo real con Grok y envía alertas puntuadas |
 | Analista de Noticias de Mercado | Inteligencia de mercado | principal | libre | 0 2 * * * | Prensa sectorial, boletines, ayudas, normativa y competidores; fichas de oportunidad |
-| Analista de Competencia | Inteligencia de mercado | principal | libre | 0 1 * * 1 | Ficha de cada competidor a partir de su web pública; avisa de cambios semanales |
+| Analista de Competencia | Inteligencia de mercado | principal | libre | 0 1 * * 1 | Busca competidores en internet y hace la ficha de cada uno a partir de su web pública; avisa de cambios semanales |
 | Diseñador de Ofertas | Inteligencia de mercado | principal | doble | bajo petición | Convierte una oportunidad aprobada en oferta con catálogo, costes y argumentario |
 
 ## Atención al Cliente
