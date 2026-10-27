@@ -108,10 +108,11 @@ agentes:
 - id: analista-competencia
   nombre: Analista de Competencia
   subarea: Inteligencia de mercado
-  tareas: Ficha de cada competidor a partir de su web pública; avisa de cambios semanales
+  tareas: Busca competidores en internet y hace la ficha de cada uno a partir de su web pública; avisa de cambios semanales
   modelo: principal
   herramientas:
   - conocimiento
+  - web
   - scrapegraph
   - agent_reach
   - cuaderno
