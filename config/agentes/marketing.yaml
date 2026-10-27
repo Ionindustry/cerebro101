@@ -83,6 +83,7 @@ agentes:
   - grok
   - agent_reach
   - jev
+  - cuaderno
   aprobacion: libre
   horario: 0 */2 * * *
   sensibilidad: baja
@@ -98,6 +99,7 @@ agentes:
   - scrapegraph
   - agent_reach
   - jev
+  - cuaderno
   aprobacion: libre
   horario: 0 2 * * *
   sensibilidad: baja
@@ -113,6 +115,7 @@ agentes:
   - web
   - scrapegraph
   - agent_reach
+  - cuaderno
   aprobacion: libre
   horario: 0 1 * * 1
   sensibilidad: baja

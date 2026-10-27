@@ -35,6 +35,7 @@ agentes:
   herramientas:
   - conocimiento
   - jev
+  - cuaderno
   aprobacion: libre
   horario: null
   sensibilidad: baja
@@ -159,6 +160,7 @@ agentes:
   - scrapegraph
   - plataformas_contratacion
   - jev
+  - cuaderno
   aprobacion: libre
   horario: 0 4 * * *
   sensibilidad: baja

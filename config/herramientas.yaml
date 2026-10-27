@@ -2,6 +2,7 @@
 # Un agente solo usa una herramienta si está en su ficha Y su sensibilidad lo permite.
 herramientas:
   conocimiento:              {local: true,  sensibilidad_max: alta}
+  cuaderno:                  {local: true,  sensibilidad_max: alta,  nota: "cuadernos de investigación en la base de datos propia; traer páginas web solo con sensibilidad baja"}
   erpnext:                   {local: true,  sensibilidad_max: alta}
   ficheros:                  {local: true,  sensibilidad_max: alta}
   cotizador:                 {local: true,  sensibilidad_max: alta}

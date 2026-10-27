@@ -80,6 +80,7 @@ agentes:
   - scrapegraph
   - agent_reach
   - grok
+  - cuaderno
   aprobacion: libre
   horario: 0 2 * * 3
   sensibilidad: baja

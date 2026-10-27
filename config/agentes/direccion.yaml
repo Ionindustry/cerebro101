@@ -25,6 +25,7 @@ agentes:
   herramientas:
   - conocimiento
   - web
+  - cuaderno
   aprobacion: libre
   horario: null
   sensibilidad: baja
