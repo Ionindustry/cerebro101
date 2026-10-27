@@ -1,6 +1,7 @@
-# Infraestructura del motor de licitaciones: almacén de originales (S3: RustFS) y bus de eventos (NATS JetStream).
-# Pensado para el servidor de producción, NO para el PC de desarrollo. Red interna: no se publica ningún puerto ni la consola del almacén.
-# Uso: docker compose -f licitaciones/compose.yaml --env-file .env up -d
+# Motor de licitaciones: almacén de originales (S3: RustFS), bus de eventos (NATS JetStream), su Postgres y el ingestor (PLACSP).
+# Red interna: no se publica ningún puerto ni la consola del almacén. Solo el ingestor sale a Internet (red «salida»), y únicamente a
+# contrataciondelestado.es (lista blanca en el propio cliente HTTP).
+# Uso: docker compose -f licitaciones/compose.yaml --env-file .env up -d --build
 name: licitaciones
 
 x-endurecido: &endurecido
@@ -41,9 +42,50 @@ services:
     mem_limit: 512m
     cpus: 1.0
 
+  lic-db:
+    <<: *endurecido
+    image: "${LIC_PG_IMAGEN:-postgres:16}"
+    cap_add: [CHOWN, DAC_OVERRIDE, FOWNER, SETGID, SETUID]      # lo que necesita el arranque de la imagen oficial; el resto sigue quitado
+    environment:
+      POSTGRES_USER: lic
+      POSTGRES_DB: licitaciones
+      POSTGRES_PASSWORD: "${LIC_PG_PASSWORD:?define LIC_PG_PASSWORD}"
+    volumes: ["pg-datos:/var/lib/postgresql/data"]
+    healthcheck: {test: ["CMD-SHELL", "pg_isready -U lic -d licitaciones"], interval: 5s, timeout: 5s, retries: 20}
+    mem_limit: 512m
+    cpus: 1.0
+
+  ingestor:
+    restart: unless-stopped
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    networks: [interna, salida]
+    build: {context: ., dockerfile: Dockerfile, args: {VERSION: "${LIC_VERSION:-local}"}}
+    image: licitaciones:local
+    entrypoint: ["/ingestor"]
+    read_only: true
+    tmpfs: ["/tmp"]
+    depends_on: {lic-db: {condition: service_healthy}}
+    environment:
+      LICITACIONES_ADDR: "0.0.0.0:8081"                  # /healthz solo dentro de la red interna
+      LIC_PG_URL: "postgres://lic:${LIC_PG_PASSWORD}@lic-db:5432/licitaciones?sslmode=disable"
+      LIC_S3_ENDPOINT: rustfs:9000
+      LIC_S3_USUARIO: "${LIC_S3_USUARIO}"
+      LIC_S3_PASSWORD: "${LIC_S3_PASSWORD}"
+      LIC_NATS_URL: nats://nats:4222
+      LIC_NATS_USUARIO: "${LIC_NATS_USUARIO}"
+      LIC_NATS_PASSWORD: "${LIC_NATS_PASSWORD}"
+      LIC_FUENTES: "${LIC_FUENTES:-placsp-643}"
+      LIC_INTERVALO: "${LIC_INTERVALO:-1h}"
+      LIC_CONTACTO: "${LIC_CONTACTO:-}"
+    mem_limit: 256m
+    cpus: 0.5
+
 networks:
-  interna: {internal: true}      # sin salida a Internet ni acceso desde fuera; el ingestor y el proyector se unirán a esta red
+  interna: {internal: true}      # sin salida a Internet ni acceso desde fuera
+  salida: {}                     # solo el ingestor, para descargar de PLACSP
 
 volumes:
   s3-datos:
+  pg-datos:
   nats-datos:
