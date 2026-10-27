@@ -1,0 +1,4281 @@
+{
+  "id" : "ybgg-dgi6",
+  "name" : "Contractació pública a Catalunya: publicacions a la Plataforma de serveis de contractació pública",
+  "assetType" : "dataset",
+  "attribution" : "Departament d'Economia i Finances",
+  "attributionLink" : "https://administraciodigital.gencat.cat/ca/dades/dades-obertes/informacio-practica/llicencies/",
+  "averageRating" : 0,
+  "category" : "Economia",
+  "createdAt" : 1675324318,
+  "description" : "Publicacions de l’activitat contractual de tots els òrgans de contractació de Catalunya a la Plataforma de serveis de contractació pública (PSCP), entre altres, anuncis de licitació, d’avaluació, d’adjudicació i de formalització de contractes. \n\nCada fila representa:\n\n- Un expedient\n- Un lot de l’expedient, per als expedients amb lots\n- Un expedient per a les publicacions agregades\n\nLes publicacions de la fase d&rsquo;execuci&oacute; estan contingudes al conjunt de dades \"Contractaci&oacute; p&uacute;blica a Catalunya: publicacions de la fase d&rsquo;execuci&oacute; a la Plataforma de serveis de contractaci&oacute; p&uacute;blica\", que trobareu a l'enlla&ccedil;&nbsp;<a href=\"https://analisi.transparenciacatalunya.cat/Economia/Contractaci-p-blica-a-Catalunya-publicacions-de-la/8idu-wkjv/about_data\">https://analisi.transparenciacatalunya.cat/Economia/Contractaci-p-blica-a-Catalunya-publicacions-de-la/8idu-wkjv/about_data</a>\n<p><em>Com a conseq&uuml;&egrave;ncia d'una incid&egrave;ncia t&egrave;cnica, aquest conjunt de dades presenta informaci&oacute; incompleta (manquen expedients) en les versions anteriors del conjunt de dades durant el per&iacute;ode compr&egrave;s entre el 15.06.2026 i el 19.06.2026. Disculpeu les mol&egrave;sties.</em></p>",
+  "diciBackend" : false,
+  "displayType" : "table",
+  "downloadCount" : 10447,
+  "hideFromCatalog" : false,
+  "hideFromDataJson" : false,
+  "licenseId" : "SEE_TERMS_OF_USE",
+  "locked" : false,
+  "newBackend" : true,
+  "numberOfComments" : 0,
+  "oid" : 2705815,
+  "provenance" : "official",
+  "publicationAppendEnabled" : true,
+  "publicationDate" : 1687878999,
+  "publicationGroup" : 1738029,
+  "publicationStage" : "published",
+  "rowIdentifierColumnId" : 24783768,
+  "rowsUpdatedAt" : 1793005212,
+  "rowsUpdatedBy" : "a4b5-gx6v",
+  "tableId" : 1818489,
+  "totalTimesRated" : 0,
+  "viewCount" : 37200,
+  "viewLastModified" : 1793005205,
+  "viewType" : "tabular",
+  "approvals" : [ {
+    "reviewedAt" : 1682057746,
+    "reviewedAutomatically" : true,
+    "state" : "approved",
+    "submissionId" : 1352500,
+    "submissionObject" : "public_audience_request",
+    "submissionOutcome" : "change_audience",
+    "submittedAt" : 1682057746,
+    "targetAudience" : "public",
+    "workflowId" : 182,
+    "submissionDetails" : {
+      "permissionType" : "READ"
+    },
+    "submissionOutcomeApplication" : {
+      "endedAt" : 1682057746,
+      "failureCount" : 0,
+      "startedAt" : 1682057746,
+      "status" : "success"
+    },
+    "submitter" : {
+      "id" : "a4b5-gx6v",
+      "displayName" : "Dades Obertes Catalunya"
+    }
+  } ],
+  "clientContext" : {
+    "clientContextVariables" : [ ],
+    "inheritedVariables" : { }
+  },
+  "columns" : [ {
+    "id" : 24783769,
+    "name" : "codi_ambit",
+    "dataTypeName" : "text",
+    "description" : "Identificador de l'àmbit organitzatiu",
+    "fieldName" : "codi_ambit",
+    "position" : 1,
+    "renderTypeName" : "text",
+    "tableColumnId" : 14845611,
+    "cachedContents" : {
+      "non_null" : "2032596",
+      "largest" : "1500005",
+      "null" : "0",
+      "top" : [ {
+        "item" : "1500002",
+        "count" : "800825"
+      }, {
+        "item" : "1500001",
+        "count" : "795475"
+      }, {
+        "item" : "1500004",
+        "count" : "409158"
+      }, {
+        "item" : "1500005",
+        "count" : "24093"
+      }, {
+        "item" : "1500003",
+        "count" : "3045"
+      } ],
+      "smallest" : "1500001",
+      "count" : "2032596",
+      "cardinality" : "2032596"
+    },
+    "format" : {
+      "decimalSeparator" : ".",
+      "groupSeparator" : ","
+    }
+  }, {
+    "id" : 24783770,
+    "name" : "nom_ambit",
+    "dataTypeName" : "text",
+    "description" : "Àmbit organitzatiu (Departaments i sector públic de la Generalitat de Catalunya /Organismes independents i/o estatutaris / Entitats de l'Administració local / Universitats /Altres ens)",
+    "fieldName" : "nom_ambit",
+    "position" : 2,
+    "renderTypeName" : "text",
+    "tableColumnId" : 14845612,
+    "cachedContents" : {
+      "non_null" : "2032596",
+      "largest" : "Universitats",
+      "null" : "0",
+      "top" : [ {
+        "item" : "Entitats de l'administració local",
+        "count" : "800825"
+      }, {
+        "item" : "Departaments i sector públic de la Generalitat de Catalunya",
+        "count" : "795475"
+      }, {
+        "item" : "Universitats",
+        "count" : "409158"
+      }, {
+        "item" : "Altres ens",
+        "count" : "24093"
+      }, {
+        "item" : "Organismes independents i/o estatutaris",
+        "count" : "3045"
+      } ],
+      "smallest" : "Altres ens",
+      "count" : "2032596",
+      "cardinality" : "2032596"
+    },
+    "format" : { }
+  }, {
+    "id" : 24783771,
+    "name" : "codi_departament_ens",
+    "dataTypeName" : "text",
+    "description" : "Identificador de les entitats de l’Administració i del sector públic de Catalunya ",
+    "fieldName" : "codi_departament_ens",
+    "position" : 3,
+    "renderTypeName" : "text",
+    "tableColumnId" : 14845613,
+    "cachedContents" : {
+      "non_null" : "900859",
+      "largest" : "9837697",
+      "null" : "1131737",
+      "top" : [ {
+        "item" : "202252",
+        "count" : "355796"
+      }, {
+        "item" : "202245",
+        "count" : "108337"
+      }, {
+        "item" : "15937468",
+        "count" : "102840"
+      }, {
+        "item" : "202191",
+        "count" : "66851"
+      }, {
+        "item" : "202144",
+        "count" : "51123"
+      }, {
+        "item" : "202037",
+        "count" : "35921"
+      }, {
+        "item" : "202231",
+        "count" : "32579"
+      }, {
+        "item" : "11202843",
+        "count" : "13739"
+      }, {
+        "item" : "202238",
+        "count" : "12773"
+      }, {
+        "item" : "9328325",
+        "count" : "12038"
+      }, {
+        "item" : "1502462",
+        "count" : "9435"
+      }, {
+        "item" : "204588",
+        "count" : "8978"
+      }, {
+        "item" : "16115130",
+        "count" : "7979"
+      }, {
+        "item" : "6011797",
+        "count" : "7145"
+      }, {
+        "item" : "100000082",
+        "count" : "6994"
+      }, {
+        "item" : "202184",
+        "count" : "6910"
+      }, {
+        "item" : "202266",
+        "count" : "4929"
+      }, {
+        "item" : "202259",
+        "count" : "4631"
+      }, {
+        "item" : "28279948",
+        "count" : "4588"
+      }, {
+        "item" : "4727047",
+        "count" : "4037"
+      } ],
+      "smallest" : "100000075",
+      "count" : "2032596",
+      "cardinality" : "2032596"
+    },
+    "format" : { }
+  }, {
+    "id" : 24783772,
+    "name" : "nom_departament_ens",
+    "dataTypeName" : "text",
+    "description" : "Descripció de  les entitats de l’Administració i del sector públic de Catalunya",
+    "fieldName" : "nom_departament_ens",
+    "position" : 4,
+    "renderTypeName" : "text",
+    "tableColumnId" : 14845614,
+    "cachedContents" : {
+      "non_null" : "900859",
+      "largest" : "Universitat Politècnica de Catalunya",
+      "null" : "1131737",
+      "top" : [ {
+        "item" : "Departament de Salut",
+        "count" : "355796"
+      }, {
+        "item" : "Departament de Recerca i Universitats",
+        "count" : "108337"
+      }, {
+        "item" : "Ajuntament de Barcelona",
+        "count" : "102840"
+      }, {
+        "item" : "Departament d'Agricultura, Ramaderia, Pesca i Alimentació",
+        "count" : "66851"
+      }, {
+        "item" : "Departament de Territori, Habitatge i Transició Ecològica",
+        "count" : "51123"
+      }, {
+        "item" : "Departament de la Presidència",
+        "count" : "35921"
+      }, {
+        "item" : "Departament de Cultura",
+        "count" : "32579"
+      }, {
+        "item" : "Diputació de Barcelona",
+        "count" : "13739"
+      }, {
+        "item" : "Departament d'Empresa i Treball",
+        "count" : "12773"
+      }, {
+        "item" : "Ajuntament de Figueres",
+        "count" : "12038"
+      }, {
+        "item" : "Ajuntament de Reus",
+        "count" : "9435"
+      }, {
+        "item" : "ICS - Gerència de compres",
+        "count" : "8978"
+      }, {
+        "item" : "Departament d'Unió Europea i Acció Exterior",
+        "count" : "7979"
+      }, {
+        "item" : "Ajuntament de Gavà",
+        "count" : "7145"
+      }, {
+        "item" : "Departament d'Esports",
+        "count" : "6994"
+      }, {
+        "item" : "Departament d'Educació i Formació Professional",
+        "count" : "6910"
+      }, {
+        "item" : "Departament de Justícia i Qualitat Democràtica",
+        "count" : "4929"
+      }, {
+        "item" : "Departament de Drets Socials i Inclusió",
+        "count" : "4631"
+      }, {
+        "item" : "Ajuntament de Sabadell",
+        "count" : "4588"
+      }, {
+        "item" : "Ajuntament del Prat de Llobregat",
+        "count" : "4037"
+      } ],
+      "smallest" : "Ajuntament d'Amposta",
+      "count" : "2032596",
+      "cardinality" : "2032596"
+    },
+    "format" : { }
+  }, {
+    "id" : 24783773,
+    "name" : "codi_organ",
+    "dataTypeName" : "text",
+    "description" : "Identificador de l'organisme contractant",
+    "fieldName" : "codi_organ",
+    "position" : 5,
+    "renderTypeName" : "text",
+    "tableColumnId" : 14845615,
+    "cachedContents" : {
+      "non_null" : "2032596",
+      "largest" : "99322431",
+      "null" : "0",
+      "top" : [ {
+        "item" : "204588",
+        "count" : "151795"
+      }, {
+        "item" : "11649693",
+        "count" : "92543"
+      }, {
+        "item" : "11061850",
+        "count" : "81750"
+      }, {
+        "item" : "865462",
+        "count" : "68256"
+      }, {
+        "item" : "2986305",
+        "count" : "63719"
+      }, {
+        "item" : "11202843",
+        "count" : "62434"
+      }, {
+        "item" : "623951",
+        "count" : "59738"
+      }, {
+        "item" : "4661470",
+        "count" : "56221"
+      }, {
+        "item" : "205664",
+        "count" : "50083"
+      }, {
+        "item" : "15291046",
+        "count" : "37195"
+      }, {
+        "item" : "2750722",
+        "count" : "35047"
+      }, {
+        "item" : "202184",
+        "count" : "25881"
+      }, {
+        "item" : "203758",
+        "count" : "25583"
+      }, {
+        "item" : "15937468",
+        "count" : "21758"
+      }, {
+        "item" : "2268810",
+        "count" : "21459"
+      }, {
+        "item" : "6870437",
+        "count" : "21438"
+      }, {
+        "item" : "5494659",
+        "count" : "19904"
+      }, {
+        "item" : "50256008",
+        "count" : "19297"
+      }, {
+        "item" : "7704990",
+        "count" : "17030"
+      }, {
+        "item" : "203649",
+        "count" : "14808"
+      } ],
+      "smallest" : "100000005",
+      "count" : "2032596",
+      "cardinality" : "2032596"
+    },
+    "format" : {
+      "decimalSeparator" : ".",
+      "groupSeparator" : ","
+    }
+  }, {
+    "id" : 24783774,
+    "name" : "nom_organ",
+    "dataTypeName" : "text",
+    "description" : "Descripció de l'organisme contractant",
+    "fieldName" : "nom_organ",
+    "position" : 6,
+    "renderTypeName" : "text",
+    "tableColumnId" : 14845616,
+    "cachedContents" : {
+      "non_null" : "2032596",
+      "largest" : "Xarxa Local de Municipis Gironins (XALOC)",
+      "null" : "0",
+      "top" : [ {
+        "item" : "Institut Català de la Salut (ICS)",
+        "count" : "141906"
+      }, {
+        "item" : "Universitat Pompeu Fabra",
+        "count" : "92543"
+      }, {
+        "item" : "Universitat Autònoma de Barcelona",
+        "count" : "81750"
+      }, {
+        "item" : "Universitat Rovira i Virgili",
+        "count" : "68256"
+      }, {
+        "item" : "Fundació de Recerca Clínic Barcelona - Institut d'Investigacions Biomèdiques August Pi i Sunyer",
+        "count" : "63719"
+      }, {
+        "item" : "Diputació de Barcelona",
+        "count" : "62434"
+      }, {
+        "item" : "Universitat de Girona",
+        "count" : "59738"
+      }, {
+        "item" : "Universitat de Barcelona",
+        "count" : "56221"
+      }, {
+        "item" : "Institut de Recerca i Tecnologia Agroalimentàries (IRTA)",
+        "count" : "50083"
+      }, {
+        "item" : "Universitat Politècnica de Catalunya",
+        "count" : "37195"
+      }, {
+        "item" : "Fundació Institut de Recerca Biomèdica (IRB Barcelona)",
+        "count" : "35047"
+      }, {
+        "item" : "Departament d'Educació i Formació Professional",
+        "count" : "25881"
+      }, {
+        "item" : "Corporació Catalana de Mitjans Audiovisuals, SA (CCMA, SA)",
+        "count" : "25583"
+      }, {
+        "item" : "Ajuntament de Barcelona",
+        "count" : "21758"
+      }, {
+        "item" : "Fundació Centre de Regulació Genòmica",
+        "count" : "21459"
+      }, {
+        "item" : "Fundació Institut de Bioenginyeria de Catalunya",
+        "count" : "21438"
+      }, {
+        "item" : "Fundació Institut de Recerca contra la Leucèmia Josep Carreras",
+        "count" : "19904"
+      }, {
+        "item" : "Fundació Politècnica de Catalunya",
+        "count" : "19297"
+      }, {
+        "item" : "Fundació Hospital Universitari Vall d'Hebron - Institut de Recerca",
+        "count" : "17030"
+      }, {
+        "item" : "Ferrocarrils de la Generalitat de Catalunya",
+        "count" : "14808"
+      } ],
+      "smallest" : "Actius de Muntanya, SA",
+      "count" : "2032596",
+      "cardinality" : "2032596"
+    },
+    "format" : { }
+  }, {
+    "id" : 24783775,
+    "name" : "codi_unitat",
+    "dataTypeName" : "text",
+    "description" : "Identificador de la unitat de contractació",
+    "fieldName" : "codi_unitat",
+    "position" : 7,
+    "renderTypeName" : "text",
+    "tableColumnId" : 14845617,
+    "cachedContents" : {
+      "non_null" : "430513",
+      "largest" : "98819747",
+      "null" : "1602083",
+      "top" : [ {
+        "item" : "7861343",
+        "count" : "66545"
+      }, {
+        "item" : "100000014",
+        "count" : "59453"
+      }, {
+        "item" : "11373975",
+        "count" : "46966"
+      }, {
+        "item" : "100000011",
+        "count" : "20133"
+      }, {
+        "item" : "100000008",
+        "count" : "19997"
+      }, {
+        "item" : "16030540",
+        "count" : "18410"
+      }, {
+        "item" : "15911613",
+        "count" : "13109"
+      }, {
+        "item" : "43835517",
+        "count" : "12902"
+      }, {
+        "item" : "59968224",
+        "count" : "10215"
+      }, {
+        "item" : "106148029",
+        "count" : "8383"
+      }, {
+        "item" : "1804845",
+        "count" : "8230"
+      }, {
+        "item" : "100000012",
+        "count" : "7160"
+      }, {
+        "item" : "100000010",
+        "count" : "6357"
+      }, {
+        "item" : "23311099",
+        "count" : "6085"
+      }, {
+        "item" : "27181034",
+        "count" : "5318"
+      }, {
+        "item" : "58795412",
+        "count" : "5140"
+      }, {
+        "item" : "44005684",
+        "count" : "4992"
+      }, {
+        "item" : "1804925",
+        "count" : "4422"
+      }, {
+        "item" : "3020465",
+        "count" : "3848"
+      }, {
+        "item" : "100000050",
+        "count" : "3845"
+      } ],
+      "smallest" : "1",
+      "count" : "2032596",
+      "cardinality" : "2032596"
+    },
+    "format" : { }
+  }, {
+    "id" : 24783776,
+    "name" : "nom_unitat",
+    "dataTypeName" : "text",
+    "description" : "Descripció de la unitat de contractació",
+    "fieldName" : "nom_unitat",
+    "position" : 8,
+    "renderTypeName" : "text",
+    "tableColumnId" : 14845618,
+    "cachedContents" : {
+      "non_null" : "430513",
+      "largest" : "Urbanisme - Planejament i llicències",
+      "null" : "1602083",
+      "top" : [ {
+        "item" : "Oficina de Contractació",
+        "count" : "66545"
+      }, {
+        "item" : "Compres i Patrimoni",
+        "count" : "59453"
+      }, {
+        "item" : "Diputació de Barcelona: Secció de Licitació",
+        "count" : "46966"
+      }, {
+        "item" : "Hospital Universitari Germans Trias i Pujol",
+        "count" : "20133"
+      }, {
+        "item" : "Hospital Universitari Vall d'Hebron",
+        "count" : "19997"
+      }, {
+        "item" : "Gerència de Serveis Generals",
+        "count" : "18410"
+      }, {
+        "item" : "Secció de Compres",
+        "count" : "13109"
+      }, {
+        "item" : "Contractació i compres",
+        "count" : "12902"
+      }, {
+        "item" : "Direcció d’Atenció Primària de la Metropolitana Sud",
+        "count" : "10215"
+      }, {
+        "item" : "Centre de Cultura Contemporània de Barcelona CCCB",
+        "count" : "8383"
+      }, {
+        "item" : "Serveis Centrals del Departament d'Educació",
+        "count" : "8230"
+      }, {
+        "item" : "Direcció d’Atenció Primària de la Metropolitana Nord",
+        "count" : "7160"
+      }, {
+        "item" : "Hospital Universitari de Bellvitge",
+        "count" : "6357"
+      }, {
+        "item" : "Infraestructures.cat",
+        "count" : "6085"
+      }, {
+        "item" : "Contractació",
+        "count" : "5909"
+      }, {
+        "item" : "Serveis Centrals",
+        "count" : "5318"
+      }, {
+        "item" : "Hospital Universitari Arnau de Vilanova de Lleida",
+        "count" : "5140"
+      }, {
+        "item" : "AJUNTAMENT DE CALAFELL",
+        "count" : "4992"
+      }, {
+        "item" : "Serveis Territorials del Departament d'Educació a Girona",
+        "count" : "4422"
+      }, {
+        "item" : "Compres i contractació",
+        "count" : "3848"
+      } ],
+      "smallest" : "--",
+      "count" : "2032596",
+      "cardinality" : "2032596"
+    },
+    "format" : { }
+  }, {
+    "id" : 24783777,
+    "name" : "codi_ine10",
+    "dataTypeName" : "text",
+    "description" : "Codi INE10",
+    "fieldName" : "codi_ine10",
+    "position" : 9,
+    "renderTypeName" : "text",
+    "tableColumnId" : 14845619,
+    "cachedContents" : {
+      "non_null" : "1225150",
+      "largest" : "9915975000",
+      "null" : "807446",
+      "top" : [ {
+        "item" : "0000000013",
+        "count" : "92543"
+      }, {
+        "item" : "0000000011",
+        "count" : "81750"
+      }, {
+        "item" : "0000000016",
+        "count" : "68256"
+      }, {
+        "item" : "8000840003",
+        "count" : "62442"
+      }, {
+        "item" : "0000000015",
+        "count" : "59738"
+      }, {
+        "item" : "0000000022",
+        "count" : "56221"
+      }, {
+        "item" : "0000000012",
+        "count" : "37195"
+      }, {
+        "item" : "0801930008",
+        "count" : "21758"
+      }, {
+        "item" : "9656610007",
+        "count" : "19297"
+      }, {
+        "item" : "4314820002",
+        "count" : "14273"
+      }, {
+        "item" : "0801934032",
+        "count" : "14253"
+      }, {
+        "item" : "1707920002",
+        "count" : "14197"
+      }, {
+        "item" : "9914065004",
+        "count" : "12038"
+      }, {
+        "item" : "0811365011",
+        "count" : "10269"
+      }, {
+        "item" : "0801090004",
+        "count" : "9218"
+      }, {
+        "item" : "7973100049",
+        "count" : "8595"
+      }, {
+        "item" : "9802080001",
+        "count" : "8510"
+      }, {
+        "item" : "0811200000",
+        "count" : "8438"
+      }, {
+        "item" : "0809610007",
+        "count" : "8087"
+      }, {
+        "item" : "0824570005",
+        "count" : "7983"
+      } ],
+      "smallest" : "0000000011",
+      "count" : "2032596",
+      "cardinality" : "2032596"
+    },
+    "format" : { }
+  }, {
+    "id" : 24783778,
+    "name" : "codi_dir3",
+    "dataTypeName" : "text",
+    "description" : "Identificador del directori d'unitats orgàniques i oficines de registres de les administracions públiques",
+    "fieldName" : "codi_dir3",
+    "position" : 10,
+    "renderTypeName" : "text",
+    "tableColumnId" : 14845620,
+    "cachedContents" : {
+      "non_null" : "1996661",
+      "largest" : "U04400001",
+      "null" : "35935",
+      "top" : [ {
+        "item" : "A09006169",
+        "count" : "151795"
+      }, {
+        "item" : "A09002970",
+        "count" : "100534"
+      }, {
+        "item" : "U03900001",
+        "count" : "92543"
+      }, {
+        "item" : "U02200001",
+        "count" : "81750"
+      }, {
+        "item" : "U04200001",
+        "count" : "68256"
+      }, {
+        "item" : "L02000008",
+        "count" : "62434"
+      }, {
+        "item" : "U04300001",
+        "count" : "59738"
+      }, {
+        "item" : "U00400001",
+        "count" : "57654"
+      }, {
+        "item" : "A09006170",
+        "count" : "50083"
+      }, {
+        "item" : "0100",
+        "count" : "46425"
+      }, {
+        "item" : "U02400001",
+        "count" : "37195"
+      }, {
+        "item" : "G63971451",
+        "count" : "35047"
+      }, {
+        "item" : "L01080193",
+        "count" : "27471"
+      }, {
+        "item" : "A99999999",
+        "count" : "27284"
+      }, {
+        "item" : "A09002976",
+        "count" : "25881"
+      }, {
+        "item" : "A09018832",
+        "count" : "25583"
+      }, {
+        "item" : "A09006510",
+        "count" : "21459"
+      }, {
+        "item" : "A09019059",
+        "count" : "21438"
+      }, {
+        "item" : "A99999981",
+        "count" : "19297"
+      }, {
+        "item" : "A09006467",
+        "count" : "17030"
+      } ],
+      "smallest" : "00000",
+      "count" : "2032596",
+      "cardinality" : "2032596"
+    },
+    "format" : { }
+  }, {
+    "id" : 24783779,
+    "name" : "codi_expedient",
+    "dataTypeName" : "text",
+    "description" : "Codi de l'expedient de contractació",
+    "fieldName" : "codi_expedient",
+    "position" : 11,
+    "renderTypeName" : "text",
+    "tableColumnId" : 14845621,
+    "cachedContents" : {
+      "non_null" : "2032018",
+      "largest" : "·         X2019001247_2023",
+      "null" : "578",
+      "top" : [ {
+        "item" : "Exp. CSUC SDA",
+        "count" : "6237"
+      }, {
+        "item" : "16/2022-SU-AM-PORH",
+        "count" : "3095"
+      }, {
+        "item" : "FACTURA",
+        "count" : "1905"
+      }, {
+        "item" : "2023/0000334",
+        "count" : "1407"
+      }, {
+        "item" : "EXP. 23/02",
+        "count" : "1326"
+      }, {
+        "item" : "Exp. CCS 2022/3",
+        "count" : "1136"
+      }, {
+        "item" : "Factura",
+        "count" : "841"
+      }, {
+        "item" : "23/02",
+        "count" : "811"
+      }, {
+        "item" : "E23/02",
+        "count" : "746"
+      }, {
+        "item" : "2024/0002301",
+        "count" : "643"
+      }, {
+        "item" : "2023/0000709",
+        "count" : "595"
+      }, {
+        "item" : "SDA 23/02",
+        "count" : "590"
+      }, {
+        "item" : "2024/0000069",
+        "count" : "581"
+      }, {
+        "item" : "2023/0001938",
+        "count" : "450"
+      }, {
+        "item" : "2023/0001348",
+        "count" : "444"
+      }, {
+        "item" : "2023/0001939",
+        "count" : "441"
+      }, {
+        "item" : "SDA Exp 23/02",
+        "count" : "406"
+      }, {
+        "item" : "SE 15/19",
+        "count" : "348"
+      }, {
+        "item" : "2024/0002945",
+        "count" : "344"
+      }, {
+        "item" : "09/2022-SE-AM-PORH",
+        "count" : "337"
+      } ],
+      "smallest" : "-",
+      "count" : "2032596",
+      "cardinality" : "2032596"
+    },
+    "format" : { }
+  }, {
+    "id" : 24783780,
+    "name" : "tipus_contracte",
+    "dataTypeName" : "text",
+    "description" : "Tipus de contracte (obres, serveis, subministraments,....)",
+    "fieldName" : "tipus_contracte",
+    "position" : 12,
+    "renderTypeName" : "text",
+    "tableColumnId" : 14845622,
+    "cachedContents" : {
+      "non_null" : "2026347",
+      "largest" : "Subministraments",
+      "null" : "6249",
+      "top" : [ {
+        "item" : "Serveis",
+        "count" : "968902"
+      }, {
+        "item" : "Subministraments",
+        "count" : "967334"
+      }, {
+        "item" : "Obres",
+        "count" : "78472"
+      }, {
+        "item" : "Administratiu especial",
+        "count" : "3841"
+      }, {
+        "item" : "Concessió de serveis",
+        "count" : "3361"
+      }, {
+        "item" : "Altra legislació sectorial",
+        "count" : "1932"
+      }, {
+        "item" : "Contracte de serveis especials (annex IV)",
+        "count" : "1377"
+      }, {
+        "item" : "Privat d'Administració Pública",
+        "count" : "940"
+      }, {
+        "item" : "Concessió d'obres",
+        "count" : "114"
+      }, {
+        "item" : "Concessió de serveis especials (annex IV)",
+        "count" : "73"
+      }, {
+        "item" : "Col·laboració Públic-Privat",
+        "count" : "1"
+      } ],
+      "smallest" : "Administratiu especial",
+      "count" : "2032596",
+      "cardinality" : "2032596"
+    },
+    "format" : { }
+  }, {
+    "id" : 24783781,
+    "name" : "procediment",
+    "dataTypeName" : "text",
+    "description" : "Procediment d’adjudicació",
+    "fieldName" : "procediment",
+    "position" : 13,
+    "renderTypeName" : "text",
+    "tableColumnId" : 14845623,
+    "cachedContents" : {
+      "non_null" : "1570506",
+      "largest" : "Tramitacio amb mesures de gestió eficient",
+      "null" : "462090",
+      "top" : [ {
+        "item" : "Contracte menor",
+        "count" : "1383556"
+      }, {
+        "item" : "Obert",
+        "count" : "92668"
+      }, {
+        "item" : "Obert simplificat",
+        "count" : "41030"
+      }, {
+        "item" : "Obert simplificat abreujat",
+        "count" : "28742"
+      }, {
+        "item" : "Negociat sense publicitat",
+        "count" : "19471"
+      }, {
+        "item" : "Restringit",
+        "count" : "1877"
+      }, {
+        "item" : "Altres procediments segons instruccions internes",
+        "count" : "1053"
+      }, {
+        "item" : "Adjudicacions directes no menors",
+        "count" : "565"
+      }, {
+        "item" : "Concurs de projectes",
+        "count" : "510"
+      }, {
+        "item" : "Tramitacio amb mesures de gestió eficient",
+        "count" : "502"
+      }, {
+        "item" : "Licitació amb negociació",
+        "count" : "404"
+      }, {
+        "item" : "Negociat amb publicitat",
+        "count" : "122"
+      }, {
+        "item" : "Diàleg competitiu",
+        "count" : "4"
+      }, {
+        "item" : "Específic de Sistema Dinàmic d'adquisició",
+        "count" : "1"
+      }, {
+        "item" : "Associació per a la innovació",
+        "count" : "1"
+      } ],
+      "smallest" : "Adjudicacions directes no menors",
+      "count" : "2032596",
+      "cardinality" : "2032596"
+    },
+    "format" : { }
+  }, {
+    "id" : 24783782,
+    "name" : "fase_publicacio",
+    "dataTypeName" : "text",
+    "description" : "Última fase publicada (de l’expedient) ",
+    "fieldName" : "fase_publicacio",
+    "position" : 14,
+    "renderTypeName" : "text",
+    "tableColumnId" : 14845624,
+    "cachedContents" : {
+      "non_null" : "2032596",
+      "largest" : "Publicació agregada de contractes",
+      "null" : "0",
+      "top" : [ {
+        "item" : "Publicació agregada de contractes",
+        "count" : "1789186"
+      }, {
+        "item" : "Formalització",
+        "count" : "101044"
+      }, {
+        "item" : "Adjudicació",
+        "count" : "58753"
+      }, {
+        "item" : "Execució",
+        "count" : "39413"
+      }, {
+        "item" : "Anul·lació",
+        "count" : "24740"
+      }, {
+        "item" : "Anunci de licitació",
+        "count" : "12534"
+      }, {
+        "item" : "Expedient en avaluació",
+        "count" : "5226"
+      }, {
+        "item" : "Anunci previ",
+        "count" : "649"
+      }, {
+        "item" : "Alerta futura",
+        "count" : "590"
+      }, {
+        "item" : "Consulta preliminar del mercat",
+        "count" : "461"
+      } ],
+      "smallest" : "Adjudicació",
+      "count" : "2032596",
+      "cardinality" : "2032596"
+    },
+    "format" : { }
+  }, {
+    "id" : 24783783,
+    "name" : "denominacio",
+    "dataTypeName" : "text",
+    "description" : "Denominació del contracte",
+    "fieldName" : "denominacio",
+    "position" : 15,
+    "renderTypeName" : "text",
+    "tableColumnId" : 14845625,
+    "cachedContents" : {
+      "non_null" : "2031738",
+      "largest" : " VILAMAGORE 2026: Contractació actuació del grup Graiatus pel Vilamagore Medieval 2026",
+      "null" : "858",
+      "top" : [ {
+        "item" : "Compra de material fungible de laboratori",
+        "count" : "21190"
+      }, {
+        "item" : "23/02: Sistema Dinàmic d'Adquisició pel subministrament de material de laboratori",
+        "count" : "15504"
+      }, {
+        "item" : "Subministrament material mèdic fungible",
+        "count" : "14837"
+      }, {
+        "item" : "Contractació específic SDA Subministrament de productes químics, reactius i productes i accessoris de biologia, geologia, medicina, química i medi ambient, lot 1",
+        "count" : "9348"
+      }, {
+        "item" : "Espectacle - PROGRAMA.CAT",
+        "count" : "9316"
+      }, {
+        "item" : "Productes químics",
+        "count" : "6741"
+      }, {
+        "item" : "Material general de laboratori",
+        "count" : "5850"
+      }, {
+        "item" : "Contractació basada acord marc SDA Subministrament de productes químics, reactius i productes i accessoris de biologia, geologia, medicina, química i medi ambient, lot 1",
+        "count" : "5834"
+      }, {
+        "item" : "Subministrament de productes químics, reactius i productes i accessoris de biologia, geologia, medicina, química i medi ambient.",
+        "count" : "3814"
+      }, {
+        "item" : "Contractació específic SDA Subministrament general de laboratori, lot 2",
+        "count" : "3349"
+      }, {
+        "item" : "MATERIAL LABORATORI",
+        "count" : "2984"
+      }, {
+        "item" : "Reunions, conferències i cursos-Assistència integral al govern local. Adm. general",
+        "count" : "2967"
+      }, {
+        "item" : "Manteniment d'edificis i altres construccions-Projectes, obres i manteniment de recintes",
+        "count" : "2872"
+      }, {
+        "item" : "Subministrament kits per diagnòstic",
+        "count" : "2822"
+      }, {
+        "item" : "Serveis d'agències de viatges i serveis similars",
+        "count" : "2747"
+      }, {
+        "item" : "Adquisició de novetats editorials en català o occità destinades a les biblioteques públiques.",
+        "count" : "2557"
+      }, {
+        "item" : "REACTIUS",
+        "count" : "2406"
+      }, {
+        "item" : "Materials de Laboratori Científic (Varis:Óptica/Fotònica)",
+        "count" : "2380"
+      }, {
+        "item" : "Contractació basada acord marc SDA Subministrament general de laboratori, lot 2",
+        "count" : "2323"
+      }, {
+        "item" : "Contractació basada acord marc per a la prestació del servei de gestió asistencia en viatges.",
+        "count" : "2135"
+      } ],
+      "smallest" : ".",
+      "count" : "2032596",
+      "cardinality" : "2032596"
+    },
+    "format" : { }
+  }, {
+    "id" : 24783784,
+    "name" : "objecte_contracte",
+    "dataTypeName" : "text",
+    "description" : "Descripció del contracte",
+    "fieldName" : "objecte_contracte",
+    "position" : 16,
+    "renderTypeName" : "text",
+    "tableColumnId" : 14845626,
+    "cachedContents" : {
+      "non_null" : "2031538",
+      "largest" : " VILAMAGORE 2026: Contractació actuació del grup Graiatus pel Vilamagore Medieval 2026",
+      "null" : "1058",
+      "top" : [ {
+        "item" : "Compra de material fungible de laboratori",
+        "count" : "21190"
+      }, {
+        "item" : "23/02: Sistema Dinàmic d'Adquisició pel subministrament de material de laboratori",
+        "count" : "15498"
+      }, {
+        "item" : "Subministrament material mèdic fungible",
+        "count" : "14837"
+      }, {
+        "item" : "Contractació específic SDA Subministrament de productes químics, reactius i productes i accessoris de biologia, geologia, medicina, química i medi ambient, lot 1",
+        "count" : "9348"
+      }, {
+        "item" : "Espectacle - PROGRAMA.CAT",
+        "count" : "9316"
+      }, {
+        "item" : "Productes químics",
+        "count" : "6741"
+      }, {
+        "item" : "Material general de laboratori",
+        "count" : "5850"
+      }, {
+        "item" : "Contractació basada acord marc SDA Subministrament de productes químics, reactius i productes i accessoris de biologia, geologia, medicina, química i medi ambient, lot 1",
+        "count" : "5834"
+      }, {
+        "item" : "Subministrament de productes químics, reactius i productes i accessoris de biologia, geologia, medicina, química i medi ambient.",
+        "count" : "3814"
+      }, {
+        "item" : "Contractació específic SDA Subministrament general de laboratori, lot 2",
+        "count" : "3349"
+      }, {
+        "item" : "MATERIAL LABORATORI",
+        "count" : "2984"
+      }, {
+        "item" : "Reunions, conferències i cursos-Assistència integral al govern local. Adm. general",
+        "count" : "2967"
+      }, {
+        "item" : "Manteniment d'edificis i altres construccions-Projectes, obres i manteniment de recintes",
+        "count" : "2872"
+      }, {
+        "item" : "Subministrament kits per diagnòstic",
+        "count" : "2822"
+      }, {
+        "item" : "Serveis d'agències de viatges i serveis similars",
+        "count" : "2747"
+      }, {
+        "item" : "Adquisició de novetats editorials en català o occità destinades a les biblioteques públiques.",
+        "count" : "2557"
+      }, {
+        "item" : "REACTIUS",
+        "count" : "2406"
+      }, {
+        "item" : "Materials de Laboratori Científic (Varis:Óptica/Fotònica)",
+        "count" : "2380"
+      }, {
+        "item" : "Contractació basada acord marc SDA Subministrament general de laboratori, lot 2",
+        "count" : "2323"
+      }, {
+        "item" : "Contractació basada acord marc per a la prestació del servei de gestió asistencia en viatges.",
+        "count" : "2135"
+      } ],
+      "smallest" : "-",
+      "count" : "2032596",
+      "cardinality" : "2032596"
+    },
+    "format" : { }
+  }, {
+    "id" : 24783785,
+    "name" : "valor_estimat_contracte",
+    "dataTypeName" : "number",
+    "description" : "Valor estimat del lot (sense IVA)",
+    "fieldName" : "valor_estimat_contracte",
+    "position" : 17,
+    "renderTypeName" : "number",
+    "tableColumnId" : 14845628,
+    "cachedContents" : {
+      "non_null" : "1381508",
+      "largest" : "2289035109.75",
+      "null" : "651088",
+      "top" : [ {
+        "item" : "1200000000",
+        "count" : "9258"
+      }, {
+        "item" : "0.00",
+        "count" : "6176"
+      }, {
+        "item" : "300",
+        "count" : "5153"
+      }, {
+        "item" : "500",
+        "count" : "4241"
+      }, {
+        "item" : "200.00",
+        "count" : "3879"
+      }, {
+        "item" : "1000",
+        "count" : "3824"
+      }, {
+        "item" : "600",
+        "count" : "3549"
+      }, {
+        "item" : "2862000",
+        "count" : "3451"
+      }, {
+        "item" : "1500",
+        "count" : "3393"
+      }, {
+        "item" : "150",
+        "count" : "3322"
+      }, {
+        "item" : "400",
+        "count" : "3321"
+      }, {
+        "item" : "3000.00",
+        "count" : "3316"
+      }, {
+        "item" : "250",
+        "count" : "3301"
+      }, {
+        "item" : "2000",
+        "count" : "3273"
+      }, {
+        "item" : "7899600",
+        "count" : "3083"
+      }, {
+        "item" : "1200",
+        "count" : "3024"
+      }, {
+        "item" : "1210000000",
+        "count" : "2786"
+      }, {
+        "item" : "450",
+        "count" : "2481"
+      }, {
+        "item" : "100.00",
+        "count" : "2472"
+      }, {
+        "item" : "350",
+        "count" : "2379"
+      } ],
+      "smallest" : "-1421.38",
+      "count" : "2032596",
+      "cardinality" : "2032596"
+    },
+    "format" : {
+      "decimalSeparator" : ".",
+      "noCommas" : "true",
+      "precision" : "2",
+      "groupSeparator" : ","
+    }
+  }, {
+    "id" : 24783786,
+    "name" : "codi_nuts",
+    "dataTypeName" : "text",
+    "description" : "Nomenclatura de les unitats territorials estadístiques",
+    "fieldName" : "codi_nuts",
+    "position" : 18,
+    "renderTypeName" : "text",
+    "tableColumnId" : 14845629,
+    "cachedContents" : {
+      "non_null" : "1170063",
+      "largest" : "UY",
+      "null" : "862533",
+      "top" : [ {
+        "item" : "ES511",
+        "count" : "726385"
+      }, {
+        "item" : "ES514",
+        "count" : "188458"
+      }, {
+        "item" : "ES512",
+        "count" : "115203"
+      }, {
+        "item" : "ES513",
+        "count" : "56022"
+      }, {
+        "item" : "OT",
+        "count" : "34940"
+      }, {
+        "item" : "ES51",
+        "count" : "34747"
+      }, {
+        "item" : "99",
+        "count" : "6470"
+      }, {
+        "item" : "ES300",
+        "count" : "1729"
+      }, {
+        "item" : "ES",
+        "count" : "929"
+      }, {
+        "item" : "ES511||ES513",
+        "count" : "560"
+      }, {
+        "item" : "ES425",
+        "count" : "434"
+      }, {
+        "item" : "ES511||ES512",
+        "count" : "341"
+      }, {
+        "item" : "ES614",
+        "count" : "309"
+      }, {
+        "item" : "ES523",
+        "count" : "297"
+      }, {
+        "item" : "ES242",
+        "count" : "130"
+      }, {
+        "item" : "ES612",
+        "count" : "120"
+      }, {
+        "item" : "ES213",
+        "count" : "118"
+      }, {
+        "item" : "ES522",
+        "count" : "110"
+      }, {
+        "item" : "ES220",
+        "count" : "107"
+      }, {
+        "item" : "ES618",
+        "count" : "105"
+      } ],
+      "smallest" : "99",
+      "count" : "2032596",
+      "cardinality" : "2032596"
+    },
+    "format" : { }
+  }, {
+    "id" : 24783787,
+    "name" : "lloc_execucio",
+    "dataTypeName" : "text",
+    "description" : "Lloc d'execució del contracte ",
+    "fieldName" : "lloc_execucio",
+    "position" : 19,
+    "renderTypeName" : "text",
+    "tableColumnId" : 14845630,
+    "cachedContents" : {
+      "non_null" : "1325870",
+      "largest" : "Zaragoza",
+      "null" : "706726",
+      "top" : [ {
+        "item" : "Barcelona",
+        "count" : "682488"
+      }, {
+        "item" : "Tarragona",
+        "count" : "176944"
+      }, {
+        "item" : "08 - Barcelona",
+        "count" : "105024"
+      }, {
+        "item" : "Girona",
+        "count" : "104182"
+      }, {
+        "item" : "Lleida",
+        "count" : "49135"
+      }, {
+        "item" : "Altres/Diversos",
+        "count" : "34940"
+      }, {
+        "item" : "Catalunya",
+        "count" : "34774"
+      }, {
+        "item" : "17 - Girona",
+        "count" : "13206"
+      }, {
+        "item" : "8 - Barcelona",
+        "count" : "10307"
+      }, {
+        "item" : "43 - Tarragona",
+        "count" : "9388"
+      }, {
+        "item" : "Província estrangera",
+        "count" : "6475"
+      }, {
+        "item" : "TARRAGONA",
+        "count" : "3958"
+      }, {
+        "item" : "Sabadell",
+        "count" : "3426"
+      }, {
+        "item" : "Sant Adrià de Besòs",
+        "count" : "2154"
+      }, {
+        "item" : "Sant Feliu de Llobregat",
+        "count" : "2028"
+      }, {
+        "item" : "98 - Diverses províncies",
+        "count" : "1922"
+      }, {
+        "item" : "Hospitalet de Llobregat, l'",
+        "count" : "1873"
+      }, {
+        "item" : "Terrassa",
+        "count" : "1791"
+      }, {
+        "item" : "Madrid",
+        "count" : "1728"
+      }, {
+        "item" : "Reus",
+        "count" : "1417"
+      } ],
+      "smallest" : "0",
+      "count" : "2032596",
+      "cardinality" : "2032596"
+    },
+    "format" : { }
+  }, {
+    "id" : 24783788,
+    "name" : "durada_contracte",
+    "dataTypeName" : "text",
+    "description" : "Durada del contracte en anys, mesos i dies o en un interval de dates",
+    "fieldName" : "durada_contracte",
+    "position" : 20,
+    "renderTypeName" : "text",
+    "tableColumnId" : 14845631,
+    "cachedContents" : {
+      "non_null" : "1962376",
+      "largest" : "9 mesos 9 dies",
+      "null" : "70220",
+      "top" : [ {
+        "item" : "1 any",
+        "count" : "9035"
+      }, {
+        "item" : "2 anys",
+        "count" : "8431"
+      }, {
+        "item" : "01/01/2025 a 31/12/2025",
+        "count" : "7353"
+      }, {
+        "item" : "01/01/2026 a 31/12/2026",
+        "count" : "7224"
+      }, {
+        "item" : "01/01/2024 a 31/12/2024",
+        "count" : "7069"
+      }, {
+        "item" : "01/01/2023 a 31/12/2023",
+        "count" : "5258"
+      }, {
+        "item" : "01/04/2023 a 30/06/2023",
+        "count" : "5210"
+      }, {
+        "item" : "01/10/2023 a 31/12/2023",
+        "count" : "4684"
+      }, {
+        "item" : "31/12/2024 a 31/12/2024",
+        "count" : "4171"
+      }, {
+        "item" : "31/12/2025 a 31/12/2025",
+        "count" : "3898"
+      }, {
+        "item" : "01/07/2024 a 30/09/2024",
+        "count" : "3792"
+      }, {
+        "item" : "16/03/2023 a 15/03/2033",
+        "count" : "3451"
+      }, {
+        "item" : "01/07/2023 a 30/09/2023",
+        "count" : "3435"
+      }, {
+        "item" : "01/02/2024 a 31/01/2025",
+        "count" : "2969"
+      }, {
+        "item" : "3 mesos",
+        "count" : "2831"
+      }, {
+        "item" : "2 mesos",
+        "count" : "2712"
+      }, {
+        "item" : "01/01/2024 a 31/03/2024",
+        "count" : "2436"
+      }, {
+        "item" : "31/03/2026 a 31/03/2026",
+        "count" : "2373"
+      }, {
+        "item" : "4 anys",
+        "count" : "2366"
+      }, {
+        "item" : "31/12/2023 a 31/12/2023",
+        "count" : "2195"
+      } ],
+      "smallest" : "01/01/1900 a 22/12/1901",
+      "count" : "2032596",
+      "cardinality" : "2032596"
+    },
+    "format" : { }
+  }, {
+    "id" : 24783789,
+    "name" : "termini_presentacio_ofertes",
+    "dataTypeName" : "calendar_date",
+    "description" : "Data fi de recepció d'ofertes\t",
+    "fieldName" : "termini_presentacio_ofertes",
+    "position" : 21,
+    "renderTypeName" : "calendar_date",
+    "tableColumnId" : 14845632,
+    "cachedContents" : {
+      "non_null" : "202078",
+      "largest" : "2041-01-24T23:59:00.000",
+      "null" : "1830518",
+      "top" : [ {
+        "item" : "2022-11-07T14:00:00.000",
+        "count" : "247"
+      }, {
+        "item" : "2023-10-24T23:59:00.000",
+        "count" : "198"
+      }, {
+        "item" : "2022-09-23T14:00:00.000",
+        "count" : "161"
+      }, {
+        "item" : "2022-08-02T23:59:00.000",
+        "count" : "160"
+      }, {
+        "item" : "2022-12-12T14:00:00.000",
+        "count" : "157"
+      }, {
+        "item" : "2026-05-26T14:00:00.000",
+        "count" : "153"
+      }, {
+        "item" : "2026-06-15T23:59:00.000",
+        "count" : "151"
+      }, {
+        "item" : "2026-04-20T15:00:00.000",
+        "count" : "146"
+      }, {
+        "item" : "2025-09-15T14:00:00.000",
+        "count" : "130"
+      }, {
+        "item" : "2020-10-19T14:00:00.000",
+        "count" : "130"
+      }, {
+        "item" : "2025-12-19T23:59:00.000",
+        "count" : "125"
+      }, {
+        "item" : "2023-05-22T14:00:00.000",
+        "count" : "122"
+      }, {
+        "item" : "2025-11-24T14:00:00.000",
+        "count" : "120"
+      }, {
+        "item" : "2024-09-16T14:00:00.000",
+        "count" : "118"
+      }, {
+        "item" : "2025-12-03T23:59:00.000",
+        "count" : "118"
+      }, {
+        "item" : "2024-12-18T14:00:00.000",
+        "count" : "116"
+      }, {
+        "item" : "2020-11-03T15:00:00.000",
+        "count" : "115"
+      }, {
+        "item" : "2025-11-03T14:00:00.000",
+        "count" : "114"
+      }, {
+        "item" : "2022-06-23T14:00:00.000",
+        "count" : "112"
+      }, {
+        "item" : "2024-09-23T14:00:00.000",
+        "count" : "112"
+      } ],
+      "smallest" : "2011-03-07T14:00:00.000",
+      "count" : "2032596",
+      "cardinality" : "2032596"
+    },
+    "format" : {
+      "view" : "date_dmy_time_24h"
+    }
+  }, {
+    "id" : 24783790,
+    "name" : "data_publicacio_futura",
+    "dataTypeName" : "calendar_date",
+    "description" : "Data de publicació de l'alerta futura ",
+    "fieldName" : "data_publicacio_futura",
+    "position" : 22,
+    "renderTypeName" : "calendar_date",
+    "tableColumnId" : 14845633,
+    "cachedContents" : {
+      "non_null" : "3060",
+      "largest" : "2026-10-23T09:22:00.000",
+      "null" : "2029536",
+      "top" : [ {
+        "item" : "2019-09-17T10:35:00.000",
+        "count" : "115"
+      }, {
+        "item" : "2022-05-13T12:00:00.000",
+        "count" : "75"
+      }, {
+        "item" : "2018-10-08T11:10:00.000",
+        "count" : "65"
+      }, {
+        "item" : "2022-01-20T10:50:00.000",
+        "count" : "60"
+      }, {
+        "item" : "2020-02-04T18:00:00.000",
+        "count" : "53"
+      }, {
+        "item" : "2023-05-04T09:00:00.000",
+        "count" : "35"
+      }, {
+        "item" : "2022-03-17T16:00:00.000",
+        "count" : "29"
+      }, {
+        "item" : "2021-07-05T13:30:00.000",
+        "count" : "29"
+      }, {
+        "item" : "2021-07-05T13:40:00.000",
+        "count" : "27"
+      }, {
+        "item" : "2022-01-20T10:40:00.000",
+        "count" : "26"
+      }, {
+        "item" : "2020-03-02T09:20:00.000",
+        "count" : "25"
+      }, {
+        "item" : "2021-05-17T18:00:00.000",
+        "count" : "20"
+      }, {
+        "item" : "2017-10-20T16:00:00.000",
+        "count" : "19"
+      }, {
+        "item" : "2022-01-20T10:30:00.000",
+        "count" : "16"
+      }, {
+        "item" : "2022-03-09T19:00:00.000",
+        "count" : "15"
+      }, {
+        "item" : "2019-01-15T15:00:00.000",
+        "count" : "14"
+      }, {
+        "item" : "2022-03-17T14:00:00.000",
+        "count" : "13"
+      }, {
+        "item" : "2021-07-05T13:35:00.000",
+        "count" : "12"
+      }, {
+        "item" : "2020-10-19T18:30:00.000",
+        "count" : "12"
+      }, {
+        "item" : "2024-11-15T14:38:00.000",
+        "count" : "12"
+      } ],
+      "smallest" : "2013-11-12T09:35:00.000",
+      "count" : "2032596",
+      "cardinality" : "2032596"
+    },
+    "format" : {
+      "view" : "date_dmy_time"
+    }
+  }, {
+    "id" : 24783791,
+    "name" : "data_publicacio_previ",
+    "dataTypeName" : "calendar_date",
+    "description" : "Data de publicació de l'anunci previ",
+    "fieldName" : "data_publicacio_previ",
+    "position" : 23,
+    "renderTypeName" : "calendar_date",
+    "tableColumnId" : 14845634,
+    "cachedContents" : {
+      "non_null" : "4711",
+      "largest" : "2026-10-22T13:08:00.000",
+      "null" : "2027885",
+      "top" : [ {
+        "item" : "2021-05-06T13:00:00.000",
+        "count" : "70"
+      }, {
+        "item" : "2021-05-14T10:25:00.000",
+        "count" : "62"
+      }, {
+        "item" : "2023-09-12T12:14:00.000",
+        "count" : "48"
+      }, {
+        "item" : "2022-04-08T09:20:00.000",
+        "count" : "45"
+      }, {
+        "item" : "2026-03-17T14:02:00.000",
+        "count" : "43"
+      }, {
+        "item" : "2023-01-11T09:00:00.000",
+        "count" : "33"
+      }, {
+        "item" : "2026-07-27T04:16:00.000",
+        "count" : "27"
+      }, {
+        "item" : "2022-05-17T17:00:00.000",
+        "count" : "24"
+      }, {
+        "item" : "2024-02-09T11:39:00.000",
+        "count" : "24"
+      }, {
+        "item" : "2023-05-03T15:30:00.000",
+        "count" : "24"
+      }, {
+        "item" : "2021-08-04T13:30:00.000",
+        "count" : "24"
+      }, {
+        "item" : "2022-07-06T09:00:00.000",
+        "count" : "22"
+      }, {
+        "item" : "2018-04-19T11:44:00.000",
+        "count" : "22"
+      }, {
+        "item" : "2025-03-28T09:32:00.000",
+        "count" : "21"
+      }, {
+        "item" : "2024-09-12T08:34:00.000",
+        "count" : "20"
+      }, {
+        "item" : "2024-02-23T12:00:00.000",
+        "count" : "20"
+      }, {
+        "item" : "2021-03-08T16:21:00.000",
+        "count" : "17"
+      }, {
+        "item" : "2023-02-23T14:15:00.000",
+        "count" : "17"
+      }, {
+        "item" : "2024-01-12T14:00:00.000",
+        "count" : "15"
+      }, {
+        "item" : "2024-11-25T12:56:00.000",
+        "count" : "15"
+      } ],
+      "smallest" : "2012-12-03T14:00:00.000",
+      "count" : "2032596",
+      "cardinality" : "2032596"
+    },
+    "format" : {
+      "view" : "date_dmy_time"
+    }
+  }, {
+    "id" : 24783792,
+    "name" : "data_publicacio_anunci",
+    "dataTypeName" : "calendar_date",
+    "description" : "Data de publicació de l'anunci de licitació",
+    "fieldName" : "data_publicacio_anunci",
+    "position" : 24,
+    "renderTypeName" : "calendar_date",
+    "tableColumnId" : 14845635,
+    "cachedContents" : {
+      "non_null" : "201678",
+      "largest" : "2026-10-25T13:00:00.000",
+      "null" : "1830918",
+      "top" : [ {
+        "item" : "2022-11-03T13:40:00.000",
+        "count" : "163"
+      }, {
+        "item" : "2025-07-03T11:28:00.000",
+        "count" : "158"
+      }, {
+        "item" : "2026-02-10T09:14:00.000",
+        "count" : "133"
+      }, {
+        "item" : "2020-11-10T16:45:00.000",
+        "count" : "127"
+      }, {
+        "item" : "2020-10-20T16:55:00.000",
+        "count" : "115"
+      }, {
+        "item" : "2025-09-10T13:04:00.000",
+        "count" : "103"
+      }, {
+        "item" : "2026-02-23T10:34:00.000",
+        "count" : "94"
+      }, {
+        "item" : "2023-10-11T13:43:00.000",
+        "count" : "87"
+      }, {
+        "item" : "2021-06-28T12:00:00.000",
+        "count" : "81"
+      }, {
+        "item" : "2023-04-12T13:01:00.000",
+        "count" : "77"
+      }, {
+        "item" : "2025-01-27T15:18:00.000",
+        "count" : "76"
+      }, {
+        "item" : "2022-11-11T15:55:00.000",
+        "count" : "75"
+      }, {
+        "item" : "2023-12-18T07:53:00.000",
+        "count" : "71"
+      }, {
+        "item" : "2021-11-16T12:32:00.000",
+        "count" : "70"
+      }, {
+        "item" : "2022-09-14T09:55:00.000",
+        "count" : "70"
+      }, {
+        "item" : "2025-12-12T11:38:00.000",
+        "count" : "67"
+      }, {
+        "item" : "2020-01-15T16:05:00.000",
+        "count" : "65"
+      }, {
+        "item" : "2022-03-16T14:08:00.000",
+        "count" : "62"
+      }, {
+        "item" : "2023-07-07T14:10:00.000",
+        "count" : "61"
+      }, {
+        "item" : "2023-10-11T13:44:00.000",
+        "count" : "60"
+      } ],
+      "smallest" : "2011-02-03T11:30:00.000",
+      "count" : "2032596",
+      "cardinality" : "2032596"
+    },
+    "format" : {
+      "view" : "date_dmy_time"
+    }
+  }, {
+    "id" : 24783793,
+    "name" : "data_publicacio_adjudicacio",
+    "dataTypeName" : "calendar_date",
+    "description" : "Data de publicació de l'adjudicació",
+    "fieldName" : "data_publicacio_adjudicacio",
+    "position" : 25,
+    "renderTypeName" : "calendar_date",
+    "tableColumnId" : 14845636,
+    "cachedContents" : {
+      "non_null" : "191808",
+      "largest" : "2026-10-25T18:54:00.000",
+      "null" : "1840788",
+      "top" : [ {
+        "item" : "2025-07-04T15:17:00.000",
+        "count" : "147"
+      }, {
+        "item" : "2023-04-05T11:47:00.000",
+        "count" : "136"
+      }, {
+        "item" : "2022-03-02T14:35:00.000",
+        "count" : "96"
+      }, {
+        "item" : "2026-07-22T13:09:00.000",
+        "count" : "83"
+      }, {
+        "item" : "2025-11-28T13:10:00.000",
+        "count" : "83"
+      }, {
+        "item" : "2021-10-14T14:00:00.000",
+        "count" : "79"
+      }, {
+        "item" : "2021-03-12T00:00:00.000",
+        "count" : "77"
+      }, {
+        "item" : "2022-08-03T13:20:00.000",
+        "count" : "76"
+      }, {
+        "item" : "2024-01-24T12:11:00.000",
+        "count" : "75"
+      }, {
+        "item" : "2021-05-03T15:30:00.000",
+        "count" : "75"
+      }, {
+        "item" : "2022-09-13T12:00:00.000",
+        "count" : "70"
+      }, {
+        "item" : "2025-04-11T11:24:00.000",
+        "count" : "63"
+      }, {
+        "item" : "2024-07-26T09:29:00.000",
+        "count" : "59"
+      }, {
+        "item" : "2022-10-21T09:40:00.000",
+        "count" : "59"
+      }, {
+        "item" : "2020-07-24T19:50:00.000",
+        "count" : "57"
+      }, {
+        "item" : "2022-03-03T14:30:00.000",
+        "count" : "55"
+      }, {
+        "item" : "2025-07-15T14:02:00.000",
+        "count" : "55"
+      }, {
+        "item" : "2022-12-23T14:15:00.000",
+        "count" : "54"
+      }, {
+        "item" : "2026-08-03T09:40:00.000",
+        "count" : "53"
+      }, {
+        "item" : "2026-08-14T14:30:00.000",
+        "count" : "53"
+      } ],
+      "smallest" : "2010-12-09T15:30:00.000",
+      "count" : "2032596",
+      "cardinality" : "2032596"
+    },
+    "format" : {
+      "view" : "date_dmy_time"
+    }
+  }, {
+    "id" : 24783794,
+    "name" : "data_publicacio_formalitzacio",
+    "dataTypeName" : "calendar_date",
+    "description" : "Data de publicació de l’anunci de la formalització",
+    "fieldName" : "data_publicacio_formalitzacio",
+    "position" : 26,
+    "renderTypeName" : "calendar_date",
+    "tableColumnId" : 14845637,
+    "cachedContents" : {
+      "non_null" : "131372",
+      "largest" : "2026-10-24T22:46:00.000",
+      "null" : "1901224",
+      "top" : [ {
+        "item" : "2025-08-12T08:59:00.000",
+        "count" : "146"
+      }, {
+        "item" : "2023-09-06T08:47:00.000",
+        "count" : "136"
+      }, {
+        "item" : "2022-03-23T15:00:00.000",
+        "count" : "134"
+      }, {
+        "item" : "2022-04-25T13:10:00.000",
+        "count" : "98"
+      }, {
+        "item" : "2026-01-16T09:12:00.000",
+        "count" : "87"
+      }, {
+        "item" : "2021-11-18T14:00:00.000",
+        "count" : "79"
+      }, {
+        "item" : "2024-03-13T13:41:00.000",
+        "count" : "75"
+      }, {
+        "item" : "2022-08-03T16:35:00.000",
+        "count" : "75"
+      }, {
+        "item" : "2025-05-08T13:52:00.000",
+        "count" : "63"
+      }, {
+        "item" : "2022-11-03T09:00:00.000",
+        "count" : "60"
+      }, {
+        "item" : "2024-09-27T09:50:00.000",
+        "count" : "58"
+      }, {
+        "item" : "2023-01-26T09:32:00.000",
+        "count" : "52"
+      }, {
+        "item" : "2024-10-10T09:09:00.000",
+        "count" : "50"
+      }, {
+        "item" : "2022-03-17T09:30:00.000",
+        "count" : "50"
+      }, {
+        "item" : "2024-04-30T13:18:00.000",
+        "count" : "49"
+      }, {
+        "item" : "2025-10-06T21:00:00.000",
+        "count" : "49"
+      }, {
+        "item" : "2022-11-04T12:00:00.000",
+        "count" : "48"
+      }, {
+        "item" : "2023-02-22T10:40:00.000",
+        "count" : "47"
+      }, {
+        "item" : "2025-07-16T13:50:00.000",
+        "count" : "46"
+      }, {
+        "item" : "2023-03-29T12:42:00.000",
+        "count" : "43"
+      } ],
+      "smallest" : "2011-04-29T14:30:00.000",
+      "count" : "2032596",
+      "cardinality" : "2032596"
+    },
+    "format" : {
+      "view" : "date_dmy_time"
+    }
+  }, {
+    "id" : 24783795,
+    "name" : "data_publicacio_anul",
+    "dataTypeName" : "calendar_date",
+    "description" : "Data de publicació de l'anul·lació (desert, desistiment, renúncia, resolució de tribunal, publicació per error)",
+    "fieldName" : "data_publicacio_anul",
+    "position" : 27,
+    "renderTypeName" : "calendar_date",
+    "tableColumnId" : 14845638,
+    "cachedContents" : {
+      "non_null" : "29319",
+      "largest" : "2026-10-23T15:55:00.000",
+      "null" : "2003277",
+      "top" : [ {
+        "item" : "2023-07-12T16:03:00.000",
+        "count" : "845"
+      }, {
+        "item" : "2025-04-10T14:00:00.000",
+        "count" : "501"
+      }, {
+        "item" : "2024-04-16T16:28:00.000",
+        "count" : "414"
+      }, {
+        "item" : "2025-02-27T15:32:00.000",
+        "count" : "412"
+      }, {
+        "item" : "2024-11-21T16:26:00.000",
+        "count" : "401"
+      }, {
+        "item" : "2025-05-27T08:32:00.000",
+        "count" : "378"
+      }, {
+        "item" : "2026-05-08T10:28:00.000",
+        "count" : "373"
+      }, {
+        "item" : "2025-12-04T13:08:00.000",
+        "count" : "369"
+      }, {
+        "item" : "2026-02-16T13:36:00.000",
+        "count" : "354"
+      }, {
+        "item" : "2026-01-08T10:56:00.000",
+        "count" : "324"
+      }, {
+        "item" : "2024-07-19T11:36:00.000",
+        "count" : "271"
+      }, {
+        "item" : "2024-07-19T11:33:00.000",
+        "count" : "270"
+      }, {
+        "item" : "2025-05-27T08:38:00.000",
+        "count" : "262"
+      }, {
+        "item" : "2024-03-08T13:33:00.000",
+        "count" : "258"
+      }, {
+        "item" : "2025-12-04T13:12:00.000",
+        "count" : "257"
+      }, {
+        "item" : "2025-09-16T10:52:00.000",
+        "count" : "254"
+      }, {
+        "item" : "2024-03-20T10:48:00.000",
+        "count" : "238"
+      }, {
+        "item" : "2024-07-19T11:35:00.000",
+        "count" : "232"
+      }, {
+        "item" : "2024-07-03T07:48:00.000",
+        "count" : "227"
+      }, {
+        "item" : "2023-07-12T16:14:00.000",
+        "count" : "215"
+      } ],
+      "smallest" : "2014-02-26T13:15:00.000",
+      "count" : "2032596",
+      "cardinality" : "2032596"
+    },
+    "format" : {
+      "view" : "date_dmy_time"
+    }
+  }, {
+    "id" : 24783837,
+    "name" : "numero_lot",
+    "dataTypeName" : "text",
+    "description" : "Identificador del lot",
+    "fieldName" : "numero_lot",
+    "position" : 28,
+    "renderTypeName" : "text",
+    "tableColumnId" : 15181678,
+    "cachedContents" : {
+      "non_null" : "1049365",
+      "largest" : "M05BA",
+      "null" : "983231",
+      "top" : [ {
+        "item" : "1",
+        "count" : "945134"
+      }, {
+        "item" : "2",
+        "count" : "25832"
+      }, {
+        "item" : "3",
+        "count" : "12273"
+      }, {
+        "item" : "0",
+        "count" : "9164"
+      }, {
+        "item" : "4",
+        "count" : "7258"
+      }, {
+        "item" : "5",
+        "count" : "4779"
+      }, {
+        "item" : "6",
+        "count" : "3554"
+      }, {
+        "item" : "7",
+        "count" : "2581"
+      }, {
+        "item" : "8",
+        "count" : "2006"
+      }, {
+        "item" : "9",
+        "count" : "1629"
+      }, {
+        "item" : "10",
+        "count" : "1335"
+      }, {
+        "item" : "11",
+        "count" : "1140"
+      }, {
+        "item" : "12",
+        "count" : "1016"
+      }, {
+        "item" : "13",
+        "count" : "872"
+      }, {
+        "item" : "14",
+        "count" : "765"
+      }, {
+        "item" : "15",
+        "count" : "695"
+      }, {
+        "item" : "16",
+        "count" : "577"
+      }, {
+        "item" : "17",
+        "count" : "513"
+      }, {
+        "item" : "18",
+        "count" : "507"
+      }, {
+        "item" : "19",
+        "count" : "459"
+      } ],
+      "smallest" : "0",
+      "count" : "2032596",
+      "cardinality" : "2032596"
+    },
+    "format" : {
+      "decimalSeparator" : ",",
+      "noCommas" : "true",
+      "groupSeparator" : "."
+    }
+  }, {
+    "id" : 24783797,
+    "name" : "descripcio_lot",
+    "dataTypeName" : "text",
+    "description" : "Descripció del lot",
+    "fieldName" : "descripcio_lot",
+    "position" : 29,
+    "renderTypeName" : "text",
+    "tableColumnId" : 14845640,
+    "cachedContents" : {
+      "non_null" : "205051",
+      "largest" : " ELISA kit GDF-2.   (1 x 96T)",
+      "null" : "1827545",
+      "top" : [ {
+        "item" : "Material General de Laboratori",
+        "count" : "18456"
+      }, {
+        "item" : "-",
+        "count" : "13783"
+      }, {
+        "item" : "Subministrament de productes químics, reactius i productes i accessoris de biologia, geologia, medicina, química i medi ambient",
+        "count" : "3430"
+      }, {
+        "item" : "Subministrament general de laboratori",
+        "count" : "2172"
+      }, {
+        "item" : "Subministrament material mèdic fungible",
+        "count" : "2080"
+      }, {
+        "item" : "Subministrament kits per diagnòstic",
+        "count" : "1695"
+      }, {
+        "item" : "Contracte derivat de l'acord marc licitat per CCS: prestació servei de gestió i assistencia en viatge",
+        "count" : "1658"
+      }, {
+        "item" : "1",
+        "count" : "1321"
+      }, {
+        "item" : "reactius de laboratori",
+        "count" : "1162"
+      }, {
+        "item" : "2023/4 - Sistema Dinàmic d'Adquisició pel subministrament de material de laboratori - Lote CATEGORIA 1 - Productes químics i reactius i productes i accessoris biologia, geologia, medicina, química i medi ambient.",
+        "count" : "771"
+      }, {
+        "item" : "SDA Subministrament material de laboratori - Lote Categoria 1: Subministrament de productes químics, reactius i productes i accessoris de biologia, geologia, medicina, química i medi ambient",
+        "count" : "747"
+      }, {
+        "item" : "Servicios de  estabulación de  animales para  investigación y  prestaciones conexas",
+        "count" : "627"
+      }, {
+        "item" : "Subministrament d’instrumentació general auxiliar i electrònica de laboratori, equips de laboratori i aparells de mesura",
+        "count" : "529"
+      }, {
+        "item" : "REACTIUS DE LABORATORI",
+        "count" : "513"
+      }, {
+        "item" : "material de laboratori",
+        "count" : "502"
+      }, {
+        "item" : "23/02: Sistema Dinàmic d'Adquisició pel subministrament de material de laboratori",
+        "count" : "502"
+      }, {
+        "item" : "Compra material laboratori- SDA SUBMINISTRAMENT MATERIAL DE LABORATORI",
+        "count" : "489"
+      }, {
+        "item" : "23/02 - 23/02: Sistema Dinàmic d'Adquisició pel subministrament de material de laboratori",
+        "count" : "477"
+      }, {
+        "item" : "SUBMINISTRAMENT DE MEDICAMENTS II",
+        "count" : "441"
+      }, {
+        "item" : "Subministrament de gasos, líquids criogènics en ampolles i recipients tipus dewar i accessoris i serveis associats per a l’UdL + UdG + UVic + URJC + IRTA + IDIBGI.",
+        "count" : "434"
+      } ],
+      "smallest" : "-",
+      "count" : "2032596",
+      "cardinality" : "2032596"
+    },
+    "format" : { }
+  }, {
+    "id" : 24783798,
+    "name" : "codi_cpv",
+    "dataTypeName" : "text",
+    "description" : "Codi del Vocabulari comú de contractes públics (CPV)",
+    "fieldName" : "codi_cpv",
+    "position" : 30,
+    "renderTypeName" : "text",
+    "tableColumnId" : 14845641,
+    "cachedContents" : {
+      "non_null" : "1790651",
+      "largest" : "98910000-5",
+      "null" : "241945",
+      "top" : [ {
+        "item" : "33696500-0",
+        "count" : "130824"
+      }, {
+        "item" : "50000000-5",
+        "count" : "51872"
+      }, {
+        "item" : "24000000-4",
+        "count" : "47114"
+      }, {
+        "item" : "38000000-5",
+        "count" : "39607"
+      }, {
+        "item" : "79000000-4",
+        "count" : "38024"
+      }, {
+        "item" : "33140000-3",
+        "count" : "37484"
+      }, {
+        "item" : "33000000-0",
+        "count" : "32793"
+      }, {
+        "item" : "33600000-6",
+        "count" : "26543"
+      }, {
+        "item" : "63500000-4",
+        "count" : "26344"
+      }, {
+        "item" : "22000000-0",
+        "count" : "24723"
+      }, {
+        "item" : "63000000-9",
+        "count" : "24455"
+      }, {
+        "item" : "98390000-3",
+        "count" : "24452"
+      }, {
+        "item" : "30000000-9",
+        "count" : "23369"
+      }, {
+        "item" : "63510000-7",
+        "count" : "22516"
+      }, {
+        "item" : "80000000-4",
+        "count" : "19946"
+      }, {
+        "item" : "80500000-9",
+        "count" : "19480"
+      }, {
+        "item" : "80510000-2",
+        "count" : "18828"
+      }, {
+        "item" : "33184100-4",
+        "count" : "16191"
+      }, {
+        "item" : "92312000-1",
+        "count" : "15973"
+      }, {
+        "item" : "30200000-1",
+        "count" : "14956"
+      } ],
+      "smallest" : "03000000-1",
+      "count" : "2032596",
+      "cardinality" : "2032596"
+    },
+    "format" : { }
+  }, {
+    "id" : 24783799,
+    "name" : "tipus_identificacio_adjudicatari",
+    "dataTypeName" : "text",
+    "description" : "Tipus d'identificació de l’empresa adjudicatària/contractista (NIF, UTE, DUNS, VIES o Altres)",
+    "fieldName" : "tipus_identificacio",
+    "position" : 31,
+    "renderTypeName" : "text",
+    "tableColumnId" : 14845642,
+    "cachedContents" : {
+      "non_null" : "188416",
+      "largest" : "VAT",
+      "null" : "1844180",
+      "top" : [ {
+        "item" : "542",
+        "count" : "171889"
+      }, {
+        "item" : "NIF",
+        "count" : "4336"
+      }, {
+        "item" : "1000019",
+        "count" : "3680"
+      }, {
+        "item" : "542||542",
+        "count" : "1771"
+      }, {
+        "item" : "11162",
+        "count" : "1763"
+      }, {
+        "item" : "542||542||542",
+        "count" : "1005"
+      }, {
+        "item" : "542||542||542||542||542",
+        "count" : "587"
+      }, {
+        "item" : "542||542||542||542",
+        "count" : "553"
+      }, {
+        "item" : "576",
+        "count" : "453"
+      }, {
+        "item" : "542||542||542||542||542||542",
+        "count" : "311"
+      }, {
+        "item" : "545",
+        "count" : "294"
+      }, {
+        "item" : "542||542||542||542||542||542||542",
+        "count" : "185"
+      }, {
+        "item" : "542||542||542||542||542||542||542||542",
+        "count" : "183"
+      }, {
+        "item" : "542||542||542||542||542||542||542||542||542||542",
+        "count" : "130"
+      }, {
+        "item" : "577",
+        "count" : "112"
+      }, {
+        "item" : "542||542||542||542||542||542||542||542||542",
+        "count" : "100"
+      }, {
+        "item" : "UTE",
+        "count" : "69"
+      }, {
+        "item" : "542||542||542||542||542||542||542||542||542||542||542",
+        "count" : "62"
+      }, {
+        "item" : "542||542||542||542||542||542||542||542||542||542||542||542||542",
+        "count" : "57"
+      }, {
+        "item" : "||",
+        "count" : "48"
+      } ],
+      "smallest" : "||",
+      "count" : "2032596",
+      "cardinality" : "2032596"
+    },
+    "format" : { }
+  }, {
+    "id" : 24783800,
+    "name" : "identificacio_adjudicatari",
+    "dataTypeName" : "text",
+    "description" : "Identificació de l'empresa adjudicatària/contractista",
+    "fieldName" : "identificacio_adjudicatari",
+    "position" : 32,
+    "renderTypeName" : "text",
+    "tableColumnId" : 14845643,
+    "cachedContents" : {
+      "non_null" : "1981064",
+      "largest" : "*****zzzz",
+      "null" : "51532",
+      "top" : [ {
+        "item" : "B79184115",
+        "count" : "35954"
+      }, {
+        "item" : "B84498955",
+        "count" : "31406"
+      }, {
+        "item" : "A28139434",
+        "count" : "29197"
+      }, {
+        "item" : "A62989009",
+        "count" : "15439"
+      }, {
+        "item" : "B57986846",
+        "count" : "14192"
+      }, {
+        "item" : "B08362089",
+        "count" : "13916"
+      }, {
+        "item" : "A79206223",
+        "count" : "13348"
+      }, {
+        "item" : "A25027145",
+        "count" : "12390"
+      }, {
+        "item" : "B28442135",
+        "count" : "10859"
+      }, {
+        "item" : "B59076828",
+        "count" : "10204"
+      }, {
+        "item" : "B66238197",
+        "count" : "9614"
+      }, {
+        "item" : "A28114742",
+        "count" : "9411"
+      }, {
+        "item" : "B07012107",
+        "count" : "9252"
+      }, {
+        "item" : "A58710740",
+        "count" : "8004"
+      }, {
+        "item" : "A79144317",
+        "count" : "7913"
+      }, {
+        "item" : "A08649477",
+        "count" : "7794"
+      }, {
+        "item" : "A58118928",
+        "count" : "7537"
+      }, {
+        "item" : "B86049137",
+        "count" : "6504"
+      }, {
+        "item" : "A50140706",
+        "count" : "6500"
+      }, {
+        "item" : "A58093816",
+        "count" : "6423"
+      } ],
+      "smallest" : "||",
+      "count" : "2032596",
+      "cardinality" : "2032596"
+    },
+    "format" : { }
+  }, {
+    "id" : 24783801,
+    "name" : "denominacio_adjudicatari",
+    "dataTypeName" : "text",
+    "description" : "Denominació de l'empresa adjudicatària/contractista",
+    "fieldName" : "denominacio_adjudicatari",
+    "position" : 33,
+    "renderTypeName" : "text",
+    "tableColumnId" : 14845644,
+    "cachedContents" : {
+      "non_null" : "1982041",
+      "largest" : " ROGER BRUFAU PLA",
+      "null" : "50555",
+      "top" : [ {
+        "item" : "SEKAI CORPORATE TRAVEL SLU",
+        "count" : "14108"
+      }, {
+        "item" : "FISHER SCIENTIFIC SL",
+        "count" : "11369"
+      }, {
+        "item" : "ATLÀNTIDA TOURS VIATGES, S.A.",
+        "count" : "10529"
+      }, {
+        "item" : "MERCK LIFE SCIENCE SLU",
+        "count" : "8278"
+      }, {
+        "item" : "1074       LIFE TECHNOLOGIES, SA",
+        "count" : "8011"
+      }, {
+        "item" : "ÁVORIS RETAIL DIVISIÓN S.L.",
+        "count" : "8009"
+      }, {
+        "item" : "OMFE SA",
+        "count" : "7884"
+      }, {
+        "item" : "AUTÒNOM",
+        "count" : "5241"
+      }, {
+        "item" : "MERCK LIFE SCIENCE S.L.U.",
+        "count" : "4767"
+      }, {
+        "item" : "MERCK LIFE SCIENCE S.L.U",
+        "count" : "4675"
+      }, {
+        "item" : "LYRECO ESPAÑA, S.A",
+        "count" : "4617"
+      }, {
+        "item" : "PMC GRUP 1985 SA",
+        "count" : "4579"
+      }, {
+        "item" : "ATLANTIDA TOURS VIATGES, S.A.",
+        "count" : "4536"
+      }, {
+        "item" : "Merck Life Science S.L.U",
+        "count" : "4511"
+      }, {
+        "item" : "VWR INTERNATIONAL EUROLAB SL",
+        "count" : "4489"
+      }, {
+        "item" : "24179      MERCK LIFE SCIENCE, SLU",
+        "count" : "4340"
+      }, {
+        "item" : "LIFE TECHNOLOGIES S.A.",
+        "count" : "3938"
+      }, {
+        "item" : "SERVICIOS MICROINFORMATICA SA",
+        "count" : "3916"
+      }, {
+        "item" : "REED & MACKAY ESPAÑA SAU",
+        "count" : "3844"
+      }, {
+        "item" : "LIFE TECHNOLOGIES, SA",
+        "count" : "3696"
+      } ],
+      "smallest" : "-",
+      "count" : "2032596",
+      "cardinality" : "2032596"
+    },
+    "format" : { }
+  }, {
+    "id" : 24783802,
+    "name" : "import_adjudicacio_sense_iva",
+    "dataTypeName" : "text",
+    "description" : "Import adjudicació sense IVA. En cas que hi hagi més d’una empresa adjudicatària, els diferents valors es concatenen amb “||”.",
+    "fieldName" : "import_adjudicacio_sense",
+    "position" : 34,
+    "renderTypeName" : "text",
+    "tableColumnId" : 14845645,
+    "cachedContents" : {
+      "non_null" : "1980581",
+      "largest" : "999999.95",
+      "null" : "52015",
+      "top" : [ {
+        "item" : "300",
+        "count" : "9743"
+      }, {
+        "item" : "500",
+        "count" : "7723"
+      }, {
+        "item" : "0",
+        "count" : "7280"
+      }, {
+        "item" : "200",
+        "count" : "7259"
+      }, {
+        "item" : "1000",
+        "count" : "6569"
+      }, {
+        "item" : "600",
+        "count" : "6556"
+      }, {
+        "item" : "400",
+        "count" : "6426"
+      }, {
+        "item" : "150",
+        "count" : "6346"
+      }, {
+        "item" : "250",
+        "count" : "5899"
+      }, {
+        "item" : "1500",
+        "count" : "5740"
+      }, {
+        "item" : "1200",
+        "count" : "5250"
+      }, {
+        "item" : "3000",
+        "count" : "5198"
+      }, {
+        "item" : "2000",
+        "count" : "5176"
+      }, {
+        "item" : "450",
+        "count" : "4663"
+      }, {
+        "item" : "100",
+        "count" : "4474"
+      }, {
+        "item" : "350",
+        "count" : "4181"
+      }, {
+        "item" : "800",
+        "count" : "4048"
+      }, {
+        "item" : "180",
+        "count" : "3922"
+      }, {
+        "item" : "900",
+        "count" : "3784"
+      }, {
+        "item" : "120",
+        "count" : "3761"
+      } ],
+      "smallest" : "||",
+      "count" : "2032596",
+      "cardinality" : "2032596"
+    },
+    "format" : {
+      "decimalSeparator" : ",",
+      "noCommas" : "true",
+      "groupSeparator" : "."
+    }
+  }, {
+    "id" : 24783803,
+    "name" : "import_adjudicacio_amb_iva",
+    "dataTypeName" : "text",
+    "description" : "Import adjudicació amb IVA. En cas que hi hagi més d’una empresa adjudicatària, els diferents valors es concatenen amb “||”. ",
+    "fieldName" : "import_adjudicacio_amb_iva",
+    "position" : 35,
+    "renderTypeName" : "text",
+    "tableColumnId" : 14845646,
+    "cachedContents" : {
+      "non_null" : "1979081",
+      "largest" : "99999.99",
+      "null" : "53515",
+      "top" : [ {
+        "item" : "300",
+        "count" : "5725"
+      }, {
+        "item" : "363",
+        "count" : "4874"
+      }, {
+        "item" : "605",
+        "count" : "4405"
+      }, {
+        "item" : "200",
+        "count" : "4309"
+      }, {
+        "item" : "500",
+        "count" : "4285"
+      }, {
+        "item" : "1210",
+        "count" : "4100"
+      }, {
+        "item" : "1815",
+        "count" : "3837"
+      }, {
+        "item" : "3630",
+        "count" : "3808"
+      }, {
+        "item" : "726",
+        "count" : "3753"
+      }, {
+        "item" : "150",
+        "count" : "3722"
+      }, {
+        "item" : "2420",
+        "count" : "3674"
+      }, {
+        "item" : "484",
+        "count" : "3495"
+      }, {
+        "item" : "400",
+        "count" : "3474"
+      }, {
+        "item" : "242",
+        "count" : "3458"
+      }, {
+        "item" : "600",
+        "count" : "3452"
+      }, {
+        "item" : "0",
+        "count" : "3402"
+      }, {
+        "item" : "250",
+        "count" : "3371"
+      }, {
+        "item" : "1000",
+        "count" : "3328"
+      }, {
+        "item" : "181.5",
+        "count" : "3311"
+      }, {
+        "item" : "1452",
+        "count" : "3263"
+      } ],
+      "smallest" : "||",
+      "count" : "2032596",
+      "cardinality" : "2032596"
+    },
+    "format" : {
+      "decimalSeparator" : ",",
+      "noCommas" : "true",
+      "groupSeparator" : "."
+    }
+  }, {
+    "id" : 24783804,
+    "name" : "ofertes_rebudes",
+    "dataTypeName" : "number",
+    "description" : "Número d'ofertes rebudes",
+    "fieldName" : "ofertes_rebudes",
+    "position" : 36,
+    "renderTypeName" : "number",
+    "tableColumnId" : 14845647,
+    "cachedContents" : {
+      "non_null" : "527934",
+      "largest" : "20253769",
+      "null" : "1504662",
+      "top" : [ {
+        "item" : "1",
+        "count" : "425665"
+      }, {
+        "item" : "2",
+        "count" : "26810"
+      }, {
+        "item" : "3",
+        "count" : "19605"
+      }, {
+        "item" : "4",
+        "count" : "12551"
+      }, {
+        "item" : "5",
+        "count" : "9589"
+      }, {
+        "item" : "6",
+        "count" : "6987"
+      }, {
+        "item" : "0",
+        "count" : "6013"
+      }, {
+        "item" : "7",
+        "count" : "3836"
+      }, {
+        "item" : "9",
+        "count" : "3170"
+      }, {
+        "item" : "8",
+        "count" : "2747"
+      }, {
+        "item" : "10",
+        "count" : "1783"
+      }, {
+        "item" : "11",
+        "count" : "1120"
+      }, {
+        "item" : "12",
+        "count" : "1115"
+      }, {
+        "item" : "13",
+        "count" : "860"
+      }, {
+        "item" : "14",
+        "count" : "792"
+      }, {
+        "item" : "17",
+        "count" : "620"
+      }, {
+        "item" : "15",
+        "count" : "620"
+      }, {
+        "item" : "16",
+        "count" : "470"
+      }, {
+        "item" : "18",
+        "count" : "394"
+      }, {
+        "item" : "40",
+        "count" : "284"
+      } ],
+      "smallest" : "0",
+      "count" : "2032596",
+      "cardinality" : "2032596"
+    },
+    "format" : {
+      "decimalSeparator" : ",",
+      "noCommas" : "true",
+      "groupSeparator" : "."
+    }
+  }, {
+    "id" : 24783805,
+    "name" : "resultat",
+    "dataTypeName" : "text",
+    "description" : "El resultat relatiu al sistema PLASCP (Desistiment, Desert, Renúncia, Adjudicació, Formalització)",
+    "fieldName" : "resultat",
+    "position" : 37,
+    "renderTypeName" : "text",
+    "tableColumnId" : 14845648,
+    "cachedContents" : {
+      "non_null" : "176650",
+      "largest" : "Renúncia",
+      "null" : "1855946",
+      "top" : [ {
+        "item" : "Formalització",
+        "count" : "99073"
+      }, {
+        "item" : "Adjudicació",
+        "count" : "54518"
+      }, {
+        "item" : "Desert",
+        "count" : "17792"
+      }, {
+        "item" : "Desistiment",
+        "count" : "4257"
+      }, {
+        "item" : "Renúncia",
+        "count" : "1010"
+      } ],
+      "smallest" : "Adjudicació",
+      "count" : "2032596",
+      "cardinality" : "2032596"
+    },
+    "format" : { }
+  }, {
+    "id" : 24783806,
+    "name" : "enllac_publicacio",
+    "dataTypeName" : "url",
+    "description" : "Enllaç de la publicació a  la Plataforma de serveis de contractació pública",
+    "fieldName" : "enllac_publicacio",
+    "position" : 38,
+    "renderTypeName" : "url",
+    "tableColumnId" : 14845649,
+    "format" : { },
+    "subColumnTypes" : [ "url", "description" ]
+  }, {
+    "id" : 24783807,
+    "name" : "es_agregada",
+    "dataTypeName" : "text",
+    "description" : "Indicador de si el contracte ha estat publicat de manera  agregada (Sí/No)",
+    "fieldName" : "es_agregada",
+    "position" : 39,
+    "renderTypeName" : "text",
+    "tableColumnId" : 14845650,
+    "cachedContents" : {
+      "non_null" : "2032596",
+      "largest" : "SÍ",
+      "null" : "0",
+      "top" : [ {
+        "item" : "SÍ",
+        "count" : "1799113"
+      }, {
+        "item" : "NO",
+        "count" : "233483"
+      } ],
+      "smallest" : "NO",
+      "count" : "2032596",
+      "cardinality" : "2032596"
+    },
+    "format" : { }
+  }, {
+    "id" : 24783808,
+    "name" : "data_adjudicacio_contracte",
+    "dataTypeName" : "calendar_date",
+    "description" : "Data d'adjudicació del contracte",
+    "fieldName" : "data_adjudicacio_contracte",
+    "position" : 40,
+    "renderTypeName" : "calendar_date",
+    "tableColumnId" : 14845651,
+    "cachedContents" : {
+      "non_null" : "1984211",
+      "largest" : "5053-05-02T00:00:00.000",
+      "null" : "48385",
+      "top" : [ {
+        "item" : "2024-01-01T00:00:00.000",
+        "count" : "11050"
+      }, {
+        "item" : "2025-01-01T00:00:00.000",
+        "count" : "9879"
+      }, {
+        "item" : "2024-07-01T00:00:00.000",
+        "count" : "6121"
+      }, {
+        "item" : "2025-07-01T00:00:00.000",
+        "count" : "5821"
+      }, {
+        "item" : "2023-01-17T00:00:00.000",
+        "count" : "4793"
+      }, {
+        "item" : "2024-02-01T00:00:00.000",
+        "count" : "4739"
+      }, {
+        "item" : "2024-10-01T00:00:00.000",
+        "count" : "4570"
+      }, {
+        "item" : "2026-01-01T00:00:00.000",
+        "count" : "4167"
+      }, {
+        "item" : "2025-04-30T00:00:00.000",
+        "count" : "4010"
+      }, {
+        "item" : "2025-09-30T00:00:00.000",
+        "count" : "3743"
+      }, {
+        "item" : "2023-11-30T00:00:00.000",
+        "count" : "3720"
+      }, {
+        "item" : "2025-12-31T00:00:00.000",
+        "count" : "3562"
+      }, {
+        "item" : "2024-04-02T00:00:00.000",
+        "count" : "3509"
+      }, {
+        "item" : "2023-01-01T00:00:00.000",
+        "count" : "3437"
+      }, {
+        "item" : "2025-11-20T00:00:00.000",
+        "count" : "3426"
+      }, {
+        "item" : "2024-05-02T00:00:00.000",
+        "count" : "3409"
+      }, {
+        "item" : "2023-11-02T00:00:00.000",
+        "count" : "3291"
+      }, {
+        "item" : "2024-06-03T00:00:00.000",
+        "count" : "3236"
+      }, {
+        "item" : "2024-02-29T00:00:00.000",
+        "count" : "3179"
+      }, {
+        "item" : "2025-06-30T00:00:00.000",
+        "count" : "3162"
+      } ],
+      "smallest" : "0024-07-06T00:00:00.000",
+      "count" : "2032596",
+      "cardinality" : "2032596"
+    },
+    "format" : {
+      "view" : "date_dmy_time"
+    }
+  }, {
+    "id" : 24783809,
+    "name" : "data_formalitzacio_contracte",
+    "dataTypeName" : "calendar_date",
+    "description" : "Data de formalització del contracte",
+    "fieldName" : "data_formalitzacio_contracte",
+    "position" : 41,
+    "renderTypeName" : "calendar_date",
+    "tableColumnId" : 14845652,
+    "cachedContents" : {
+      "non_null" : "129766",
+      "largest" : "2034-06-21T00:00:00.000",
+      "null" : "1902830",
+      "top" : [ {
+        "item" : "2025-07-24T00:00:00.000",
+        "count" : "240"
+      }, {
+        "item" : "2024-03-01T00:00:00.000",
+        "count" : "198"
+      }, {
+        "item" : "2022-07-29T00:00:00.000",
+        "count" : "194"
+      }, {
+        "item" : "2023-05-02T00:00:00.000",
+        "count" : "185"
+      }, {
+        "item" : "2026-01-14T00:00:00.000",
+        "count" : "173"
+      }, {
+        "item" : "2022-12-22T00:00:00.000",
+        "count" : "172"
+      }, {
+        "item" : "2021-12-29T00:00:00.000",
+        "count" : "168"
+      }, {
+        "item" : "2022-09-01T00:00:00.000",
+        "count" : "164"
+      }, {
+        "item" : "2022-03-18T00:00:00.000",
+        "count" : "162"
+      }, {
+        "item" : "2025-12-16T00:00:00.000",
+        "count" : "161"
+      }, {
+        "item" : "2022-10-24T00:00:00.000",
+        "count" : "157"
+      }, {
+        "item" : "2022-12-21T00:00:00.000",
+        "count" : "156"
+      }, {
+        "item" : "2024-12-18T00:00:00.000",
+        "count" : "155"
+      }, {
+        "item" : "2024-12-20T00:00:00.000",
+        "count" : "154"
+      }, {
+        "item" : "2021-12-22T00:00:00.000",
+        "count" : "154"
+      }, {
+        "item" : "2022-06-21T00:00:00.000",
+        "count" : "153"
+      }, {
+        "item" : "2021-12-23T00:00:00.000",
+        "count" : "153"
+      }, {
+        "item" : "2022-12-19T00:00:00.000",
+        "count" : "151"
+      }, {
+        "item" : "2023-01-24T00:00:00.000",
+        "count" : "150"
+      }, {
+        "item" : "2022-12-12T00:00:00.000",
+        "count" : "148"
+      } ],
+      "smallest" : "1900-01-01T01:14:00.000",
+      "count" : "2032596",
+      "cardinality" : "2032596"
+    },
+    "format" : {
+      "view" : "date_dmy_time"
+    }
+  }, {
+    "id" : 24783810,
+    "name" : "tipus_tramitacio",
+    "dataTypeName" : "text",
+    "description" : "Tipus de tramitació",
+    "fieldName" : "tipus_tramitacio",
+    "position" : 42,
+    "renderTypeName" : "text",
+    "tableColumnId" : 14845653,
+    "cachedContents" : {
+      "non_null" : "1159015",
+      "largest" : "Urgència",
+      "null" : "873581",
+      "top" : [ {
+        "item" : "Ordinària",
+        "count" : "1145554"
+      }, {
+        "item" : "Urgència",
+        "count" : "8002"
+      }, {
+        "item" : "Emergència",
+        "count" : "5459"
+      } ],
+      "smallest" : "Emergència",
+      "count" : "2032596",
+      "cardinality" : "2032596"
+    },
+    "format" : { }
+  }, {
+    "id" : 24783811,
+    "name" : "racionalitzacio_contractacio",
+    "dataTypeName" : "text",
+    "description" : "Sistema de racionalització de la contractació ",
+    "fieldName" : "racionalitzacio_contractacio",
+    "position" : 43,
+    "renderTypeName" : "text",
+    "tableColumnId" : 14845654,
+    "cachedContents" : {
+      "non_null" : "470267",
+      "largest" : "Sistema Dinàmic d'adquisició",
+      "null" : "1562329",
+      "top" : [ {
+        "item" : "Específic de Sistema Dinàmic d'adquisició",
+        "count" : "232994"
+      }, {
+        "item" : "Contracte basat en acord marc",
+        "count" : "224265"
+      }, {
+        "item" : "Acord Marc",
+        "count" : "11484"
+      }, {
+        "item" : "Sistema Dinàmic d'adquisició",
+        "count" : "1524"
+      } ],
+      "smallest" : "Acord Marc",
+      "count" : "2032596",
+      "cardinality" : "2032596"
+    },
+    "format" : { }
+  }, {
+    "id" : 24783812,
+    "name" : "tipus_financament",
+    "dataTypeName" : "text",
+    "description" : "Tipus de finançament de fons europeus afectat ",
+    "fieldName" : "tipus_financament",
+    "position" : 44,
+    "renderTypeName" : "text",
+    "tableColumnId" : 14845655,
+    "cachedContents" : {
+      "non_null" : "11491",
+      "largest" : "MRR (Mecanisme de recuperació, transformació i resiliència)||FSE+ (Fons social europeu plus)",
+      "null" : "2021105",
+      "top" : [ {
+        "item" : "MRR (Mecanisme de recuperació, transformació i resiliència)",
+        "count" : "7467"
+      }, {
+        "item" : "FEDER (Fons europeu de desenvolupament regional)",
+        "count" : "1471"
+      }, {
+        "item" : "Altres fons europeus",
+        "count" : "1254"
+      }, {
+        "item" : "FEDER-REACT",
+        "count" : "939"
+      }, {
+        "item" : "FEADER (Fons europeu agrícola de desenvolupament rural)",
+        "count" : "107"
+      }, {
+        "item" : "FSE+ (Fons social europeu plus)",
+        "count" : "107"
+      }, {
+        "item" : "FSE (Fons social europeu)",
+        "count" : "91"
+      }, {
+        "item" : "FSE-REACT",
+        "count" : "42"
+      }, {
+        "item" : "FEMP (Fons social europeu marítim i de pesca)",
+        "count" : "7"
+      }, {
+        "item" : "FSE (Fons social europeu)||FSE+ (Fons social europeu plus)",
+        "count" : "2"
+      }, {
+        "item" : "FEDER (Fons europeu de desenvolupament regional)||FSE-REACT",
+        "count" : "1"
+      }, {
+        "item" : "Altres fons europeus||FEDER (Fons europeu de desenvolupament regional)",
+        "count" : "1"
+      }, {
+        "item" : "MRR (Mecanisme de recuperació, transformació i resiliència)||FEDER (Fons europeu de desenvolupament regional)",
+        "count" : "1"
+      }, {
+        "item" : "MRR (Mecanisme de recuperació, transformació i resiliència)||FSE+ (Fons social europeu plus)",
+        "count" : "1"
+      } ],
+      "smallest" : "Altres fons europeus",
+      "count" : "2032596",
+      "cardinality" : "2032596"
+    },
+    "format" : { }
+  }, {
+    "id" : 24783813,
+    "name" : "eina_presentacio_electronica",
+    "dataTypeName" : "text",
+    "description" : "Eina corporativa de presentació electrònica d’ofertes utilitzada",
+    "fieldName" : "eina_presentacio_electronica",
+    "position" : 45,
+    "renderTypeName" : "text",
+    "tableColumnId" : 14845656,
+    "cachedContents" : {
+      "non_null" : "228402",
+      "largest" : "Telemàtica",
+      "null" : "1804194",
+      "top" : [ {
+        "item" : "Sobre digital",
+        "count" : "136155"
+      }, {
+        "item" : "Telemàtica",
+        "count" : "38510"
+      }, {
+        "item" : "Altres",
+        "count" : "35933"
+      }, {
+        "item" : "No",
+        "count" : "17536"
+      }, {
+        "item" : "Subhasta",
+        "count" : "268"
+      } ],
+      "smallest" : "Altres",
+      "count" : "2032596",
+      "cardinality" : "2032596"
+    },
+    "format" : { }
+  }, {
+    "id" : 24783814,
+    "name" : "altres_eines_licitacio_electronica",
+    "dataTypeName" : "text",
+    "description" : "Altres eines de presentació electrònica d’ofertes ",
+    "fieldName" : "altres_eines_licitacio",
+    "position" : 46,
+    "renderTypeName" : "text",
+    "tableColumnId" : 14845657,
+    "cachedContents" : {
+      "non_null" : "35804",
+      "largest" : "YouGov Compra Variables de gran consum",
+      "null" : "1996792",
+      "top" : [ {
+        "item" : "https://licitacions.bcn.cat/",
+        "count" : "2090"
+      }, {
+        "item" : "Correu electrònic",
+        "count" : "1749"
+      }, {
+        "item" : "https://licitacions.bcn.cat/organismos/26",
+        "count" : "1666"
+      }, {
+        "item" : "correu electrònic",
+        "count" : "1553"
+      }, {
+        "item" : "https://seuelectronica.ajuntament.barcelona.cat/licitacioelectronica",
+        "count" : "1477"
+      }, {
+        "item" : "PLYCA",
+        "count" : "788"
+      }, {
+        "item" : "licitacions.bcn.cat",
+        "count" : "784"
+      }, {
+        "item" : "Eina electrònica PLYCA",
+        "count" : "657"
+      }, {
+        "item" : ".",
+        "count" : "486"
+      }, {
+        "item" : "En aquesta licitació, les licitadores han de presentar la seva oferta electrònicament mitjançant el portal de contractació electrònica de l'Ajuntament de Barcelona:  https://licitacions.bcn.cat/ Les persones o empreses interessades a presentar proposta poden resoldre les preguntes freqüents a l'enllaç següent:  https://licitacions.bcn.cat/html/preguntas-frecuentes En concret, per poder-se presentar a la licitació, els requisits tècnics que s'han de complir per operar amb el portal són els detallats a l'enllaç següent:  https://licitacions.bcn.cat/html/requisitos-tecnicos",
+        "count" : "477"
+      }, {
+        "item" : "Correu electrònic.",
+        "count" : "359"
+      }, {
+        "item" : "La presentació de proposicions es farà de forma electrònica mitjançant el Portal de Licitació Electrònica de l' Ajuntament de Sabadell, a l’enllaç següent: https://contractacio.ajsabadell.cat.",
+        "count" : "347"
+      }, {
+        "item" : "telemàtica",
+        "count" : "332"
+      }, {
+        "item" : "Correu Electrònic",
+        "count" : "329"
+      }, {
+        "item" : "VORTAL",
+        "count" : "317"
+      }, {
+        "item" : "Altres",
+        "count" : "292"
+      }, {
+        "item" : "Plec de clàusules administratives particulars",
+        "count" : "269"
+      }, {
+        "item" : "Plyca",
+        "count" : "266"
+      }, {
+        "item" : "La presentació de proposicions es farà de forma electrònica mitjançant l’eina informàtica Pixelware, a l’enllaç següent:  https://contractacio.ajsabadell.cat.",
+        "count" : "255"
+      }, {
+        "item" : "No licitació contracte basat",
+        "count" : "228"
+      } ],
+      "smallest" : "_",
+      "count" : "2032596",
+      "cardinality" : "2032596"
+    },
+    "format" : { }
+  }, {
+    "id" : 24783815,
+    "name" : "no_admet_eina_licitacio_electronica",
+    "dataTypeName" : "text",
+    "description" : "Supòsits taxats en els que no  és obligatori l’ús de les eines de licitació electrònica",
+    "fieldName" : "no_admet_eina_licitacio",
+    "position" : 47,
+    "renderTypeName" : "text",
+    "tableColumnId" : 14845658,
+    "cachedContents" : {
+      "non_null" : "11752",
+      "largest" : "Disposició addicional 15a LCSP - 3.d",
+      "null" : "2020844",
+      "top" : [ {
+        "item" : "Disposició addicional 15a LCSP - 3.a",
+        "count" : "5600"
+      }, {
+        "item" : "Disposició addicional 15a LCSP - 3.c",
+        "count" : "3705"
+      }, {
+        "item" : "Disposició addicional 15a LCSP - 3.d",
+        "count" : "1770"
+      }, {
+        "item" : "Disposició addicional 15a LCSP - 3.b",
+        "count" : "677"
+      } ],
+      "smallest" : "Disposició addicional 15a LCSP - 3.a",
+      "count" : "2032596",
+      "cardinality" : "2032596"
+    },
+    "format" : { }
+  }, {
+    "id" : 24783816,
+    "name" : "pressupost_licitacio_sense_iva",
+    "dataTypeName" : "number",
+    "description" : "Pressupost de licitació del lot (sense IVA)",
+    "fieldName" : "pressupost_licitacio_sense",
+    "position" : 48,
+    "renderTypeName" : "number",
+    "tableColumnId" : 14845659,
+    "width" : 347,
+    "cachedContents" : {
+      "non_null" : "1359308",
+      "largest" : "1210000000",
+      "null" : "673288",
+      "top" : [ {
+        "item" : "0.00",
+        "count" : "10402"
+      }, {
+        "item" : "300",
+        "count" : "5311"
+      }, {
+        "item" : "500",
+        "count" : "4404"
+      }, {
+        "item" : "1000",
+        "count" : "4089"
+      }, {
+        "item" : "200.00",
+        "count" : "3975"
+      }, {
+        "item" : "600",
+        "count" : "3684"
+      }, {
+        "item" : "1210000000",
+        "count" : "3666"
+      }, {
+        "item" : "1500",
+        "count" : "3652"
+      }, {
+        "item" : "3000.00",
+        "count" : "3613"
+      }, {
+        "item" : "2000",
+        "count" : "3585"
+      }, {
+        "item" : "400",
+        "count" : "3463"
+      }, {
+        "item" : "150",
+        "count" : "3395"
+      }, {
+        "item" : "250",
+        "count" : "3392"
+      }, {
+        "item" : "1200",
+        "count" : "3274"
+      }, {
+        "item" : "5448000",
+        "count" : "3083"
+      }, {
+        "item" : "2862000",
+        "count" : "2786"
+      }, {
+        "item" : "450",
+        "count" : "2583"
+      }, {
+        "item" : "5000",
+        "count" : "2554"
+      }, {
+        "item" : "100.00",
+        "count" : "2520"
+      }, {
+        "item" : "350",
+        "count" : "2465"
+      } ],
+      "smallest" : "-1421.38",
+      "count" : "2032596",
+      "cardinality" : "2032596"
+    },
+    "format" : {
+      "decimalSeparator" : ".",
+      "noCommas" : "true",
+      "precision" : "2",
+      "groupSeparator" : ","
+    }
+  }, {
+    "id" : 24783817,
+    "name" : "pressupost_licitacio_sense_iva_expedient",
+    "dataTypeName" : "number",
+    "description" : "Pressupost de licitació de l’expedient sense IVA (en cas de diversos lots és la suma de tots els lots)",
+    "fieldName" : "pressupost_licitacio_sense_1",
+    "position" : 49,
+    "renderTypeName" : "number",
+    "tableColumnId" : 14845660,
+    "width" : 356,
+    "cachedContents" : {
+      "non_null" : "221585",
+      "largest" : "2233268448.58",
+      "null" : "1811011",
+      "top" : [ {
+        "item" : "0.00",
+        "count" : "3442"
+      }, {
+        "item" : "30000",
+        "count" : "739"
+      }, {
+        "item" : "20000.00",
+        "count" : "601"
+      }, {
+        "item" : "40000.00",
+        "count" : "556"
+      }, {
+        "item" : "50000.00",
+        "count" : "552"
+      }, {
+        "item" : "15000.00",
+        "count" : "539"
+      }, {
+        "item" : "60000.00",
+        "count" : "531"
+      }, {
+        "item" : "10000.00",
+        "count" : "503"
+      }, {
+        "item" : "25000.00",
+        "count" : "495"
+      }, {
+        "item" : "12000.00",
+        "count" : "489"
+      }, {
+        "item" : "6000.00",
+        "count" : "449"
+      }, {
+        "item" : "18000.00",
+        "count" : "444"
+      }, {
+        "item" : "3000.00",
+        "count" : "360"
+      }, {
+        "item" : "45000.00",
+        "count" : "359"
+      }, {
+        "item" : "35000.00",
+        "count" : "356"
+      }, {
+        "item" : "100000.00",
+        "count" : "356"
+      }, {
+        "item" : "14900.00",
+        "count" : "350"
+      }, {
+        "item" : "80000.00",
+        "count" : "340"
+      }, {
+        "item" : "5000.00",
+        "count" : "337"
+      }, {
+        "item" : "24000.00",
+        "count" : "316"
+      } ],
+      "smallest" : "0.00",
+      "count" : "2032596",
+      "cardinality" : "2032596"
+    },
+    "format" : {
+      "decimalSeparator" : ".",
+      "noCommas" : "true",
+      "precision" : "2",
+      "groupSeparator" : ","
+    }
+  }, {
+    "id" : 24783818,
+    "name" : "pressupost_licitacio_amb_iva",
+    "dataTypeName" : "number",
+    "description" : "Pressupost de licitació del lot (amb IVA)",
+    "fieldName" : "pressupost_licitacio_amb",
+    "position" : 50,
+    "renderTypeName" : "number",
+    "tableColumnId" : 14845661,
+    "width" : 365,
+    "cachedContents" : {
+      "non_null" : "1115041",
+      "largest" : "1210000000.00",
+      "null" : "917555",
+      "top" : [ {
+        "item" : "0.00",
+        "count" : "4186"
+      }, {
+        "item" : "300",
+        "count" : "2953"
+      }, {
+        "item" : "363",
+        "count" : "2647"
+      }, {
+        "item" : "605",
+        "count" : "2533"
+      }, {
+        "item" : "3630",
+        "count" : "2513"
+      }, {
+        "item" : "1210",
+        "count" : "2497"
+      }, {
+        "item" : "2420.00",
+        "count" : "2405"
+      }, {
+        "item" : "1815",
+        "count" : "2364"
+      }, {
+        "item" : "500",
+        "count" : "2354"
+      }, {
+        "item" : "200",
+        "count" : "2214"
+      }, {
+        "item" : "726",
+        "count" : "2083"
+      }, {
+        "item" : "1000.00",
+        "count" : "1985"
+      }, {
+        "item" : "484",
+        "count" : "1954"
+      }, {
+        "item" : "150.00",
+        "count" : "1942"
+      }, {
+        "item" : "1452",
+        "count" : "1928"
+      }, {
+        "item" : "600",
+        "count" : "1918"
+      }, {
+        "item" : "242",
+        "count" : "1914"
+      }, {
+        "item" : "250",
+        "count" : "1883"
+      }, {
+        "item" : "6050",
+        "count" : "1883"
+      }, {
+        "item" : "7260.00",
+        "count" : "1776"
+      } ],
+      "smallest" : "-740.13",
+      "count" : "2032596",
+      "cardinality" : "2032596"
+    },
+    "format" : {
+      "decimalSeparator" : ".",
+      "noCommas" : "true",
+      "precision" : "2",
+      "groupSeparator" : "."
+    }
+  }, {
+    "id" : 24783819,
+    "name" : "pressupost_licitacio_amb_iva_expedient",
+    "dataTypeName" : "number",
+    "description" : "Pressupost de licitació de l’expedient amb IVA  (en cas de diversos lots és la suma de tots els lots)",
+    "fieldName" : "pressupost_licitacio_amb_1",
+    "position" : 51,
+    "renderTypeName" : "number",
+    "tableColumnId" : 14845662,
+    "width" : 345,
+    "cachedContents" : {
+      "non_null" : "148158",
+      "largest" : "1985597606.31",
+      "null" : "1884438",
+      "top" : [ {
+        "item" : "0.00",
+        "count" : "1845"
+      }, {
+        "item" : "36300",
+        "count" : "430"
+      }, {
+        "item" : "24200.00",
+        "count" : "364"
+      }, {
+        "item" : "48400.00",
+        "count" : "318"
+      }, {
+        "item" : "18150.00",
+        "count" : "313"
+      }, {
+        "item" : "72600.00",
+        "count" : "302"
+      }, {
+        "item" : "12100.00",
+        "count" : "302"
+      }, {
+        "item" : "60500.00",
+        "count" : "299"
+      }, {
+        "item" : "14520.00",
+        "count" : "292"
+      }, {
+        "item" : "30250.00",
+        "count" : "283"
+      }, {
+        "item" : "18029.00",
+        "count" : "262"
+      }, {
+        "item" : "7260.00",
+        "count" : "251"
+      }, {
+        "item" : "21780.00",
+        "count" : "247"
+      }, {
+        "item" : "96800.00",
+        "count" : "214"
+      }, {
+        "item" : "18148.79",
+        "count" : "204"
+      }, {
+        "item" : "121000.00",
+        "count" : "202"
+      }, {
+        "item" : "6050.00",
+        "count" : "195"
+      }, {
+        "item" : "54450.00",
+        "count" : "194"
+      }, {
+        "item" : "108900.00",
+        "count" : "194"
+      }, {
+        "item" : "17545",
+        "count" : "191"
+      } ],
+      "smallest" : "0.00",
+      "count" : "2032596",
+      "cardinality" : "2032596"
+    },
+    "format" : {
+      "decimalSeparator" : ".",
+      "noCommas" : "true",
+      "precision" : "2",
+      "groupSeparator" : ","
+    }
+  }, {
+    "id" : 24783820,
+    "name" : "valor_estimat_expedient",
+    "dataTypeName" : "number",
+    "description" : "Valor estimat del contracte sense IVA (a nivell expedient, per tant, comú a tots els lots)\"",
+    "fieldName" : "valor_estimat_expedient",
+    "position" : 52,
+    "renderTypeName" : "number",
+    "tableColumnId" : 14901788,
+    "cachedContents" : {
+      "non_null" : "217913",
+      "largest" : "6519432000.00",
+      "null" : "1814683",
+      "top" : [ {
+        "item" : "0.00",
+        "count" : "2078"
+      }, {
+        "item" : "30000.00",
+        "count" : "594"
+      }, {
+        "item" : "60000.00",
+        "count" : "519"
+      }, {
+        "item" : "40000.00",
+        "count" : "465"
+      }, {
+        "item" : "20000.00",
+        "count" : "452"
+      }, {
+        "item" : "50000.00",
+        "count" : "422"
+      }, {
+        "item" : "25000.00",
+        "count" : "375"
+      }, {
+        "item" : "18000.00",
+        "count" : "346"
+      }, {
+        "item" : "15000.00",
+        "count" : "346"
+      }, {
+        "item" : "12000.00",
+        "count" : "343"
+      }, {
+        "item" : "6000.00",
+        "count" : "340"
+      }, {
+        "item" : "10000.00",
+        "count" : "336"
+      }, {
+        "item" : "90000.00",
+        "count" : "322"
+      }, {
+        "item" : "100000.00",
+        "count" : "316"
+      }, {
+        "item" : "120000.00",
+        "count" : "306"
+      }, {
+        "item" : "80000.00",
+        "count" : "301"
+      }, {
+        "item" : "14900.00",
+        "count" : "284"
+      }, {
+        "item" : "24000.00",
+        "count" : "269"
+      }, {
+        "item" : "200000",
+        "count" : "269"
+      }, {
+        "item" : "45000.00",
+        "count" : "260"
+      } ],
+      "smallest" : "0.00",
+      "count" : "2032596",
+      "cardinality" : "2032596"
+    },
+    "format" : {
+      "decimalSeparator" : ".",
+      "noCommas" : "true",
+      "precision" : "2",
+      "groupSeparator" : ","
+    }
+  }, {
+    "id" : 24783821,
+    "name" : "data_publicacio_consulta_mercat",
+    "dataTypeName" : "calendar_date",
+    "description" : "Data de publicació de la consulta preliminar del mercat",
+    "fieldName" : "data_publicacio_consulta",
+    "position" : 53,
+    "renderTypeName" : "calendar_date",
+    "tableColumnId" : 14845663,
+    "cachedContents" : {
+      "non_null" : "1166",
+      "largest" : "2026-10-23T08:16:00.000",
+      "null" : "2031430",
+      "top" : [ {
+        "item" : "2025-04-14T14:02:00.000",
+        "count" : "133"
+      }, {
+        "item" : "2025-09-29T08:48:00.000",
+        "count" : "94"
+      }, {
+        "item" : "2026-02-18T12:50:00.000",
+        "count" : "53"
+      }, {
+        "item" : "2024-04-10T12:32:00.000",
+        "count" : "49"
+      }, {
+        "item" : "2024-07-09T07:34:00.000",
+        "count" : "41"
+      }, {
+        "item" : "2023-11-20T10:14:00.000",
+        "count" : "35"
+      }, {
+        "item" : "2024-06-05T14:25:00.000",
+        "count" : "30"
+      }, {
+        "item" : "2024-02-08T11:33:00.000",
+        "count" : "29"
+      }, {
+        "item" : "2023-06-26T12:00:00.000",
+        "count" : "26"
+      }, {
+        "item" : "2024-10-31T10:00:00.000",
+        "count" : "12"
+      }, {
+        "item" : "2025-04-07T10:44:00.000",
+        "count" : "12"
+      }, {
+        "item" : "2026-01-21T13:42:00.000",
+        "count" : "9"
+      }, {
+        "item" : "2023-02-02T16:48:00.000",
+        "count" : "8"
+      }, {
+        "item" : "2026-04-27T10:16:00.000",
+        "count" : "8"
+      }, {
+        "item" : "2023-11-17T08:56:00.000",
+        "count" : "7"
+      }, {
+        "item" : "2024-11-12T11:33:00.000",
+        "count" : "7"
+      }, {
+        "item" : "2023-06-14T11:44:00.000",
+        "count" : "7"
+      }, {
+        "item" : "2024-04-10T12:29:00.000",
+        "count" : "7"
+      }, {
+        "item" : "2025-09-29T08:28:00.000",
+        "count" : "4"
+      }, {
+        "item" : "2023-04-25T17:34:00.000",
+        "count" : "4"
+      } ],
+      "smallest" : "2019-01-08T13:20:00.000",
+      "count" : "2032596",
+      "cardinality" : "2032596"
+    },
+    "format" : {
+      "view" : "date_dmy_time"
+    }
+  }, {
+    "id" : 24783822,
+    "name" : "data_publicacio_avaluacio",
+    "dataTypeName" : "calendar_date",
+    "description" : "Data de publicació de la fase de l’avaluació de l’expedient",
+    "fieldName" : "data_publicacio_avaluacio",
+    "position" : 54,
+    "renderTypeName" : "calendar_date",
+    "tableColumnId" : 14845664,
+    "cachedContents" : {
+      "non_null" : "114855",
+      "largest" : "2026-10-25T18:44:00.000",
+      "null" : "1917741",
+      "top" : [ {
+        "item" : "2025-07-03T15:14:00.000",
+        "count" : "155"
+      }, {
+        "item" : "2025-10-28T15:07:00.000",
+        "count" : "83"
+      }, {
+        "item" : "2026-07-09T14:49:00.000",
+        "count" : "83"
+      }, {
+        "item" : "2023-07-04T12:08:00.000",
+        "count" : "75"
+      }, {
+        "item" : "2024-01-22T14:33:00.000",
+        "count" : "75"
+      }, {
+        "item" : "2025-12-29T10:03:00.000",
+        "count" : "64"
+      }, {
+        "item" : "2025-03-25T11:59:00.000",
+        "count" : "63"
+      }, {
+        "item" : "2026-08-03T07:57:00.000",
+        "count" : "53"
+      }, {
+        "item" : "2024-03-18T11:32:00.000",
+        "count" : "52"
+      }, {
+        "item" : "2026-08-07T13:21:00.000",
+        "count" : "50"
+      }, {
+        "item" : "2024-07-04T14:58:00.000",
+        "count" : "50"
+      }, {
+        "item" : "2025-07-14T13:31:00.000",
+        "count" : "49"
+      }, {
+        "item" : "2026-06-30T10:11:00.000",
+        "count" : "46"
+      }, {
+        "item" : "2026-09-04T13:07:00.000",
+        "count" : "46"
+      }, {
+        "item" : "2026-07-31T12:51:00.000",
+        "count" : "43"
+      }, {
+        "item" : "2023-04-26T11:11:00.000",
+        "count" : "43"
+      }, {
+        "item" : "2025-11-11T13:06:00.000",
+        "count" : "43"
+      }, {
+        "item" : "2026-03-02T09:38:00.000",
+        "count" : "43"
+      }, {
+        "item" : "2025-11-10T14:53:00.000",
+        "count" : "42"
+      }, {
+        "item" : "2025-08-22T09:18:00.000",
+        "count" : "42"
+      } ],
+      "smallest" : "2023-02-27T09:43:00.000",
+      "count" : "2032596",
+      "cardinality" : "2032596"
+    },
+    "format" : {
+      "view" : "date_dmy_time"
+    }
+  }, {
+    "id" : 24783823,
+    "name" : "data_publicacio_contracte_agregat",
+    "dataTypeName" : "calendar_date",
+    "description" : "Data de la publicació agregada  ",
+    "fieldName" : "data_publicacio_contracte",
+    "position" : 55,
+    "renderTypeName" : "calendar_date",
+    "tableColumnId" : 14845665,
+    "cachedContents" : {
+      "non_null" : "1799113",
+      "largest" : "2026-10-23T14:02:00.000",
+      "null" : "233483",
+      "top" : [ {
+        "item" : "2023-08-01T13:03:00.000",
+        "count" : "8170"
+      }, {
+        "item" : "2024-01-08T16:21:00.000",
+        "count" : "6283"
+      }, {
+        "item" : "2024-07-04T12:32:00.000",
+        "count" : "5797"
+      }, {
+        "item" : "2023-09-18T15:16:00.000",
+        "count" : "5617"
+      }, {
+        "item" : "2024-03-07T08:16:00.000",
+        "count" : "5379"
+      }, {
+        "item" : "2025-03-28T13:00:00.000",
+        "count" : "5088"
+      }, {
+        "item" : "2025-11-25T08:30:00.000",
+        "count" : "5062"
+      }, {
+        "item" : "2023-09-20T11:03:00.000",
+        "count" : "5037"
+      }, {
+        "item" : "2026-08-12T09:16:00.000",
+        "count" : "4928"
+      }, {
+        "item" : "2024-07-15T14:50:00.000",
+        "count" : "4732"
+      }, {
+        "item" : "2026-08-05T07:44:00.000",
+        "count" : "4643"
+      }, {
+        "item" : "2024-06-04T21:15:00.000",
+        "count" : "4568"
+      }, {
+        "item" : "2025-05-28T14:48:00.000",
+        "count" : "4481"
+      }, {
+        "item" : "2023-11-02T13:49:00.000",
+        "count" : "4346"
+      }, {
+        "item" : "2024-06-04T19:00:00.000",
+        "count" : "4309"
+      }, {
+        "item" : "2023-10-25T19:12:00.000",
+        "count" : "4080"
+      }, {
+        "item" : "2023-04-21T14:55:00.000",
+        "count" : "4035"
+      }, {
+        "item" : "2023-07-04T20:05:00.000",
+        "count" : "3885"
+      }, {
+        "item" : "2024-07-17T13:54:00.000",
+        "count" : "3790"
+      }, {
+        "item" : "2023-07-19T12:39:00.000",
+        "count" : "3707"
+      } ],
+      "smallest" : "2018-07-18T08:42:00.000",
+      "count" : "2032596",
+      "cardinality" : "2032596"
+    },
+    "format" : {
+      "view" : "date_dmy_time"
+    }
+  }, {
+    "id" : 24783824,
+    "name" : "data_publicacio_encarrec",
+    "dataTypeName" : "calendar_date",
+    "description" : "Data de publicació de l’encàrrec a mitjà propi",
+    "fieldName" : "data_publicacio_encarrec",
+    "position" : 56,
+    "renderTypeName" : "calendar_date",
+    "tableColumnId" : 14845666,
+    "cachedContents" : {
+      "non_null" : "0",
+      "null" : "2032596",
+      "count" : "2032596",
+      "cardinality" : "2032596"
+    },
+    "format" : {
+      "view" : "date_dmy_time"
+    }
+  }, {
+    "id" : 24783825,
+    "name" : "tipus_empresa",
+    "dataTypeName" : "text",
+    "description" : "Tipus d’empresa adjudicatària/contractista (Pime / No Pime)",
+    "fieldName" : "tipus_empresa",
+    "position" : 57,
+    "renderTypeName" : "text",
+    "tableColumnId" : 14845667,
+    "cachedContents" : {
+      "non_null" : "621992",
+      "largest" : "PIME||PIME||PIME||PIME||PIME||PIME||PIME||PIME||PIME||PIME||PIME||PIME||PIME||PIME||PIME||PIME||PIME||PIME||PIME||PIME||PIME||PIME||PIME||PIME||PIME||PIME||PIME||PIME",
+      "null" : "1410604",
+      "top" : [ {
+        "item" : "PIME",
+        "count" : "334096"
+      }, {
+        "item" : "No PIME",
+        "count" : "282133"
+      }, {
+        "item" : "||",
+        "count" : "1159"
+      }, {
+        "item" : "PIME||PIME",
+        "count" : "397"
+      }, {
+        "item" : "PIME||PIME||PIME",
+        "count" : "343"
+      }, {
+        "item" : "||||",
+        "count" : "342"
+      }, {
+        "item" : "||||||||",
+        "count" : "210"
+      }, {
+        "item" : "||||||",
+        "count" : "206"
+      }, {
+        "item" : "PIME||PIME||PIME||PIME||PIME",
+        "count" : "172"
+      }, {
+        "item" : "PIME||PIME||PIME||PIME",
+        "count" : "171"
+      }, {
+        "item" : "No PIME||No PIME",
+        "count" : "140"
+      }, {
+        "item" : "No PIME||PIME",
+        "count" : "105"
+      }, {
+        "item" : "||||||||||",
+        "count" : "100"
+      }, {
+        "item" : "PIME||No PIME",
+        "count" : "100"
+      }, {
+        "item" : "No PIME||No PIME||No PIME",
+        "count" : "91"
+      }, {
+        "item" : "||||||||||||",
+        "count" : "71"
+      }, {
+        "item" : "PIME||PIME||PIME||PIME||PIME||PIME",
+        "count" : "67"
+      }, {
+        "item" : "No PIME||PIME||PIME",
+        "count" : "65"
+      }, {
+        "item" : "PIME||No PIME||PIME",
+        "count" : "63"
+      }, {
+        "item" : "||||||||||||||",
+        "count" : "58"
+      } ],
+      "smallest" : "||",
+      "count" : "2032596",
+      "cardinality" : "2032596"
+    },
+    "format" : { }
+  }, {
+    "id" : 24783826,
+    "name" : "url_json_futura",
+    "dataTypeName" : "url",
+    "description" : "Enllaç per descarregar  tota la informació de la fase d’alerta futura",
+    "fieldName" : "url_json_futura",
+    "position" : 58,
+    "renderTypeName" : "url",
+    "tableColumnId" : 14845668,
+    "format" : { },
+    "subColumnTypes" : [ "url", "description" ]
+  }, {
+    "id" : 24783827,
+    "name" : "url_json_cpm",
+    "dataTypeName" : "url",
+    "description" : "Enllaç per descarregar informació de la fase consulta preliminar del mercat",
+    "fieldName" : "url_json_cpm",
+    "position" : 59,
+    "renderTypeName" : "url",
+    "tableColumnId" : 14845669,
+    "format" : { },
+    "subColumnTypes" : [ "url", "description" ]
+  }, {
+    "id" : 24783828,
+    "name" : "url_json_previ",
+    "dataTypeName" : "url",
+    "description" : "Enllaç per descarregar informació de la fase anunci previ",
+    "fieldName" : "url_json_previ",
+    "position" : 60,
+    "renderTypeName" : "url",
+    "tableColumnId" : 14845670,
+    "format" : { },
+    "subColumnTypes" : [ "url", "description" ]
+  }, {
+    "id" : 24783829,
+    "name" : "url_json_licitacio",
+    "dataTypeName" : "url",
+    "description" : "Enllaç per descarregar informació de la fase anunci de licitació",
+    "fieldName" : "url_json_licitacio",
+    "position" : 61,
+    "renderTypeName" : "url",
+    "tableColumnId" : 14845671,
+    "format" : { },
+    "subColumnTypes" : [ "url", "description" ]
+  }, {
+    "id" : 24783830,
+    "name" : "url_json_avaluacio",
+    "dataTypeName" : "url",
+    "description" : "Enllaç per descarregar informació de la fase d’avaluació",
+    "fieldName" : "url_json_avaluacio",
+    "position" : 62,
+    "renderTypeName" : "url",
+    "tableColumnId" : 14845672,
+    "format" : { },
+    "subColumnTypes" : [ "url", "description" ]
+  }, {
+    "id" : 24783831,
+    "name" : "url_json_adjudicacio",
+    "dataTypeName" : "url",
+    "description" : "Enllaç per descarregar informació de la fase d’adjudicació",
+    "fieldName" : "url_json_adjudicacio",
+    "position" : 63,
+    "renderTypeName" : "url",
+    "tableColumnId" : 14845673,
+    "format" : { },
+    "subColumnTypes" : [ "url", "description" ]
+  }, {
+    "id" : 24783832,
+    "name" : "url_json_formalitzacio",
+    "dataTypeName" : "url",
+    "description" : "Enllaç per descarregar informació de la fase de formalització",
+    "fieldName" : "url_json_formalitzacio",
+    "position" : 64,
+    "renderTypeName" : "url",
+    "tableColumnId" : 14845674,
+    "format" : { },
+    "subColumnTypes" : [ "url", "description" ]
+  }, {
+    "id" : 24783834,
+    "name" : "url_json_anulacio",
+    "dataTypeName" : "url",
+    "description" : "Enllaç per descarregar informació de la fase d’anul·lació",
+    "fieldName" : "url_json_anulacio",
+    "position" : 66,
+    "renderTypeName" : "url",
+    "tableColumnId" : 14845676,
+    "format" : { },
+    "subColumnTypes" : [ "url", "description" ]
+  }, {
+    "id" : 24783836,
+    "name" : "url_json_agregada",
+    "dataTypeName" : "url",
+    "description" : "Enllaç per descarregar informació de la publicació  agregada ",
+    "fieldName" : "url_json_agregada",
+    "position" : 68,
+    "renderTypeName" : "url",
+    "tableColumnId" : 14845678,
+    "format" : { },
+    "subColumnTypes" : [ "url", "description" ]
+  }, {
+    "id" : 24783768,
+    "name" : "id_intern",
+    "dataTypeName" : "text",
+    "description" : "identificador intern",
+    "fieldName" : "id_intern",
+    "position" : 69,
+    "renderTypeName" : "text",
+    "tableColumnId" : 14845610,
+    "cachedContents" : {
+      "non_null" : "2032596",
+      "largest" : "ffffcfe2-03b2-4aee-97df-e324181497ba_1",
+      "null" : "0",
+      "top" : [ {
+        "item" : "21cea6a5-f6c4-42e3-aa53-34f7565d01a6_309654200",
+        "count" : "1"
+      }, {
+        "item" : "e48e306e-5764-493c-8098-c1dc6226fba1_300369351",
+        "count" : "1"
+      }, {
+        "item" : "2c5ef733-3d83-43c7-b1cc-8d018ffff2d8_311424150",
+        "count" : "1"
+      }, {
+        "item" : "102e6076-7086-d1f0-e3c4-ba06f9f6c098",
+        "count" : "1"
+      }, {
+        "item" : "e7d7ce91-6fc2-40e6-a75b-8fc96f7bbf71_308755965",
+        "count" : "1"
+      }, {
+        "item" : "1b221e14-c48f-4b73-adf1-3758a16b8852_2717218",
+        "count" : "1"
+      }, {
+        "item" : "dcbdb79a-fc45-42b5-95c9-43c544bbb0c4_2543295",
+        "count" : "1"
+      }, {
+        "item" : "b6e47889-6577-4fd9-bc6a-3576dc2ab02d_307805317",
+        "count" : "1"
+      }, {
+        "item" : "22599bb4-b422-4239-854b-ffb4e09e8f7d_313485633",
+        "count" : "1"
+      }, {
+        "item" : "a59e6875-b731-44e9-8c9e-4db95938f876_309801348",
+        "count" : "1"
+      }, {
+        "item" : "a17bb75a-92f0-4785-ad05-ae7e402a3122_301673787",
+        "count" : "1"
+      }, {
+        "item" : "aa1df6fe-a9aa-438a-8e43-b95d9b2d3a7c_302272222",
+        "count" : "1"
+      }, {
+        "item" : "eda152d1-83e2-4a49-b75a-05cb51b3c319_317071959",
+        "count" : "1"
+      }, {
+        "item" : "ba13e5e0-84ad-45d4-a4ef-fd6c7674cfd9_3151015",
+        "count" : "1"
+      }, {
+        "item" : "3abcc4d1-c12c-46f5-be79-fa4795c249e1_319090905",
+        "count" : "1"
+      }, {
+        "item" : "acca6c92-8624-44f7-9c71-e69160961d26_1590444",
+        "count" : "1"
+      }, {
+        "item" : "e1b9f98b-869e-4d2c-bb03-d6e64068f302_311087016",
+        "count" : "1"
+      }, {
+        "item" : "6b85c724-c33f-4e9e-a356-065b7332948f_317578270",
+        "count" : "1"
+      }, {
+        "item" : "40f44a88-8b2b-4328-a1e4-f08660d3f1f7_312365537",
+        "count" : "1"
+      }, {
+        "item" : "718ffa04-7ebc-4fb8-ae52-9968fb02bb2d_306635284",
+        "count" : "1"
+      } ],
+      "smallest" : "0000106a-61d8-4bd1-97c1-6f8bd4909d3a",
+      "count" : "2032596",
+      "cardinality" : "2032596"
+    },
+    "format" : { }
+  } ],
+  "grants" : [ {
+    "inherited" : false,
+    "type" : "viewer",
+    "flags" : [ "public" ]
+  } ],
+  "license" : {
+    "name" : "See Terms of Use"
+  },
+  "metadata" : {
+    "custom_fields" : {
+      "Freqüència d'actualització" : {
+        "Freqüència d'actualització" : "Diària"
+      },
+      "Idioma" : {
+        "Idioma" : "Català",
+        "Dataset name (EN)" : "Public procurement in Catalonia: publications on the Public Recruitment Services Platform ",
+        "Nombre del conjunto de datos (ES)" : "Contratación pública en Catalunya: publicaciones en la Plataforma de servicios de contratación pública"
+      },
+      "Informació de gènere o sexe" : {
+        "Informació de gènere o sexe" : "No aplicable"
+      },
+      "Actors" : {
+        "Departament" : "Economia i Finances",
+        "Tipus actor" : "Generalitat de Catalunya"
+      },
+      "Àmbit geogràfic" : {
+        "Informació geogràfica" : "Sense informació geogràfica",
+        "Àmbit geogràfic" : "Catalunya"
+      }
+    },
+    "rowIdentifier" : 24783768,
+    "availableDisplayTypes" : [ "table", "fatrow", "page" ]
+  },
+  "owner" : {
+    "id" : "a4b5-gx6v",
+    "displayName" : "Dades Obertes Catalunya",
+    "profileImageUrlLarge" : "/api/users/a4b5-gx6v/profile_images/LARGE",
+    "profileImageUrlMedium" : "/api/users/a4b5-gx6v/profile_images/THUMB",
+    "profileImageUrlSmall" : "/api/users/a4b5-gx6v/profile_images/TINY",
+    "screenName" : "Dades Obertes Catalunya",
+    "type" : "interactive",
+    "flags" : [ "acceptedEula" ]
+  },
+  "query" : { },
+  "rights" : [ "read" ],
+  "tableAuthor" : {
+    "id" : "a4b5-gx6v",
+    "displayName" : "Dades Obertes Catalunya",
+    "profileImageUrlLarge" : "/api/users/a4b5-gx6v/profile_images/LARGE",
+    "profileImageUrlMedium" : "/api/users/a4b5-gx6v/profile_images/THUMB",
+    "profileImageUrlSmall" : "/api/users/a4b5-gx6v/profile_images/TINY",
+    "screenName" : "Dades Obertes Catalunya",
+    "type" : "interactive",
+    "flags" : [ "acceptedEula" ]
+  },
+  "tags" : [ "plataforma de serveis de contractació pública", "anunci licitació", "adjudicació", "anunci formalització", "contractació pública", "contractes", "perfils de contractant", "òrgan de contractació", "empreses", "pscp", "sobre digital", "oferta telemàtica", "ods12_producció i consum responsable", "ods16_pau justícies i institucions sòlides" ],
+  "flags" : [ "default", "ownerMayBeContacted", "restorable", "restorePossibleForType" ]
+}

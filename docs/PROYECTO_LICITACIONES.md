@@ -42,7 +42,7 @@ trabajo de Go nuevo). Estructura de §12.8: `cmd/api`, `cmd/ingestor`, `internal
                 │
                 ├─► panel del Cerebro (pantalla «Licitaciones»)
                 ├─► herramienta «licitaciones» de los agentes (Rastreador, Viabilidad, Inteligencia Competitiva, Precio…)
-                └─► eventos «licitacion.nueva / modificada / adjudicada» ─► alertas y resumen diario de las 7:00
+                └─► eventos «licitacion.nueva / modificada / adjudicada» ─► alertas y resumen diario de las 16:00
 ```
 El S3 conserva la evidencia; el grafo y OpenSearch son **proyecciones reconstruibles** desde S3 y el log de NATS (§12.6).
 
@@ -204,10 +204,40 @@ módulos con pruebas, y si un pliego trae una fórmula nueva, se añade como mó
   `organismo`, `competidores`, `contratos_que_vencen`, `novedades_desde` y `simular` (devuelve la curva probabilidad-precio-margen;
   no decide). `plataformas_contratacion` conserva `descargar_documento` y `preparar_paquete`.
 - **Eventos → Cerebro**: un consumidor en el Cerebro recibe `licitacion.nueva` con encaje alto y la registra en el embudo; el
-  **Rastreador** (6:00) pide a **Viabilidad** el informe ir/no ir; el **Director de Licitaciones** recibe el resumen a las 7:00 en el panel.
+  **Rastreador** (6:00) pide a **Viabilidad** el informe ir/no ir; el **Director de Licitaciones** prepara el resumen que Dirección recibe a las 16:00 en el panel.
 - **Panel**: pantalla «Licitaciones» (buscador con facetas, ficha, alertas guardadas, panel operativo), a través de la pasarela del panel.
 - **Seguridad**: tokens de Keycloak validados en la API Go; la API no se publica fuera (como la del Cerebro); registro de accesos.
 - Las aprobaciones no cambian: presentarse y firmar siguen siendo decisiones humanas.
+
+### Interfaz y dashboard (decidido por Dirección el 26/10/2026)
+Una sección **«Licitaciones»** dentro del panel del Cerebro (mismo inicio de sesión de Keycloak, mismos permisos por rol y
+departamento, mismo aspecto). El navegador nunca habla con la API del motor: pasa por la pasarela del panel (ADR 0007).
+
+| Pestaña | Contenido | Datos de |
+|---|---|---|
+| **Dashboard** | Cuatro bloques (abajo), con periodo seleccionable (hoy, 7, 30, 90 días) y clic en cada cifra para ver el listado | API del motor + API del Cerebro |
+| **Buscador** | Texto libre (híbrido BM25 + semántico), facetas por área CPV, provincia/NUTS, organismo, importe, estado, plazo y fuente; orden por encaje, fecha o importe; paginación por cursor | `GET /tenders` |
+| **Ficha** | Expediente y lotes, importes con su significado, plazos, documentos, historial de versiones, enlaces a las fuentes originales, puntuación de encaje explicada; botones «Estudiar» (pasa al embudo del Cerebro) y «Simular» (fase 5b) | `/tenders/{id}`, `/history` |
+| **Competencia** | Ficha de competidor y de organismo, cuotas de mercado, bajas medias, contratos que vencen | `/competitors`, `/organizations`, `/expiring-contracts`, `/awards` |
+| **Alertas** | Búsquedas guardadas con aviso (en el panel y en el resumen de las 16:00) | `/alerts` |
+| **Estado del motor** | Indicadores operativos del §11 | `GET /ops/status` |
+
+**Bloques del dashboard**
+1. **Oportunidades**: licitaciones nuevas del periodo con encaje alto (ordenadas por encaje), importe total, plazos que cierran
+   en 7 días, reparto por área CPV (TI, videovigilancia, tráfico, control de accesos, redes) y por provincia.
+2. **Competencia y mercado**: adjudicaciones recientes en nuestros CPV, competidores que más ganan y su cuota, baja media por
+   área, contratos que vencen en 3–12 meses.
+3. **Embudo propio**: licitaciones en estudio, presentadas, ganadas y perdidas; tasa de éxito y motivos de pérdida. Sale de la
+   tabla `licitaciones` del Cerebro (embudo comercial), no del motor.
+4. **Estado del motor**: frescura por fuente (objetivo < 2 h), última ingesta correcta, errores de parser, retraso de las colas
+   de NATS, salud de OpenSearch, grafo, MinIO y Redis. Si algo falla, el dashboard lo dice en rojo en vez de mostrar cifras viejas.
+
+**Rendimiento**: los agregados del dashboard se precalculan en la proyección de OpenSearch y se cachean en Redis (TTL corto);
+objetivo de carga del dashboard p95 < 300 ms. Ninguna cifra del dashboard la calcula la IA.
+
+**Entregas**: primera versión **adelantada al final de la fase 3** (Dashboard con Oportunidades y Estado del motor, Buscador y
+Ficha básica, solo lectura); en la fase 4, Embudo, Alertas, Ficha completa y Competencia en forma de listados y ranking
+(bloque «Competencia y mercado»); las fichas completas de competidor y de organismo llegan con la fase 5, y «Simular» en la 5b.
 
 ## 9. Objetivos de rendimiento (SLO del documento, §12.1)
 
@@ -221,13 +251,13 @@ Búsqueda p95 < 100 ms y p99 < 250 ms; vecindad del grafo (1–2 saltos) p95 < 5
 | **0. Descubrimiento y PoC** | 2–3 semanas | Corpus de muestras reales (643, 1044, TED, Cataluña) como datos de prueba; feed de menores verificado; **banco de pruebas Neo4j vs Memgraph** (§12.7) con corpus sintético de 1 M expedientes y 5 M anuncios/versiones: p50/p95/p99, CPU, RAM, disco, ingestión por segundo, HA y recuperación, caché fría y caliente; **ADR** de grafo, mensajería, caché y consistencia; decisiones de la sección 12 | ADR aprobados y muestras en `licitaciones/testdata/` |
 | **1. Datos** | 3 semanas | Esqueleto Go (`cmd/*`, `internal/*`), MinIO y NATS en el compose; conector PLACSP 643/1044 incremental con **anuncios y adjudicaciones** (adjudicatario por NIF, importes, bajas, nº de ofertas, formalización y fin del contrato); parser CODICE versionado con pruebas de contrato; originales con SHA-256; proyector de grafo | Repetir la ingesta no duplica; cada registro tiene original, hash y URL; carga histórica de **5 años** de licitaciones y adjudicaciones |
 | **2. Más fuentes** | 2 semanas | Conector TED v3 (eForms); reconciliación PLACSP–TED conservadora (identificadores, evidencia y confianza); contraste con Cataluña | Un expediente presente en PLACSP y TED aparece una vez, con la evidencia del enlace |
-| **3. Búsqueda y API** | 3 semanas | Proyector de OpenSearch (híbrido BM25 + semántico); puntuación de encaje; API Go con OpenAPI, Keycloak, paginación por cursor, límites y caché Redis | Búsqueda por texto, CPV, zona, organismo, fechas y estado; contrato OpenAPI publicado |
-| **4. Cerebro y panel** | 3 semanas | Herramienta `licitaciones`; consumidor de eventos; nuevo Rastreador y resumen de las 7:00; pantalla «Licitaciones» (buscador, ficha, alertas, panel operativo) | Criterios del MVP del documento (§9) cumplidos y el resumen diario llega solo |
+| **3. Búsqueda y API** | 3–4 semanas | Proyector de OpenSearch (híbrido BM25 + semántico); puntuación de encaje; API Go con OpenAPI, Keycloak, paginación por cursor, límites y caché Redis; endpoints del dashboard y `/ops/status`; **primera versión de la sección «Licitaciones» del panel** (Dashboard con Oportunidades y Estado del motor, Buscador, Ficha básica; solo lectura) | Búsqueda por texto, CPV, zona, organismo, fechas y estado; contrato OpenAPI publicado; Dirección usa el dashboard con datos reales |
+| **4. Cerebro y panel** | 3 semanas | Herramienta `licitaciones`; consumidor de eventos; nuevo Rastreador y resumen de las 16:00; resto de la sección «Licitaciones» (Competencia, Embudo propio, Alertas, Ficha completa con «Estudiar») | Criterios del MVP del documento (§9) cumplidos y el resumen diario llega solo |
 | **5. Pliegos y competencia** | 3 semanas | Descarga bajo demanda con antivirus; cuaderno por expediente con matriz de cumplimiento citada; fichas de competidor y de organismo, cuotas de mercado, **contratos que vencen** y alertas de competencia (§5); actas de mesa (licitadores y puntuaciones) cuando se publican; plazos al calendario | El Analista de Pliegos cita página y fragmento; la ficha de un competidor cuadra con una muestra revisada a mano |
 | **5b. Simulador de ofertas** | 3 semanas | Módulo `internal/simulation` (§6): fórmulas de puntuación con pruebas, baja anormal, Monte Carlo, curva probabilidad-precio-margen; *backtesting* con concursos ya adjudicados; botón «Simular» en el panel; uso por Precio, Evaluador y Viabilidad | El *backtesting* alcanza la precisión acordada con Licitaciones antes de usarse para decidir |
 | **6. Producción** | 2 semanas | OpenTofu; OpenTelemetry y paneles; pruebas k6/Vegeta reproducibles; copias y ensayo de restauración (RPO/RTO); reindexado completo desde S3 | SLO medidos y cumplidos; restauración ensayada |
 
-Total orientativo: **20–23 semanas** con una persona dedicada, más la revisión de Licitaciones. Cada fase acaba en algo usable.
+Total orientativo: **20–24 semanas** con una persona dedicada, más la revisión de Licitaciones. Cada fase acaba en algo usable.
 
 ## 11. Indicadores del panel operativo
 
@@ -238,17 +268,26 @@ hasta la decisión ir/no ir.
 
 ## 12. Decisiones que necesito de 101.cat (fase 0)
 
-1. **CPV de interés.** Propuesta para validar con Licitaciones: 35125000 (sistemas de vigilancia), 32323500 (videovigilancia),
-   31625200 (detección de incendios), 35111000 (equipos de extinción), 45343000 (instalación de prevención de incendios),
-   45312000 (sistemas de alarma y antenas), 45314000 (equipos de telecomunicaciones), 32412000 (redes de comunicaciones),
-   64200000 (servicios de telecomunicaciones), 09332000 (instalaciones solares), 50610000 (mantenimiento de equipos de seguridad).
-2. **Zona prioritaria** para la puntuación (se ingesta todo): ¿Cataluña, Cataluña y limítrofes, toda España?
-3. **Histórico**: propuesta de **5 años** de licitaciones y adjudicaciones (necesario para el análisis de competencia y el simulador).
-4. **Importes** mínimo y máximo según la solvencia.
-5. **Contratos menores**: ¿sí?
-6. **Quién recibe el resumen diario** y a qué hora (propuesta: Dirección y Licitaciones, 7:00).
-7. **Servidor**: memoria disponible para OpenSearch y el grafo junto a Ollama (ver riesgos); ¿mismo servidor o uno aparte?
+Decididas por Dirección el 26/10/2026: todas. La 8 se decide con los resultados del banco de pruebas (ADR 0006).
+
+1. **CPV de interés** (decidido; sustituye a la propuesta inicial): 72000000-5, 72200000-7, 72230000-6, 72262000-9,
+   72267000-4 (servicios TI, desarrollo y mantenimiento de software); 32323500-8, 32235000-9, 32234000-2, 35125300-2,
+   35120000-1 (videovigilancia, cámaras y sistemas de vigilancia y seguridad); 34970000-7, 34923000-3, 34971000-4,
+   34972000-1, 63712710-3, 45316210-0 (control, vigilancia y medición del tráfico, y su instalación); 42961000-0,
+   42961100-1 (mando y control, control de accesos); 32420000-3 (equipos de red); 32441100-7 (vigilancia telemétrica).
+   Propuesta por validar: puntuar también la jerarquía (un CPV hijo de uno de la lista encaja; p. ej. 72000000 cubriría toda la división 72).
+2. **Zona prioritaria** (decidido): **España**. Se ingesta todo y se puntúa por zona. **Andorra queda fuera** (decidido el
+   26/10/2026): su fuente (`contractacio.govern.ad`, registro exportable sin NIF ni CPV) no permite la reutilización sin
+   autorización escrita del Govern. Se puede replantear si se obtiene (ver `licitaciones/testdata/andorra/PROCEDENCIA.md`).
+3. **Histórico** (decidido): **5 años** de licitaciones y adjudicaciones (carga inicial en la fase 1).
+4. **Importes** (decidido): **hasta 1 000 000 €**, sin mínimo. Se ingesta todo; el límite cuenta en la puntuación de encaje y
+   en el resumen diario. Se aplica al **presupuesto base de licitación sin IVA de cada lote** (confirmado por Dirección).
+5. **Contratos menores** (decidido): **sí se incluyen**. Su fuente se verifica en la fase 0.
+6. **Resumen diario** (decidido): lo recibe **Dirección (Albert)** a las **16:00**, con lo publicado desde las 16:00 del día anterior.
+7. **Servidor** (decidido): **este mismo servidor** (62 GB compartidos con el Cerebro y Ollama). Cada servicio del motor lleva
+   límite de memoria y CPU (NORMAS) y el presupuesto se fija con el banco de pruebas.
 8. **Licencias**: Neo4j Community (sin clúster) o Enterprise; Memgraph Community (BSL). Afecta a la alta disponibilidad.
+   Se decide con los resultados del banco (ADR 0006).
 
 ## 13. Riesgos
 
