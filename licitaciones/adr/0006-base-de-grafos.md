@@ -58,6 +58,10 @@ parametrizadas, 3 repeticiones, resultados y *scripts* reproducibles en `licitac
 ## Decisión
 **Decisión: pendiente del banco de pruebas (licitaciones/docs/BENCH_GRAFO.md).**
 
+**Avance (27/10/2026)**: resultados parciales en `licitaciones/docs/BENCH_GRAFO.md`. Con 10.000 expedientes los tres cumplen y Postgres sin grafo es el
+más ligero; con 1 millón solo hay datos de Neo4j (no cumple el criterio 1 en q3) y falta Postgres. El equipo del banco es inestable, así que el ADR
+**sigue PROVISIONAL** hasta repetir las medidas.
+
 Regla de decisión, fijada de antemano para no elegir por preferencia:
 1. Se descarta la opción que no cumpla los criterios 1, 3, 5, 6 o 10.
 2. Si C (sin grafo) cumple 1 y 5 con el mismo corpus, se elige C (menos piezas).
