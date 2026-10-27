@@ -22,8 +22,10 @@ var ErrNoStartURL = errors.New("ingest: falta la dirección de la primera págin
 // en el tiempo hasta llegar a una página en la que todo es ya conocido. La sindicación va en orden descendente por fecha, así que en
 // régimen normal solo hace falta la primera página; si ha habido muchos cambios desde la última vez, recorre las que hagan falta.
 //
-// Si una página falla, devuelve el error con lo ingerido hasta entonces (todo ello ya consistente: cada entrada es idempotente) y no
-// avanza el punto de control, de modo que la siguiente ejecución repite desde el principio sin duplicar.
+// Si una página falla, devuelve el error con lo ingerido hasta entonces (todo ello ya consistente: cada entrada es idempotente) y deja el punto
+// de control vacío. Vacío significa «la última ejecución no terminó»: la siguiente ejecución no se fía de los validadores (un 304 la dejaría en
+// la primera página) ni se detiene en la primera página ya conocida, sino que recorre hacia atrás hasta el final o hasta el tope, de modo
+// que lo que quedó sin ingerir se recupera sin duplicar lo ya hecho. Así también arranca la primera ejecución de una fuente.
 func Run(ctx context.Context, d Deps, source, startURL string, opt RunOptions) (Stats, error) {
 	var total Stats
 	if startURL == "" {
@@ -37,12 +39,23 @@ func Run(ctx context.Context, d Deps, source, startURL string, opt RunOptions) (
 		return total, fmt.Errorf("ingest: leer el punto de control: %w", err)
 	}
 
+	complete := !cp.LastRun.IsZero() // la ejecución anterior terminó: basta con llegar a lo ya conocido
 	url, validators := startURL, cp.Validators
 	var first Checkpoint
+	progressed := false
+	// fail devuelve el error; si ya se había ingerido algo, deja el punto de control vacío (ver arriba).
+	fail := func(err error) (Stats, error) {
+		if progressed && complete {
+			if serr := d.State.SaveCheckpoint(context.WithoutCancel(ctx), source, Checkpoint{}); serr != nil {
+				d.log().Error("no se pudo invalidar el punto de control", "fuente", source, "error", serr)
+			}
+		}
+		return total, err
+	}
 	for page := 0; page < opt.MaxPages; page++ {
 		res, err := d.Fetcher.Fetch(ctx, url, validators)
 		if err != nil {
-			return total, fmt.Errorf("ingest: descargar %s: %w", url, err)
+			return fail(fmt.Errorf("ingest: descargar %s: %w", url, err))
 		}
 		if res.NotModified {
 			if page == 0 {
@@ -51,18 +64,19 @@ func Run(ctx context.Context, d Deps, source, startURL string, opt RunOptions) (
 			}
 			break
 		}
+		progressed = true
 		feed, st, err := ingestPage(ctx, d, source, res)
 		total.add(st)
 		if err != nil {
-			return total, fmt.Errorf("ingest: página %s: %w", url, err)
+			return fail(fmt.Errorf("ingest: página %s: %w", url, err))
 		}
 		d.log().Info("página ingerida", "fuente", source, "url", res.URL, "entradas", st.Entries, "bajas", st.Removed,
 			"nuevas", st.New, "modificadas", st.Modified, "sin_cambios", st.Unchanged)
 		if page == 0 {
 			first = Checkpoint{LastRun: d.now(), Validators: res.Validators}
 		}
-		// Página sin ninguna novedad: se ha llegado a lo ya conocido.
-		if st.New+st.Modified == 0 || feed.Next == "" {
+		// Página sin ninguna novedad: se ha llegado a lo ya conocido (solo si la ejecución anterior terminó).
+		if feed.Next == "" || (complete && st.New+st.Modified == 0) {
 			break
 		}
 		url, validators = feed.Next, fetch.Validators{}

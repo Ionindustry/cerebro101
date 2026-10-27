@@ -57,6 +57,7 @@ Las pruebas de PostgreSQL necesitan una base de pruebas (la variable `LICITACION
 | `LIC_FUENTES` | `placsp-643` | `placsp-643`, `placsp-1044`, `placsp-1143`, separadas por comas |
 | `LIC_INTERVALO` | `1h` | Entre ingestas de cada fuente (mínimo `5m`: no se castiga a la fuente) |
 | `LIC_MAX_PAGINAS` | `50` | Páginas como máximo por ejecución |
+| `LIC_TIMEOUT_DESCARGA` | `5m` | Plazo por descarga (entre `30s` y `15m`); PLACSP sirve las páginas despacio |
 | `LIC_CONTACTO` | vacío | Correo o web que se anuncia a la fuente en el `User-Agent` |
 
 ## Imagen

@@ -26,7 +26,14 @@ jobs:
           cache: pip
           cache-dependency-path: api/pyproject.toml
       - name: OCR (Tesseract y Poppler) para las pruebas de documentos escaneados
-        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends tesseract-ocr tesseract-ocr-spa tesseract-ocr-cat tesseract-ocr-eng poppler-utils
+        timeout-minutes: 10          # un espejo de apt colgado no debe dejar el trabajo parado hasta el límite del job
+        run: |
+          aptq() { sudo timeout --kill-after=10 150 apt-get -o Acquire::Retries=3 -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30 "$@"; }
+          for intento in 1 2 3; do
+            if aptq update && aptq install -y --no-install-recommends tesseract-ocr tesseract-ocr-spa tesseract-ocr-cat tesseract-ocr-eng poppler-utils; then exit 0; fi
+            echo "apt falló (intento $intento de 3)"; sleep 5
+          done
+          exit 1
       - name: Instalar la API
         run: pip install -e ./api
       - name: Pruebas

@@ -17,7 +17,7 @@ func TestConfigPorDefecto(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if c.Interval != time.Hour || c.MaxPages != 50 || len(c.Sources) != 1 || c.Sources[0] != "placsp-643" || c.S3Secure {
+	if c.Interval != time.Hour || c.MaxPages != 50 || c.Timeout != 5*time.Minute || len(c.Sources) != 1 || c.Sources[0] != "placsp-643" || c.S3Secure {
 		t.Fatalf("valores por defecto inesperados: %+v", c)
 	}
 }
@@ -42,6 +42,8 @@ func TestConfigErrores(t *testing.T) {
 		"páginas fuera":      {EnvMaxPages: "0"},
 		"seguro roto":        {EnvS3Secure: "quizá"},
 		"nats sin servidor":  {EnvNATS: "nada"},
+		"plazo muy corto":    {EnvTimeout: "5s"},
+		"plazo muy largo":    {EnvTimeout: "2h"},
 	} {
 		m := base()
 		for k, v := range cambio {
