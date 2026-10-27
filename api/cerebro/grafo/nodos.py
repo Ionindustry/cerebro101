@@ -4,6 +4,7 @@ from __future__ import annotations
 import json
 import logging
 import os
+import re
 
 from langgraph.types import interrupt
 
@@ -21,7 +22,25 @@ from .prompts import sistema_agente, sistema_director_departamento, sistema_dire
 
 log = logging.getLogger("cerebro.grafo")
 MAX_PASOS = 5
-INYECTAR_DEPARTAMENTO = {"erpnext", "conocimiento", "correo", "calendario"}
+INYECTAR_DEPARTAMENTO = {"erpnext", "conocimiento", "correo", "calendario", "cuaderno"}
+PIDE_CUADERNO = re.compile(r"\bcuadern|\bquadern|notebook\s*lm", re.I)
+
+
+def con_cuadernos(fichas) -> list:
+    return [f for f in fichas if "cuaderno" in f.herramientas]
+
+
+def corregir_por_cuaderno(peticion: str, departamento: str, agente: str | None = None) -> tuple[str, str | None]:
+    """Si la petición pide un cuaderno de investigación y el departamento (o el agente) elegido no tiene cuadernos, lo
+    corrige hacia quien sí los tiene. El modelo rápido que enruta confunde «cuaderno» con la base de conocimiento."""
+    if not PIDE_CUADERNO.search(peticion):
+        return departamento, agente
+    r = registro()
+    if not con_cuadernos(r.del_departamento(departamento)):
+        departamento, agente = "direccion", None
+    if agente is not None and "cuaderno" not in r.fichas[agente].herramientas:
+        agente = con_cuadernos(r.del_departamento(departamento))[0].id
+    return departamento, agente
 
 def inyectar(ficha, estado: dict, herramienta: str, args: dict) -> dict:
     """Lo que decide el sistema (no el modelo): el departamento y la sensibilidad. Si el modelo los pasa, se pisan."""
@@ -70,7 +89,7 @@ async def enrutar(estado: Estado) -> Estado:
                            esquema=esquema, temperatura=0, max_tokens=400)
     finally:
         await actividad.reposo(ficha.id)
-    return {"departamento": d["departamento"]}
+    return {"departamento": corregir_por_cuaderno(estado["peticion"], d["departamento"])[0]}
 
 
 async def elegir_agente(estado: Estado) -> Estado:
@@ -91,7 +110,7 @@ async def elegir_agente(estado: Estado) -> Estado:
                        esquema=esquema, temperatura=0, max_tokens=400)
     finally:
         await actividad.reposo(director.id)
-    return {"agente": d["agente"]}
+    return {"agente": corregir_por_cuaderno(estado["peticion"], dep, d["agente"])[1]}
 
 
 PASO_MAX_TOKENS = 1500          # un paso del agente es una llamada a herramienta o una respuesta: no necesita más

@@ -64,16 +64,28 @@ def sistema_director_general(departamentos: dict, agentes: dict[str, list[str]] 
     lista = "\n".join(linea(k, v) for k, v in departamentos.items())
     return (f"{CONTEXTO_EMPRESA}\n\nEres el Director General del Cerebro. Decide qué departamento debe "
             f"atender la petición, según la función del departamento y de sus agentes.\n\n"
+            "Las investigaciones en internet con «cuaderno de investigación» (como NotebookLM) las hacen los agentes que investigan: "
+            "si son de mercado, competencia, noticias o tendencias, «marketing»; de fabricantes y productos, «operaciones»; de "
+            "licitaciones y adjudicaciones, «licitaciones»; las demás, «direccion» (Asistente general). «conocimiento» es solo para "
+            "indexar y consultar los documentos internos de la empresa.\n\n"
             "Aviso: «areas» (Áreas de Servicio) solo es para el diseño técnico de un servicio concreto "
             "(cámaras, incendios, accesos, redes, renovables…), su obra, mantenimiento, legalizaciones o "
             "ayudas. Presupuestos, clientes, proyectos, compras, personal, contratos, cobros, licitaciones "
             "o telecomunicaciones de operador van a su propio departamento.\n\n"
-            "Las dudas generales, de cultura general o de actualidad que no son del negocio (qué día es, noticias, normativa pública, "
-            "cómo funciona algo, definiciones, comparativas…) van a «direccion»: allí las responde el Asistente general, que consulta internet.\n\n"
+            "Las dudas generales, de cultura general o de actualidad (qué día es, noticias, normativa pública, cómo funciona algo, "
+            "definiciones, comparativas…) y TODA pregunta que se conteste con información pública de internet van a «direccion», "
+            "aunque trate del sector: precios de mercado o de tiendas, productos y fichas técnicas de fabricantes, competidores y lo que "
+            "ofrecen, noticias del sector, cotizaciones, el tiempo… Allí las responde el Asistente general, el único que busca en internet "
+            "y cita las fuentes. Van a su departamento solo si necesitan datos internos de la empresa (ERP, clientes, correos, proyectos, "
+            "nuestras cifras) o hacer algo (crear, enviar, presupuestar, comprar, diseñar un servicio).\n\n"
             f"Departamentos:\n{lista}")
 
 
 def sistema_director_departamento(nombre_dep: str, fichas: list[Ficha]) -> str:
     lista = "\n".join(f"- {f.id}: {f.nombre} — {f.tareas}" for f in fichas)
+    con_web = [f.id for f in fichas if "web" in f.herramientas]
+    aviso = (f"\n\nSi la petición se contesta con información pública de internet (noticias, precios de mercado, productos, "
+             f"competidores, normativa publicada…) y no necesita datos internos ni hacer nada, elige {', '.join(con_web)}: "
+             f"es quien puede buscar en internet." if con_web else "")
     return (f"{CONTEXTO_EMPRESA}\n\nDiriges el departamento {nombre_dep}. Elige qué agente atiende la "
-            f"petición.\n\nAgentes:\n{lista}")
+            f"petición.{aviso}\n\nAgentes:\n{lista}")

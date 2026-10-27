@@ -1,6 +1,7 @@
 # ERPNext (frappe_docker) para el Cerebro 101.cat. Basado en pwd.yml de https://github.com/frappe/frappe_docker
-# con tres cambios: contraseñas desde .env, el frontend entra en la red «cerebro» con el nombre «erpnext» y solo
-# se publica en localhost:8081. Requiere que la red «cerebro» exista (la crea el docker-compose.yml principal).
+# con cuatro cambios: contraseñas desde .env, el frontend entra en la red «cerebro» con el nombre «erpnext», solo
+# se publica en localhost:8081 y los servicios usan «restart: unless-stopped» (con «on-failure» no volvían tras
+# reiniciar Docker). Requiere que la red «cerebro» exista (la crea el docker-compose.yml principal).
 #
 #   docker compose -f erpnext/docker-compose.yml --env-file .env up -d
 #   (la primera vez tarda varios minutos: crea el sitio e instala ERPNext)
@@ -11,9 +12,7 @@ services:
     image: ${ERPNEXT_IMAGEN:-frappe/erpnext:${ERPNEXT_VERSION:-v16.37.0}}
     networks:
       - frappe_network
-    deploy:
-      restart_policy:
-        condition: on-failure
+    restart: unless-stopped
     volumes:
       - sites:/home/frappe/frappe-bench/sites
       - logs:/home/frappe/frappe-bench/logs
@@ -106,9 +105,7 @@ services:
       interval: 5s
       timeout: 5s
       retries: 5
-    deploy:
-      restart_policy:
-        condition: on-failure
+    restart: unless-stopped
     command:
       - --character-set-server=utf8mb4
       - --collation-server=utf8mb4_unicode_ci
@@ -128,9 +125,7 @@ services:
     depends_on:
       - websocket
       - backend
-    deploy:
-      restart_policy:
-        condition: on-failure
+    restart: unless-stopped
     command:
       - nginx-entrypoint.sh
     environment:
@@ -152,9 +147,7 @@ services:
     image: ${ERPNEXT_IMAGEN:-frappe/erpnext:${ERPNEXT_VERSION:-v16.37.0}}
     networks:
       - frappe_network
-    deploy:
-      restart_policy:
-        condition: on-failure
+    restart: unless-stopped
     command:
       - bench
       - worker
@@ -174,9 +167,7 @@ services:
     image: ${ERPNEXT_IMAGEN:-frappe/erpnext:${ERPNEXT_VERSION:-v16.37.0}}
     networks:
       - frappe_network
-    deploy:
-      restart_policy:
-        condition: on-failure
+    restart: unless-stopped
     command:
       - bench
       - worker
@@ -196,9 +187,7 @@ services:
     image: redis:6.2-alpine
     networks:
       - frappe_network
-    deploy:
-      restart_policy:
-        condition: on-failure
+    restart: unless-stopped
     volumes:
       - redis-queue-data:/data
 
@@ -206,17 +195,13 @@ services:
     image: redis:6.2-alpine
     networks:
       - frappe_network
-    deploy:
-      restart_policy:
-        condition: on-failure
+    restart: unless-stopped
 
   scheduler:
     image: ${ERPNEXT_IMAGEN:-frappe/erpnext:${ERPNEXT_VERSION:-v16.37.0}}
     networks:
       - frappe_network
-    deploy:
-      restart_policy:
-        condition: on-failure
+    restart: unless-stopped
     command:
       - bench
       - schedule
@@ -231,9 +216,7 @@ services:
     image: ${ERPNEXT_IMAGEN:-frappe/erpnext:${ERPNEXT_VERSION:-v16.37.0}}
     networks:
       - frappe_network
-    deploy:
-      restart_policy:
-        condition: on-failure
+    restart: unless-stopped
     command:
       - node
       - /home/frappe/frappe-bench/apps/frappe/socketio.js

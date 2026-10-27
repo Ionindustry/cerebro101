@@ -40,10 +40,14 @@ DEPARTAMENTOS = {
 
 K = ["conocimiento"]  # herramienta base que tienen todos los agentes
 
+# Agentes que investigan: tienen cuadernos de investigación (herramienta «cuaderno», como NotebookLM pero en local)
+INVESTIGAN = {"asistente-general", "analista-noticias", "analista-competencia", "radar-tendencias",
+              "explorador-fabricantes", "inteligencia-competitiva", "viabilidad"}
+
 AGENTES = {
     "direccion": [
         ("director-general", "Director General", "Coordinación", "Recibe todas las peticiones, las enruta al departamento correcto, prioriza conflictos entre áreas y genera el resumen diario", "rapido", K + ["jev"], "libre", "0 7 * * 1-5", "media"),
-        ("asistente-general", "Asistente general", "Coordinación", "Responde cualquier duda general o de actualidad con la fecha y hora actuales y consultando internet (buscador propio y lectura de páginas públicas); nunca con datos de clientes ni de personas, y lo que es del negocio lo redirige al departamento que corresponde", "principal", K + ["web"], "libre", None, "baja"),
+        ("asistente-general", "Asistente general", "Coordinación", "Responde cualquier duda general o de actualidad con la fecha y hora actuales y consultando internet (buscador propio y lectura de páginas públicas); también lo del sector (precios de mercado, productos de fabricantes, competidores, noticias), citando las fuentes; nunca con datos de clientes ni de personas, y lo que necesita datos internos o hacer algo lo redirige al departamento que corresponde", "principal", K + ["web"], "libre", None, "baja"),
         ("secretaria-direccion", "Secretaría de Dirección", "Coordinación", "Agenda de dirección, actas de reuniones y seguimiento de acuerdos y fechas límite", "principal", K + ["calendario", "correo"], "simple", None, "media"),
         ("estratega", "Estratega", "Estrategia", "Objetivos trimestrales, análisis de escenarios y alertas de desviación", "principal", K + ["erpnext"], "libre", "0 8 * * 1", "media"),
         ("analista-bi", "Analista BI", "Inteligencia de negocio", "Consolida los KPI de todos los departamentos en el panel diario y semanal", "principal", K + ["erpnext"], "libre", "30 6 * * *", "media"),
@@ -82,7 +86,7 @@ AGENTES = {
         ("guardian-marca", "Guardián de Marca", "Marca", "Guía de estilo y tono; revisa que todo lo publicado sea coherente", "rapido", K + ["jev"], "libre", None, "baja"),
         ("radar-tendencias", "Radar de Tendencias", "Inteligencia de mercado", "Vigila X y la web en tiempo real con Grok y envía alertas puntuadas", "rapido", K + ["grok", "agent_reach", "jev"], "libre", "0 */2 * * *", "baja"),
         ("analista-noticias", "Analista de Noticias de Mercado", "Inteligencia de mercado", "Prensa sectorial, boletines, ayudas, normativa y competidores; fichas de oportunidad", "principal", K + ["scrapegraph", "agent_reach", "jev"], "libre", "0 2 * * *", "baja"),
-        ("analista-competencia", "Analista de Competencia", "Inteligencia de mercado", "Ficha de cada competidor a partir de su web pública; avisa de cambios semanales", "principal", K + ["scrapegraph", "agent_reach"], "libre", "0 1 * * 1", "baja"),
+        ("analista-competencia", "Analista de Competencia", "Inteligencia de mercado", "Busca competidores en internet y hace la ficha de cada uno a partir de su web pública; avisa de cambios semanales", "principal", K + ["web", "scrapegraph", "agent_reach"], "libre", "0 1 * * 1", "baja"),
         ("disenador-ofertas", "Diseñador de Ofertas", "Inteligencia de mercado", "Convierte una oportunidad aprobada en oferta con catálogo, costes y argumentario", "principal", K + ["erpnext", "cotizador"], "doble", None, "media"),
     ],
     "atencion": [
@@ -197,6 +201,8 @@ def construir() -> tuple[dict, dict]:
             f = dict(zip(CAMPOS, fila))
             f["departamento"] = dep_id
             f["director"] = i == 0
+            if f["id"] in INVESTIGAN:
+                f["herramientas"] = f["herramientas"] + ["cuaderno"]
             fichas.append(f)
         subareas = list(dict.fromkeys(f["subarea"] for f in fichas))
         departamentos[dep_id] = {

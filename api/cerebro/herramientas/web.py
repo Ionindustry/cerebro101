@@ -14,6 +14,7 @@ import asyncio
 import ipaddress
 import re
 import socket
+import unicodedata
 import urllib.robotparser
 from html.parser import HTMLParser
 from urllib.parse import urljoin, urlparse
@@ -31,6 +32,22 @@ MAX_REDIRECCIONES = 3
 TIMEOUT = 15
 MAX_RESULTADOS = 8
 PERIODOS = {"dia": "day", "semana": "week", "mes": "month", "año": "year", "ano": "year"}
+# Cómo lo escriben los modelos: «último año», «past week», «24 horas», «7 días»…
+_SINONIMOS = (("day", ("dia", "hoy", "24h", "24 horas", "diario", "day", "today")),
+              ("week", ("semana", "7 dias", "7d", "semanal", "week")),
+              ("month", ("mes", "30 dias", "30d", "mensual", "month")),
+              ("year", ("ano", "anio", "12 meses", "365 dias", "anual", "year")))
+
+
+def periodo_de(valor: str) -> str | None:
+    """Traduce el periodo que escribe el modelo al de SearXNG (day, week, month, year), o None si no se reconoce."""
+    t = unicodedata.normalize("NFKD", (valor or "").lower()).encode("ascii", "ignore").decode()
+    t = re.sub(r"[^a-z0-9 ]", " ", t)
+    palabras = f" {' '.join(t.split())} "
+    for destino, claves in _SINONIMOS:
+        if any(f" {c} " in palabras or (c.endswith("h") and c in palabras.replace(" ", "")) for c in claves):
+            return destino
+    return None
 
 
 # --------------------------------------------------------------------------- consulta sin datos personales
@@ -59,9 +76,10 @@ async def buscar(consulta: str, tipo: str = "general", periodo: str = "", max_re
         raise ValueError("tipo debe ser «general» o «noticias»")
     params = {"q": consulta, "format": "json", "language": "es", "safesearch": 1, "categories": "news" if tipo == "noticias" else "general"}
     if periodo:
-        if periodo.lower() not in PERIODOS:
+        rango = periodo_de(periodo)
+        if rango is None:
             raise ValueError("periodo debe ser dia, semana, mes o año")
-        params["time_range"] = PERIODOS[periodo.lower()]
+        params["time_range"] = rango
     try:
         async with httpx.AsyncClient(base_url=ajustes.searxng_url, timeout=TIMEOUT, headers={"User-Agent": AGENTE_HTTP}) as c:
             r = await c.get("/search", params=params)
