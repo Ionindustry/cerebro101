@@ -84,7 +84,9 @@ func Run(ctx context.Context, c ingestor.Config, log *slog.Logger) error {
 	}()
 	err = <-errs
 	stop()
-	<-errs
+	if otro := <-errs; otro != nil && err == nil {
+		err = otro
+	}
 	return err
 }
 
