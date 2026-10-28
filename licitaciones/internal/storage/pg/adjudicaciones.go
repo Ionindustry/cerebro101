@@ -293,3 +293,81 @@ ORDER BY %[5]s DESC, t.clave DESC LIMIT %[6]d`, strings.Join(c.where, " AND "), 
 	}
 	return filas, min(total, MaxTotal), muestra, nil
 }
+
+// FiltroVencimientos describe una consulta de /expiring-contracts ya validada. Del mercado solo cuentan CPV, zona, comprador e importe mínimo.
+type FiltroVencimientos struct {
+	Mercado
+	VenceDesde, VenceHasta string // «AAAA-MM-DD», ambas incluidas
+	ConProrrogas           bool   // usa la fecha de fin con las prórrogas posibles cuando se conoce; si no, la fecha de fin del contrato
+	Limit                  int
+	Despues                *Posicion
+}
+
+// ContratoVence es un contrato adjudicado cuya fecha de fin cae en el periodo pedido.
+type ContratoVence struct {
+	ID, ExpedienteID, Expediente, Titulo, Lote   string
+	CompradorNombre, CompradorNIF, CompradorDIR3 string
+	AdjudicatarioNombre, AdjudicatarioNIF        string
+	AdjudicatarioID                              *string
+	Moneda                                       string
+	ImporteSinIVA                                *string
+	FechaFormalizacion                           *string
+	FechaFin                                     string
+	ProrrogasPosibles                            *bool
+	FechaFinProrrogas                            *string
+	ProrrogasTexto                               *string
+	Confianza                                    *string
+	CPV, NUTS                                    []string
+	ClaveOrden                                   string
+}
+
+// ContratosQueVencen devuelve los contratos que terminan en el periodo, los que antes terminan primero, y cuántos son (hasta MaxTotal).
+func (s *Store) ContratosQueVencen(ctx context.Context, f FiltroVencimientos) (filas []ContratoVence, total int, exacto bool, err error) {
+	if f.Limit < 1 || f.Limit > 100 {
+		return nil, 0, false, fmt.Errorf("limit fuera de rango: %d", f.Limit)
+	}
+	fin := "a.fecha_fin"
+	if f.ConProrrogas {
+		fin = "coalesce(a.fecha_fin_prorrogas, a.fecha_fin)"
+	}
+	var c consulta
+	c.add("a.resultado = 'adjudicado'")
+	c.add(fin + " BETWEEN " + c.arg(f.VenceDesde) + "::date AND " + c.arg(f.VenceHasta) + "::date")
+	f.aplicar(&c)
+	where := strings.Join(c.where, " AND ")
+	argsTotal := append([]any(nil), c.args...)
+	if f.Despues != nil {
+		c.add(fmt.Sprintf("(%s, a.id) > (%s::date, %s::uuid)", fin, c.arg(f.Despues.Clave), c.arg(f.Despues.ID)))
+	}
+	sql := fmt.Sprintf(`SELECT a.id::text, a.expediente_id::text, e.expediente, e.titulo, a.lote, e.comprador_nombre, e.comprador_nif, e.comprador_dir3,
+    a.adjudicatario_nombre, a.adjudicatario_nif, a.adjudicatario_id::text, a.moneda, a.importe_sin_iva::text, a.fecha_formalizacion::text, a.fecha_fin::text,
+    a.prorrogas_posibles, a.fecha_fin_prorrogas::text, a.prorrogas_texto, a.confianza_fin::text, e.cpv, e.nuts, (%[1]s)::text
+FROM adjudicaciones a JOIN expedientes e ON e.id = a.expediente_id WHERE %[2]s ORDER BY %[1]s, a.id LIMIT %[3]d`, fin, strings.Join(c.where, " AND "), f.Limit+1)
+	rows, err := s.pool.Query(ctx, sql, c.args...)
+	if err != nil {
+		return nil, 0, false, fmt.Errorf("pg: contratos que vencen: %w", err)
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var x ContratoVence
+		if err := rows.Scan(&x.ID, &x.ExpedienteID, &x.Expediente, &x.Titulo, &x.Lote, &x.CompradorNombre, &x.CompradorNIF, &x.CompradorDIR3,
+			&x.AdjudicatarioNombre, &x.AdjudicatarioNIF, &x.AdjudicatarioID, &x.Moneda, &x.ImporteSinIVA, &x.FechaFormalizacion, &x.FechaFin,
+			&x.ProrrogasPosibles, &x.FechaFinProrrogas, &x.ProrrogasTexto, &x.Confianza, &x.CPV, &x.NUTS, &x.ClaveOrden); err != nil {
+			return nil, 0, false, fmt.Errorf("pg: leer un contrato: %w", err)
+		}
+		filas = append(filas, x)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, 0, false, fmt.Errorf("pg: leer los contratos: %w", err)
+	}
+	rows.Close()
+	var n int
+	cq := fmt.Sprintf("SELECT count(*) FROM (SELECT 1 FROM adjudicaciones a JOIN expedientes e ON e.id = a.expediente_id WHERE %s LIMIT %d) t", where, MaxTotal+1)
+	if err := s.pool.QueryRow(ctx, cq, argsTotal...).Scan(&n); err != nil {
+		return nil, 0, false, fmt.Errorf("pg: contar contratos: %w", err)
+	}
+	if n > MaxTotal {
+		return filas, MaxTotal, false, nil
+	}
+	return filas, n, true, nil
+}

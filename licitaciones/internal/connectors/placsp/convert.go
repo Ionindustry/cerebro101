@@ -67,9 +67,8 @@ func (e *xmlEntry) toDomain(source string, loc *time.Location) *domain.Licitacio
 	l.BaseBudgetExclVAT = c.money("presupuesto base sin IVA", p.Budget.Excl)
 	l.BaseBudgetInclVAT = c.money("presupuesto base con IVA", p.Budget.Total)
 	l.CPV, l.NUTS = codes(p.CPVs), codes(p.NUTS)
-	if p.Duration != nil && clean(p.Duration.Value) != "" {
-		l.Duration = &domain.Duration{Value: clean(p.Duration.Value), Unit: clean(p.Duration.Unit)}
-	}
+	l.Duration = duration(p.Duration)
+	l.Extension = extension(p.Extension)
 
 	l.Procedure, l.Urgency, l.System = clean(s.Process.Procedure), clean(s.Process.Urgency), clean(s.Process.System)
 	l.OverThreshold = c.boolean("OverThresholdIndicator", s.Process.OverThreshold)
@@ -88,6 +87,7 @@ func (e *xmlEntry) toDomain(source string, loc *time.Location) *domain.Licitacio
 			BaseBudgetExclVAT: c.money("presupuesto del lote sin IVA", lot.Project.Budget.Excl),
 			BaseBudgetInclVAT: c.money("presupuesto del lote con IVA", lot.Project.Budget.Total),
 			CPV:               codes(lot.Project.CPVs), NUTS: codes(lot.Project.NUTS),
+			Duration: duration(lot.Project.Duration), Extension: extension(lot.Project.Extension),
 		})
 	}
 	for _, r := range s.Results {
@@ -244,3 +244,10 @@ func codes(in []string) []string {
 }
 
 func clean(s string) string { return strings.Join(strings.Fields(s), " ") }
+
+func duration(d *xmlDuration) *domain.Duration {
+	if d == nil || clean(d.Value) == "" {
+		return nil
+	}
+	return &domain.Duration{Value: clean(d.Value), Unit: clean(d.Unit)}
+}

@@ -170,6 +170,11 @@ func TestAdjudicacionesConMuestrasReales(t *testing.T) {
 		t.Fatalf("adjudicaciones proyectadas = %d, resultados en las muestras = %d", n, esperadas)
 	}
 	t.Logf("%d adjudicaciones; %d con importe; %d con baja; %d con baja fuera de [0, 1]", n, conImporte, conBaja, fuera)
+	var conFin, conProrrogas, sabeProrrogas int
+	if err := pool.QueryRow(ctx, `SELECT count(fecha_fin), count(fecha_fin_prorrogas), count(prorrogas_posibles) FROM adjudicaciones`).Scan(&conFin, &conProrrogas, &sabeProrrogas); err != nil {
+		t.Fatal(err)
+	}
+	t.Logf("%d con fecha de fin; %d con fecha de fin con prórrogas; %d con prórrogas sí/no", conFin, conProrrogas, sabeProrrogas)
 	if fuera != 0 {
 		t.Fatalf("hay %d bajas fuera de [0, 1]", fuera)
 	}
@@ -187,4 +192,87 @@ func TestAdjudicacionPorEncimaDelPresupuestoNoTieneBaja(t *testing.T) {
 	if err := pool.QueryRow(context.Background(), `SELECT baja::text FROM adjudicaciones`).Scan(&baja); err != nil || baja != nil {
 		t.Fatalf("baja = %v, %v: adjudicar más que el presupuesto no es una baja", baja, err)
 	}
+}
+
+func TestFinDelContratoYProrrogas(t *testing.T) {
+	pool, st := conectar(t)
+	ctx := context.Background()
+	si, no := true, false
+	dur := func(v, u string) *domain.Duration { return &domain.Duration{Value: v, Unit: u} }
+	mk := func(id string, d *domain.Duration, ext *domain.Extension, lotes []domain.Lot, rs []domain.Result) {
+		l := expedienteConResultados(id, lotes, "100000", rs, "Ayuntamiento de Girona")
+		l.Duration, l.Extension = d, ext
+		proyectar(t, st, id, 1, l)
+	}
+	res := func(lote string, r domain.Result) domain.Result {
+		r.LotID, r.Code, r.WinnerName, r.WinnerID, r.AwardedExclVAT = lote, domain.ResultFormalized, "UNO SL", "B00000001", eur("50000")
+		return r
+	}
+	// formalizado el 2025-03-01, 2 años (fin 2027-02-28), con 2 prórrogas de 1 año → 2029-02-28; confianza 0,7
+	mk("f/1", dur("2", "ANN"), &domain.Extension{Text: "Dos prórrogas de un año", Allowed: &si, Count: 2, Each: dur("1", "ANN")}, nil, []domain.Result{res("", domain.Result{FormalizedOn: "2025-03-01", AwardDate: "2025-02-01"})})
+	// entrada en vigor publicada: confianza 0,9; 12 meses desde el 1 de enero → 31 de diciembre; el texto dice que no hay prórrogas
+	mk("f/2", dur("12", "MON"), &domain.Extension{Text: "No se preven prórrogas", Allowed: &no}, nil, []domain.Result{res("", domain.Result{ContractStartsOn: "2026-01-01", FormalizedOn: "2025-12-15"})})
+	// solo la fecha de adjudicación: confianza 0,4; 90 días; sin extensión
+	mk("f/3", dur("90", "DAY"), nil, nil, []domain.Result{res("", domain.Result{AwardDate: "2026-01-01"})})
+	// sin duración: no hay fecha de fin; un texto de prórroga que no se entiende se conserva pero no calcula nada
+	mk("f/4", nil, &domain.Extension{Text: "Consultar el pliego"}, nil, []domain.Result{res("", domain.Result{FormalizedOn: "2026-01-01"})})
+	// la duración del lote manda sobre la del expediente
+	mk("f/5", dur("5", "ANN"), nil, []domain.Lot{{ID: "1", Duration: dur("6", "MON")}, {ID: "2"}}, []domain.Result{
+		res("1", domain.Result{FormalizedOn: "2026-01-01"}), res("2", domain.Result{FormalizedOn: "2026-01-01"})})
+	// una unidad desconocida o una duración absurda no inventan fechas
+	mk("f/6", dur("3", "HUR"), nil, nil, []domain.Result{res("", domain.Result{FormalizedOn: "2026-01-01"})})
+
+	type fila struct {
+		inicio, fin, finPro *string
+		posibles            *bool
+		conf                *string
+		texto               *string
+	}
+	get := func(id string) map[string]fila {
+		rows, err := pool.Query(ctx, `SELECT a.lote, a.fecha_inicio::text, a.fecha_fin::text, a.fecha_fin_prorrogas::text, a.prorrogas_posibles, a.confianza_fin::text, a.prorrogas_texto
+			FROM adjudicaciones a JOIN expedientes e ON e.id = a.expediente_id WHERE e.id_origen = $1`, id)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer rows.Close()
+		out := map[string]fila{}
+		for rows.Next() {
+			var lote string
+			var f fila
+			if err := rows.Scan(&lote, &f.inicio, &f.fin, &f.finPro, &f.posibles, &f.conf, &f.texto); err != nil {
+				t.Fatal(err)
+			}
+			out[lote] = f
+		}
+		return out
+	}
+	val := func(p *string) string {
+		if p == nil {
+			return "—"
+		}
+		return *p
+	}
+	cuatro := func(id, lote, inicio, fin, finPro, conf string) {
+		t.Helper()
+		f, ok := get(id)[lote]
+		if !ok {
+			t.Fatalf("%s lote %s: sin fila", id, lote)
+		}
+		if val(f.inicio) != inicio || val(f.fin) != fin || val(f.finPro) != finPro || val(f.conf) != conf {
+			t.Errorf("%s lote %s: inicio=%s fin=%s con prórrogas=%s confianza=%s; esperaba %s %s %s %s", id, lote, val(f.inicio), val(f.fin), val(f.finPro), val(f.conf), inicio, fin, finPro, conf)
+		}
+	}
+	cuatro("f/1", "1", "2025-03-01", "2027-02-28", "2029-02-28", "0.70")
+	cuatro("f/2", "1", "2026-01-01", "2026-12-31", "—", "0.90")
+	if f := get("f/2")["1"]; f.posibles == nil || *f.posibles {
+		t.Errorf("f/2: el texto dice que no hay prórrogas: %v", f.posibles)
+	}
+	cuatro("f/3", "1", "2026-01-01", "2026-03-31", "—", "0.40")
+	cuatro("f/4", "1", "2026-01-01", "—", "—", "0.70")
+	if f := get("f/4")["1"]; f.posibles != nil || f.texto == nil || *f.texto != "Consultar el pliego" {
+		t.Errorf("f/4: ni sí ni no, pero el texto se conserva: %v %v", f.posibles, f.texto)
+	}
+	cuatro("f/5", "1", "2026-01-01", "2026-06-30", "—", "0.70") // 6 meses del lote
+	cuatro("f/5", "2", "2026-01-01", "2030-12-31", "—", "0.70") // 5 años del expediente
+	cuatro("f/6", "1", "2026-01-01", "—", "—", "0.70")
 }

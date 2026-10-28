@@ -84,6 +84,9 @@ func parseMercado(q url.Values, campoDesde, campoHasta string) (pg.Mercado, *pro
 			*dst = v
 		}
 	}
+	if campoDesde == "" { // /expiring-contracts tiene sus propias fechas (vence_desde, vence_hasta) y no filtra por fecha de adjudicación
+		return m, nil
+	}
 	if m.Desde, p = fecha(q, campoDesde); p != nil {
 		return m, p
 	}
@@ -196,4 +199,60 @@ func parseCompetidores(q url.Values) (pg.FiltroCompetidores, *problem) {
 		return f, p
 	}
 	return f, nil
+}
+
+var soportadosVencimientos = map[string]bool{
+	"cpv": true, "nuts": true, "comprador": true, "importe_min": true, "vence_desde": true, "vence_hasta": true, "con_prorrogas": true, "limit": true, "cursor": true,
+}
+
+// MaxMesesVencimientos es la anchura máxima del periodo de /expiring-contracts (contrato: 36 meses desde vence_desde).
+const MaxMesesVencimientos = 36
+
+// parseVencimientos valida los parámetros de /expiring-contracts. Por defecto mira de hoy + 3 meses a hoy + 12 meses (contrato).
+func parseVencimientos(q url.Values, hoy time.Time) (pg.FiltroVencimientos, *problem) {
+	var f pg.FiltroVencimientos
+	if p := comprobarNombres(q, soportadosVencimientos); p != nil {
+		return f, p
+	}
+	var p *problem
+	if f.Mercado, p = parseMercado(q, "", ""); p != nil {
+		return f, p
+	}
+	hoy = hoy.UTC()
+	f.VenceDesde, f.VenceHasta = hoy.AddDate(0, 3, 0).Format("2006-01-02"), hoy.AddDate(0, 12, 0).Format("2006-01-02")
+	if f.VenceDesde, p = defectoFecha(q, "vence_desde", f.VenceDesde); p != nil {
+		return f, p
+	}
+	if f.VenceHasta, p = defectoFecha(q, "vence_hasta", f.VenceHasta); p != nil {
+		return f, p
+	}
+	desde, _ := time.Parse("2006-01-02", f.VenceDesde)
+	hasta, _ := time.Parse("2006-01-02", f.VenceHasta)
+	if hasta.Before(desde) {
+		return f, invalid("vence_hasta", "no puede ser anterior a vence_desde")
+	}
+	if hasta.After(desde.AddDate(0, MaxMesesVencimientos, 0)) {
+		return f, invalid("vence_hasta", "como máximo 36 meses desde vence_desde")
+	}
+	if v, ok := one(q, "con_prorrogas"); ok {
+		switch v {
+		case "true":
+			f.ConProrrogas = true
+		case "false":
+		default:
+			return f, invalid("con_prorrogas", "true o false")
+		}
+	}
+	if f.Limit, p = limite(q); p != nil {
+		return f, p
+	}
+	return f, nil
+}
+
+func defectoFecha(q url.Values, campo, defecto string) (string, *problem) {
+	v, p := fecha(q, campo)
+	if p != nil || v == "" {
+		return defecto, p
+	}
+	return v, nil
 }

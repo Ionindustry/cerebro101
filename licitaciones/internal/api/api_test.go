@@ -22,12 +22,17 @@ type fakeRepo struct {
 	visto  pg.Filtro
 	pingEr error
 
-	vistoAdj  pg.FiltroAdjudicaciones
-	vistoComp pg.FiltroCompetidores
+	vistoAdj   pg.FiltroAdjudicaciones
+	vistoComp  pg.FiltroCompetidores
+	vistoVence pg.FiltroVencimientos
 }
 
 func (f *fakeRepo) BuscarAdjudicaciones(_ context.Context, fl pg.FiltroAdjudicaciones) ([]pg.Adjudicacion, int, bool, error) {
 	f.vistoAdj = fl
+	return nil, 0, true, nil
+}
+func (f *fakeRepo) ContratosQueVencen(_ context.Context, fl pg.FiltroVencimientos) ([]pg.ContratoVence, int, bool, error) {
+	f.vistoVence = fl
 	return nil, 0, true, nil
 }
 func (f *fakeRepo) Competidores(_ context.Context, fl pg.FiltroCompetidores) ([]pg.Competidor, int, pg.MuestraMercado, error) {

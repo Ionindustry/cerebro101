@@ -315,3 +315,157 @@ func TestCompetidoresConPostgres(t *testing.T) {
 		t.Fatalf("mercado sin adjudicaciones: %+v", nada)
 	}
 }
+
+func TestParametrosDeContratosQueVencen(t *testing.T) {
+	repo := &fakeRepo{}
+	srv, ts := servidor(t, repo)
+	srv.Now = func() time.Time { return time.Date(2026, 10, 28, 12, 0, 0, 0, time.UTC) }
+	malos := []string{
+		"/api/v1/expiring-contracts?area=cctv",
+		"/api/v1/expiring-contracts?importe_max=100", // no existe en esta ruta
+		"/api/v1/expiring-contracts?vence_desde=2027-02-30",
+		"/api/v1/expiring-contracts?vence_desde=2027-05-01&vence_hasta=2027-01-01",
+		"/api/v1/expiring-contracts?vence_desde=2027-01-01&vence_hasta=2030-01-02", // más de 36 meses
+		"/api/v1/expiring-contracts?con_prorrogas=si",
+		"/api/v1/expiring-contracts?cpv=7",
+		"/api/v1/expiring-contracts?limit=0",
+	}
+	for _, p := range malos {
+		if r := get(t, ts, p, token); r.StatusCode != 400 {
+			t.Errorf("%s: esperaba 400, llegó %d: %s", p, r.StatusCode, r.Body)
+		}
+	}
+	// por defecto: de hoy + 3 meses a hoy + 12 meses, sin prórrogas
+	if r := get(t, ts, "/api/v1/expiring-contracts", token); r.StatusCode != 200 {
+		t.Fatalf("por defecto: %d %s", r.StatusCode, r.Body)
+	}
+	if f := repo.vistoVence; f.VenceDesde != "2027-01-28" || f.VenceHasta != "2027-10-28" || f.ConProrrogas || f.Limit != 20 {
+		t.Fatalf("periodo por defecto: %+v", f)
+	}
+	if r := get(t, ts, "/api/v1/expiring-contracts?cpv=72&nuts=ES512&comprador=nif:P1708500E&importe_min=50000&vence_desde=2027-01-01&vence_hasta=2030-01-01&con_prorrogas=true&limit=7", token); r.StatusCode != 200 {
+		t.Fatalf("válida: %d %s", r.StatusCode, r.Body)
+	}
+	if f := repo.vistoVence; f.VenceDesde != "2027-01-01" || f.VenceHasta != "2030-01-01" || !f.ConProrrogas || f.Limit != 7 || f.ImporteMin != "50000" || len(f.CompradorNIF) != 1 {
+		t.Fatalf("filtro mal traducido: %+v", f)
+	}
+}
+
+type paginaVence struct {
+	Items []struct {
+		AdjudicacionID string                   `json:"adjudicacion_id"`
+		LicitacionID   string                   `json:"licitacion_id"`
+		Titulo         string                   `json:"titulo"`
+		Lote           string                   `json:"lote"`
+		Adjudicatario  *struct{ Nombre string } `json:"adjudicatario"`
+		Importe        *Importe                 `json:"importe_adjudicado"`
+		Formalizacion  *string                  `json:"fecha_formalizacion"`
+		Fin            string                   `json:"fecha_fin"`
+		Posibles       *bool                    `json:"prorrogas_posibles"`
+		FinProrrogas   *string                  `json:"fecha_fin_con_prorrogas"`
+		Texto          *string                  `json:"prorrogas_texto"`
+		Confianza      *float64                 `json:"confianza"`
+	} `json:"items"`
+	Sig   *string `json:"siguiente_cursor"`
+	Total struct {
+		Valor int `json:"valor"`
+	} `json:"total"`
+	Periodo struct {
+		Desde, Hasta string `json:"-"`
+	} `json:"periodo"`
+}
+
+func TestContratosQueVencenConPostgres(t *testing.T) {
+	ts, st, _ := conPostgres(t)
+	si := true
+	// formalizados en 2025-03-01 con duración 2 años → terminan el 2027-02-28
+	datos := []struct {
+		id, ini, dur, unidad string
+		ext                  *domain.Extension
+	}{
+		{"v/1", "2025-03-01", "2", "ANN", &domain.Extension{Text: "Dos prórrogas de un año", Allowed: &si, Count: 2, Each: &domain.Duration{Value: "1", Unit: "ANN"}}}, // 2027-02-28 / 2029-02-28
+		{"v/2", "2025-06-01", "24", "MON", nil},                                           // 2027-05-31
+		{"v/3", "2025-01-01", "12", "MON", nil},                                           // 2025-12-31: ya terminó
+		{"v/4", "2026-01-01", "5", "ANN", &domain.Extension{Text: "Consultar el pliego"}}, // 2030-12-31
+		{"v/5", "2025-09-01", "3", "ANN", nil},                                            // 2028-08-31
+	}
+	base := time.Date(2026, 10, 1, 10, 0, 0, 0, time.UTC)
+	for i, d := range datos {
+		l := &domain.Licitacion{Source: "placsp-643", SourceID: d.id, NumericID: fmt.Sprint(i), Updated: base.Add(time.Duration(i) * time.Minute), Expediente: "V-" + d.id, Status: "ADJ",
+			Title: "Contrato " + d.id, Organism: domain.Organization{Name: "Ayuntamiento de Girona", NIF: "P1708500E"}, Procedure: "1", CPV: []string{"72000000"},
+			NUTS: []string{"ES512"}, Link: "https://x.test/" + d.id, Duration: &domain.Duration{Value: d.dur, Unit: d.unidad}, Extension: d.ext,
+			Results: []domain.Result{{Code: domain.ResultFormalized, WinnerName: "Uno Sistemas SL", WinnerID: "B11111111", AwardedExclVAT: &domain.Money{Value: "100000", Currency: "EUR"},
+				FormalizedOn: domain.Date(d.ini)}}}
+		ev := ingest.Event{Source: "placsp-643", SourceID: d.id, Version: 1, RawSHA256: "ab", RawKey: "k"}
+		if _, err := st.UpsertExpediente(context.Background(), ev, l); err != nil {
+			t.Fatal(err)
+		}
+	}
+	titulos := func(p paginaVence) []string {
+		var out []string
+		for _, it := range p.Items {
+			out = append(out, it.Titulo)
+		}
+		return out
+	}
+	// ventana de 2027 completo: v/1 (feb), v/2 (may); el que terminó en 2025 y los de 2028 y 2030 no
+	var p paginaVence
+	getJSON(t, ts, "/api/v1/expiring-contracts?vence_desde=2027-01-01&vence_hasta=2027-12-31", &p)
+	if got := strings.Join(titulos(p), "|"); got != "Contrato v/1|Contrato v/2" || p.Total.Valor != 2 {
+		t.Fatalf("2027: %s (total %d)", got, p.Total.Valor)
+	}
+	a := p.Items[0]
+	if a.Fin != "2027-02-28" || a.Posibles == nil || !*a.Posibles || a.FinProrrogas == nil || *a.FinProrrogas != "2029-02-28" || a.Confianza == nil || *a.Confianza != 0.7 ||
+		a.Adjudicatario == nil || a.Adjudicatario.Nombre != "Uno Sistemas SL" || a.Importe == nil || a.Importe.Valor != "100000.00" || a.Formalizacion == nil || *a.Formalizacion != "2025-03-01" || a.Lote != "1" {
+		t.Fatalf("v/1: %+v", a)
+	}
+	if b := p.Items[1]; b.Posibles != nil || b.FinProrrogas != nil || b.Texto != nil {
+		t.Fatalf("v/2 no dice nada de prórrogas: %+v", b)
+	}
+	// con prórrogas: v/1 pasa a terminar en 2029 (y sale de 2027); los que no tienen dato siguen con su fecha de fin
+	var cp paginaVence
+	getJSON(t, ts, "/api/v1/expiring-contracts?vence_desde=2027-01-01&vence_hasta=2027-12-31&con_prorrogas=true", &cp)
+	if got := strings.Join(titulos(cp), "|"); got != "Contrato v/2" {
+		t.Fatalf("2027 con prórrogas: %s", got)
+	}
+	var cp2 paginaVence
+	getJSON(t, ts, "/api/v1/expiring-contracts?vence_desde=2029-01-01&vence_hasta=2029-12-31&con_prorrogas=true", &cp2)
+	if got := strings.Join(titulos(cp2), "|"); got != "Contrato v/1" {
+		t.Fatalf("2029 con prórrogas: %s", got)
+	}
+	// el texto que no se entiende se entrega tal cual, sin fecha con prórrogas
+	var t4 paginaVence
+	getJSON(t, ts, "/api/v1/expiring-contracts?vence_desde=2030-01-01&vence_hasta=2030-12-31", &t4)
+	if len(t4.Items) != 1 || t4.Items[0].Texto == nil || *t4.Items[0].Texto != "Consultar el pliego" || t4.Items[0].FinProrrogas != nil {
+		t.Fatalf("v/4: %+v", t4.Items)
+	}
+	// filtros del mercado, orden por fin y paginación de 1 en 1 sobre 2027–2029
+	var otro paginaVence
+	getJSON(t, ts, "/api/v1/expiring-contracts?cpv=35&vence_desde=2027-01-01&vence_hasta=2029-12-31", &otro)
+	if len(otro.Items) != 0 {
+		t.Fatalf("otro CPV: %v", titulos(otro))
+	}
+	var vistos []string
+	cursor := ""
+	for i := 0; i < 8; i++ {
+		q := "/api/v1/expiring-contracts?vence_desde=2027-01-01&vence_hasta=2029-12-31&limit=1&cpv=72"
+		if cursor != "" {
+			q += "&cursor=" + url.QueryEscape(cursor)
+		}
+		var pg paginaVence
+		getJSON(t, ts, q, &pg)
+		vistos = append(vistos, titulos(pg)...)
+		if pg.Sig == nil {
+			break
+		}
+		cursor = *pg.Sig
+	}
+	if got := strings.Join(vistos, "|"); got != "Contrato v/1|Contrato v/2|Contrato v/5" {
+		t.Fatalf("orden por fecha de fin: %s", got)
+	}
+	// el cursor de otro periodo se rechaza
+	var pr paginaVence
+	getJSON(t, ts, "/api/v1/expiring-contracts?vence_desde=2027-01-01&vence_hasta=2029-12-31&limit=1", &pr)
+	if r := get(t, ts, "/api/v1/expiring-contracts?vence_desde=2027-01-01&vence_hasta=2029-11-30&limit=1&cursor="+url.QueryEscape(*pr.Sig), token); r.StatusCode != 400 {
+		t.Fatalf("cursor de otro periodo: %d", r.StatusCode)
+	}
+}

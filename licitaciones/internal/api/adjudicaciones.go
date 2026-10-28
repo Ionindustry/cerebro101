@@ -215,3 +215,84 @@ func redondearPtr(v *float64) *float64 {
 	r := redondear(*v)
 	return &r
 }
+
+// ContratoQueVence es ContratoQueVence del contrato.
+type ContratoQueVence struct {
+	AdjudicacionID       string           `json:"adjudicacion_id"`
+	LicitacionID         string           `json:"licitacion_id"`
+	Expediente           string           `json:"expediente,omitempty"`
+	Titulo               string           `json:"titulo,omitempty"`
+	Lote                 string           `json:"lote,omitempty"`
+	Comprador            *OrganizacionRef `json:"comprador,omitempty"`
+	Adjudicatario        *OrganizacionRef `json:"adjudicatario,omitempty"`
+	ImporteAdjudicado    *Importe         `json:"importe_adjudicado,omitempty"`
+	FechaFormalizacion   *string          `json:"fecha_formalizacion"`
+	FechaFin             string           `json:"fecha_fin"`
+	ProrrogasPosibles    *bool            `json:"prorrogas_posibles"`
+	FechaFinConProrrogas *string          `json:"fecha_fin_con_prorrogas"`
+	// ProrrogasTexto es el texto del pliego tal cual (dato de un tercero): sirve para leer lo que el motor no ha sabido interpretar.
+	ProrrogasTexto *string  `json:"prorrogas_texto"`
+	CPV            []string `json:"cpv"`
+	NUTS           []string `json:"nuts"`
+	Confianza      *float64 `json:"confianza"`
+}
+
+func contratoQueVence(x pg.ContratoVence) ContratoQueVence {
+	out := ContratoQueVence{
+		AdjudicacionID: x.ID, LicitacionID: x.ExpedienteID, Expediente: x.Expediente, Titulo: x.Titulo, Lote: x.Lote,
+		Comprador: orgRef(x.CompradorNombre, x.CompradorNIF, x.CompradorDIR3), ImporteAdjudicado: importeBD(x.ImporteSinIVA, x.Moneda, "sin_iva", "adjudicado"),
+		FechaFormalizacion: x.FechaFormalizacion, FechaFin: x.FechaFin, ProrrogasPosibles: x.ProrrogasPosibles, FechaFinConProrrogas: x.FechaFinProrrogas,
+		ProrrogasTexto: x.ProrrogasTexto, CPV: nonNil(x.CPV), NUTS: nonNil(x.NUTS), Confianza: decimal(x.Confianza),
+	}
+	if x.AdjudicatarioID != nil {
+		o := &OrganizacionRef{ID: *x.AdjudicatarioID, Nombre: x.AdjudicatarioNombre}
+		if x.AdjudicatarioNIF != "" {
+			o.NIF = &x.AdjudicatarioNIF
+		}
+		out.Adjudicatario = o
+	}
+	return out
+}
+
+func (s *Server) contratosQueVencen(w http.ResponseWriter, r *http.Request) {
+	q := r.URL.Query()
+	f, p := parseVencimientos(q, s.Now())
+	if p != nil {
+		writeProblem(w, r, p)
+		return
+	}
+	// La huella incluye el periodo efectivo: un cursor pedido hoy con las fechas por defecto no vale mañana, cuando esas fechas son otras.
+	huella := huellaFiltros(q) + "|" + f.VenceDesde + "|" + f.VenceHasta
+	if c, ok := one(q, "cursor"); ok {
+		cd, err := decodeCursor(s.cursor, c, huella, s.Now())
+		if err != nil || !reOrgUUID.MatchString(cd.I) || !reFecha.MatchString(cd.K) {
+			writeProblem(w, r, newProblem(http.StatusBadRequest, codCursor, "Cursor no válido", "El cursor no es válido, ha caducado o no corresponde a esta consulta."))
+			return
+		}
+		f.Despues = &pg.Posicion{Clave: cd.K, ID: cd.I}
+	}
+	filas, total, exacto, err := s.Repo.ContratosQueVencen(r.Context(), f)
+	if err != nil {
+		s.internal(w, r, err)
+		return
+	}
+	var siguiente *string
+	if len(filas) > f.Limit {
+		filas = filas[:f.Limit]
+		last := filas[len(filas)-1]
+		c := encodeCursor(s.cursor, cursorData{K: last.ClaveOrden, I: last.ID, F: huella, E: s.Now().Add(cursorTTL).Unix()})
+		siguiente = &c
+	}
+	items := make([]ContratoQueVence, len(filas))
+	for i, x := range filas {
+		items[i] = contratoQueVence(x)
+	}
+	rel := "eq"
+	if !exacto {
+		rel = "gte"
+	}
+	writeJSON(w, http.StatusOK, map[string]any{
+		"items": items, "siguiente_cursor": siguiente, "total": map[string]any{"valor": total, "relacion": rel},
+		"periodo": map[string]any{"vence_desde": f.VenceDesde, "vence_hasta": f.VenceHasta},
+	})
+}
