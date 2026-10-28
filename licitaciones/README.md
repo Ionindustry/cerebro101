@@ -34,7 +34,10 @@ curl -s -H "Authorization: Bearer $TOKEN" 'http://127.0.0.1:8090/api/v1/tenders?
 docker compose -f licitaciones/compose.yaml --env-file .env up -d --build
 docker compose -f licitaciones/compose.yaml logs -f ingestor     # «ingesta completada» con las cifras de cada vuelta
 ```
-La primera vuelta recorre como mucho `LIC_MAX_PAGINAS` (50) páginas hacia atrás; el histórico anterior se cargará aparte (ZIP mensuales).
+La carga recorre la cadena de páginas hacia atrás **retomando donde quedó**: una página de archivo ya ingerida se anota (`paginas_ingeridas`) y no se
+vuelve a descargar, así que un fallo a mitad de camino (una página lenta) no se paga dos veces. Cada vuelta descarga como mucho `LIC_MAX_PAGINAS` (50)
+páginas; si quedan más, la siguiente empieza al minuto (tras un fallo, a los 5 minutos). El histórico más allá de lo que ofrece la sindicación
+(ZIP mensuales) se cargará aparte.
 Credenciales: de momento el ingestor usa la del almacén y la del bus tal cual (una por servicio, sin las políticas por usuario de SEC-080).
 
 ## Estructura

@@ -124,8 +124,8 @@ func (s *Store) observeOnce(ctx context.Context, o ingest.Observation) (ingest.O
 // Checkpoint devuelve el punto de control de una fuente (vacío si no hay).
 func (s *Store) Checkpoint(ctx context.Context, source string) (ingest.Checkpoint, error) {
 	var c ingest.Checkpoint
-	err := s.pool.QueryRow(ctx, `SELECT ultima_ejecucion, etag, last_modified FROM puntos_control WHERE fuente = $1`, source).
-		Scan(&c.LastRun, &c.Validators.ETag, &c.Validators.LastModified)
+	err := s.pool.QueryRow(ctx, `SELECT ultima_ejecucion, etag, last_modified, siguiente FROM puntos_control WHERE fuente = $1`, source).
+		Scan(&c.LastRun, &c.Validators.ETag, &c.Validators.LastModified, &c.Next)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return ingest.Checkpoint{}, nil
 	}
@@ -137,11 +137,40 @@ func (s *Store) Checkpoint(ctx context.Context, source string) (ingest.Checkpoin
 
 // SaveCheckpoint guarda (o sustituye) el punto de control de una fuente.
 func (s *Store) SaveCheckpoint(ctx context.Context, source string, c ingest.Checkpoint) error {
-	_, err := s.pool.Exec(ctx, `INSERT INTO puntos_control (fuente, ultima_ejecucion, etag, last_modified) VALUES ($1, $2, $3, $4)
+	_, err := s.pool.Exec(ctx, `INSERT INTO puntos_control (fuente, ultima_ejecucion, etag, last_modified, siguiente) VALUES ($1, $2, $3, $4, $5)
 		ON CONFLICT (fuente) DO UPDATE SET ultima_ejecucion = EXCLUDED.ultima_ejecucion, etag = EXCLUDED.etag,
-			last_modified = EXCLUDED.last_modified, actualizado = clock_timestamp()`, source, c.LastRun, c.Validators.ETag, c.Validators.LastModified)
+			last_modified = EXCLUDED.last_modified, siguiente = EXCLUDED.siguiente, actualizado = clock_timestamp()`,
+		source, c.LastRun, c.Validators.ETag, c.Validators.LastModified, c.Next)
 	if err != nil {
 		return fmt.Errorf("pg: guardar el punto de control: %w", err)
+	}
+	return nil
+}
+
+// DonePages devuelve las páginas de archivo ya ingeridas de una fuente (dirección → enlace siguiente).
+func (s *Store) DonePages(ctx context.Context, source string) (map[string]string, error) {
+	rows, err := s.pool.Query(ctx, `SELECT url, siguiente FROM paginas_ingeridas WHERE fuente = $1`, source)
+	if err != nil {
+		return nil, fmt.Errorf("pg: leer las páginas ingeridas: %w", err)
+	}
+	defer rows.Close()
+	out := map[string]string{}
+	for rows.Next() {
+		var url, next string
+		if err := rows.Scan(&url, &next); err != nil {
+			return nil, fmt.Errorf("pg: leer una página ingerida: %w", err)
+		}
+		out[url] = next
+	}
+	return out, rows.Err()
+}
+
+// MarkPageDone anota una página de archivo como ingerida (repetirlo es inofensivo).
+func (s *Store) MarkPageDone(ctx context.Context, source, url, next string) error {
+	_, err := s.pool.Exec(ctx, `INSERT INTO paginas_ingeridas (fuente, url, siguiente) VALUES ($1, $2, $3)
+		ON CONFLICT (fuente, url) DO UPDATE SET siguiente = EXCLUDED.siguiente, ingerida = clock_timestamp()`, source, url, next)
+	if err != nil {
+		return fmt.Errorf("pg: anotar la página ingerida: %w", err)
 	}
 	return nil
 }

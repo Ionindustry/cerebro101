@@ -3,6 +3,7 @@ package ingest
 import (
 	"context"
 	"fmt"
+	"strings"
 	"sync"
 )
 
@@ -58,11 +59,12 @@ type MemState struct {
 	views       map[string]View
 	Outbox      []Event
 	checkpoints map[string]Checkpoint
+	pages       map[string]string
 }
 
 // NewMemState crea un estado vacío.
 func NewMemState() *MemState {
-	return &MemState{views: map[string]View{}, checkpoints: map[string]Checkpoint{}}
+	return &MemState{views: map[string]View{}, checkpoints: map[string]Checkpoint{}, pages: map[string]string{}}
 }
 
 // Observe aplica la regla de la ingesta (Decide) sobre la memoria.
@@ -100,6 +102,27 @@ func (m *MemState) SaveCheckpoint(_ context.Context, source string, c Checkpoint
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	m.checkpoints[source] = c
+	return nil
+}
+
+// DonePages devuelve las páginas de archivo ya ingeridas de una fuente.
+func (m *MemState) DonePages(_ context.Context, source string) (map[string]string, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	out := map[string]string{}
+	for k, v := range m.pages {
+		if s, u, ok := strings.Cut(k, "\x00"); ok && s == source {
+			out[u] = v
+		}
+	}
+	return out, nil
+}
+
+// MarkPageDone anota una página de archivo como ingerida.
+func (m *MemState) MarkPageDone(_ context.Context, source, url, next string) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.pages[source+"\x00"+url] = next
 	return nil
 }
 
