@@ -21,6 +21,18 @@ type fakeRepo struct {
 	filas  []pg.Fila
 	visto  pg.Filtro
 	pingEr error
+
+	vistoAdj  pg.FiltroAdjudicaciones
+	vistoComp pg.FiltroCompetidores
+}
+
+func (f *fakeRepo) BuscarAdjudicaciones(_ context.Context, fl pg.FiltroAdjudicaciones) ([]pg.Adjudicacion, int, bool, error) {
+	f.vistoAdj = fl
+	return nil, 0, true, nil
+}
+func (f *fakeRepo) Competidores(_ context.Context, fl pg.FiltroCompetidores) ([]pg.Competidor, int, pg.MuestraMercado, error) {
+	f.vistoComp = fl
+	return nil, 0, pg.MuestraMercado{}, nil
 }
 
 func (f *fakeRepo) Buscar(_ context.Context, fl pg.Filtro) ([]pg.Fila, int, bool, error) {

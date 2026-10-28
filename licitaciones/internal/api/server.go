@@ -1,4 +1,4 @@
-// Package api sirve el contrato HTTP del motor (api/openapi.yaml): búsqueda y ficha de licitaciones y estado del motor. Esta primera versión
+// Package api sirve el contrato HTTP del motor (api/openapi.yaml): búsqueda y ficha de licitaciones, adjudicaciones, competidores y estado del motor. Esta primera versión
 // lee del modelo de lectura de Postgres (ADR 0009) y se autentica con un token compartido; la validación de tokens de Keycloak (SEC-031)
 // sustituirá a ese token cuando la API la usen el panel y los agentes. Solo para la red interna: no se publica fuera.
 package api
@@ -24,6 +24,8 @@ import (
 type Repo interface {
 	Buscar(ctx context.Context, f pg.Filtro) ([]pg.Fila, int, bool, error)
 	Expediente(ctx context.Context, id string) (pg.Fila, error)
+	BuscarAdjudicaciones(ctx context.Context, f pg.FiltroAdjudicaciones) ([]pg.Adjudicacion, int, bool, error)
+	Competidores(ctx context.Context, f pg.FiltroCompetidores) ([]pg.Competidor, int, pg.MuestraMercado, error)
 	Fuentes(ctx context.Context) ([]pg.EstadoFuente, error)
 	Ping(ctx context.Context) (time.Duration, error)
 }
@@ -57,6 +59,8 @@ func New(repo Repo, token string, log *slog.Logger) (*Server, error) {
 func (s *Server) Register(mux *http.ServeMux) {
 	mux.Handle("GET /api/v1/tenders", s.wrap(s.buscar))
 	mux.Handle("GET /api/v1/tenders/{id}", s.wrap(s.ficha))
+	mux.Handle("GET /api/v1/awards", s.wrap(s.adjudicaciones))
+	mux.Handle("GET /api/v1/competitors", s.wrap(s.competidores))
 	mux.Handle("GET /api/v1/ops/status", s.wrap(s.estado))
 	mux.Handle("/api/", s.wrap(func(w http.ResponseWriter, r *http.Request) {
 		writeProblem(w, r, newProblem(http.StatusNotFound, codNoEncontrado, "No encontrado", "La ruta no existe."))

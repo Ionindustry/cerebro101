@@ -265,21 +265,13 @@ func adjudicacion(f pg.Fila, l domain.Licitacion, r domain.Result, i int, presup
 		lote = "1"
 	}
 	a := Adjudicacion{
-		ID: uuid8(fmt.Sprintf("adj:%s:%s:%s:%d", f.ID, lote, r.WinnerID, i)), LicitacionID: f.ID, Expediente: f.Expediente, Titulo: f.Titulo, Lote: lote,
+		ID: uuid8(fmt.Sprintf("adj:%s|%d", f.ID, i+1)), LicitacionID: f.ID, Expediente: f.Expediente, Titulo: f.Titulo, Lote: lote,
 		Resultado: resultado, Importes: importes(money(r.AwardedExclVAT, "sin_iva", "adjudicado"), money(r.AwardedInclVAT, "con_iva", "adjudicado"),
 			money(r.LowestOffer, "desconocido", "oferta_mas_baja"), money(r.HighestOffer, "desconocido", "oferta_mas_alta")),
 		OfertasRecibidas: r.TendersReceived, BajaAnormal: r.AbnormallyLow,
 	}
-	if r.WinnerName != "" || r.WinnerID != "" {
-		nif := ""
-		if r.WinnerScheme == "NIF" {
-			nif = r.WinnerID
-		}
-		a.Adjudicatario = orgRef(r.WinnerName, nif, "")
-		if a.Adjudicatario == nil && r.WinnerID != "" {
-			a.Adjudicatario = &OrganizacionRef{ID: uuid8("org:" + r.WinnerID), Nombre: r.WinnerName}
-		}
-	}
+	clave, nif := claveAdjudicatario(r)
+	a.Adjudicatario = orgAdjudicatario(r.WinnerName, clave, nif)
 	if r.AwardDate != "" {
 		d := string(r.AwardDate)
 		a.FechaAdjudicacion = &d

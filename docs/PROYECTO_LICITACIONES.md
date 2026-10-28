@@ -366,4 +366,14 @@ Documento de partida: «Plataforma de detección y análisis de concursos públi
   organismo…) los escribe un organismo, no 101.cat: van a Viabilidad dentro de un bloque marcado como texto de terceros, recortados y sin poder cerrarlo. Nunca pisa un
   informe anterior (repetir la tarea es inofensivo), un fallo en una licitación no impide valorar las demás, y si el modelo no está disponible se reintenta (hasta 4
   veces, con espera creciente) conservando lo ya valorado. El Rastreador deja de lanzar su ejecución genérica de las 6:00 (`horario: null` en su ficha): su trabajo es esta tarea.
-- Pendiente: canal `correo`; competencia; un botón «Pedir informe de viabilidad» para una licitación concreta; y llevar a Viabilidad lo que ya sabe 101.cat de cada organismo.
+- **Adjudicaciones y competidores en el motor** (hecho): tabla `adjudicaciones` (una fila por lote y adjudicatario; migración 0004) derivada **siempre del `documento`** del
+  expediente con una función SQL y un disparador (se regenera sola con cada versión nueva del expediente, desaparece si se anula, y la migración rellena lo que ya había).
+  La API sirve `GET /api/v1/awards` (texto, CPV, NUTS, comprador, adjudicatario por UUID o `nif:`, resultado, importes, fechas, procedimiento, orden por fecha, importe o
+  baja) y `GET /api/v1/competitors` (ranking de empresas del mercado: contratos, importe, **cuota** sobre el importe del mercado filtrado, baja media y mediana, tendencia
+  y última adjudicación, con `muestra` = cuántas adjudicaciones hay detrás; obliga a acotar por CPV, NUTS o comprador). La **baja** (1 − adjudicado/presupuesto base, sin IVA)
+  solo se calcula cuando el presupuesto es fiable: el del lote, o el del expediente si no tiene lotes; si hay varios adjudicatarios en el mismo lote, o lo adjudicado supera
+  el presupuesto (contratos plurianuales: en las muestras hay uno con el cuádruple), queda vacía. Un adjudicatario se identifica por su NIF; una persona física con el NIF
+  tapado, por su nombre. **Tendencia** = contratos de los últimos 12 meses frente a los 12 anteriores (`sin_datos` con menos de 3). Solo cuenta lo adjudicado en euros. La
+  herramienta `licitaciones` de los agentes tiene las operaciones nuevas `adjudicaciones` y `competidores`. **Aún no**: `/organizations/{id}`, `/expiring-contracts` (la
+  fecha de fin del contrato no se extrae todavía), `area`, ni el ranking de licitadores no adjudicatarios (solo se publica en las actas de la mesa).
+- Pendiente: canal `correo`; fichas de organismo y contratos que vencen; un botón «Pedir informe de viabilidad» para una licitación concreta; y llevar a Viabilidad lo que ya sabe 101.cat de cada organismo.
