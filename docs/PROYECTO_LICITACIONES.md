@@ -374,6 +374,8 @@ Documento de partida: «Plataforma de detección y análisis de concursos públi
   (`licitaciones_avisos.correo_enviado IS NULL`), agrupados por alerta (hasta `max_por_correo` = 20 por mensaje), con `Auto-Submitted: auto-generated`. Un fallo del servidor se
   anota (`correo_error`) y se reintenta hasta `max_intentos` = 5; un aviso de más de `max_antiguedad_horas` = 48 ya no se envía; al pasar una alerta a `correo` no se envía lo que
   ya había. El canal es único: «correo» incluye el panel pero no el resumen de las 16:00. Desde `/licitaciones/alertas`.
+- **Carga del histórico segura** (hecho): los eventos de lo que se carga desde los ZIP van a su propio flujo `LIC_HISTORICO` (solo el proyector lo consume; el Cerebro no recibe millones de
+  «nuevas», ADR 0002) y el relay publica antes lo en vivo. Guía para cargarlo poco a poco en un PC delicado: `docs/CARGAR_HISTORICO.md`, con `scripts/estado_historico.sh` para ver el avance.
 - **Viabilidad frente a lo que hizo la gente** (hecho): el resumen del embudo (`GET /licitaciones/embudo/resumen`) lleva un bloque `viabilidad` y el embudo del panel un cuadro
   desplegable. Cuenta, por recomendación (IR, NO IR, REVISAR), los informes **generados en el periodo** y lo que pasó después: **seguidos** (IR con la licitación presentada, o NO IR con la
   licitación descartada), **en contra** (al revés), **pendientes** (aún detectada o en estudio) y cómo han acabado (ganadas y perdidas). No dice quién «acierta»: la gente decide por motivos

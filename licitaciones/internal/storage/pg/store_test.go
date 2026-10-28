@@ -237,6 +237,29 @@ func TestDrainPublicaEnOrdenYBorra(t *testing.T) {
 	}
 }
 
+func TestDrainPublicaPrimeroLoEnVivoYGuardaLaMarcaDelHistorico(t *testing.T) {
+	_, s := conectar(t)
+	ctx := context.Background()
+	for i := 0; i < 2; i++ { // dos del histórico primero…
+		o := obs(fmt.Sprint("h", i), fmt.Sprint("hh", i), t0, 0)
+		o.Backfill = true
+		if _, err := s.Observe(ctx, o); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if _, err := s.Observe(ctx, obs("v0", "vv0", t0, 0)); err != nil { // …y uno en vivo después
+		t.Fatal(err)
+	}
+	var vistos []string
+	n, err := s.Drain(ctx, 10, func(_ context.Context, e ingest.Event) error {
+		vistos = append(vistos, fmt.Sprint(e.SourceID, ":", e.Backfill))
+		return nil
+	})
+	if err != nil || n != 3 || fmt.Sprint(vistos) != "[v0:false h0:true h1:true]" {
+		t.Fatalf("n = %d, vistos = %v, err = %v: lo en vivo sale antes que el histórico y conserva su marca", n, vistos, err)
+	}
+}
+
 func TestDrainTrasUnFalloConservaLoPendienteYAnotaElIntento(t *testing.T) {
 	pool, s := conectar(t)
 	sembrar(t, s, 4)

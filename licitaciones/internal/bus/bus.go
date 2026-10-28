@@ -26,6 +26,12 @@ const (
 	MaxBytes      = 1 << 30
 	MaxMsgSize    = 64 << 10
 	DuplicateWin  = 2 * time.Hour
+
+	// El histórico (carga de ZIP) tiene su propio flujo (ADR 0002): solo lo consumen los proyectores, nunca el Cerebro, y no compite por espacio con el flujo en vivo.
+	StreamHistorico        = "LIC_HISTORICO"
+	SubjectHistoricoFilter = "lichist.v1.>"
+	MaxAgeHistorico        = 7 * 24 * time.Hour
+	MaxBytesHistorico      = 2 << 30 // se reserva en disco al crear el flujo; con DiscardNew, si se llena el relay espera (no se pierde nada: los eventos siguen en el outbox)
 )
 
 // Config es la conexión. Con usuario y clave se autentica; sin ellos va sin autenticación (solo en desarrollo, red interna).
@@ -77,16 +83,28 @@ func (p *Publisher) EnsureStream(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("bus: crear o actualizar el flujo %s: %w", StreamName, err)
 	}
+	_, err = p.js.CreateOrUpdateStream(ctx, jetstream.StreamConfig{
+		Name: StreamHistorico, Subjects: []string{SubjectHistoricoFilter}, Storage: jetstream.FileStorage, Retention: jetstream.LimitsPolicy,
+		MaxAge: MaxAgeHistorico, MaxBytes: MaxBytesHistorico, MaxMsgSize: MaxMsgSize, Duplicates: DuplicateWin, Discard: jetstream.DiscardNew,
+		Replicas: 1, Description: "Carga histórica y reprocesos: solo los proyectores (ADR 0002)",
+	})
+	if err != nil {
+		return fmt.Errorf("bus: crear o actualizar el flujo %s: %w", StreamHistorico, err)
+	}
 	return nil
 }
 
 var token = regexp.MustCompile(`^[A-Za-z0-9_-]{1,64}$`)
 
-// Subject es el asunto de un evento: licitacion.<tipo>.<fuente>, p. ej. licitacion.nueva.placsp-643.
+// Subject es el asunto de un evento: licitacion.<tipo>.<fuente>, p. ej. licitacion.nueva.placsp-643; el de la carga del histórico, lichist.v1.<tipo>.<fuente>
+// (otro flujo: el Cerebro no lo ve).
 func Subject(e ingest.Event) (string, error) {
 	tipo := strings.TrimPrefix(e.Type, "licitacion.")
 	if !token.MatchString(tipo) || !token.MatchString(e.Source) {
 		return "", fmt.Errorf("bus: tipo (%q) o fuente (%q) no válidos para un asunto", e.Type, e.Source)
+	}
+	if e.Backfill {
+		return "lichist.v1." + tipo + "." + e.Source, nil
 	}
 	return "licitacion." + tipo + "." + e.Source, nil
 }
@@ -99,6 +117,7 @@ type payload struct {
 	Version   int    `json:"version"`
 	RawSHA256 string `json:"sha256_original"`
 	RawKey    string `json:"clave_original"`
+	Backfill  bool   `json:"historico,omitempty"`
 }
 
 // Decode es la operación inversa de Publish: reconstruye el evento a partir del mensaje.
@@ -110,7 +129,7 @@ func Decode(data []byte) (ingest.Event, error) {
 	if p.ID == "" || p.Type == "" || p.Source == "" || p.RawKey == "" || p.Version < 1 {
 		return ingest.Event{}, fmt.Errorf("%w: al mensaje le faltan campos obligatorios", ErrPermanent)
 	}
-	return ingest.Event{ID: p.ID, Type: p.Type, Source: p.Source, SourceID: p.SourceID, Version: p.Version, RawSHA256: p.RawSHA256, RawKey: p.RawKey}, nil
+	return ingest.Event{ID: p.ID, Type: p.Type, Source: p.Source, SourceID: p.SourceID, Version: p.Version, RawSHA256: p.RawSHA256, RawKey: p.RawKey, Backfill: p.Backfill}, nil
 }
 
 // Publish publica el evento y vuelve cuando JetStream lo ha confirmado. Un duplicado dentro de la ventana cuenta como éxito.
@@ -119,7 +138,7 @@ func (p *Publisher) Publish(ctx context.Context, e ingest.Event) error {
 	if err != nil {
 		return err
 	}
-	body, err := json.Marshal(payload{e.ID, e.Type, e.Source, e.SourceID, e.Version, e.RawSHA256, e.RawKey})
+	body, err := json.Marshal(payload{e.ID, e.Type, e.Source, e.SourceID, e.Version, e.RawSHA256, e.RawKey, e.Backfill})
 	if err != nil {
 		return err
 	}

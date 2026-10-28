@@ -58,7 +58,7 @@ func Decide(prev *View, o Observation) Decision {
 // NewEvent construye el evento de una decisión con identificador determinista.
 func NewEvent(typ string, o Observation, version int) Event {
 	return Event{ID: eventID(typ, o.Source, o.SourceID, version), Type: typ, Source: o.Source, SourceID: o.SourceID,
-		Version: version, RawSHA256: o.RawSHA256, RawKey: o.RawKey}
+		Version: version, RawSHA256: o.RawSHA256, RawKey: o.RawKey, Backfill: o.Backfill}
 }
 
 // Outcome construye el resultado público de una decisión.

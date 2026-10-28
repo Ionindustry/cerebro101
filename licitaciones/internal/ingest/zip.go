@@ -49,6 +49,7 @@ func ZipKey(label string) string { return "zip:" + label }
 // entero. Un orden distinto al cronológico no importa: Observe descarta lo que ya está superado por una versión más reciente (KindStale).
 func RunZip(ctx context.Context, d Deps, source, label, zipURL, zipPath string, lim ZipLimits) (Stats, error) {
 	var total Stats
+	d.Backfill = true // todo lo que sale de un ZIP es histórico, también sus eventos
 	lim = lim.withDefaults()
 	zr, err := zip.OpenReader(zipPath)
 	if err != nil {

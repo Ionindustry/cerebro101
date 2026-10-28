@@ -109,9 +109,9 @@ func (s *Store) observeOnce(ctx context.Context, o ingest.Observation) (ingest.O
 		out.Version = prev.Version
 	}
 	if e := out.Event; e != nil {
-		if _, err := tx.Exec(ctx, `INSERT INTO outbox (id, tipo, fuente, id_origen, version_entidad, sha256_original, clave_original)
-			VALUES ($1, $2, $3, $4, $5, $6, $7) ON CONFLICT (id) DO NOTHING`,
-			e.ID, e.Type, e.Source, e.SourceID, e.Version, e.RawSHA256, e.RawKey); err != nil {
+		if _, err := tx.Exec(ctx, `INSERT INTO outbox (id, tipo, fuente, id_origen, version_entidad, sha256_original, clave_original, historico)
+			VALUES ($1, $2, $3, $4, $5, $6, $7, $8) ON CONFLICT (id) DO NOTHING`,
+			e.ID, e.Type, e.Source, e.SourceID, e.Version, e.RawSHA256, e.RawKey, e.Backfill); err != nil {
 			return ingest.Outcome{}, fmt.Errorf("pg: escribir el evento: %w", err)
 		}
 	}
@@ -175,7 +175,7 @@ func (s *Store) MarkPageDone(ctx context.Context, source, url, next string) erro
 	return nil
 }
 
-// Drain publica hasta limit eventos pendientes (publish vuelve cuando el destino lo ha confirmado, p. ej. con el PubAck de NATS), en orden, y borra del outbox los confirmados (ADR 0003, paso 5). Varios Drain a la vez no se
+// Drain publica hasta limit eventos pendientes (publish vuelve cuando el destino lo ha confirmado, p. ej. con el PubAck de NATS), en orden (primero lo en vivo y después lo de la carga del histórico, cada uno por orden de llegada), y borra del outbox los confirmados (ADR 0003, paso 5). Varios Drain a la vez no se
 // pisan (SKIP LOCKED). Si la publicación de un evento falla, se conservan él y los siguientes, se anota el intento y se devuelve el error junto
 // con el número de eventos publicados antes del fallo.
 func (s *Store) Drain(ctx context.Context, limit int, publish func(context.Context, ingest.Event) error) (int, error) {
@@ -188,15 +188,15 @@ func (s *Store) Drain(ctx context.Context, limit int, publish func(context.Conte
 	}
 	defer func() { _ = tx.Rollback(context.WithoutCancel(ctx)) }()
 
-	rows, err := tx.Query(ctx, `SELECT id, tipo, fuente, id_origen, version_entidad, sha256_original, clave_original
-		FROM outbox ORDER BY seq LIMIT $1 FOR UPDATE SKIP LOCKED`, limit)
+	rows, err := tx.Query(ctx, `SELECT id, tipo, fuente, id_origen, version_entidad, sha256_original, clave_original, historico
+		FROM outbox ORDER BY historico, seq LIMIT $1 FOR UPDATE SKIP LOCKED`, limit)
 	if err != nil {
 		return 0, fmt.Errorf("pg: leer el outbox: %w", err)
 	}
 	var pend []ingest.Event
 	for rows.Next() {
 		var e ingest.Event
-		if err := rows.Scan(&e.ID, &e.Type, &e.Source, &e.SourceID, &e.Version, &e.RawSHA256, &e.RawKey); err != nil {
+		if err := rows.Scan(&e.ID, &e.Type, &e.Source, &e.SourceID, &e.Version, &e.RawSHA256, &e.RawKey, &e.Backfill); err != nil {
 			rows.Close()
 			return 0, err
 		}

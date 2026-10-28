@@ -27,6 +27,8 @@ type ConsumerOptions struct {
 	AckWait       time.Duration // tiempo para confirmar antes de reentregar; 0 = 2 min
 	MaxDeliver    int           // intentos antes de descartar; 0 = 8
 	MaxAckPending int           // mensajes en vuelo; 0 = 32
+	Stream        string        // flujo del que se consume; vacío = el de la sindicación en vivo (StreamName)
+	Filter        string        // asuntos del flujo; vacío = el del flujo en vivo (SubjectFilter) o, con StreamHistorico, el suyo
 	Log           *slog.Logger
 }
 
@@ -49,13 +51,22 @@ func Consume(ctx context.Context, nc *nats.Conn, h Handler, o ConsumerOptions) e
 	if o.Log == nil {
 		o.Log = slog.New(slog.DiscardHandler)
 	}
+	if o.Stream == "" {
+		o.Stream = StreamName
+	}
+	if o.Filter == "" {
+		o.Filter = SubjectFilter
+		if o.Stream == StreamHistorico {
+			o.Filter = SubjectHistoricoFilter
+		}
+	}
 	js, err := jetstream.New(nc)
 	if err != nil {
 		return fmt.Errorf("bus: JetStream: %w", err)
 	}
-	cons, err := js.CreateOrUpdateConsumer(ctx, StreamName, jetstream.ConsumerConfig{
+	cons, err := js.CreateOrUpdateConsumer(ctx, o.Stream, jetstream.ConsumerConfig{
 		Durable: o.Durable, AckPolicy: jetstream.AckExplicitPolicy, AckWait: o.AckWait, MaxDeliver: o.MaxDeliver,
-		MaxAckPending: o.MaxAckPending, FilterSubject: SubjectFilter, DeliverPolicy: jetstream.DeliverAllPolicy,
+		MaxAckPending: o.MaxAckPending, FilterSubject: o.Filter, DeliverPolicy: jetstream.DeliverAllPolicy,
 		Description: "Proyector de lectura",
 	})
 	if err != nil {
