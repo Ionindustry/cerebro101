@@ -1,0 +1,19 @@
+# Contexto de construcción de la API, el worker, el beat, las migraciones y el consumidor (`context: .` en docker-compose.yml). El Dockerfile solo copia
+# api/, config/, scripts/ y db/: lo demás (claves, copias de seguridad, el panel, el motor de licitaciones, los datos…) no hace falta que viaje al motor
+# de Docker y, en el caso de las claves, no debe.
+.git
+.env
+.env.*
+secretos
+copias
+panel
+licitaciones
+servicios
+erpnext
+docs
+evaluacion
+despliegue
+**/node_modules
+**/__pycache__
+**/*.pyc
+**/*.egg-info
