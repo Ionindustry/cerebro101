@@ -326,10 +326,62 @@ class TestContratosQueVencen(unittest.TestCase):
                     ejecutar(licitaciones.contratos_que_vencen(**kw))
 
 
+FICHA = {
+    "id": ID, "nombre": "Uno Sistemas SL", "nombres_alternativos": ["UNO SISTEMAS S.L."], "identificadores": [{"esquema": "NIF", "valor": "B11111111"}], "persona_fisica": False,
+    "roles": ["proveedor"], "nuts": ["ES512"],
+    "como_proveedor": {"contratos": 3, "importe_total": {"valor": "600000.00", "moneda": "EUR", "impuestos": "sin_iva", "significado": "adjudicado"}, "baja_media": 0.2,
+                       "baja_p50": 0.2, "ofertas_medias": 4.0, "por_cpv": [{"cpv": "72000", "contratos": 3, "cuota": 1.0}],
+                       "por_trimestre": [{"trimestre": "2026-T3", "contratos": 1, "importe": {"valor": "100000.00"}}], "muestra": {"adjudicaciones": 3, "desde": "2025-02-01", "hasta": "2026-09-01"},
+                       "principales_compradores": [{"organizacion": {"id": "z", "nombre": "Ayuntamiento de Girona", "nif": "P1708500E"}, "contratos": 3}], "campo_inesperado": "no pasa"},
+}
+
+
+@unittest.skipUnless(HTTPX_REAL, "requiere httpx real (se ejecuta en el contenedor)")
+class TestOrganizacion(unittest.TestCase):
+    def llamar(self, codigo=200, cuerpo=None, **kw):
+        vistas = []
+
+        def manejar(req):
+            vistas.append(req)
+            return httpx.Response(codigo, json=FICHA if cuerpo is None else cuerpo)
+        with entorno(), con_motor(manejar):
+            return ejecutar(licitaciones.organizacion(**kw)), vistas
+
+    def test_traduce_el_identificador_y_resume(self):
+        r, vistas = self.llamar(identificador="b11111111", desde="2025-01-01", hasta="2026-12-31", cpv=["72"])
+        self.assertEqual((vistas[0].url.path, vistas[0].url.params["desde"], vistas[0].url.params["hasta"], vistas[0].url.params["cpv"]),
+                         ("/api/v1/organizations/nif:B11111111", "2025-01-01", "2026-12-31", "72"))
+        self.assertEqual((r["nombre"], r["identificadores"], r["roles"], r["otros_nombres"]), ("Uno Sistemas SL", ["NIF B11111111"], ["proveedor"], ["UNO SISTEMAS S.L."]))
+        p = r["como_proveedor"]
+        self.assertEqual((p["contratos"], p["importe_total"], p["baja_mediana"]), (3, "600000.00 EUR (sin iva; adjudicado)", 0.2))
+        self.assertEqual(p["principales_compradores"][0]["nombre"], "Ayuntamiento de Girona")
+        self.assertEqual(p["muestra"]["adjudicaciones"], 3)
+        self.assertIsNone(r["como_comprador"])
+        self.assertNotIn("campo_inesperado", str(r))
+        self.assertIn("muestra", r["aviso"])
+
+    def test_formas_validas_del_identificador(self):
+        for ident, ruta in ((ID.upper(), ID), ("nif:b11111111", "nif:B11111111"), ("NIF:B11111111", "nif:B11111111"), ("dir3:l01170000", "dir3:L01170000")):
+            with self.subTest(ident):
+                _, vistas = self.llamar(identificador=ident)
+                self.assertEqual(vistas[0].url.path, f"/api/v1/organizations/{ruta}")
+
+    def test_nunca_por_nombre_ni_con_rutas(self):
+        for ident in ("Uno Sistemas SL", "vat:FR12345678901", "../ops/status", "nif:B1", "", "x/y", None, 5):
+            with self.subTest(ident), entorno(), con_motor(lambda r: self.fail("no debe llamar al motor")):
+                with self.assertRaises(ValueError):
+                    ejecutar(licitaciones.organizacion(identificador=ident))
+
+    def test_una_organizacion_desconocida_se_dice_claro(self):
+        with self.assertRaises(LookupError) as cm:
+            self.llamar(codigo=404, cuerpo={"detail": "x"}, identificador="nif:B99999999")
+        self.assertIn("organización", str(cm.exception))
+
+
 class TestRegistro(unittest.TestCase):
     def test_esta_registrada_y_es_de_solo_lectura(self):
         h = base._REGISTRO["licitaciones"]
-        self.assertEqual(set(h.operaciones), {"buscar", "ficha", "novedades_desde", "adjudicaciones", "competidores", "contratos_que_vencen", "estado_motor"})
+        self.assertEqual(set(h.operaciones), {"buscar", "ficha", "novedades_desde", "adjudicaciones", "competidores", "contratos_que_vencen", "organizacion", "estado_motor"})
         self.assertEqual(h.externas, frozenset())             # ninguna operación tiene impacto fuera: no necesita aprobación
         self.assertEqual(set(h.ayuda), set(h.operaciones))
 

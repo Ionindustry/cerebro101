@@ -25,6 +25,8 @@ type fakeRepo struct {
 	vistoAdj   pg.FiltroAdjudicaciones
 	vistoComp  pg.FiltroCompetidores
 	vistoVence pg.FiltroVencimientos
+	vistaOrg   pg.FiltroOrganizacion
+	sinOrg     bool
 }
 
 func (f *fakeRepo) BuscarAdjudicaciones(_ context.Context, fl pg.FiltroAdjudicaciones) ([]pg.Adjudicacion, int, bool, error) {
@@ -34,6 +36,13 @@ func (f *fakeRepo) BuscarAdjudicaciones(_ context.Context, fl pg.FiltroAdjudicac
 func (f *fakeRepo) ContratosQueVencen(_ context.Context, fl pg.FiltroVencimientos) ([]pg.ContratoVence, int, bool, error) {
 	f.vistoVence = fl
 	return nil, 0, true, nil
+}
+func (f *fakeRepo) Organizacion(_ context.Context, fl pg.FiltroOrganizacion) (*pg.FichaOrganizacion, error) {
+	f.vistaOrg = fl
+	if f.sinOrg {
+		return nil, pg.ErrOrganizacionSinDatos
+	}
+	return &pg.FichaOrganizacion{ID: fl.ID, Nombre: "Uno Sistemas SL", NIF: "B11111111", Proveedor: &pg.StatsRol{Contratos: 2, Importe: "300000.0000"}}, nil
 }
 func (f *fakeRepo) Competidores(_ context.Context, fl pg.FiltroCompetidores) ([]pg.Competidor, int, pg.MuestraMercado, error) {
 	f.vistoComp = fl

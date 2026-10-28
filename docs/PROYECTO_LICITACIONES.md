@@ -374,7 +374,7 @@ Documento de partida: «Plataforma de detección y análisis de concursos públi
   solo se calcula cuando el presupuesto es fiable: el del lote, o el del expediente si no tiene lotes; si hay varios adjudicatarios en el mismo lote, o lo adjudicado supera
   el presupuesto (contratos plurianuales: en las muestras hay uno con el cuádruple), queda vacía. Un adjudicatario se identifica por su NIF; una persona física con el NIF
   tapado, por su nombre. **Tendencia** = contratos de los últimos 12 meses frente a los 12 anteriores (`sin_datos` con menos de 3). Solo cuenta lo adjudicado en euros. La
-  herramienta `licitaciones` de los agentes tiene las operaciones nuevas `adjudicaciones` y `competidores`. **Aún no**: `/organizations/{id}`, `area`, ni el ranking de licitadores no adjudicatarios (solo se publica en las actas de la mesa).
+  herramienta `licitaciones` de los agentes tiene las operaciones nuevas `adjudicaciones` y `competidores`. **Aún no**: `area`, ni el ranking de licitadores no adjudicatarios (solo se publica en las actas de la mesa).
 - **Página «Competencia» del panel** (hecho): `/licitaciones/competencia` enseña el ranking de `/competitors` de un mercado que se elige con CPV, zona (NUTS) o NIF del comprador
   (más fechas y orden); la dirección de la página es la consulta, así que se puede compartir. Cada empresa muestra cuota (barra y %), contratos, importe, baja media y mediana,
   tendencia y última adjudicación, y se abre para ver sus **últimas adjudicaciones en ese mismo mercado** (`/awards` con los mismos filtros), enlazadas a la ficha de la
@@ -394,4 +394,11 @@ Documento de partida: «Plataforma de detección y análisis de concursos públi
   termina y **cuánto fiarse de esa fecha** (inicio publicado / calculada desde la formalización / desde la adjudicación: orientativa), quién lo tiene ahora, el importe, qué se sabe de las
   prórrogas (sin prórrogas / con prórrogas hasta tal fecha / admite sin fecha / no consta) y, desplegable, el texto del pliego tal cual (dato de un tercero: se escribe como texto, nunca como
   HTML). Avisa de que la fecha es la prevista en origen. Desde «Competencia» hay un enlace con el mismo mercado. La pasarela del panel deja pasar `expiring-contracts` (solo la lista).
-- Pendiente: canal `correo`; ficha de organismo; un botón «Pedir informe de viabilidad» para una licitación concreta; y llevar a Viabilidad lo que ya sabe 101.cat de cada organismo.
+- **Fichas de organismo y de competidor** (motor, hecho): `GET /api/v1/organizations/{id}` con el UUID que dan las listas, `nif:` o `dir3:` (`vat:` da 400; **nunca por nombre**).
+  Un NIF o un DIR3 dan el mismo UUID que calculan las listas, y un comprador con NIF y DIR3 es una sola organización (su id es el del NIF). Una organización puede ser comprador,
+  adjudicataria o las dos: `roles`, y por papel (`como_comprador`, `como_proveedor`) contratos, importe, baja media y percentiles, ofertas medias, CPV (grupos de 5 cifras), trimestres
+  (los últimos 16), `muestra`, a quién adjudica y cuánto se concentra en un solo adjudicatario (`repeticion_adjudicatario`, solo comprador) o a quién vende (`principales_compradores`,
+  solo proveedor). `desde`, `hasta` y `cpv` acotan las cifras pero no la existencia. Los otros nombres con que aparece son informativos y **nunca unen** organizaciones. La
+  migración 0006 añade `expedientes.comprador_id` (columna generada con la misma función `lic_uuid8`) para poder buscar compradores por UUID. La herramienta de los agentes
+  tiene la operación `organizacion`.
+- Pendiente: canal `correo`; página de la ficha en el panel; un botón «Pedir informe de viabilidad» para una licitación concreta; y llevar a Viabilidad lo que ya sabe 101.cat de cada organismo.

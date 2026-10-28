@@ -469,3 +469,217 @@ func TestContratosQueVencenConPostgres(t *testing.T) {
 		t.Fatalf("cursor de otro periodo: %d", r.StatusCode)
 	}
 }
+
+func TestParametrosDeOrganizacion(t *testing.T) {
+	repo := &fakeRepo{}
+	_, ts := servidor(t, repo)
+	malos := []string{
+		"/api/v1/organizations/vat:FR12345678901", // todavía no
+		"/api/v1/organizations/nombre-de-empresa", // nunca por nombre
+		"/api/v1/organizations/nif:B123",
+		"/api/v1/organizations/nif:B11111111?foo=1",
+		"/api/v1/organizations/nif:B11111111?desde=2026-02-30",
+		"/api/v1/organizations/nif:B11111111?desde=2026-05-01&hasta=2026-01-01",
+		"/api/v1/organizations/nif:B11111111?cpv=7",
+	}
+	for _, p := range malos {
+		if r := get(t, ts, p, token); r.StatusCode != 400 {
+			t.Errorf("%s: esperaba 400, llegó %d: %s", p, r.StatusCode, r.Body)
+		}
+	}
+	// el NIF y el DIR3 dan el UUID que calculan las listas
+	if r := get(t, ts, "/api/v1/organizations/nif:b11111111", token); r.StatusCode != 400 {
+		t.Fatalf("el NIF va en mayúsculas, como en el contrato: %d", r.StatusCode)
+	}
+	if r := get(t, ts, "/api/v1/organizations/nif:B11111111?desde=2025-01-01&hasta=2026-12-31&cpv=72&cpv=35125", token); r.StatusCode != 200 {
+		t.Fatalf("válida: %d %s", r.StatusCode, r.Body)
+	}
+	if f := repo.vistaOrg; f.ID != uuid8("org:B11111111") || f.DIR3 != "" || f.Desde != "2025-01-01" || f.Hasta != "2026-12-31" || len(f.CPV) != 2 {
+		t.Fatalf("filtro mal traducido: %+v", f)
+	}
+	if r := get(t, ts, "/api/v1/organizations/dir3:L01170000", token); r.StatusCode != 200 {
+		t.Fatalf("dir3: %d", r.StatusCode)
+	}
+	if f := repo.vistaOrg; f.ID != uuid8("org:L01170000") || f.DIR3 != "L01170000" {
+		t.Fatalf("dir3 mal traducido: %+v", f)
+	}
+	if r := get(t, ts, "/api/v1/organizations/0F1E2D3C-4B5A-6978-8796-A5B4C3D2E1F0", token); r.StatusCode != 200 || repo.vistaOrg.ID != "0f1e2d3c-4b5a-6978-8796-a5b4c3d2e1f0" {
+		t.Fatalf("uuid: %d %+v", r.StatusCode, repo.vistaOrg)
+	}
+	repo.sinOrg = true
+	if r := get(t, ts, "/api/v1/organizations/nif:B99999999", token); r.StatusCode != 404 {
+		t.Fatalf("desconocida: %d", r.StatusCode)
+	}
+}
+
+type fichaOrg struct {
+	ID              string          `json:"id"`
+	Nombre          string          `json:"nombre"`
+	Alternativos    []string        `json:"nombres_alternativos"`
+	Identificadores []Identificador `json:"identificadores"`
+	PersonaFisica   bool            `json:"persona_fisica"`
+	Roles           []string        `json:"roles"`
+	NUTS            []string        `json:"nuts"`
+	Comprador       *struct {
+		Contratos    int      `json:"contratos"`
+		ImporteTotal Importe  `json:"importe_total"`
+		BajaMedia    *float64 `json:"baja_media"`
+		PorCPV       []struct {
+			CPV       string  `json:"cpv"`
+			Contratos int     `json:"contratos"`
+			Cuota     float64 `json:"cuota"`
+		} `json:"por_cpv"`
+		Principales []struct {
+			Organizacion OrganizacionRef `json:"organizacion"`
+			Contratos    int             `json:"contratos"`
+			Cuota        float64         `json:"cuota"`
+		} `json:"principales_adjudicatarios"`
+		Repeticion *float64 `json:"repeticion_adjudicatario"`
+	} `json:"como_comprador"`
+	Proveedor *struct {
+		Contratos    int      `json:"contratos"`
+		ImporteTotal Importe  `json:"importe_total"`
+		BajaMedia    *float64 `json:"baja_media"`
+		BajaP25      *float64 `json:"baja_p25"`
+		BajaP75      *float64 `json:"baja_p75"`
+		PorCPV       []struct {
+			CPV       string `json:"cpv"`
+			Contratos int    `json:"contratos"`
+		} `json:"por_cpv"`
+		PorTrimestre []struct {
+			Trimestre string  `json:"trimestre"`
+			Contratos int     `json:"contratos"`
+			Importe   Importe `json:"importe"`
+		} `json:"por_trimestre"`
+		Compradores []struct {
+			Organizacion OrganizacionRef `json:"organizacion"`
+			Contratos    int             `json:"contratos"`
+		} `json:"principales_compradores"`
+		Muestra struct {
+			Adjudicaciones int `json:"adjudicaciones"`
+			Desde, Hasta   string
+		} `json:"muestra"`
+	} `json:"como_proveedor"`
+}
+
+func TestFichaDeOrganizacionConPostgres(t *testing.T) {
+	ts, st, _ := conPostgres(t)
+	siembraMercado(t, st)
+	// un comprador con NIF y DIR3, y otro solo con DIR3 (su identificador sale del DIR3)
+	ins := func(id, nif, dir3, nombre, ganador, idGanador, adj, fecha string) {
+		l := &domain.Licitacion{Source: "placsp-643", SourceID: id, NumericID: "9", Updated: time.Date(2026, 10, 2, 10, 0, 0, 0, time.UTC), Expediente: "O-" + id, Status: "ADJ",
+			Title: "Contrato " + id, Organism: domain.Organization{Name: nombre, NIF: nif, DIR3: dir3}, Procedure: "1", CPV: []string{"35125300"}, NUTS: []string{"ES512"},
+			Link: "https://x.test/" + id, BaseBudgetExclVAT: &domain.Money{Value: "200000", Currency: "EUR"},
+			Results: []domain.Result{{Code: domain.ResultFormalized, WinnerName: ganador, WinnerID: idGanador, AwardedExclVAT: &domain.Money{Value: adj, Currency: "EUR"}, AwardDate: domain.Date(fecha)}}}
+		if _, err := st.UpsertExpediente(context.Background(), ingest.Event{Source: "placsp-643", SourceID: id, Version: 1, RawSHA256: "ab", RawKey: "k"}, l); err != nil {
+			t.Fatal(err)
+		}
+	}
+	ins("o/1", "Q0818001J", "L01082000", "Consorci de Serveis", "Uno Sistemas SL", "B11111111", "100000", "2026-03-15")
+	ins("o/2", "", "L01170000", "Ajuntament de Girona (DIR3)", "Dos Redes SL", "B22222222", "150000", "2026-04-15")
+	ins("o/3", "Q0818001J", "L01082000", "Consorci de Serveis de Barcelona", "Uno Sistemas SL", "B11111111", "50000", "2026-05-15")
+
+	// ---- proveedor: Uno Sistemas SL por NIF ----
+	var u fichaOrg
+	getJSON(t, ts, "/api/v1/organizations/nif:B11111111", &u)
+	if u.Nombre != "Uno Sistemas SL" || u.ID != uuid8("org:B11111111") || strings.Join(u.Roles, ",") != "proveedor" || u.Comprador != nil || u.PersonaFisica ||
+		len(u.Identificadores) != 1 || u.Identificadores[0] != (Identificador{"NIF", "B11111111"}) {
+		t.Fatalf("identidad de Uno: %+v", u)
+	}
+	p := u.Proveedor
+	if p == nil || p.Contratos != 5 || p.ImporteTotal.Valor != "750000.00" || p.Muestra.Adjudicaciones != 5 {
+		t.Fatalf("Uno tiene 3 contratos de 2025-26 en CPV 72 y 2 más: %+v", p)
+	}
+	if len(p.Compradores) != 2 || p.Compradores[0].Organizacion.Nombre != "Ayuntamiento de Girona" || p.Compradores[0].Contratos != 3 {
+		t.Fatalf("compradores: %+v", p.Compradores)
+	}
+	if len(p.PorCPV) < 2 || p.PorCPV[0].CPV != "72000" || p.PorCPV[0].Contratos != 3 || p.PorCPV[1].CPV != "35125" || p.PorCPV[1].Contratos != 2 {
+		t.Fatalf("por CPV: %+v", p.PorCPV)
+	}
+	if n := len(p.PorTrimestre); n < 4 || p.PorTrimestre[0].Trimestre != "2025-T1" || p.PorTrimestre[n-1].Trimestre != "2026-T3" {
+		t.Fatalf("por trimestre, en orden cronológico: %+v", p.PorTrimestre)
+	}
+	if p.BajaMedia == nil || p.BajaP25 == nil || p.BajaP75 == nil {
+		t.Fatalf("bajas: %+v", p)
+	}
+	// el mismo UUID que dan las listas (competidores) y la misma ficha por UUID
+	var comp paginaComp
+	getJSON(t, ts, "/api/v1/competitors?cpv=72", &comp)
+	if comp.Items[0].Organizacion.ID != u.ID {
+		t.Fatalf("el id de la ficha debe ser el de /competitors: %s ≠ %s", u.ID, comp.Items[0].Organizacion.ID)
+	}
+	var porID fichaOrg
+	getJSON(t, ts, "/api/v1/organizations/"+u.ID, &porID)
+	if porID.Nombre != u.Nombre || porID.Proveedor.Contratos != 5 {
+		t.Fatalf("por uuid: %+v", porID)
+	}
+	// filtros: solo CPV 72 y solo 2026
+	var f72 fichaOrg
+	getJSON(t, ts, "/api/v1/organizations/nif:B11111111?cpv=72", &f72)
+	if f72.Proveedor.Contratos != 3 || len(f72.Proveedor.PorCPV) != 1 {
+		t.Fatalf("con cpv=72: %+v", f72.Proveedor)
+	}
+	var f26 fichaOrg
+	getJSON(t, ts, "/api/v1/organizations/nif:B11111111?desde=2026-01-01&hasta=2026-12-31", &f26)
+	if f26.Proveedor.Contratos != 4 || f26.Proveedor.Muestra.Desde != "2026-03-15" {
+		t.Fatalf("con 2026: %+v", f26.Proveedor)
+	}
+	// periodo sin adjudicaciones: la ficha existe, las estadísticas están a cero
+	var vacio fichaOrg
+	getJSON(t, ts, "/api/v1/organizations/nif:B11111111?desde=2020-01-01&hasta=2020-12-31", &vacio)
+	if vacio.Proveedor == nil || vacio.Proveedor.Contratos != 0 || vacio.Proveedor.ImporteTotal.Valor != "0.00" || len(vacio.Proveedor.Compradores) != 0 {
+		t.Fatalf("periodo sin datos: %+v", vacio.Proveedor)
+	}
+
+	// ---- comprador: Ayuntamiento de Girona por NIF y por el UUID que salen en /awards ----
+	var aw paginaAdj
+	getJSON(t, ts, "/api/v1/awards?cpv=72&limit=1", &aw)
+	var ay fichaOrg
+	getJSON(t, ts, "/api/v1/organizations/"+aw.Items[0].Comprador.ID, &ay)
+	if ay.ID != aw.Items[0].Comprador.ID || ay.Nombre != "Ayuntamiento de Girona" || strings.Join(ay.Roles, ",") != "comprador" || ay.Proveedor != nil {
+		t.Fatalf("identidad del comprador: %+v", ay)
+	}
+	c := ay.Comprador
+	if c == nil || c.Contratos != 7 || len(c.Principales) == 0 || c.Principales[0].Organizacion.Nombre != "Uno Sistemas SL" || c.Principales[0].Contratos != 3 || c.Repeticion == nil {
+		t.Fatalf("el Ayuntamiento adjudicó 3 a Uno en CPV 72, 2 a Dos, 1 a Tres y 1 a Constructora SA: %+v", c)
+	}
+	if math.Abs(*c.Repeticion-3.0/7.0) > 1e-4 {
+		t.Fatalf("repetición = 3/7: %v", *c.Repeticion)
+	}
+	var cuotas float64
+	for _, x := range c.Principales {
+		cuotas += x.Cuota
+	}
+	if cuotas <= 0 || cuotas > 1.0001 {
+		t.Fatalf("cuotas de los principales adjudicatarios: %v", cuotas)
+	}
+
+	// ---- comprador con NIF y DIR3: por dir3: se encuentra, y el id es el del NIF ----
+	var cons fichaOrg
+	getJSON(t, ts, "/api/v1/organizations/dir3:L01082000", &cons)
+	if cons.ID != uuid8("org:Q0818001J") || cons.Comprador == nil || cons.Comprador.Contratos != 2 || len(cons.Identificadores) != 2 {
+		t.Fatalf("consorcio por dir3: %+v", cons)
+	}
+	if cons.Identificadores[0] != (Identificador{"NIF", "Q0818001J"}) || cons.Identificadores[1] != (Identificador{"DIR3", "L01082000"}) {
+		t.Fatalf("identificadores: %+v", cons.Identificadores)
+	}
+	if strings.Join(cons.Alternativos, "|") != "Consorci de Serveis" && strings.Join(cons.Alternativos, "|") != "Consorci de Serveis de Barcelona" {
+		t.Fatalf("el otro nombre con que aparece: %+v (nombre %q)", cons.Alternativos, cons.Nombre)
+	}
+	var mismo fichaOrg
+	getJSON(t, ts, "/api/v1/organizations/nif:Q0818001J", &mismo)
+	if mismo.ID != cons.ID {
+		t.Fatalf("por NIF y por DIR3 es la misma organización: %s ≠ %s", mismo.ID, cons.ID)
+	}
+	// comprador solo con DIR3: su id sale del DIR3
+	var gi fichaOrg
+	getJSON(t, ts, "/api/v1/organizations/dir3:L01170000", &gi)
+	if gi.ID != uuid8("org:L01170000") || gi.Comprador == nil || gi.Comprador.Contratos != 1 {
+		t.Fatalf("comprador solo con DIR3: %+v", gi)
+	}
+
+	// ---- desconocida ----
+	if r := get(t, ts, "/api/v1/organizations/nif:Z99999999", token); r.StatusCode != 404 {
+		t.Fatalf("desconocida: %d", r.StatusCode)
+	}
+}

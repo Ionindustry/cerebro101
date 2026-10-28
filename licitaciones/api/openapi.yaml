@@ -16,7 +16,11 @@ info:
     `/expiring-contracts` también está: la fecha de fin es inicio + duración prevista − 1 día (inicio = entrada en vigor publicada, si no la formalización, si no la
     adjudicación; `confianza` 0,9 / 0,7 / 0,4); `prorrogas_posibles` y `fecha_fin_con_prorrogas` solo se rellenan cuando el texto del pliego lo dice con claridad (si no,
     `null`, y el texto original va en `prorrogas_texto`, campo añadido al contrato). No admite `area`.
-    Sin implementar: `/tenders/{id}/history`, `/organizations`, `/alerts`, `/simulations`, `/dashboard/*`.
+    `/organizations/{id}` también está (ficha de comprador y de proveedor con estadísticas): `id` es el UUID que dan las listas, `nif:` o `dir3:` (un NIF o un DIR3
+    dan el mismo UUID que calculan las listas; `vat:` da 400); `desde`, `hasta` (fecha de adjudicación) y `cpv` acotan las estadísticas, no la existencia; solo cuenta
+    lo adjudicado en euros; `por_cpv` agrupa por grupo de 5 cifras y su `cuota` es la proporción de contratos; `cuota` de `principales_adjudicatarios` es sobre el importe;
+    los `nombres_alternativos` son informativos y nunca se usan para unir organizaciones.
+    Sin implementar: `/tenders/{id}/history`, `/alerts`, `/simulations`, `/dashboard/*`.
 
     Convenciones:
     - Solo en la red interna; **no se publica fuera** (ADR 0007).
