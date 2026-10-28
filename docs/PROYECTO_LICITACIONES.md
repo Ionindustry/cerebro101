@@ -405,5 +405,6 @@ Documento de partida: «Plataforma de detección y análisis de concursos públi
   contratos, importe, baja media y percentiles, ofertas por licitación, a quién adjudica (con cuánto se concentra: ≥ 50 % en un solo adjudicatario se marca como mercado muy concentrado)
   o a quién vende, en qué mercados (enlaces a «Competencia» por CPV) y una gráfica de contratos por trimestre. Los otros nombres con que aparece salen aparte y avisan de que no prueban
   que sea la misma empresa; una persona física lo dice. Filtros por periodo y CPV en la dirección. Los nombres de empresas y organismos de «Competencia», «Contratos que vencen»
-  y la ficha de una licitación enlazan a su ficha. La pasarela del panel deja pasar `organizations/{uuid}` solo con UUID (nunca por nombre ni NIF desde el navegador).
+  y la ficha de una licitación enlazan a su ficha. Los errores se distinguen: «esa organización no existe» (404 con datos) no es lo mismo que «el motor todavía no tiene esta función»
+  (404 «La ruta no existe»: motor desactualizado, hay que reconstruir `api` y `proyector`) ni que una dirección con NIF (solo se abre por UUID). La pasarela del panel deja pasar `organizations/{uuid}` solo con UUID (nunca por nombre ni NIF desde el navegador).
 - Pendiente: canal `correo`; un botón «Pedir informe de viabilidad» para una licitación concreta; y llevar a Viabilidad lo que ya sabe 101.cat de cada organismo.

@@ -5,6 +5,7 @@ import {
   nombreFuente, queryAFiltros, rutaPermitida, totalTexto, urlSegura,
 } from "../lib/licitaciones.js";
 import { viabilidadEtiqueta, admiteResumen, avisosDeAlertaTexto, canalEtiqueta, CANALES_ALERTA, ambitoTexto, eventoEtiqueta, filtroDeAlerta, filtroTexto, mensajeAlertas, sinLeerTexto } from "../lib/licitaciones.js";
+import { rutaNoExiste } from "../lib/licitaciones.js";
 import {
   alturasTrimestres, competenciaDeCpv, fichaOrgHref, identificadoresTexto, orgAQuery, queryAOrg, repeticionTexto, trimestreTexto,
 } from "../lib/licitaciones.js";
@@ -421,4 +422,20 @@ test("ficha de organización: enlaces, filtros y textos", () => {
   assert.deepEqual(alturasTrimestres(null), []);
   assert.equal(competenciaDeCpv("35125"), "/licitaciones/competencia?cpv=35125");
   assert.equal(competenciaDeCpv("<script>"), "/licitaciones/competencia");
+});
+
+
+test("un 404 de «la ruta no existe» (motor desactualizado) no se confunde con «ese dato no existe»", () => {
+  assert.ok(rutaNoExiste({ status: 404, detalle: "La ruta no existe." }));
+  assert.ok(rutaNoExiste({ status: 404, detalle: "La ruta no existe" }));
+  assert.ok(!rutaNoExiste({ status: 404, detalle: "No hay datos de esa organización." }));
+  assert.ok(!rutaNoExiste({ status: 404, detalle: "El expediente no existe." }));
+  assert.ok(!rutaNoExiste({ status: 404 }));
+  assert.ok(!rutaNoExiste({ status: 500, detalle: "La ruta no existe." }));
+  assert.ok(!rutaNoExiste(null));
+  assert.match(mensajeDeError(404, "La ruta no existe."), /todavía no tiene esta función.*actualizarlo/);
+  assert.equal(mensajeDeError(404, "No hay datos de esa organización."), "No se ha encontrado.");
+  assert.equal(mensajeDeError(404), "No se ha encontrado.");
+  assert.match(mensajeDeError(401, "x"), /sesión/);
+  assert.match(mensajeDeError(503, "El motor de licitaciones no está disponible"), /no está disponible/);
 });

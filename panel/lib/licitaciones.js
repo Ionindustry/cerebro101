@@ -131,12 +131,15 @@ export const ESTADO_MOTOR = {
 };
 export const estadoMotor = (e) => ESTADO_MOTOR[e] || { texto: "Desconocido", clase: "aviso" };
 
-/** Mensaje para una respuesta de error del motor o de la pasarela (nunca el cuerpo crudo). */
-export function mensajeDeError(status) {
+/** ¿Es el 404 de «esa ruta no existe» (el motor está desactualizado) y no el de «ese dato no existe»? El motor y la pasarela dicen «La ruta no existe». */
+export const rutaNoExiste = (e) => e?.status === 404 && /ruta no existe/i.test(String(e?.detalle || ""));
+
+/** Mensaje para una respuesta de error del motor o de la pasarela (nunca el cuerpo crudo). El detalle solo sirve para distinguir los dos 404. */
+export function mensajeDeError(status, detalle) {
   if (status === 401) return "Tu sesión ha caducado.";
   if (status === 403) return "Tu usuario no tiene acceso a Licitaciones.";
   if (status === 400) return "La búsqueda no es válida: revisa los filtros.";
-  if (status === 404) return "No se ha encontrado.";
+  if (status === 404) return rutaNoExiste({ status, detalle }) ? "El motor de licitaciones todavía no tiene esta función: hay que actualizarlo (avisa a Tecnología)." : "No se ha encontrado.";
   if (status === 429) return "Demasiadas consultas seguidas: espera un momento.";
   return "El motor de licitaciones no está disponible ahora. Inténtalo en unos minutos.";
 }

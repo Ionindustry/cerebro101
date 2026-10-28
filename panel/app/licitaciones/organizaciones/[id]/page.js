@@ -4,7 +4,7 @@ import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useState } from "react";
 import {
   FILTROS_ORG_VACIOS, ROLES_ORGANIZACION, alturasTrimestres, bajaTexto, competenciaDeCpv, cuotaTexto, fichaOrgHref, identificadoresTexto, importeTexto, muestraPoca,
-  muestraTexto, orgAQuery, queryAOrg, repeticionTexto, trimestreTexto,
+  muestraTexto, orgAQuery, queryAOrg, repeticionTexto, rutaNoExiste, trimestreTexto,
 } from "../../../../lib/licitaciones";
 import { Fallo, pedir } from "../../cliente";
 
@@ -92,6 +92,7 @@ function Ficha() {
   useEffect(() => {
     let vigente = true;
     setD(null); setError(null);
+    if (!fichaOrgHref(id)) { setError({ status: 400, detalle: "id" }); return undefined; }          // solo se abre por el UUID que dan las listas
     pedir(`organizations/${encodeURIComponent(id)}?${orgAQuery(queryAOrg(new URLSearchParams(clave)))}`)
       .then((r) => vigente && setD(r)).catch((e) => vigente && setError(e));
     return () => { vigente = false; };
@@ -104,7 +105,11 @@ function Ficha() {
   return (
     <div className="lic">
       <p className="lic-vuelve"><Link href="/licitaciones/competencia">← Competencia</Link></p>
-      {error && (error.status === 404 ? <p role="alert" className="lic-error">No hay datos de esta organización: ni como comprador ni como adjudicataria.</p> : <Fallo e={error} />)}
+      {error && (
+        error.detalle === "id" ? <p role="alert" className="lic-error">Esta dirección no es válida. La ficha se abre desde «Competencia», «Contratos que vencen» o una licitación.</p>
+        : error.status === 404 && !rutaNoExiste(error) ? <p role="alert" className="lic-error">No hay datos de esta organización: ni como comprador ni como adjudicataria.</p>
+        : <Fallo e={error} />
+      )}
       {!d && !error && <p className="meta" aria-busy="true">Cargando…</p>}
       {d && (
         <>
