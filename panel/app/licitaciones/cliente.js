@@ -2,18 +2,22 @@
 import Link from "next/link";
 import { diasTexto, encajeClase, estadoEtiqueta, fechaTexto, importeTexto, mensajeDeError } from "../../lib/licitaciones";
 
-/** GET a la pasarela del motor. Lanza {status} si falla; una sesión caducada lleva al inicio de sesión como el resto del panel. */
+/** GET a la pasarela del motor. Lanza {status, detalle} si falla (el detalle es el texto del problema, solo para distinguir un 404 de otro); una sesión caducada lleva al inicio de sesión como el resto del panel. */
 export async function pedir(ruta) {
   const r = await fetch(`/licitaciones-api/${ruta}`, { cache: "no-store" });
   if (r.status === 401) {
     window.location.href = "/auth/login";
     throw { status: 401 };
   }
-  if (!r.ok) throw { status: r.status };
+  if (!r.ok) {
+    let detalle = "";
+    try { detalle = String((await r.json())?.detail || "").slice(0, 200); } catch { /* sin cuerpo legible: basta con el código */ }
+    throw { status: r.status, detalle };
+  }
   return r.json();
 }
 
-export const textoError = (e) => mensajeDeError(e?.status);
+export const textoError = (e) => mensajeDeError(e?.status, e?.detalle);
 
 export function Fallo({ e }) {
   return <p role="alert" className="lic-error">{textoError(e)}</p>;
