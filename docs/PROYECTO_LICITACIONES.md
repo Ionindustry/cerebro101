@@ -317,4 +317,15 @@ Documento de partida: «Plataforma de detección y análisis de concursos públi
   Keycloak sustituirá al token cuando lo usen más clientes (SEC-031).
 - **Sección «Licitaciones» del panel** (`/licitaciones`): estado del motor, últimas novedades, buscador con filtros y paginación, y ficha del expediente
   con lotes, adjudicaciones y evidencia. La pasarela (`/licitaciones-api`) comprueba el grupo del usuario y solo deja pasar lecturas.
-- Pendiente: competencia, alertas, embudo, resumen de las 16:00 y el consumidor de eventos del Cerebro (fase 4 del plan).
+- **Resumen de las 16:00** (28/10/2026): tarea de Celery (`resumen_licitaciones`, cola `lote`, todos los días a las 16:00 hora de Madrid) que **consulta**
+  la API del motor, puntúa y ordena; **no usa el modelo de IA**. Lo que Dirección ve en el panel (`/licitaciones/resumen`, y una tarjeta en
+  `/licitaciones`): lo actualizado desde las 16:00 del día anterior en los 20 CPV decididos (con sus descendientes), ordenado por **encaje** (0–100:
+  CPV 40, zona 20, importe 15, plazo 15, procedimiento 10; los pesos y el perfil están en `config/licitaciones.yaml`, **POR VALIDAR con Dirección**),
+  con las razones de cada puntuación, y aparte las adjudicaciones y las anulaciones. Lo que supera 1 000 000 € se cuenta pero no se detalla.
+  Dice lo que no sabe: si el motor no responde guarda el resumen como «sin datos» con el motivo y reintenta cada 15 min (3 veces); si el motor no está al día
+  o hay más novedades de las que se leen (500), lo avisa. Se guarda en `licitaciones_resumenes` y hay botón «Generar ahora» (últimas 24 h) por si el equipo
+  estaba apagado a las 16:00. Lo ven Dirección y el departamento de Licitaciones.
+  Diferencias con el ADR 0007: el motor aún no tiene `publicada_desde`, `encaje_min` ni `orden=encaje`, así que la ventana usa `actualizada_desde`
+  (la fecha de la versión en origen) y el encaje se calcula en el Cerebro con los datos de la ficha; pasará al motor cuando se proyecte el encaje (§7.9).
+- Pendiente: competencia, alertas, embudo y el consumidor de eventos del Cerebro (fase 4 del plan); entrega del resumen por otros canales (correo) si
+  Dirección lo pide.

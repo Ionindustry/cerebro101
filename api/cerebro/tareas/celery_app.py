@@ -21,6 +21,7 @@ from ..registro import registro
 app = Celery("cerebro", broker=ajustes.redis_url, backend=ajustes.redis_url)
 app.conf.timezone = ajustes.zona_horaria
 app.conf.task_routes = {"cerebro.tareas.celery_app.ejecutar_programada": {"queue": "lote"},
+                        "cerebro.tareas.celery_app.resumen_licitaciones": {"queue": "lote"},
                         "cerebro.tareas.celery_app.volcar_constancia": {"queue": "peticiones"}}
 
 
@@ -37,7 +38,18 @@ def _calendario() -> dict:
     return tareas
 
 
-app.conf.beat_schedule = {**_calendario(),
+def _resumen_licitaciones() -> dict:
+    """El resumen diario de licitaciones para Dirección: a la hora de config/licitaciones.yaml (16:00), todos los días."""
+    import yaml
+    # Se lee el YAML directamente (sin importar el paquete de licitaciones) para que beat arranque ligero; sin el fichero, 16:00.
+    try:
+        hora, minuto = yaml.safe_load((ajustes.dir_config / "licitaciones.yaml").read_text(encoding="utf-8"))["resumen"]["hora"].split(":")
+    except (OSError, KeyError, TypeError, ValueError):
+        hora, minuto = "16", "00"
+    return {"resumen-licitaciones": {"task": "cerebro.tareas.celery_app.resumen_licitaciones", "schedule": crontab(minute=minuto, hour=hora)}}
+
+
+app.conf.beat_schedule = {**_calendario(), **_resumen_licitaciones(),
                           "constancia-pendiente": {"task": "cerebro.tareas.celery_app.volcar_constancia", "schedule": 300.0}}
 
 
@@ -71,3 +83,20 @@ def ejecutar_programada(agente_id: str) -> dict:
     estado = asyncio.run(_ejecutar(agente_id))
     return {"agente": agente_id, "respuesta": estado.get("respuesta"),
             "acciones": len(estado.get("acciones", []))}
+
+
+def _reintentar_resumen(resultado: dict, reintentos: int, maximo: int) -> bool:
+    """Solo se reintenta si el motor no respondió (resumen «sin_datos») y quedan reintentos; con datos, o agotados, se deja lo guardado."""
+    return resultado["estado"] == "sin_datos" and reintentos < maximo
+
+
+@app.task(name="cerebro.tareas.celery_app.resumen_licitaciones", bind=True, max_retries=3)
+def resumen_licitaciones(self) -> dict:
+    """Genera el resumen de licitaciones de las 16:00. No usa el modelo de IA (consulta el motor, puntúa y ordena). Si el motor no responde, el
+    resumen se guarda igualmente diciéndolo (Dirección nunca recibe «nada» sin explicación) y se reintenta cada 15 minutos hasta 3 veces: el
+    reintento sustituye al guardado, no lo duplica."""
+    from ..licitaciones.resumen import generar
+    r = asyncio.run(generar("programada"))
+    if _reintentar_resumen(r, self.request.retries, self.max_retries):
+        raise self.retry(countdown=900)
+    return r

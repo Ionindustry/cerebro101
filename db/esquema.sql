@@ -222,3 +222,18 @@ CREATE TABLE IF NOT EXISTS licitaciones (
   estado         text NOT NULL DEFAULT 'detectada',
   creado         timestamptz NOT NULL DEFAULT now()
 );
+
+-- Resumen diario de licitaciones (a las 16:00, para Dirección; ver api/cerebro/licitaciones/resumen.py). El contenido es un documento completo:
+-- lo que se vio ese día no cambia aunque después cambien las licitaciones.
+CREATE TABLE IF NOT EXISTS licitaciones_resumenes (
+  id         bigserial PRIMARY KEY,
+  fecha      date NOT NULL,                 -- día (hora local) al que pertenece
+  origen     text NOT NULL CHECK (origen IN ('programada','manual')),
+  desde      timestamptz NOT NULL,
+  hasta      timestamptz NOT NULL,
+  estado     text NOT NULL CHECK (estado IN ('ok','sin_datos')),
+  contenido  jsonb NOT NULL,
+  generado   timestamptz NOT NULL DEFAULT now()
+);
+CREATE UNIQUE INDEX IF NOT EXISTS licitaciones_resumenes_programado ON licitaciones_resumenes (fecha) WHERE origen = 'programada';
+CREATE INDEX IF NOT EXISTS licitaciones_resumenes_fecha ON licitaciones_resumenes (fecha DESC, generado DESC);
