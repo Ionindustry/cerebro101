@@ -103,6 +103,16 @@ Límites que conviene conocer: Docker Desktop necesita una sesión de usuario ab
 sesión automático); si el PC se suspende, todo se para (`powercfg /change standby-timeout-ac 0`); y el script de Windows **no se ha podido probar en un
 Windows real desde el entorno donde se escribió**: la parte de WSL (`arrancar.sh`) sí está probada.
 
+## Copias de seguridad
+
+Haz una copia **antes de cada actualización** y, mientras el PC se cuelgue de vez en cuando, una vez por semana. Desde la raíz del repositorio, en Ubuntu:
+
+```
+COPIA_SIN_TRAZAS=1 ./scripts/copia_seguridad.sh
+```
+
+Guarda en `copias/<fecha>/` las bases de datos del Cerebro y de Langfuse, la del motor de licitaciones si está en marcha y las sumas de control (`SHA256SUMS`). `COPIA_SIN_TRAZAS=1` se salta las trazas de Langfuse, que son lo que más pesa. Copia esa carpeta de vez en cuando a otro disco o a la nube: una copia que está en el mismo PC no protege de un fallo del PC. Guarda también tu `.env` en un gestor de contraseñas. Para recuperar una base: `gunzip -c copias/<fecha>/cerebro.sql.gz | docker compose exec -T postgres psql -U cerebro cerebro` (en una base vacía).
+
 ## Problemas típicos
 
 | Síntoma | Causa y solución |
