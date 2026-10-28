@@ -201,22 +201,25 @@ func TestFiltros(t *testing.T) {
 	ts, _, _ := conPostgres(t)
 	cuenta := func(q string) int { _, n := recorrer(t, ts, q, 3); return n }
 	casos := map[string]int{
-		"cpv=72":                                 3, // prefijo de 2 cifras: 72262000, 72267000, 72000000
-		"cpv=35125300":                           2,
-		"cpv=35,45":                              3,
-		"nuts=ES51":                              5, // ES512 ×4 y ES511
-		"nuts=ES511":                             1,
-		"estado=adjudicada":                      1,
-		"estado=abierta&estado=cerrada":          6,
-		"importe_min=100000":                     4, // 100000, 250000, 900000, 100000
-		"importe_min=100000&importe_max=250000":  3,
-		"comprador=nif:P1708500E":                7,
-		"comprador=nif:A00000000":                0,
-		"fuente=placsp":                          7,
-		"fuente=ted":                             0,
-		"procedimiento=abierto":                  7,
-		"actualizada_desde=2026-10-01T14:00:00Z": 3, // las de las 14:00, 15:00 y 16:00
-		"plazo_hasta=2026-10-09T00:00:00Z":       2, // los plazos del 6 y del 8
+		"cpv=72":                                3, // prefijo de 2 cifras: 72262000, 72267000, 72000000
+		"cpv=35125300":                          2,
+		"cpv=35,45":                             3,
+		"nuts=ES51":                             5, // ES512 ×4 y ES511
+		"nuts=ES511":                            1,
+		"estado=adjudicada":                     1,
+		"estado=abierta&estado=cerrada":         6,
+		"importe_min=100000":                    4, // 100000, 250000, 900000, 100000
+		"importe_min=100000&importe_max=250000": 3,
+		"comprador=nif:P1708500E":               7,
+		"comprador=nif:A00000000":               0,
+		"fuente=placsp":                         7,
+		"fuente=ted":                            0,
+		"fuente=placsp&id_origen=https://x.test/3":  1, // el identificador de origen de un expediente concreto
+		"fuente=placsp&id_origen=https://x.test/99": 0,
+		"fuente=ted&id_origen=https://x.test/3":     0, // otra fuente no lo ve: el identificador solo es único dentro de la suya
+		"procedimiento=abierto":                     7,
+		"actualizada_desde=2026-10-01T14:00:00Z":    3, // las de las 14:00, 15:00 y 16:00
+		"plazo_hasta=2026-10-09T00:00:00Z":          2, // los plazos del 6 y del 8
 	}
 	for q, want := range casos {
 		if got := cuenta(q); got != want {

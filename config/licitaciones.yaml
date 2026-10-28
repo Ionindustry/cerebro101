@@ -42,3 +42,9 @@ pesos:
   importe: 15
   plazo: 15
   procedimiento: 10
+
+# Embudo propio: el consumidor de eventos mete en el embudo (estado «detectada») las licitaciones NUEVAS, abiertas y con un encaje igual o superior
+# a este umbral (0–100). Propuesta POR VALIDAR con Dirección: se vigila cuántas entran al día (si son más de 50, subirlo antes de que Viabilidad se
+# sature, ADR 0007). Se puede cambiar sin tocar código, o con la variable LICITACIONES_ENCAJE_MIN.
+embudo:
+  encaje_min: 60

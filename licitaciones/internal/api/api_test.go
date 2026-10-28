@@ -7,6 +7,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"strings"
 	"testing"
 	"time"
@@ -122,6 +123,7 @@ func TestParametrosInvalidos(t *testing.T) {
 		"importe_max=1,5", "actualizada_desde=ayer", "orden=relevancia", "orden=encaje", "orden=nada", "limit=0", "limit=101", "limit=x",
 		"comprador=0b1f7a3e-1111-2222-3333-444444444444", "desconocido=1", "facetas=cpv", "encaje_min=50", "publicada_desde=2026-01-01T00:00:00Z",
 		"cpv=" + strings.Repeat("72,", 21),
+		"id_origen=x", "fuente=placsp&fuente=ted&id_origen=x", "fuente=placsp&id_origen=" + strings.Repeat("x", 501), "fuente=placsp&id_origen=a%0Ab",
 	} {
 		res := get(t, ts, "/api/v1/tenders?"+q, token)
 		var p problem
@@ -143,6 +145,15 @@ func TestParametrosValidosLlegaranAlFiltro(t *testing.T) {
 	if f.Q != "videovigilancia" || len(f.CPV) != 2 || f.NUTS[0] != "ES512" || len(f.Estados) != 2 || f.Fuentes[0] != "placsp-643" || f.ImporteMin != "1000.50" ||
 		f.PlazoHasta == nil || f.CompradorNIF[0] != "P1708500E" || f.Limit != 5 || f.Orden != pg.OrdenImporte {
 		t.Fatalf("filtro inesperado: %+v", f)
+	}
+}
+
+func TestIDOrigenLlegaAlFiltro(t *testing.T) {
+	repo := &fakeRepo{}
+	_, ts := servidor(t, repo)
+	res := get(t, ts, "/api/v1/tenders?fuente=placsp&id_origen="+url.QueryEscape("https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/12345"), token)
+	if res.StatusCode != 200 || repo.visto.IDOrigen != "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/12345" || repo.visto.Fuentes[0] != "placsp-643" {
+		t.Fatalf("%d %+v", res.StatusCode, repo.visto)
 	}
 }
 

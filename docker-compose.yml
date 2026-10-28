@@ -175,6 +175,28 @@ services:
     volumes: ["./config:/app/config:ro", "datos:/datos"]
     command: celery -A cerebro.tareas.celery_app beat
 
+  licitaciones-eventos:   # consumidor de eventos del motor de licitaciones (ADR 0007 §3): mete en el embudo las nuevas con buen encaje. No ejecuta agentes
+    build: {context: ., dockerfile: api/Dockerfile}
+    command: python -m cerebro.licitaciones.consumidor
+    profiles: ["licitaciones"]       # no arranca con `up` a secas: se pide por su nombre (`docker compose up -d licitaciones-eventos`) y necesita el motor en marcha
+    environment:                      # lista cerrada: solo lo que usa (sin claves de modelos, de ERP ni de correo)
+      DATABASE_URL: "postgresql://cerebro_app:${CEREBRO_APP_PASSWORD}@postgres:5432/cerebro"
+      TZ: "${TZ:-Europe/Madrid}"
+      LICITACIONES_API_URL: "${LICITACIONES_API_URL:-http://licitaciones-api:8080}"
+      LICITACIONES_API_TOKEN: "${LICITACIONES_API_TOKEN:-${LIC_API_TOKEN:-}}"
+      LICITACIONES_NATS_URL: "${LICITACIONES_NATS_URL:-nats://licitaciones-nats:4222}"
+      LICITACIONES_NATS_USUARIO: "${LIC_NATS_USUARIO:-}"
+      LICITACIONES_NATS_CLAVE: "${LIC_NATS_PASSWORD:-}"
+      LICITACIONES_ENCAJE_MIN: "${LICITACIONES_ENCAJE_MIN:-}"      # vacío = el de config/licitaciones.yaml
+    volumes: ["./config:/app/config:ro"]
+    depends_on:
+      postgres: {condition: service_started}
+      migraciones: {condition: service_completed_successfully}
+    networks: [cerebro]
+    mem_limit: 256m
+    cpus: 0.5
+    restart: unless-stopped
+
   redis-panel:            # sesiones del panel: Redis propio con contraseña y persistencia (la API y el worker no la tienen)
     image: redis:7-alpine
     command: ["sh", "-c", "exec redis-server --requirepass \"$$PANEL_REDIS_PASSWORD\" --appendonly yes --save ''"]

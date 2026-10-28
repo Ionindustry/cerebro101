@@ -188,3 +188,50 @@ export function mensajeResumen(status) {
   if (status === 404) return "Todavía no hay ningún resumen. Se genera cada día a las 16:00; también puedes generarlo ahora.";
   return "No se ha podido cargar el resumen. Inténtalo en unos minutos.";
 }
+
+// ---- Embudo propio (API del Cerebro: /licitaciones/embudo) ----
+
+export const ESTADOS_EMBUDO = [
+  ["detectada", "Detectada"], ["en_estudio", "En estudio"], ["presentada", "Presentada"], ["ganada", "Ganada"], ["perdida", "Perdida"], ["descartada", "Descartada"],
+];
+export const etiquetaEmbudo = (e) => (ESTADOS_EMBUDO.find(([k]) => k === e) || [, e || "—"])[1];
+
+/** Texto del botón que pasa una licitación de un estado del embudo a otro. */
+export function accionEmbudo(desde, hacia) {
+  if (hacia === "en_estudio") return desde === "descartada" ? "Reabrir (en estudio)" : "Pasar a estudio";
+  return { presentada: "Marcar como presentada", ganada: "Marcar como ganada", perdida: "Marcar como perdida…", descartada: "Descartar (no ir)" }[hacia] || etiquetaEmbudo(hacia);
+}
+
+/** «40 % (2 de 5)»; con pocas decididas la tasa no significa nada y no se enseña como si fuera una cifra. */
+export function tasaExitoTexto(t) {
+  if (!t) return "—";
+  if (t.valor === null || t.valor === undefined) return `Aún sin datos suficientes (${t.decididas ?? 0} de ${t.minimo ?? 5} decididas)`;
+  return `${Math.round(t.valor * 100)} % (${t.ganadas} de ${t.decididas})`;
+}
+
+/** Horas como «3 h» o «2,5 días»; null es «—». */
+export function horasTexto(h) {
+  if (h === null || h === undefined || Number.isNaN(Number(h))) return "—";
+  const n = Number(h);
+  const f = new Intl.NumberFormat("es-ES", { maximumFractionDigits: 1 });
+  return n < 48 ? `${f.format(n)} h` : `${f.format(n / 24)} días`;
+}
+
+/** Periodos del dashboard → días que pide la API. */
+export const PERIODOS_EMBUDO = [["hoy", 1, "Hoy"], ["7d", 7, "7 días"], ["30d", 30, "30 días"], ["90d", 90, "90 días"]];
+export const diasDePeriodo = (p) => (PERIODOS_EMBUDO.find(([k]) => k === p) || PERIODOS_EMBUDO[2])[1];
+
+export function mensajeEmbudo(status) {
+  if (status === 401) return "Tu sesión ha caducado.";
+  if (status === 403) return "El embudo es para Dirección y el departamento de Licitaciones.";
+  if (status === 404) return "Esa licitación ya no está en el embudo.";
+  if (status === 422) return "Ese cambio no está permitido para el estado actual.";
+  if (status === 503) return "No se ha podido consultar el motor de licitaciones. Inténtalo en unos minutos.";
+  return "No se ha podido completar la operación. Inténtalo en unos minutos.";
+}
+
+/** Aviso cuando el expediente ya no está abierto en el motor (adjudicada, anulada…): quien lo lleva decide qué hacer con él. */
+export function avisoEstadoMotor(estado) {
+  if (!estado || estado === "abierta" || estado === "anuncio_previo") return null;
+  return `En el motor: ${estadoEtiqueta(estado)}`;
+}

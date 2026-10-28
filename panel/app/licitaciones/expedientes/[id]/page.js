@@ -2,14 +2,46 @@
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useEffect, useState } from "react";
-import { estadoEtiqueta, fechaTexto, importeTexto, nombreFuente, urlSegura } from "../../../../lib/licitaciones";
-import { Fallo, pedir } from "../../cliente";
+import { estadoEtiqueta, etiquetaEmbudo, fechaTexto, importeTexto, mensajeEmbudo, nombreFuente, urlSegura } from "../../../../lib/licitaciones";
+import { Fallo, pedir, pedirCerebro } from "../../cliente";
 
 const Dato = ({ t, children }) => <div><dt>{t}</dt><dd>{children ?? "—"}</dd></div>;
 const Enlace = ({ url, children }) => {
   const u = urlSegura(url);
   return u ? <a href={u} target="_blank" rel="noopener noreferrer">{children}</a> : <span>{children}</span>;
 };
+
+// «Estudiar»: pasa el expediente al embudo de 101.cat. Solo lo ven Dirección y Licitaciones (para los demás la consulta da 403 y la tarjeta no aparece).
+function Estudiar({ id }) {
+  const [fila, setFila] = useState(undefined);        // undefined = consultando; null = no está en el embudo
+  const [permitido, setPermitido] = useState(true);
+  const [trabajando, setTrabajando] = useState(false);
+  const [error, setError] = useState(null);
+  useEffect(() => {
+    pedirCerebro(`licitaciones/embudo?motor_id=${encodeURIComponent(id)}`).then((l) => setFila(l.items[0] || null)).catch(() => setPermitido(false));
+  }, [id]);
+  if (!permitido || fila === undefined) return null;
+  const estudiar = async () => {
+    setTrabajando(true); setError(null);
+    try { setFila(await pedirCerebro("licitaciones/embudo/estudiar", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ motor_id: id }) })); }
+    catch (e) { setError(e); }
+    finally { setTrabajando(false); }
+  };
+  return (
+    <section className="tarjeta" aria-label="Embudo">
+      <h2>Embudo de 101.cat</h2>
+      {fila ? (
+        <p>Estado: <span className="lic-etiqueta">{etiquetaEmbudo(fila.estado)}</span> · <Link href="/licitaciones/embudo">Ver el embudo</Link></p>
+      ) : (
+        <>
+          <p className="meta">Si te interesa, pásala a estudio: se anota en el embudo y Viabilidad podrá valorarla. No se presenta nada por ti.</p>
+          <button className="boton si" onClick={estudiar} disabled={trabajando}>{trabajando ? "Anotando…" : "Estudiar"}</button>
+        </>
+      )}
+      {error && <p role="alert" className="lic-error">{mensajeEmbudo(error.status)}</p>}
+    </section>
+  );
+}
 
 export default function Ficha() {
   const { id } = useParams();
@@ -25,6 +57,7 @@ export default function Ficha() {
       {x && (
         <>
           <h1>{x.titulo || "(sin título)"}</h1>
+          <Estudiar id={id} />
           <section className="tarjeta" aria-label="Resumen">
             <dl className="lic-ficha">
               <Dato t="Estado"><span className={`lic-etiqueta ${x.estado}`}>{estadoEtiqueta(x.estado)}</span>{x.estado_origen ? ` (en origen: ${x.estado_origen})` : ""}</Dato>

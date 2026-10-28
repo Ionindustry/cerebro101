@@ -4,6 +4,7 @@ import {
   antiguedadTexto, conAcceso, decidir, estadoEtiqueta, estadoMotor, filtrosAQuery, fechaTexto, importeTexto, limpiarCpv, limpiarNuts, mensajeDeError,
   nombreFuente, queryAFiltros, rutaPermitida, totalTexto, urlSegura,
 } from "../lib/licitaciones.js";
+import { accionEmbudo, avisoEstadoMotor, diasDePeriodo, ESTADOS_EMBUDO, etiquetaEmbudo, horasTexto, mensajeEmbudo, tasaExitoTexto } from "../lib/licitaciones.js";
 
 const ID = "0b1f7a3e-1111-4222-8333-444444444444";
 
@@ -163,4 +164,48 @@ test("mensajes del resumen en castellano y sin detalles internos", () => {
   assert.match(mensajeResumen(404), /16:00/);
   assert.match(mensajeResumen(500), /No se ha podido/);
   assert.ok(!/token|Bearer|10\.0/i.test([401, 403, 404, 500].map(mensajeResumen).join(" ")));
+});
+
+test("el embudo: etiquetas, acciones y periodos", () => {
+  assert.deepEqual(ESTADOS_EMBUDO.map(([k]) => k), ["detectada", "en_estudio", "presentada", "ganada", "perdida", "descartada"]);
+  assert.equal(etiquetaEmbudo("en_estudio"), "En estudio");
+  assert.equal(etiquetaEmbudo("raro"), "raro");
+  assert.equal(accionEmbudo("detectada", "en_estudio"), "Pasar a estudio");
+  assert.equal(accionEmbudo("descartada", "en_estudio"), "Reabrir (en estudio)");
+  assert.match(accionEmbudo("presentada", "perdida"), /perdida/);
+  assert.equal(diasDePeriodo("hoy"), 1);
+  assert.equal(diasDePeriodo("7d"), 7);
+  assert.equal(diasDePeriodo("90d"), 90);
+  assert.equal(diasDePeriodo("lo que sea"), 30);       // por defecto, 30 días
+});
+
+test("la tasa de éxito no se enseña como cifra si hay pocas decididas", () => {
+  assert.equal(tasaExitoTexto({ valor: 0.4, ganadas: 2, decididas: 5, minimo: 5 }), "40 % (2 de 5)");
+  assert.equal(tasaExitoTexto({ valor: 0, ganadas: 0, decididas: 8, minimo: 5 }), "0 % (0 de 8)");
+  assert.match(tasaExitoTexto({ valor: null, ganadas: 1, decididas: 3, minimo: 5 }), /Aún sin datos suficientes \(3 de 5 decididas\)/);
+  assert.equal(tasaExitoTexto(null), "—");
+});
+
+test("horas hasta decidir: horas hasta dos días y días a partir de ahí", () => {
+  assert.equal(horasTexto(3), "3 h");
+  assert.equal(horasTexto(25.5), "25,5 h");
+  assert.equal(horasTexto(72), "3 días");
+  assert.equal(horasTexto(null), "—");
+  assert.equal(horasTexto(undefined), "—");
+});
+
+test("mensajes del embudo en castellano y sin detalles internos", () => {
+  assert.match(mensajeEmbudo(403), /Dirección/);
+  assert.match(mensajeEmbudo(422), /no está permitido/);
+  assert.match(mensajeEmbudo(503), /motor/);
+  assert.ok(!/token|Bearer|10\.0|psycopg|Traceback/i.test([401, 403, 404, 422, 503, 500].map(mensajeEmbudo).join(" ")));
+});
+
+test("aviso cuando el expediente ya no está abierto en el motor", () => {
+  assert.equal(avisoEstadoMotor("abierta"), null);
+  assert.equal(avisoEstadoMotor("anuncio_previo"), null);
+  assert.equal(avisoEstadoMotor(null), null);
+  assert.equal(avisoEstadoMotor(undefined), null);
+  assert.equal(avisoEstadoMotor("anulada"), "En el motor: Anulada");
+  assert.equal(avisoEstadoMotor("adjudicada"), "En el motor: Adjudicada");
 });

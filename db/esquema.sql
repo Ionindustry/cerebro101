@@ -223,6 +223,32 @@ CREATE TABLE IF NOT EXISTS licitaciones (
   creado         timestamptz NOT NULL DEFAULT now()
 );
 
+-- Embudo propio de licitaciones (ADR 0007 §3 y §4; api/cerebro/licitaciones/embudo.py). La tabla `licitaciones` pasa a ser el embudo comercial y
+-- apunta al expediente del motor (motor_id). Idempotente: se aplica en cada arranque. Estados: detectada → en_estudio → presentada → ganada | perdida;
+-- «descartada» es el no ir. Las fechas dicen cuándo se pasó de un estado a otro (para los indicadores): decidida_en = salió de «detectada».
+ALTER TABLE licitaciones ADD COLUMN IF NOT EXISTS motor_id        uuid;
+ALTER TABLE licitaciones ADD COLUMN IF NOT EXISTS motor_version   int;
+ALTER TABLE licitaciones ADD COLUMN IF NOT EXISTS encaje          numeric;
+ALTER TABLE licitaciones ADD COLUMN IF NOT EXISTS motivo_perdida  text;
+ALTER TABLE licitaciones ADD COLUMN IF NOT EXISTS actualizado     timestamptz NOT NULL DEFAULT now();
+ALTER TABLE licitaciones ADD COLUMN IF NOT EXISTS decidida_en     timestamptz;
+ALTER TABLE licitaciones ADD COLUMN IF NOT EXISTS presentada_en   timestamptz;
+ALTER TABLE licitaciones ADD COLUMN IF NOT EXISTS resuelta_en     timestamptz;
+-- Estado del expediente en el motor (abierta, adjudicada, anulada…); lo actualiza el consumidor de eventos (cerebro/licitaciones/consumidor.py).
+ALTER TABLE licitaciones ADD COLUMN IF NOT EXISTS estado_motor    text;
+-- El código de expediente no es único entre organismos: la identidad de una fila es el expediente del motor.
+ALTER TABLE licitaciones DROP CONSTRAINT IF EXISTS licitaciones_expediente_key;
+CREATE UNIQUE INDEX IF NOT EXISTS licitaciones_motor_id ON licitaciones (motor_id);
+CREATE INDEX IF NOT EXISTS licitaciones_estado ON licitaciones (estado, actualizado DESC);
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'licitaciones_estado_valido' AND conrelid = 'licitaciones'::regclass) THEN
+    -- NOT VALID: no revisa lo que ya hubiera (la tabla no tenía uso); sí lo que se escriba a partir de ahora.
+    ALTER TABLE licitaciones ADD CONSTRAINT licitaciones_estado_valido
+      CHECK (estado IN ('detectada','en_estudio','presentada','ganada','perdida','descartada')) NOT VALID;
+  END IF;
+END $$;
+
 -- Resumen diario de licitaciones (a las 16:00, para Dirección; ver api/cerebro/licitaciones/resumen.py). El contenido es un documento completo:
 -- lo que se vio ese día no cambia aunque después cambien las licitaciones.
 CREATE TABLE IF NOT EXISTS licitaciones_resumenes (
