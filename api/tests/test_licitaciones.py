@@ -213,10 +213,78 @@ class TestFichaNovedadesYEstado(unittest.TestCase):
         self.assertIn("desactualizadas", r["aviso"])
 
 
+ADJUDICACIONES = {
+    "items": [{"id": ID, "licitacion_id": ID, "expediente": "EXP-1", "titulo": "Cámaras\n de   vigilancia", "lote": "1", "resultado": "adjudicado",
+               "comprador": {"id": "x", "nombre": "Ayuntamiento de Girona", "nif": "P1708500E"},
+               "adjudicatario": {"id": "y", "nombre": "Uno Sistemas SL", "nif": "B11111111", "dato_inesperado": "no pasa"},
+               "importes": [{"valor": "90000.00", "moneda": "EUR", "impuestos": "sin_iva", "significado": "adjudicado"}], "baja": 0.1,
+               "ofertas_recibidas": 4, "baja_anormal": False, "fecha_adjudicacion": "2026-09-01", "cpv": ["35125300"],
+               "evidencia": {"url_origen": "https://contrataciondelestado.es/x", "sha256": "no pasa"}}],
+    "siguiente_cursor": "C.F", "total": {"valor": 12000, "relacion": "gte"},
+}
+COMPETIDORES = {
+    "items": [{"organizacion": {"id": "y", "nombre": "Uno Sistemas SL", "nif": "B11111111"}, "contratos_ganados": 3,
+               "importe_adjudicado": {"valor": "600000.00", "moneda": "EUR", "impuestos": "sin_iva", "significado": "adjudicado"}, "cuota": 0.6667,
+               "baja_media": 0.2, "baja_p50": 0.2, "tendencia": "sube", "ultima_adjudicacion": "2026-09-01"}],
+    "siguiente_cursor": None, "total": {"valor": 1, "relacion": "eq"}, "muestra": {"adjudicaciones": 6, "desde": "2025-02-01", "hasta": "2026-09-01"},
+}
+
+
+@unittest.skipUnless(HTTPX_REAL, "requiere httpx real (se ejecuta en el contenedor)")
+class TestAdjudicacionesYCompetidores(unittest.TestCase):
+    def llamar(self, operacion, cuerpo, **kw):
+        vistas = []
+
+        def manejar(req):
+            vistas.append(req)
+            return httpx.Response(200, json=cuerpo)
+        with entorno(), con_motor(manejar):
+            return ejecutar(operacion(**kw)), vistas
+
+    def test_adjudicaciones_traduce_los_argumentos_y_resume(self):
+        r, vistas = self.llamar(licitaciones.adjudicaciones, ADJUDICACIONES, texto=" cámaras ", cpv=["35125"], nuts=["es512"], adjudicatario_nif="b11111111",
+                                comprador_nif="P1708500E", resultado="adjudicado", importe_min=1000, desde="2025-01-01", hasta="2026-10-27", orden="baja", limite=500)
+        req = vistas[0]
+        self.assertEqual((req.url.host, req.url.path), ("motor", "/api/v1/awards"))
+        q = req.url.params
+        self.assertEqual((q["q"], q["cpv"], q["nuts"], q["adjudicatario"], q["comprador"], q["resultado"], q["importe_min"]),
+                         ("cámaras", "35125", "ES512", "nif:B11111111", "nif:P1708500E", "adjudicado", "1000.00"))
+        self.assertEqual((q["adjudicada_desde"], q["adjudicada_hasta"], q["orden"], q["limit"]), ("2025-01-01", "2026-10-27", "baja", "25"))
+        self.assertEqual(req.headers["authorization"], f"Bearer {TOKEN}")
+        a = r["adjudicaciones"][0]
+        self.assertEqual((a["titulo"], a["adjudicatario"], a["baja"], a["fecha_adjudicacion"]), ("Cámaras de vigilancia", {"nombre": "Uno Sistemas SL", "nif": "B11111111"}, 0.1, "2026-09-01"))
+        self.assertEqual(a["importes"], ["90000.00 EUR (sin iva; adjudicado)"])
+        self.assertNotIn("sha256", str(r))
+        self.assertNotIn("dato_inesperado", str(r))
+        self.assertTrue(r["total_aproximado"])
+        self.assertEqual(r["siguiente_cursor"], "C.F")
+
+    def test_adjudicaciones_valida_antes_de_llamar(self):
+        for kw in ({"desde": "ayer"}, {"desde": "2026-13-45"}, {"adjudicatario_nif": "B1"}, {"resultado": "ganado"}, {"orden": "plazo"}, {"importe_max": -1}):
+            with self.subTest(kw), entorno(), con_motor(lambda r: self.fail("no debe llamar al motor")):
+                with self.assertRaises(ValueError):
+                    ejecutar(licitaciones.adjudicaciones(**kw))
+
+    def test_competidores_exige_acotar_el_mercado(self):
+        with entorno(), con_motor(lambda r: self.fail("no debe llamar al motor")):
+            with self.assertRaises(ValueError):
+                ejecutar(licitaciones.competidores(desde="2025-01-01"))
+
+    def test_competidores_resume_y_avisa_de_la_muestra(self):
+        r, vistas = self.llamar(licitaciones.competidores, COMPETIDORES, cpv=["35125"], desde="2025-01-01", orden="contratos", limite=3)
+        q = vistas[0].url.params
+        self.assertEqual((vistas[0].url.path, q["cpv"], q["desde"], q["orden"], q["limit"]), ("/api/v1/competitors", "35125", "2025-01-01", "contratos", "3"))
+        c = r["competidores"][0]
+        self.assertEqual((c["empresa"]["nombre"], c["contratos_ganados"], c["cuota"], c["baja_mediana"], c["tendencia"]), ("Uno Sistemas SL", 3, 0.6667, 0.2, "sube"))
+        self.assertEqual(r["muestra"], {"adjudicaciones": 6, "desde": "2025-02-01", "hasta": "2026-09-01"})
+        self.assertIn("muestra", r["aviso"])
+        self.assertNotIn("siguiente_cursor", r)
+
+
 class TestRegistro(unittest.TestCase):
     def test_esta_registrada_y_es_de_solo_lectura(self):
         h = base._REGISTRO["licitaciones"]
-        self.assertEqual(set(h.operaciones), {"buscar", "ficha", "novedades_desde", "estado_motor"})
+        self.assertEqual(set(h.operaciones), {"buscar", "ficha", "novedades_desde", "adjudicaciones", "competidores", "estado_motor"})
         self.assertEqual(h.externas, frozenset())             # ninguna operación tiene impacto fuera: no necesita aprobación
         self.assertEqual(set(h.ayuda), set(h.operaciones))
 
