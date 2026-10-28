@@ -91,6 +91,7 @@ type Outcome struct {
 type Checkpoint struct {
 	LastRun    time.Time
 	Validators fetch.Validators
+	Next       string // enlace «siguiente» de la primera página en esa ejecución: por dónde seguir hacia atrás si la primera responde «sin cambios»
 }
 
 // State es el estado operativo de la ingesta. Observe debe ser atómico: la vista del expediente y el evento del outbox se escriben en
@@ -99,6 +100,10 @@ type State interface {
 	Observe(ctx context.Context, o Observation) (Outcome, error)
 	Checkpoint(ctx context.Context, source string) (Checkpoint, error)
 	SaveCheckpoint(ctx context.Context, source string, c Checkpoint) error
+	// Las páginas de archivo (las que se alcanzan siguiendo `next` desde la primera) no cambian una vez publicadas: cuando una se ha ingerido entera se
+	// anota con su enlace siguiente, y las ejecuciones posteriores la saltan sin descargarla. Así un fallo a mitad de camino se retoma donde quedó.
+	DonePages(ctx context.Context, source string) (map[string]string, error) // dirección de la página → su enlace siguiente
+	MarkPageDone(ctx context.Context, source, url, next string) error
 }
 
 var seguro = regexp.MustCompile(`^[A-Za-z0-9._-]{1,64}$`)

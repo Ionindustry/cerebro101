@@ -312,64 +312,118 @@ func TestTopeDePaginas(t *testing.T) {
 	}
 }
 
-func TestUnFalloDeDescargaNoAvanzaElPuntoDeControl(t *testing.T) {
-	p1 := bytes.Replace(pagina(entrada("2", "2026-10-25T10:00:00.000+01:00", "PUB")), []byte(`<entry>`),
-		[]byte(`<link href="https://contrataciondelestado.es/p2.atom" rel="next"/><entry>`), 1)
-	caida := errors.New("caído")
-	f := &fakeFetcher{paginas: map[string][]byte{inicio: p1}, etag: `"v2"`, errs: map[string]error{"https://contrataciondelestado.es/p2.atom": caida}}
+const (
+	u2 = "https://contrataciondelestado.es/p2.atom"
+	u3 = "https://contrataciondelestado.es/p3.atom"
+)
+
+func conEnlace(b []byte, next string) []byte {
+	if next == "" {
+		return b
+	}
+	return bytes.Replace(b, []byte(`<entry>`), []byte(`<link href="`+next+`" rel="next"/><entry>`), 1)
+}
+
+// cadena prepara una sindicación de tres páginas: la cabeza (inicio) → p2 → p3, cada una con una entrada propia.
+func cadena() *fakeFetcher {
+	return &fakeFetcher{etag: `"v1"`, paginas: map[string][]byte{
+		inicio: conEnlace(pagina(entrada("1", "2026-10-27T10:00:00.000+01:00", "PUB")), u2),
+		u2:     conEnlace(pagina(entrada("2", "2026-10-26T10:00:00.000+01:00", "PUB")), u3),
+		u3:     pagina(entrada("3", "2026-10-25T10:00:00.000+01:00", "PUB")),
+	}}
+}
+
+func llamadasA(f *fakeFetcher, url string) int {
+	n := 0
+	for _, l := range f.llamadas {
+		if l == url {
+			n++
+		}
+	}
+	return n
+}
+
+// Un fallo a mitad de la cadena se retoma donde quedó: lo hecho no se repite (ni se vuelve a descargar) y no se pierde nada.
+func TestUnFalloSeRetomaEnLaPaginaQueFallo(t *testing.T) {
+	f := cadena()
+	caida := errors.New("tiempo de espera agotado")
+	f.errs = map[string]error{u3: caida}
 	d, _, st := deps(f)
-	s, err := Run(context.Background(), d, src, inicio, RunOptions{})
-	if !errors.Is(err, caida) || s.New != 1 {
-		t.Fatalf("stats = %+v, err = %v", s, err)
+	ctx := context.Background()
+
+	s1, err := Run(ctx, d, src, inicio, RunOptions{})
+	if !errors.Is(err, caida) || s1.New != 2 {
+		t.Fatalf("la primera ejecución debía fallar en la tercera página habiendo ingerido dos: %+v %v", s1, err)
 	}
-	if cp, _ := st.Checkpoint(context.Background(), src); !cp.LastRun.IsZero() {
-		t.Fatalf("no debe avanzar el punto de control tras un fallo: %+v", cp)
+	cp, _ := st.Checkpoint(ctx, src)
+	if cp.LastRun.IsZero() || cp.Next != u2 {
+		t.Fatalf("la cabeza queda anotada para saber por dónde seguir: %+v", cp)
 	}
-	// La siguiente ejecución, ya recuperado el servidor, repite sin duplicar lo que ya estaba.
-	delete(f.errs, "https://contrataciondelestado.es/p2.atom")
-	s2, err := Run(context.Background(), d, src, inicio, RunOptions{})
-	if err != nil || s2.New != 0 || s2.Unchanged != 1 {
-		t.Fatalf("reintento: %+v %v", s2, err)
+	if hechas, _ := st.DonePages(ctx, src); len(hechas) != 1 || hechas[u2] != u3 {
+		t.Fatalf("solo p2 está ingerida entera (p3 falló): %v", hechas)
+	}
+
+	// Recuperado el servidor: la cabeza responde 304, p2 se salta y solo se descarga p3.
+	delete(f.errs, u3)
+	f.llamadas = nil
+	s2, err := Run(ctx, d, src, inicio, RunOptions{})
+	if err != nil || s2.New != 1 || s2.Skipped != 1 || !s2.NotModified || s2.Pending {
+		t.Fatalf("recuperación: %+v %v", s2, err)
+	}
+	if llamadasA(f, u2) != 0 || llamadasA(f, u3) != 1 {
+		t.Fatalf("no debía volver a descargar p2 y sí p3 una vez: %v", f.llamadas)
+	}
+	if n := len(st.Events()); n != 3 {
+		t.Fatalf("eventos = %d, quería 3 (uno por expediente)", n)
+	}
+
+	// Y ya todo hecho: basta con comprobar la cabeza.
+	f.llamadas = nil
+	s3, err := Run(ctx, d, src, inicio, RunOptions{})
+	if err != nil || !s3.NotModified || s3.Skipped != 2 || len(f.llamadas) != 1 {
+		t.Fatalf("régimen normal: %+v %v llamadas=%v", s3, err, f.llamadas)
 	}
 }
 
-// Regresión: tras un fallo a mitad de camino, la ejecución siguiente debe llegar a las páginas que quedaron sin ingerir aunque la primera
-// ya sea conocida (y aunque la fuente responda 304 a los validadores de la ejecución buena anterior).
-func TestTrasUnFalloSeRecuperanLasPaginasQueQuedaronAtras(t *testing.T) {
-	const p2url = "https://contrataciondelestado.es/p2.atom"
-	conNext := func(b []byte) []byte {
-		return bytes.Replace(b, []byte(`<entry>`), []byte(`<link href="`+p2url+`" rel="next"/><entry>`), 1)
+// Con un tope de páginas por ejecución la carga avanza entre ejecuciones sin repetir ninguna página de archivo.
+func TestLaCargaAvanzaEntreEjecucionesConUnTope(t *testing.T) {
+	f := &fakeFetcher{paginas: map[string][]byte{}}
+	url := func(i int) string { return fmt.Sprintf("https://contrataciondelestado.es/a%d.atom", i) }
+	const archivos = 6
+	f.paginas[inicio] = conEnlace(pagina(entrada("100", "2026-10-27T10:00:00.000+01:00", "PUB")), url(1))
+	for i := 1; i <= archivos; i++ {
+		next := ""
+		if i < archivos {
+			next = url(i + 1)
+		}
+		f.paginas[url(i)] = conEnlace(pagina(entrada(fmt.Sprint(i), "2026-10-20T10:00:00.000+01:00", "PUB")), next)
 	}
-	f := &fakeFetcher{paginas: map[string][]byte{inicio: pagina(entrada("1", "2026-10-25T10:00:00.000+01:00", "PUB"))}, etag: `"v1"`}
 	d, _, st := deps(f)
-	if _, err := Run(context.Background(), d, src, inicio, RunOptions{}); err != nil { // ejecución buena: queda punto de control con validadores
-		t.Fatal(err)
+	ctx := context.Background()
+	ejecuciones := 0
+	for {
+		s, err := Run(ctx, d, src, inicio, RunOptions{MaxPages: 3})
+		if err != nil {
+			t.Fatal(err)
+		}
+		ejecuciones++
+		if !s.Pending {
+			break
+		}
+		if ejecuciones > 10 {
+			t.Fatal("la carga no termina")
+		}
 	}
-	// Llegan novedades: la primera página trae una nueva y enlaza a otra con dos más, que se cae al descargarla.
-	f.etag = `"v2"`
-	f.paginas[inicio] = conNext(pagina(entrada("2", "2026-10-26T10:00:00.000+01:00", "PUB"), entrada("1", "2026-10-25T10:00:00.000+01:00", "PUB")))
-	f.paginas[p2url] = pagina(entrada("3", "2026-10-24T10:00:00.000+01:00", "PUB"), entrada("4", "2026-10-23T10:00:00.000+01:00", "PUB"))
-	caida := errors.New("tiempo de espera agotado")
-	f.errs = map[string]error{p2url: caida}
-	if _, err := Run(context.Background(), d, src, inicio, RunOptions{}); !errors.Is(err, caida) {
-		t.Fatalf("debía fallar: %v", err)
+	if ejecuciones < 3 {
+		t.Fatalf("con 6 páginas de archivo y un tope de 3 descargas debía hacer falta más de una ejecución, hizo %d", ejecuciones)
 	}
-	if cp, _ := st.Checkpoint(context.Background(), src); !cp.LastRun.IsZero() || cp.Validators.ETag != "" {
-		t.Fatalf("tras el fallo el punto de control debe quedar vacío: %+v", cp)
+	for i := 1; i <= archivos; i++ {
+		if n := llamadasA(f, url(i)); n != 1 {
+			t.Errorf("la página de archivo %d se descargó %d veces, quería 1", i, n)
+		}
 	}
-	// Recuperado el servidor, la siguiente ejecución llega a la segunda página y no deja nada atrás.
-	delete(f.errs, p2url)
-	s, err := Run(context.Background(), d, src, inicio, RunOptions{})
-	if err != nil || s.Pages != 2 || s.New != 2 {
-		t.Fatalf("recuperación: %+v %v", s, err)
-	}
-	if n := len(st.Events()); n != 4 {
-		t.Fatalf("eventos = %d, quería 4 (uno por expediente)", n)
-	}
-	// Y ahora sí vuelve a bastar con la primera página.
-	s, err = Run(context.Background(), d, src, inicio, RunOptions{})
-	if err != nil || !s.NotModified {
-		t.Fatalf("ejecución en régimen: %+v %v", s, err)
+	if n := len(st.Events()); n != archivos+1 {
+		t.Fatalf("eventos = %d, quería %d", n, archivos+1)
 	}
 }
 

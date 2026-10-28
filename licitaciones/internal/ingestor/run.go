@@ -80,6 +80,7 @@ func Work(ctx context.Context, deps ingest.Deps, d events.Drainer, publish event
 	defer wg.Wait()
 
 	for ctx.Err() == nil {
+		pending, failed := false, false // quedan páginas por cargar / una fuente falló: no se espera la hora entera para seguir
 		for _, source := range c.Sources {
 			if ctx.Err() != nil {
 				break
@@ -87,14 +88,25 @@ func Work(ctx context.Context, deps ingest.Deps, d events.Drainer, publish event
 			start := time.Now()
 			stats, err := ingest.Run(ctx, deps, source, Catalog[source], ingest.RunOptions{MaxPages: c.MaxPages})
 			if err != nil {
-				log.Error("ingesta fallida", "fuente", source, "error", err, "paginas", stats.Pages)
+				// Lo ingerido hasta aquí queda anotado: la siguiente vuelta retoma en la página que falló, sin repetir lo hecho.
+				log.Error("ingesta fallida", "fuente", source, "error", err, "paginas", stats.Pages, "paginas_saltadas", stats.Skipped)
+				failed = true
 				continue
 			}
+			pending = pending || stats.Pending
 			log.Info("ingesta completada", "fuente", source, "duracion", time.Since(start).Round(time.Millisecond).String(),
+				"paginas", stats.Pages, "paginas_saltadas", stats.Skipped, "pendiente", stats.Pending,
 				"nuevas", stats.New, "modificadas", stats.Modified, "sin_cambios", stats.Unchanged, "bajas", stats.Removed,
 				"originales_nuevos", stats.RawCreated, "sin_cambios_en_origen", stats.NotModified)
 		}
-		if err := startup.Sleep(ctx, c.Interval); err != nil {
+		wait := c.Interval
+		switch {
+		case failed:
+			wait = min(wait, MinInterval) // tras un fallo, un reintento pronto pero sin machacar a la fuente
+		case pending:
+			wait = min(wait, time.Minute) // la carga avanza bien: seguir enseguida
+		}
+		if err := startup.Sleep(ctx, wait); err != nil {
 			break
 		}
 	}

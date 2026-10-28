@@ -53,6 +53,8 @@ type Stats struct {
 	RawExisting int // originales que ya estaban
 	Warnings    int // avisos de calidad de datos
 	NotModified bool
+	Skipped     int  // páginas de archivo ya ingeridas que no hizo falta descargar
+	Pending     bool // quedan páginas por ingerir (se alcanzó el tope de la ejecución): seguir pronto
 }
 
 func (s *Stats) add(o Stats) {

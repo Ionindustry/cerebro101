@@ -66,10 +66,10 @@ func TestMigrarEsIdempotente(t *testing.T) {
 		t.Fatalf("segunda vez: %v", err)
 	}
 	var n int
-	if err := pool.QueryRow(ctx, `SELECT count(*) FROM schema_migraciones`).Scan(&n); err != nil || n != 2 {
+	if err := pool.QueryRow(ctx, `SELECT count(*) FROM schema_migraciones`).Scan(&n); err != nil || n != 3 {
 		t.Fatalf("migraciones aplicadas = %d, %v", n, err)
 	}
-	for _, tabla := range []string{"vistas", "outbox", "puntos_control", "expedientes"} {
+	for _, tabla := range []string{"vistas", "outbox", "puntos_control", "expedientes", "paginas_ingeridas"} {
 		if _, err := pool.Exec(ctx, "SELECT 1 FROM "+tabla); err != nil {
 			t.Fatalf("falta la tabla %s: %v", tabla, err)
 		}
@@ -312,5 +312,48 @@ func TestSinBaseEmpiezaConError(t *testing.T) {
 	}
 	if _, err := Connect(context.Background(), "esto no es una url"); err == nil {
 		t.Fatal("una dirección no válida debe dar error")
+	}
+}
+
+func TestPuntoDeControlConservaElEnlaceSiguiente(t *testing.T) {
+	_, st := conectar(t)
+	ctx := context.Background()
+	c := ingest.Checkpoint{LastRun: t0, Validators: fetch.Validators{ETag: `"v1"`}, Next: "https://x.test/p2.atom"}
+	if err := st.SaveCheckpoint(ctx, "placsp-643", c); err != nil {
+		t.Fatal(err)
+	}
+	got, err := st.Checkpoint(ctx, "placsp-643")
+	if err != nil || !got.LastRun.Equal(t0) || got.Validators.ETag != `"v1"` || got.Next != c.Next {
+		t.Fatalf("punto de control = %+v, %v", got, err)
+	}
+	// Se sustituye por completo (también el enlace siguiente).
+	if err := st.SaveCheckpoint(ctx, "placsp-643", ingest.Checkpoint{LastRun: t0.Add(time.Hour)}); err != nil {
+		t.Fatal(err)
+	}
+	if got, _ := st.Checkpoint(ctx, "placsp-643"); got.Next != "" || got.Validators.ETag != "" {
+		t.Fatalf("debía sustituirse: %+v", got)
+	}
+}
+
+func TestPaginasIngeridasPorFuente(t *testing.T) {
+	_, st := conectar(t)
+	ctx := context.Background()
+	if hechas, err := st.DonePages(ctx, "placsp-643"); err != nil || len(hechas) != 0 {
+		t.Fatalf("al principio no hay ninguna: %v %v", hechas, err)
+	}
+	for _, p := range [][3]string{{"placsp-643", "https://x.test/a1", "https://x.test/a2"}, {"placsp-643", "https://x.test/a2", ""}, {"placsp-1044", "https://x.test/a1", "otra"}} {
+		if err := st.MarkPageDone(ctx, p[0], p[1], p[2]); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := st.MarkPageDone(ctx, "placsp-643", "https://x.test/a1", "https://x.test/a2"); err != nil { // repetir es inofensivo
+		t.Fatal(err)
+	}
+	hechas, _ := st.DonePages(ctx, "placsp-643")
+	if len(hechas) != 2 || hechas["https://x.test/a1"] != "https://x.test/a2" || hechas["https://x.test/a2"] != "" {
+		t.Fatalf("placsp-643: %v", hechas)
+	}
+	if otras, _ := st.DonePages(ctx, "placsp-1044"); len(otras) != 1 || otras["https://x.test/a1"] != "otra" {
+		t.Fatalf("cada fuente lleva las suyas: %v", otras)
 	}
 }
