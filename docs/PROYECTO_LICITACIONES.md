@@ -407,4 +407,7 @@ Documento de partida: «Plataforma de detección y análisis de concursos públi
   que sea la misma empresa; una persona física lo dice. Filtros por periodo y CPV en la dirección. Los nombres de empresas y organismos de «Competencia», «Contratos que vencen»
   y la ficha de una licitación enlazan a su ficha. Los errores se distinguen: «esa organización no existe» (404 con datos) no es lo mismo que «el motor todavía no tiene esta función»
   (404 «La ruta no existe»: motor desactualizado, hay que reconstruir `api` y `proyector`) ni que una dirección con NIF (solo se abre por UUID). La pasarela del panel deja pasar `organizations/{uuid}` solo con UUID (nunca por nombre ni NIF desde el navegador).
+- **Reprocesar expedientes antiguos** (motor, hecho): `proyector reproyectar [-simular] [-fuente F] [-limite N] [-despues ID]` (tarea de una sola vez; ver `licitaciones/README.md`) relee de `raw` el
+  original de cada expediente ya proyectado y rehace su modelo de lectura con el parser actual, para que los antiguos tengan, por ejemplo, el texto de las prórrogas. Comprueba el SHA-256 de cada
+  original; no resucita los anulados, no pisa un expediente que cambió mientras tanto, no toca versión, original ni fecha de actualización y es idempotente. `-simular` cuenta cuántos cambiarían sin escribir.
 - Pendiente: canal `correo`; un botón «Pedir informe de viabilidad» para una licitación concreta; y llevar a Viabilidad lo que ya sabe 101.cat de cada organismo.

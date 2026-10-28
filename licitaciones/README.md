@@ -107,6 +107,21 @@ evidencia es la misma. **POR VERIFICAR** con una descarga real: el servidor exac
 Cerebro, los eventos del histórico van al mismo flujo `LICITACIONES`; cuando exista habrá que llevarlos a `LIC_HISTORICO` (ADR 0002) para que el Cerebro no reciba
 millones de «nuevas».
 
+## Reprocesar los expedientes ya cargados
+Cuando el parser aprende algo nuevo (por ejemplo, el texto de las prórrogas), los expedientes ya proyectados no lo tienen hasta que se vuelven a leer. No hace falta
+volver a descargar nada: `proyector reproyectar` relee de `raw` el original de cada expediente (comprobando su SHA-256), lo interpreta con el parser actual y rehace su
+modelo de lectura; las adjudicaciones se recalculan solas. Es una tarea de una sola vez, no un servicio, y se puede repetir o cortar sin riesgo (ADR 0003: el modelo de lectura
+es regenerable). Primero simula (no escribe nada) y mira cuántos cambiarían:
+
+```
+docker compose -f licitaciones/compose.yaml -f licitaciones/compose.cerebro.yaml --env-file .env run --rm proyector reproyectar -simular
+docker compose -f licitaciones/compose.yaml -f licitaciones/compose.cerebro.yaml --env-file .env run --rm proyector reproyectar
+```
+
+Opciones: `-fuente placsp-643` (solo esa fuente), `-limite N` (como máximo N expedientes) y `-despues ID` (seguir después del último id que enseñó una pasada cortada). Al final dice
+cuántos ha **revisado**, **cambiado**, dejado **iguales**, saltado por ser **bajas** (los anulados no se resucitan), **movidos** (llegó una versión nueva mientras tanto: no se pisa) y con
+**errores** (el original no se lee o no coincide con su SHA-256: no se proyecta nada de él). No cambia la versión, el original ni la fecha de actualización del expediente.
+
 ## Imagen
 `docker build -f licitaciones/Dockerfile --build-arg VERSION=$(git rev-parse HEAD) -t licitaciones:local licitaciones`
 (una imagen con los tres binarios; `ENTRYPOINT` es `/api`, el resto se elige con `entrypoint`).

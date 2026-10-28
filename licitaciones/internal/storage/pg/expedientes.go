@@ -21,25 +21,40 @@ func importe(m *domain.Money) *string {
 	return &m.Value
 }
 
-// UpsertExpediente proyecta una licitación en el modelo de lectura. Solo avanza: si ya hay una versión igual o posterior (reentrega, orden
-// distinto) no toca nada y devuelve applied=false.
-func (s *Store) UpsertExpediente(ctx context.Context, ev ingest.Event, l *domain.Licitacion) (applied bool, err error) {
+// valoresExpediente son las columnas derivadas de una licitación normalizada. Las usan la proyección normal (UpsertExpediente) y la reproyección de los
+// expedientes ya guardados (ReproyectarExpediente), para que las dos escriban exactamente lo mismo.
+type valoresExpediente struct {
+	doc       []byte
+	moneda    string
+	plazo     *time.Time
+	cpv, nuts []string
+}
+
+func valoresDe(l *domain.Licitacion) (valoresExpediente, error) {
 	doc, err := json.Marshal(l)
 	if err != nil {
-		return false, fmt.Errorf("pg: serializar el expediente: %w", err)
+		return valoresExpediente{}, fmt.Errorf("pg: serializar el expediente: %w", err)
 	}
-	moneda := "EUR"
+	v := valoresExpediente{doc: doc, moneda: "EUR", cpv: nonNil(l.CPV), nuts: nonNil(l.NUTS)}
 	for _, m := range []*domain.Money{l.EstimatedValue, l.BaseBudgetExclVAT, l.BaseBudgetInclVAT} {
 		if m != nil && len(m.Currency) == 3 {
-			moneda = m.Currency
+			v.moneda = m.Currency
 			break
 		}
 	}
-	var deadline *time.Time
 	if l.TenderDeadline != nil && !l.TenderDeadline.IsZero() {
-		deadline = l.TenderDeadline
+		v.plazo = l.TenderDeadline
 	}
-	cpv, nuts := nonNil(l.CPV), nonNil(l.NUTS)
+	return v, nil
+}
+
+// UpsertExpediente proyecta una licitación en el modelo de lectura. Solo avanza: si ya hay una versión igual o posterior (reentrega, orden
+// distinto) no toca nada y devuelve applied=false.
+func (s *Store) UpsertExpediente(ctx context.Context, ev ingest.Event, l *domain.Licitacion) (applied bool, err error) {
+	v, err := valoresDe(l)
+	if err != nil {
+		return false, err
+	}
 	tag, err := s.pool.Exec(ctx, `
 INSERT INTO expedientes (fuente, id_origen, id_numerico, version_entidad, actualizada, expediente, estado_origen, estado, titulo,
     comprador_nombre, comprador_nif, comprador_dir3, procedimiento, procedimiento_origen, tipo_contrato, cpv, nuts,
@@ -56,9 +71,9 @@ ON CONFLICT (fuente, id_origen) DO UPDATE SET
     documento = EXCLUDED.documento, proyectada = clock_timestamp()
 WHERE expedientes.version_entidad < EXCLUDED.version_entidad`,
 		l.Source, l.SourceID, l.NumericID, ev.Version, l.Updated, l.Expediente, l.Status, l.Estado(), l.Title,
-		l.Organism.Name, l.Organism.NIF, l.Organism.DIR3, domain.ProcedimientoNormalizado(l.Procedure), l.Procedure, l.ContractType, cpv, nuts,
-		importe(l.EstimatedValue), importe(l.BaseBudgetExclVAT), importe(l.BaseBudgetInclVAT), moneda, deadline, l.Link,
-		ev.RawSHA256, ev.RawKey, doc)
+		l.Organism.Name, l.Organism.NIF, l.Organism.DIR3, domain.ProcedimientoNormalizado(l.Procedure), l.Procedure, l.ContractType, v.cpv, v.nuts,
+		importe(l.EstimatedValue), importe(l.BaseBudgetExclVAT), importe(l.BaseBudgetInclVAT), v.moneda, v.plazo, l.Link,
+		ev.RawSHA256, ev.RawKey, v.doc)
 	if err != nil {
 		return false, fmt.Errorf("pg: proyectar el expediente %s: %w", l.SourceID, err)
 	}
