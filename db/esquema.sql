@@ -249,6 +249,46 @@ BEGIN
   END IF;
 END $$;
 
+-- Alertas de licitaciones: búsquedas guardadas con aviso (api/cerebro/licitaciones/alertas.py). El filtro es el mismo que el de GET /tenders del motor; el
+-- consumidor de eventos (cerebro/licitaciones/consumidor.py) pregunta al motor si el expediente de cada evento lo cumple y, si sí, deja un aviso. Personal: solo
+-- su dueño; de departamento: la ven sus miembros (y Dirección) y la cambian el responsable del departamento y Dirección.
+CREATE TABLE IF NOT EXISTS licitaciones_alertas (
+  id              bigserial PRIMARY KEY,
+  nombre          text NOT NULL,
+  propietario     text NOT NULL,                       -- quien la creó (id del usuario)
+  ambito          text NOT NULL CHECK (ambito IN ('personal','departamento')),
+  departamento    text,                                -- obligatorio si ambito = departamento
+  filtro          jsonb NOT NULL,
+  eventos         text[] NOT NULL,                     -- licitacion.nueva, .modificada, .adjudicada, .formalizada, .anulada
+  canal           text NOT NULL DEFAULT 'panel' CHECK (canal IN ('panel')),     -- «resumen_diario» llegará con el resumen de las 16:00; «correo», cuando haya envío
+  activa          boolean NOT NULL DEFAULT true,
+  creada          timestamptz NOT NULL DEFAULT now(),
+  cambiada        timestamptz NOT NULL DEFAULT now(),
+  ultima_entrega  timestamptz,
+  CHECK ((ambito = 'departamento') = (departamento IS NOT NULL))
+);
+CREATE INDEX IF NOT EXISTS licitaciones_alertas_activas ON licitaciones_alertas (activa) WHERE activa;
+
+-- Avisos: una fila por alerta y evento (UNIQUE: una alerta no avisa dos veces del mismo evento, ADR 0003). Guardan los datos del expediente tal como eran al avisar.
+CREATE TABLE IF NOT EXISTS licitaciones_avisos (
+  id           bigserial PRIMARY KEY,
+  alerta_id    bigint NOT NULL REFERENCES licitaciones_alertas (id) ON DELETE CASCADE,
+  evento_id    text NOT NULL,
+  tipo         text NOT NULL,
+  motor_id     uuid NOT NULL,
+  titulo       text NOT NULL,
+  organismo    text,
+  encaje       numeric,
+  importe      numeric,
+  fecha_limite timestamptz,
+  enlace       text,
+  estado_motor text,
+  leido        boolean NOT NULL DEFAULT false,
+  creado       timestamptz NOT NULL DEFAULT now(),
+  UNIQUE (alerta_id, evento_id)
+);
+CREATE INDEX IF NOT EXISTS licitaciones_avisos_no_leidos ON licitaciones_avisos (creado DESC) WHERE NOT leido;
+
 -- Resumen diario de licitaciones (a las 16:00, para Dirección; ver api/cerebro/licitaciones/resumen.py). El contenido es un documento completo:
 -- lo que se vio ese día no cambia aunque después cambien las licitaciones.
 CREATE TABLE IF NOT EXISTS licitaciones_resumenes (

@@ -11,6 +11,7 @@ import subprocess
 import tempfile
 import time
 import unittest
+from datetime import datetime, timezone
 from pathlib import Path
 from types import SimpleNamespace
 from unittest import mock
@@ -20,7 +21,7 @@ import _sin_servicios  # noqa: F401
 try:
     import nats
     import psycopg
-    from cerebro.licitaciones import consumidor, embudo
+    from cerebro.licitaciones import alertas, consumidor, embudo
 except ImportError as e:      # pragma: no cover
     raise unittest.SkipTest(str(e))
 
@@ -57,6 +58,7 @@ class TestConNatsReal(unittest.IsolatedAsyncioTestCase):
         sep = "&" if "?" in URL else "?"
         self.parches = [
             mock.patch.object(embudo, "ajustes", SimpleNamespace(database_url=f"{URL}{sep}options=-csearch_path%3D{self.schema}", zona_horaria="Europe/Madrid")),
+            mock.patch.object(alertas, "ajustes", SimpleNamespace(database_url=f"{URL}{sep}options=-csearch_path%3D{self.schema}")),
             mock.patch.object(embudo.resumen_mod, "config", lambda: CFG),
             mock.patch.object(consumidor, "ESPERAS", (1,)),          # reintentos rápidos para la prueba
             mock.patch.dict(os.environ, {"LICITACIONES_NATS_URL": "", "LICITACIONES_ENCAJE_MIN": "60"}),
@@ -143,6 +145,48 @@ class TestConNatsReal(unittest.IsolatedAsyncioTestCase):
                     self.assertEqual(len(await embudo.listar()), 1)            # todavía no está en el motor
                     estado["aparece"] = True
                     await self.esperar(lambda f: len(f) == 2)
+            finally:
+                parar.set()
+                await asyncio.wait_for(tarea, 15)
+
+    async def test_las_alertas_de_los_eventos_al_aviso(self):
+        usuario = SimpleNamespace(id="albert", roles={"usuario"}, departamentos={"licitaciones"})
+        await alertas.crear(usuario, {"nombre": "Videovigilancia", "ambito": "personal", "filtro": {"cpv": ["32"]}, "eventos": ["licitacion.nueva"], "canal": "panel"})
+        await alertas.crear(usuario, {"nombre": "Obras", "ambito": "personal", "filtro": {"cpv": ["45"]}, "eventos": ["licitacion.nueva"], "canal": "panel"})
+        ahora = datetime.now(timezone.utc).isoformat()
+        preguntas = []
+
+        async def motor_juez(ruta, params=None):                      # el motor hace de juez: solo cumple el filtro de CPV 32
+            preguntas.append(params)
+            item = licitacion(actualizada_en=ahora)
+            if set(params) == {"fuente", "id_origen", "limit"}:
+                return {"items": [item]}
+            return {"items": [item] if params["cpv"] == ["32"] else []}
+
+        parar = asyncio.Event()
+        with mock.patch.object(consumidor.motor, "_get", motor_juez):
+            tarea = asyncio.create_task(consumidor.ejecutar(parar))
+            try:
+                await self.publicar("nueva", id="n1")
+                await self.publicar("nueva", id="n1")          # reentrega del mismo evento
+                for _ in range(100):
+                    r = await alertas.listar_avisos(usuario)
+                    if r["items"]:
+                        break
+                    await asyncio.sleep(0.2)
+                await asyncio.sleep(1.5)
+                r = await alertas.listar_avisos(usuario)
+                self.assertEqual([(x["alerta"], x["motor_id"], x["tipo"], x["leido"]) for x in r["items"]], [("Videovigilancia", ID, "licitacion.nueva", False)])
+                self.assertEqual(r["sin_leer"], 1)
+                ultimas = {a["nombre"]: a["ultima_entrega"] for a in await alertas.listar(usuario)}
+                self.assertIsNotNone(ultimas["Videovigilancia"])
+                self.assertIsNone(ultimas["Obras"])               # la que no cumple el filtro no recibe nada
+                # Un tipo de evento que ninguna alerta pide no genera ninguna consulta de filtro al motor (el consumidor del embudo sí busca el expediente).
+                antes = len(preguntas)
+                await self.publicar("adjudicada", id="a1", version=2)
+                await asyncio.sleep(1.5)
+                self.assertTrue(all(set(p) == {"fuente", "id_origen", "limit"} for p in preguntas[antes:]), preguntas[antes:])
+                self.assertEqual((await alertas.listar_avisos(usuario))["sin_leer"], 1)
             finally:
                 parar.set()
                 await asyncio.wait_for(tarea, 15)

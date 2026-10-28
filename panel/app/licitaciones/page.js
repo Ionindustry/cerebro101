@@ -2,7 +2,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
-import { antiguedadTexto, estadoMotor, ESTADOS_EMBUDO, fechaCivilTexto, nombreFuente, tasaExitoTexto, totalesTexto } from "../../lib/licitaciones";
+import { antiguedadTexto, estadoMotor, ESTADOS_EMBUDO, fechaCivilTexto, nombreFuente, sinLeerTexto, tasaExitoTexto, totalesTexto } from "../../lib/licitaciones";
 import { Fallo, Item, Oportunidad, pedir, pedirCerebro } from "./cliente";
 
 function EstadoDelMotor() {
@@ -71,6 +71,22 @@ function EmbudoPropio() {
   );
 }
 
+// Avisos de las alertas guardadas: solo para quien tiene acceso; si no hay alertas ni avisos, la tarjeta no ocupa sitio.
+function AvisosDeAlertas() {
+  const [v, setV] = useState(null);
+  useEffect(() => { pedirCerebro("licitaciones/avisos?no_leidos=true&limite=3").then(setV).catch(() => setV(null)); }, []);
+  if (!v) return null;
+  return (
+    <section className="tarjeta" aria-labelledby="lic-avi-t">
+      <header>
+        <h2 id="lic-avi-t">Alertas · {sinLeerTexto(v.sin_leer)}</h2>
+        <Link href="/licitaciones/alertas" className="lic-vuelve">{v.sin_leer > 0 ? "Ver los avisos" : "Gestionar alertas"}</Link>
+      </header>
+      {v.items.length > 0 && <ul className="lic-lista">{v.items.map((x) => <li key={x.id} className="meta">{x.titulo} <span className="lic-etiqueta">Alerta «{x.alerta}»</span></li>)}</ul>}
+    </section>
+  );
+}
+
 function Novedades() {
   const [d, setD] = useState(null);
   const [error, setError] = useState(null);
@@ -101,6 +117,7 @@ export default function Licitaciones() {
         <button className="boton si" type="submit">Buscar</button>
       </form>
       <ResumenDelDia />
+      <AvisosDeAlertas />
       <EmbudoPropio />
       <EstadoDelMotor />
       <Novedades />

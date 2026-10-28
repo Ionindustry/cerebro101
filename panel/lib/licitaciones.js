@@ -235,3 +235,57 @@ export function avisoEstadoMotor(estado) {
   if (!estado || estado === "abierta" || estado === "anuncio_previo") return null;
   return `En el motor: ${estadoEtiqueta(estado)}`;
 }
+
+// ---- Alertas guardadas y avisos (API del Cerebro: /licitaciones/alertas, /licitaciones/avisos) ----
+
+export const EVENTOS_ALERTA = [
+  ["licitacion.nueva", "Nueva licitación"], ["licitacion.modificada", "Modificada"], ["licitacion.adjudicada", "Adjudicada"],
+  ["licitacion.formalizada", "Formalizada"], ["licitacion.anulada", "Anulada"],
+];
+export const eventoEtiqueta = (e) => (EVENTOS_ALERTA.find(([k]) => k === e) || [, String(e || "").replace("licitacion.", "")])[1];
+
+/** Los filtros del buscador (formulario) → el filtro de una alerta (lo que no es válido se omite; sin criterios queda vacío y la alerta no se puede guardar). */
+export function filtroDeAlerta(f) {
+  const out = {};
+  const q = String(f.q || "").trim();
+  if (q.length >= 2) out.q = q.slice(0, 200);
+  const cpv = limpiarCpv(f.cpv), nuts = limpiarNuts(f.nuts);
+  if (cpv.length) out.cpv = cpv;
+  if (nuts.length) out.nuts = nuts;
+  const estados = (f.estados || []).filter((e) => ESTADOS.some(([k]) => k === e));
+  if (estados.length) out.estado = estados;
+  const min = importeValido(f.importeMin), max = importeValido(f.importeMax);
+  if (min) out.importe_min = min;
+  if (max) out.importe_max = max;
+  return out;
+}
+
+const euros = (v) => `${new Intl.NumberFormat("es-ES").format(Number(v))} €`;
+
+/** Una frase con lo que busca una alerta: «texto "cámaras" · CPV 32323500 · zona ES512 · importe desde 100.000 €». */
+export function filtroTexto(f) {
+  if (!f || typeof f !== "object") return "";
+  const p = [];
+  if (f.q) p.push(`texto «${f.q}»`);
+  if (f.cpv?.length) p.push(`CPV ${f.cpv.join(", ")}`);
+  if (f.nuts?.length) p.push(`zona ${f.nuts.join(", ")}`);
+  if (f.estado?.length) p.push(`estado ${f.estado.map(estadoEtiqueta).join(" o ").toLowerCase()}`);
+  if (f.importe_min) p.push(`desde ${euros(f.importe_min)}`);
+  if (f.importe_max) p.push(`hasta ${euros(f.importe_max)}`);
+  if (f.comprador?.length) p.push(`comprador ${f.comprador.join(", ")}`);
+  if (f.procedimiento?.length) p.push(`procedimiento ${f.procedimiento.join(", ").replace(/_/g, " ")}`);
+  return p.join(" · ");
+}
+
+export const ambitoTexto = (a) => (a.ambito === "departamento" ? `Departamento ${a.departamento}` : "Personal");
+
+/** «3 avisos sin leer», «1 aviso sin leer», «Sin avisos nuevos». */
+export const sinLeerTexto = (n) => (!n ? "Sin avisos nuevos" : n === 1 ? "1 aviso sin leer" : `${n} avisos sin leer`);
+
+export function mensajeAlertas(status) {
+  if (status === 401) return "Tu sesión ha caducado.";
+  if (status === 403) return "No tienes permiso para esto. Las alertas de un departamento las crea su responsable o Dirección.";
+  if (status === 404) return "Esa alerta ya no existe.";
+  if (status === 422) return "Revisa los datos de la alerta: necesita un nombre, al menos un criterio de búsqueda y un evento.";
+  return "No se ha podido completar la operación. Inténtalo en unos minutos.";
+}

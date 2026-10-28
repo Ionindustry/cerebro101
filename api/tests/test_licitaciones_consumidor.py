@@ -7,8 +7,8 @@ from unittest import mock
 import _sin_servicios  # noqa: F401
 
 try:
-    from cerebro.licitaciones import consumidor, embudo
-    from cerebro.licitaciones.consumidor import AunNoProyectado, ErrorPermanente, Evento, atender, decodificar, encaje_minimo, espera, procesar
+    from cerebro.licitaciones import alertas, consumidor, embudo
+    from cerebro.licitaciones.consumidor import AunNoProyectado, ErrorPermanente, Evento, atender, decodificar, encaje_minimo, espera, procesar, procesar_alertas
 except ImportError as e:      # pragma: no cover
     raise unittest.SkipTest(str(e))
 
@@ -140,6 +140,89 @@ class TestProcesar(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(r.startswith("ignorada"))
 
 
+class TestProcesarAlertas(unittest.IsolatedAsyncioTestCase):
+    """Las alertas con la base y el motor simulados: el motor hace de juez del filtro."""
+
+    def alerta(self, id, **filtro):
+        return {"id": id, "filtro": filtro or {"cpv": ["32"]}}
+
+    def preparar(self, pedidas, ya=(), cumplen=(), rechaza=()):
+        self.registrados = []
+        parches = [
+            mock.patch.object(alertas, "activas_para", mock.AsyncMock(return_value=pedidas)),
+            mock.patch.object(alertas, "ya_avisada", mock.AsyncMock(side_effect=lambda a, e: a in ya)),
+            mock.patch.object(alertas, "registrar_aviso", mock.AsyncMock(side_effect=lambda a, e, t, d, ahora: self.registrados.append((a, e, t, d["motor_id"])) or True)),
+        ]
+        for p in parches:
+            p.start()
+            self.addCleanup(p.stop)
+        self.preguntas = []
+
+        async def consulta(ruta, params=None):
+            if set(params) == {"fuente", "id_origen", "limit"}:                 # buscar el expediente del evento
+                return {"items": [self.item]}
+            self.preguntas.append(params)
+            cpv = params["cpv"][0] if "cpv" in params else None
+            if cpv in rechaza:
+                raise ValueError("El motor rechaza la consulta")
+            return {"items": [self.item] if cpv in cumplen else []}
+        return consulta
+
+    def setUp(self):
+        self.item = item(actualizada_en="2026-10-27T10:00:00Z")
+
+    async def lanzar(self, consulta, tipo="licitacion.nueva", **kw):
+        return await procesar_alertas(decodificar(mensaje(tipo, **kw)), consulta=consulta, cfg={**CFG, "alertas": {"max_antiguedad_dias": 7}}, ahora=AHORA)
+
+    async def test_avisa_a_las_alertas_cuyo_filtro_cumple_el_expediente(self):
+        c = self.preparar([self.alerta(1, cpv=["32"]), self.alerta(2, cpv=["45"])], cumplen=("32",))
+        r = await self.lanzar(c)
+        self.assertEqual(r, "1 aviso(s) de 2 alerta(s)")
+        self.assertEqual(self.registrados, [(1, "e1", "licitacion.nueva", ID)])
+        self.assertEqual([p["id_origen"] for p in self.preguntas], [ORIGEN, ORIGEN])           # el motor evalúa el filtro sobre ESTE expediente
+        self.assertEqual(self.preguntas[0], {"cpv": ["32"], "fuente": "placsp", "id_origen": ORIGEN, "limit": 1})
+
+    async def test_si_ninguna_alerta_pide_el_evento_no_se_molesta_al_motor(self):
+        llamadas = []
+
+        async def consulta(ruta, params=None):
+            llamadas.append(params)
+            return {"items": []}
+        self.preparar([])
+        self.assertEqual(await self.lanzar(consulta), "ninguna alerta pide este evento")
+        self.assertEqual(llamadas, [])
+
+    async def test_una_alerta_ya_avisada_del_mismo_evento_se_salta(self):
+        c = self.preparar([self.alerta(1), self.alerta(2, cpv=["32", ])], ya=(1,), cumplen=("32",))
+        await self.lanzar(c)
+        self.assertEqual([r[0] for r in self.registrados], [2])
+        self.assertEqual(len(self.preguntas), 1)
+
+    async def test_lo_antiguo_no_avisa_para_no_inundar_con_el_historico(self):
+        self.item = item(actualizada_en="2026-09-01T10:00:00Z")
+        c = self.preparar([self.alerta(1)], cumplen=("32",))
+        self.assertTrue((await self.lanzar(c)).startswith("ignorada: actualizada hace más de 7 días"))
+        self.assertEqual(self.registrados, [])
+
+    async def test_una_nueva_que_no_esta_abierta_no_avisa_pero_una_adjudicada_si(self):
+        self.item = item(estado="adjudicada", actualizada_en="2026-10-27T10:00:00Z", version_entidad=2)
+        c = self.preparar([self.alerta(1)], cumplen=("32",))
+        self.assertTrue((await self.lanzar(c, "licitacion.nueva")).startswith("ignorada: no está abierta"))
+        self.assertTrue((await self.lanzar(c, "licitacion.adjudicada", version=2)).startswith("1 aviso"))
+
+    async def test_un_filtro_que_el_motor_rechaza_se_salta_sin_perder_el_evento(self):
+        c = self.preparar([self.alerta(1, cpv=["99"]), self.alerta(2, cpv=["32"])], cumplen=("32",), rechaza=("99",))
+        self.assertEqual(await self.lanzar(c), "1 aviso(s) de 2 alerta(s)")
+        self.assertEqual([r[0] for r in self.registrados], [2])
+
+    async def test_si_el_motor_aun_no_lo_tiene_se_espera(self):
+        async def vacio(ruta, params=None):
+            return {"items": []}
+        self.preparar([self.alerta(1)])
+        with self.assertRaises(AunNoProyectado):
+            await self.lanzar(vacio)
+
+
 class FalsoMensaje:
     def __init__(self, datos, entregas=1):
         self.data = datos
@@ -173,6 +256,13 @@ class TestAtender(unittest.IsolatedAsyncioTestCase):
             m = FalsoMensaje(mensaje(), entregas)
             self.assertEqual(await self.lanzar(m, {"side_effect": AunNoProyectado("x")}), "reintento")
             self.assertEqual(m.log, [("nak", segundos)])
+
+    async def test_se_puede_atender_con_otra_funcion_las_alertas(self):
+        m = FalsoMensaje(mensaje())
+        otra = mock.AsyncMock(return_value="1 aviso(s)")
+        self.assertEqual(await atender(m, otra, cfg=CFG), "ok")
+        otra.assert_awaited_once()
+        self.assertEqual(m.log, ["ack"])
 
     async def test_un_fallo_inesperado_o_del_motor_se_reintenta_no_se_pierde(self):
         for exc in (motor_caido(), RuntimeError("la base no responde"), OSError("red")):

@@ -404,6 +404,9 @@ paths:
         '403': {$ref: '#/components/responses/Prohibido'}
         '429': {$ref: '#/components/responses/DemasiadasPeticiones'}
 
+  # NOTA (alertas): hoy NO se sirven desde el motor sino desde la API del Cerebro (`/licitaciones/alertas`, `/licitaciones/avisos`), que es donde están la identidad de
+  # las personas y sus departamentos; el motor solo evalúa el filtro de un expediente (`GET /tenders` con `fuente` + `id_origen`). Este contrato queda como referencia
+  # para cuando la API del motor conozca a los usuarios (Keycloak, SEC-031).
   /alerts:
     get:
       tags: [alertas]

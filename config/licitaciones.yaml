@@ -48,3 +48,8 @@ pesos:
 # sature, ADR 0007). Se puede cambiar sin tocar código, o con la variable LICITACIONES_ENCAJE_MIN.
 embudo:
   encaje_min: 60
+
+# Alertas guardadas: un evento (nueva, adjudicada…) solo genera aviso si el expediente se ha actualizado en los últimos días. Así la carga del histórico y la
+# primera lectura del flujo no inundan a nadie de avisos de licitaciones de hace meses.
+alertas:
+  max_antiguedad_dias: 7

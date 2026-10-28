@@ -342,5 +342,16 @@ Documento de partida: «Plataforma de detección y análisis de concursos públi
   piden a la API del motor con el filtro nuevo `GET /tenders?fuente=&id_origen=` (hecho en el motor). Si el proyector aún no lo tiene, se reintenta (10 s, 1 min,
   5 min, 30 min, 2 h; 6 entregas). **Ojo con la carga del histórico**: sus eventos van al mismo flujo y se procesan igual (una consulta al motor por evento, casi todos
   «ignorada: no está abierta»); cuando se lleven a `LIC_HISTORICO` (ADR 0002) dejarán de pasar por aquí.
-- Pendiente: competencia, alertas guardadas, y que el Rastreador (6:00) pida a Viabilidad el informe ir/no ir de las `detectada` (fase 4 del plan); entrega del
-  resumen por otros canales (correo) si Dirección lo pide.
+- **Alertas guardadas** (hechas, canal «panel»): búsquedas guardadas con aviso. `api/cerebro/licitaciones/alertas.py`; tablas `licitaciones_alertas` y
+  `licitaciones_avisos` (UNIQUE por alerta y evento: no avisa dos veces); rutas `GET/POST /licitaciones/alertas`, `POST /licitaciones/alertas/{id}` (cambiar:
+  nombre, filtro, eventos, activa), `POST /licitaciones/alertas/{id}/borrar`, `GET /licitaciones/avisos` y `POST /licitaciones/avisos/leer`; pantalla
+  `/licitaciones/alertas`, «Guardar como alerta» en el buscador y tarjeta en el dashboard. Un segundo consumidor duradero, `cerebro-alertas`, en el mismo servicio
+  `licitaciones-eventos`: por cada evento, para cada alerta activa que lo pida, **pregunta al motor si el expediente cumple el filtro**
+  (`GET /tenders` con el filtro + `fuente` + `id_origen`; así el texto libre y todo lo demás lo evalúa quien lo entiende) y deja un aviso. Solo avisa de expedientes
+  actualizados hace menos de `alertas.max_antiguedad_dias` (7) y una «nueva» solo si sigue abierta: la carga del histórico no inunda a nadie. Permisos: una personal
+  es solo de su dueño (ni Dirección la ve); una de departamento la ven sus miembros y Dirección, y la crean o cambian el responsable del departamento y Dirección.
+  Diferencias con el contrato `/alerts` del motor (`openapi.yaml`): viven en el Cerebro y no en el motor porque la API del motor aún no sabe quién es cada
+  usuario (Keycloak en el motor, SEC-031); cambiar y borrar van por `POST` (la pasarela solo deja GET y POST); sin `If-Match` (v1); solo los criterios que el motor
+  filtra hoy (texto, CPV, NUTS, comprador, estado, procedimiento, importes; no `area`, `fuente` ni `encaje_min`); sin alertas de competencia.
+- Pendiente: canales `resumen_diario` (que las alertas de departamento salgan en el resumen de las 16:00) y `correo`; competencia; y que el Rastreador (6:00) pida a
+  Viabilidad el informe ir/no ir de las `detectada` (fase 4 del plan).
