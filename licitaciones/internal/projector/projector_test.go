@@ -121,7 +121,12 @@ func (f fetcher) Fetch(_ context.Context, url string, _ fetch.Validators) (fetch
 
 // TestDeLaFuenteAlModeloDeLectura recorre todo: la ingesta de la muestra real deja originales y eventos; el relay los publica; el proyector
 // los consume, y el modelo de lectura queda con un expediente por licitación de la muestra. Necesita LICITACIONES_TEST_PG.
-func TestDeLaFuenteAlModeloDeLectura(t *testing.T) {
+func TestDeLaFuenteAlModeloDeLectura(t *testing.T) { deLaFuenteAlModeloDeLectura(t, false) }
+
+// TestDelHistoricoAlModeloDeLectura es lo mismo para la carga del histórico: sus eventos van al flujo LIC_HISTORICO y el segundo consumidor del proyector los proyecta.
+func TestDelHistoricoAlModeloDeLectura(t *testing.T) { deLaFuenteAlModeloDeLectura(t, true) }
+
+func deLaFuenteAlModeloDeLectura(t *testing.T, historico bool) {
 	pgURL := os.Getenv("LICITACIONES_TEST_PG")
 	if pgURL == "" {
 		t.Skip("sin LICITACIONES_TEST_PG")
@@ -183,17 +188,21 @@ func TestDeLaFuenteAlModeloDeLectura(t *testing.T) {
 	}
 
 	raw := ingest.NewMemRaw()
+	durable, flujo := Durable, bus.StreamName
+	if historico {
+		durable, flujo = DurableHistorico, bus.StreamHistorico
+	}
 	wctx, stop := context.WithCancel(ctx)
 	defer stop()
 	log := slog.New(slog.DiscardHandler)
 	go func() { // ingesta + relay
-		_ = ingestor.Work(wctx, ingest.Deps{Fetcher: fetcher{body}, Raw: raw, State: st}, st, pub.Publish, ingestor.Config{Sources: []string{"placsp-643"}, Interval: time.Hour, MaxPages: 3}, log)
+		_ = ingestor.Work(wctx, ingest.Deps{Fetcher: fetcher{body}, Raw: raw, State: st, Backfill: historico}, st, pub.Publish, ingestor.Config{Sources: []string{"placsp-643"}, Interval: time.Hour, MaxPages: 3}, log)
 	}()
 	go func() { // proyector
 		_ = bus.Consume(wctx, nc, func(ctx context.Context, ev ingest.Event) error {
 			_, err := Handle(ctx, raw, st, ev)
 			return err
-		}, bus.ConsumerOptions{Durable: Durable, Log: log})
+		}, bus.ConsumerOptions{Durable: durable, Stream: flujo, Log: log})
 	}()
 
 	var n int

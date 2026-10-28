@@ -9,6 +9,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/ionindustry/cerebro101/licitaciones/internal/connectors/fetch"
 )
 
 const zipURL = "https://contrataciondelsectorpublico.gob.es/sindicacion/sindicacion_643/licitacionesPerfilesContratanteCompleto3_202609.zip"
@@ -57,6 +59,32 @@ func TestZipIngiereTodasLasPaginasYLasAnota(t *testing.T) {
 		if _, ok := done[k]; !ok {
 			t.Fatalf("falta anotar %s: %v", k, done)
 		}
+	}
+}
+
+func TestLosEventosDelZipSonDelHistoricoYLosEnVivoNo(t *testing.T) {
+	d, _, st := deps(nil)
+	p := hacerZip(t, map[string][]byte{"a.atom": pagina(entrada("1", "2026-09-30T10:00:00.000+02:00", "PUB"), entrada("2", "2026-09-29T10:00:00.000+02:00", "ADJ", "8"))})
+	if _, err := RunZip(context.Background(), d, src, "202609", zipURL, p, ZipLimits{}); err != nil {
+		t.Fatal(err)
+	}
+	if len(st.Events()) != 2 {
+		t.Fatalf("eventos = %d", len(st.Events()))
+	}
+	for _, e := range st.Events() {
+		if !e.Backfill {
+			t.Fatalf("un evento del ZIP debe ser del histórico: %+v", e)
+		}
+	}
+	if d.Backfill {
+		t.Fatal("RunZip no debe cambiar los Deps de quien lo llama (la ingesta en vivo comparte esos Deps)")
+	}
+	d2, _, st2 := deps(nil)
+	if _, st, err := ingestPage(context.Background(), d2, src, fetch.Result{URL: inicio, Body: pagina(entrada("9", "2026-09-30T10:00:00.000+02:00", "PUB")), FetchedAt: ahora}); err != nil || st.New != 1 {
+		t.Fatalf("página en vivo: %+v %v", st, err)
+	}
+	if ev := st2.Events(); len(ev) != 1 || ev[0].Backfill {
+		t.Fatalf("un evento en vivo no es del histórico: %+v", ev)
 	}
 }
 

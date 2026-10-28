@@ -24,6 +24,8 @@ type Deps struct {
 	State   State
 	Now     func() time.Time
 	Log     *slog.Logger
+	// Backfill marca lo que se ingiere como carga del histórico: sus eventos no van al flujo en vivo (los consumidores del Cerebro no deben recibir millones de «nuevas»).
+	Backfill bool
 }
 
 func (d Deps) now() time.Time {
@@ -131,12 +133,12 @@ func ingestPage(ctx context.Context, d Deps, source string, page fetch.Result) (
 			if err != nil {
 				return err
 			}
-			o = Observation{Source: source, SourceID: l.SourceID, Hash: h, RawSHA256: r.RawSHA256, Updated: l.Updated, Flags: FlagsOf(l)}
+			o = Observation{Source: source, SourceID: l.SourceID, Hash: h, RawSHA256: r.RawSHA256, Updated: l.Updated, Flags: FlagsOf(l), Backfill: d.Backfill}
 			o.RawKey = RawKey(source, idFor(l.NumericID, l.SourceID), l.Updated, r.RawSHA256)
 		default:
 			b := r.Baja
 			st.Removed++
-			o = Observation{Source: source, SourceID: b.Ref, RawSHA256: r.RawSHA256, Updated: b.When, Removed: true}
+			o = Observation{Source: source, SourceID: b.Ref, RawSHA256: r.RawSHA256, Updated: b.When, Removed: true, Backfill: d.Backfill}
 			o.RawKey = RawKey(source, idFor(lastSegment(b.Ref), b.Ref), b.When, r.RawSHA256)
 		}
 		o.ObservedAt = page.FetchedAt

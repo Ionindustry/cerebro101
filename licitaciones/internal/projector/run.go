@@ -16,8 +16,11 @@ import (
 	"github.com/ionindustry/cerebro101/licitaciones/internal/storage/s3"
 )
 
-// Durable es el nombre del consumidor del proyector de lectura en el flujo.
-const Durable = "proyector-lectura"
+// Durable es el nombre del consumidor del proyector de lectura en el flujo en vivo; DurableHistorico, el del flujo de la carga histórica (no lo consume el Cerebro).
+const (
+	Durable          = "proyector-lectura"
+	DurableHistorico = "proyector-lectura-hist"
+)
 
 // Run abre las conexiones y proyecta hasta que se cancela ctx. Usa la misma configuración de conexiones que el ingestor (ingestor.FromEnv);
 // sus campos de ingesta no se utilizan.
@@ -56,8 +59,8 @@ func Run(ctx context.Context, c ingestor.Config, log *slog.Logger) error {
 
 	st := pg.New(pool)
 	var applied, skipped atomic.Int64
-	log.Info("proyector listo", "consumidor", Durable)
-	return bus.Consume(ctx, nc, func(ctx context.Context, ev ingest.Event) error {
+	log.Info("proyector listo", "consumidores", []string{Durable, DurableHistorico})
+	handler := func(ctx context.Context, ev ingest.Event) error {
 		ok, err := Handle(ctx, raw, st, ev)
 		if err != nil {
 			return err
@@ -70,7 +73,21 @@ func Run(ctx context.Context, c ingestor.Config, log *slog.Logger) error {
 			skipped.Add(1)
 		}
 		return nil
-	}, bus.ConsumerOptions{Durable: Durable, Log: log})
+	}
+	// Dos flujos, dos consumidores: el de la sindicación en vivo y el de la carga histórica. Si uno cae, el otro sigue y se devuelve el primer error.
+	errs := make(chan error, 2)
+	ctx2, stop := context.WithCancel(ctx)
+	defer stop()
+	go func() { errs <- bus.Consume(ctx2, nc, handler, bus.ConsumerOptions{Durable: Durable, Log: log}) }()
+	go func() {
+		errs <- bus.Consume(ctx2, nc, handler, bus.ConsumerOptions{Durable: DurableHistorico, Stream: bus.StreamHistorico, Log: log})
+	}()
+	err = <-errs
+	stop()
+	if otro := <-errs; otro != nil && err == nil {
+		err = otro
+	}
+	return err
 }
 
 // ReproyectarTodo abre las conexiones (la base y el almacén; no hace falta el bus) y rehace el modelo de lectura de los expedientes ya proyectados releyendo sus originales

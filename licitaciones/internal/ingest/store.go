@@ -67,6 +67,7 @@ type Observation struct {
 	Flags      Flags
 	Removed    bool // baja (at:deleted-entry): no lleva registro normalizado
 	ObservedAt time.Time
+	Backfill   bool // viene de la carga del histórico (ZIP), no de la sindicación en vivo
 }
 
 // Event es un cambio que debe llegar a los consumidores (se publica desde el outbox).
@@ -78,6 +79,7 @@ type Event struct {
 	Version   int
 	RawSHA256 string
 	RawKey    string
+	Backfill  bool // evento de la carga del histórico: va a su propio flujo (LIC_HISTORICO), que solo consumen los proyectores y no el Cerebro
 }
 
 // Outcome es la decisión sobre una observación. Event solo va informado cuando hay un cambio.

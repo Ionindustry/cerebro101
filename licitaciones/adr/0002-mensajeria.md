@@ -48,7 +48,7 @@ justo lo que falló en octubre.
 | Stream | Sujetos | Retención | Límites | Uso |
 |---|---|---|---|---|
 | `LICITACIONES` | `lic.v1.>` | `limits`, `discard: old` | `MaxAge` **30 días**, `MaxBytes` 8 GiB, `MaxMsgSize` 64 KiB, `Duplicates` **2 h**, `DenyDelete`, `DenyPurge` | Eventos de dominio **en vivo** y `ingesta.ejecutada` |
-| `LIC_HISTORICO` | `lichist.v1.>` | `limits` | `MaxAge` **7 días**, `MaxBytes` 12 GiB, `MaxMsgSize` 64 KiB, `Duplicates` 2 h | Carga histórica y reprocesos (nuevo parser). **Solo los proyectores** lo consumen: el Cerebro nunca recibe 5 M «nuevas» |
+| `LIC_HISTORICO` | `lichist.v1.>` | `limits`, `discard: new` | `MaxAge` **7 días**, `MaxBytes` **2 GiB** (hecho así: JetStream reserva ese espacio al crear el flujo y el PC de desarrollo no tiene 12 GiB de sobra; el proyector lo vacía mientras carga), `MaxMsgSize` 64 KiB, `Duplicates` 2 h | Carga histórica y reprocesos (nuevo parser). **Solo los proyectores** lo consumen: el Cerebro nunca recibe 5 M «nuevas». Con `discard: new`, si se llena el relay espera (el evento sigue en el outbox) en vez de perder los más antiguos sin leer. Hecho: `Event.Backfill` → `outbox.historico` → asunto `lichist.v1.<tipo>.<fuente>` |
 | `LIC_DLQ` | `lic.dlq.>` | `limits` | `MaxAge` **30 días**, `MaxBytes` 1 GiB | Mensajes que agotaron reintentos o se descartaron por inválidos |
 
 Ventana de duplicados de 2 h (no 24 h): cubre los reintentos del *relay* del outbox (ADR 0003) sin tener millones de ids en
