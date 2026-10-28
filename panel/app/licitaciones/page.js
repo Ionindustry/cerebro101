@@ -116,6 +116,7 @@ export default function Licitaciones() {
         <input type="text" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Buscar por texto: videovigilancia, software, mantenimiento…" aria-label="Buscar licitaciones" maxLength={200} />
         <button className="boton si" type="submit">Buscar</button>
       </form>
+      <p className="lic-fila"><Link href="/licitaciones/competencia" className="boton no">Competencia: quién gana en cada mercado</Link></p>
       <ResumenDelDia />
       <AvisosDeAlertas />
       <EmbudoPropio />

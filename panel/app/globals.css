@@ -355,3 +355,13 @@ a.kp-fila:hover { background: var(--fondo); }
 /* Informe de Viabilidad */
 .lic-informe { margin: 4px 0; }
 .lic-informe-texto { white-space: pre-wrap; word-break: break-word; font-family: inherit; font-size: 14px; margin: 6px 0 0; }
+.lic-comp { display: grid; gap: 10px; }
+.lic-comp h3 { margin: 0; font-size: 17px; overflow-wrap: anywhere; }
+.lic-puesto { display: inline-grid; place-items: center; min-width: 30px; height: 30px; border-radius: 99px; background: var(--fondo); font-weight: 700; font-size: 14px; }
+.lic-cuota { height: 8px; border-radius: 99px; background: var(--fondo); overflow: hidden; }
+.lic-cuota span { display: block; height: 100%; background: var(--tinta); border-radius: 99px; }
+.lic-comp summary { cursor: pointer; font-size: 14px; }
+.lic-etiqueta.ok { background: #e8f3ec; color: #1f5a37; }
+.lic-etiqueta.caido { background: #fbe8e6; color: #8c2118; }
+.lic-comp header { justify-content: flex-start; }
+.lic-comp header .lic-etiqueta { margin-left: auto; }
