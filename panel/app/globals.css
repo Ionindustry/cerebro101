@@ -370,3 +370,10 @@ a.kp-fila:hover { background: var(--fondo); }
 .lic-mes { margin: 18px 0 8px; font-size: 18px; }
 .lic-mes::first-letter { text-transform: uppercase; }
 .lic-check { display: inline-flex; gap: 8px; align-items: center; font-size: 14px; }
+.lic-rol { display: grid; gap: 10px; }
+.lic-rol h4 { margin: 8px 0 4px; font-size: 14px; color: var(--secundario); text-transform: uppercase; letter-spacing: .05em; }
+.lic-barras { display: flex; align-items: flex-end; gap: 6px; height: 120px; padding-top: 4px; overflow-x: auto; }
+.lic-barra { display: flex; flex-direction: column; justify-content: flex-end; align-items: center; gap: 4px; flex: 1 0 34px; height: 100%; }
+.lic-barra span { display: block; width: 100%; background: var(--tinta); border-radius: 4px 4px 0 0; min-height: 0; }
+.lic-barra small { font-size: 11px; color: var(--secundario); white-space: nowrap; }
+ul.lic-fila, ol.lic-fila { list-style: none; margin: 0; padding: 0; }

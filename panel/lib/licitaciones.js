@@ -16,7 +16,8 @@ export function rutaPermitida(segmentos, metodo) {
   const [a, b, ...resto] = segmentos;
   if (resto.length > 0) return false;
   if (a === "tenders") return b === undefined || UUID.test(b);
-  if (a === "awards" || a === "competitors" || a === "expiring-contracts") return b === undefined;                   // solo la lista, con sus filtros en la dirección
+  if (a === "awards" || a === "competitors" || a === "expiring-contracts") return b === undefined;
+  if (a === "organizations") return UUID.test(b || "");                                // la ficha de una organización, siempre por su UUID                   // solo la lista, con sus filtros en la dirección
   return a === "ops" && b === "status";
 }
 
@@ -510,3 +511,51 @@ export function vencenDeMercado(filtros) {
   const q = p.toString();
   return q ? `/licitaciones/vencen?${q}` : "/licitaciones/vencen";
 }
+
+
+// ---- Ficha de organización (GET /organizations/{id} del motor) ----
+
+export const FILTROS_ORG_VACIOS = { desde: "", hasta: "", cpv: "" };
+export const ROLES_ORGANIZACION = { comprador: "Comprador", proveedor: "Adjudicataria" };
+
+/** Dirección de la ficha de una organización a partir de su UUID (el de las listas); sin UUID válido no hay enlace. */
+export const fichaOrgHref = (id) => (UUID.test(id || "") ? `/licitaciones/organizaciones/${id}` : null);
+
+/** Filtros de la ficha → parámetros de GET /organizations/{id}. */
+export function orgAQuery(f) {
+  const p = new URLSearchParams();
+  const desde = fechaValida(f.desde), hasta = fechaValida(f.hasta);
+  if (desde) p.set("desde", desde);
+  if (hasta && (!desde || desde <= hasta)) p.set("hasta", hasta);
+  for (const c of limpiarCpv(f.cpv)) p.append("cpv", c);
+  return p;
+}
+
+export function queryAOrg(sp) {
+  return { desde: sp.get("desde") || "", hasta: sp.get("hasta") || "", cpv: sp.getAll("cpv").join(" ") };
+}
+
+/** «NIF B11111111 · DIR3 L01170000». */
+export const identificadoresTexto = (ids) => (ids || []).map((i) => `${i.esquema} ${i.valor}`).join(" · ");
+
+/** «2026-T3» → «3.er trimestre de 2026» (otro texto, tal cual). */
+export function trimestreTexto(t) {
+  const m = /^(\d{4})-T([1-4])$/.exec(t || "");
+  return m ? `T${m[2]} ${m[1]}` : String(t || "—");
+}
+
+/** Cuánto se concentra un comprador en un solo adjudicatario (0–1), con la lectura que se le puede dar sin pasarse. */
+export function repeticionTexto(r) {
+  if (typeof r !== "number" || !Number.isFinite(r) || r < 0 || r > 1) return "";
+  const p = `${Math.round(r * 100)} %`;
+  return r >= 0.5 ? `${p} de sus contratos van al mismo adjudicatario: mercado muy concentrado` : `${p} de sus contratos van al adjudicatario más frecuente`;
+}
+
+/** Altura (0–100) de la barra de un trimestre respecto al mayor de la serie; un trimestre con contratos siempre se ve. */
+export function alturasTrimestres(ts) {
+  const max = Math.max(0, ...(ts || []).map((t) => t.contratos || 0));
+  return (ts || []).map((t) => (max > 0 && t.contratos > 0 ? Math.max(6, Math.round((t.contratos / max) * 100)) : 0));
+}
+
+/** Enlace a «Competencia» con un CPV (grupo de 5 cifras) de la ficha. */
+export const competenciaDeCpv = (cpv) => (/^\d{2,8}$/.test(cpv || "") ? `/licitaciones/competencia?cpv=${cpv}` : "/licitaciones/competencia");

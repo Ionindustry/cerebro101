@@ -6,6 +6,9 @@ import {
 } from "../lib/licitaciones.js";
 import { viabilidadEtiqueta, admiteResumen, avisosDeAlertaTexto, canalEtiqueta, CANALES_ALERTA, ambitoTexto, eventoEtiqueta, filtroDeAlerta, filtroTexto, mensajeAlertas, sinLeerTexto } from "../lib/licitaciones.js";
 import {
+  alturasTrimestres, competenciaDeCpv, fichaOrgHref, identificadoresTexto, orgAQuery, queryAOrg, repeticionTexto, trimestreTexto,
+} from "../lib/licitaciones.js";
+import {
   VENCEN_VACIO, agruparPorMes, confianzaFinTexto, prorrogasTexto, queryAVencen, vencenAQuery, vencenDeMercado, vencenProblema, venceEnTexto,
 } from "../lib/licitaciones.js";
 import {
@@ -278,7 +281,7 @@ test("el informe de Viabilidad: una etiqueta clara y nunca una decisión", () =>
 test("la pasarela deja pasar la lista de adjudicaciones y de competidores, y nada más de ellas", () => {
   assert.ok(rutaPermitida(["awards"], "GET"));
   assert.ok(rutaPermitida(["competitors"], "GET"));
-  for (const r of [["awards", ID], ["competitors", "x"], ["awards", "export"], ["organizations", ID], ["alerts"]]) assert.ok(!rutaPermitida(r, "GET"), JSON.stringify(r));
+  for (const r of [["awards", ID], ["competitors", "x"], ["awards", "export"], ["organizations"], ["alerts"]]) assert.ok(!rutaPermitida(r, "GET"), JSON.stringify(r));
   assert.ok(!rutaPermitida(["awards"], "POST"));
 });
 
@@ -385,4 +388,37 @@ test("contratos que vencen: qué se dice de las prórrogas sin inventar", () => 
 test("contratos que vencen: enlace desde competencia con el mismo mercado", () => {
   assert.equal(vencenDeMercado({ cpv: "72 35125", nuts: "es512", comprador: "" }), "/licitaciones/vencen?cpv=72&cpv=35125&nuts=ES512");
   assert.equal(vencenDeMercado({ cpv: "", nuts: "", comprador: "" }), "/licitaciones/vencen");
+});
+
+
+test("la pasarela deja pasar la ficha de una organización solo por UUID", () => {
+  assert.ok(rutaPermitida(["organizations", ID], "GET"));
+  assert.ok(rutaPermitida(["organizations", ID.toUpperCase()], "GET"));
+  for (const r of [["organizations"], ["organizations", "nif:B11111111"], ["organizations", "Uno Sistemas SL"], ["organizations", ID, "x"], ["organizations", ""], ["organizations", "../ops/status"]]) {
+    assert.ok(!rutaPermitida(r, "GET"), JSON.stringify(r));
+  }
+  assert.ok(!rutaPermitida(["organizations", ID], "POST"));
+});
+
+test("ficha de organización: enlaces, filtros y textos", () => {
+  assert.equal(fichaOrgHref(ID), `/licitaciones/organizaciones/${ID}`);
+  for (const malo of [null, undefined, "", "nif:B11111111", "no-es-uuid", `${ID}/x`]) assert.equal(fichaOrgHref(malo), null, String(malo));
+  const q = orgAQuery({ desde: "2025-01-01", hasta: "2026-12-31", cpv: "72 mal 35125" });
+  assert.deepEqual([q.get("desde"), q.get("hasta"), q.getAll("cpv")], ["2025-01-01", "2026-12-31", ["72", "35125"]]);
+  assert.deepEqual(queryAOrg(q), { desde: "2025-01-01", hasta: "2026-12-31", cpv: "72 35125" });
+  assert.equal(orgAQuery({ desde: "2026-02-30", hasta: "ayer", cpv: "" }).toString(), "");
+  assert.equal(orgAQuery({ desde: "2026-05-01", hasta: "2026-01-01", cpv: "" }).has("hasta"), false);
+  assert.equal(identificadoresTexto([{ esquema: "NIF", valor: "Q0818001J" }, { esquema: "DIR3", valor: "L01082000" }]), "NIF Q0818001J · DIR3 L01082000");
+  assert.equal(identificadoresTexto(null), "");
+  assert.equal(trimestreTexto("2026-T3"), "T3 2026");
+  assert.equal(trimestreTexto("raro"), "raro");
+  assert.equal(trimestreTexto(null), "—");
+  assert.match(repeticionTexto(0.6), /^60 % .*muy concentrado/);
+  assert.match(repeticionTexto(0.25), /^25 % .*más frecuente/);
+  for (const malo of [null, undefined, -1, 1.5, NaN, "0.5"]) assert.equal(repeticionTexto(malo), "", String(malo));
+  assert.deepEqual(alturasTrimestres([{ contratos: 10 }, { contratos: 5 }, { contratos: 1 }, { contratos: 0 }]), [100, 50, 10, 0]);
+  assert.deepEqual(alturasTrimestres([{ contratos: 1000 }, { contratos: 1 }]), [100, 6]);          // un trimestre con contratos siempre se ve
+  assert.deepEqual(alturasTrimestres(null), []);
+  assert.equal(competenciaDeCpv("35125"), "/licitaciones/competencia?cpv=35125");
+  assert.equal(competenciaDeCpv("<script>"), "/licitaciones/competencia");
 });

@@ -3,7 +3,7 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useMemo, useRef, useState } from "react";
 import {
-  VENCEN_VACIO, agruparPorMes, confianzaFinTexto, fechaCivilTexto, importeTexto, prorrogasTexto, queryAVencen, totalTexto, vencenAQuery, vencenProblema, venceEnTexto,
+  VENCEN_VACIO, agruparPorMes, confianzaFinTexto, fechaCivilTexto, fichaOrgHref, importeTexto, prorrogasTexto, queryAVencen, totalTexto, vencenAQuery, vencenProblema, venceEnTexto,
 } from "../../../lib/licitaciones";
 import { Fallo, pedir } from "../cliente";
 
@@ -14,10 +14,13 @@ function Contrato({ x, hoy }) {
   return (
     <li className="tarjeta lic-venc">
       <Link href={`/licitaciones/expedientes/${x.licitacion_id}`} className="titulo">{x.titulo || x.expediente || "(sin título)"}{x.lote && x.lote !== "1" ? ` · lote ${x.lote}` : ""}</Link>
-      <span className="meta">{[x.comprador?.nombre, x.expediente].filter(Boolean).join(" · ")}</span>
+      <span className="meta">
+        {fichaOrgHref(x.comprador?.id) ? <Link href={fichaOrgHref(x.comprador.id)}>{x.comprador.nombre}</Link> : x.comprador?.nombre}
+        {x.expediente ? `${x.comprador?.nombre ? " · " : ""}${x.expediente}` : ""}
+      </span>
       <dl className="lic-ficha">
         <div><dt>Termina</dt><dd>{fechaCivilTexto(x.fecha_fin)}{cuando ? ` (${cuando})` : ""}<br /><span className="meta">{confianzaFinTexto(x.confianza)}</span></dd></div>
-        <div><dt>Lo tiene ahora</dt><dd>{x.adjudicatario?.nombre || "—"}{x.adjudicatario?.nif ? <span className="meta"> · {x.adjudicatario.nif}</span> : null}</dd></div>
+        <div><dt>Lo tiene ahora</dt><dd>{fichaOrgHref(x.adjudicatario?.id) ? <Link href={fichaOrgHref(x.adjudicatario.id)}>{x.adjudicatario.nombre || "—"}</Link> : (x.adjudicatario?.nombre || "—")}{x.adjudicatario?.nif ? <span className="meta"> · {x.adjudicatario.nif}</span> : null}</dd></div>
         <div><dt>Importe adjudicado</dt><dd>{importeTexto(x.importe_adjudicado)}</dd></div>
         <div><dt>Prórrogas</dt><dd>{prorrogasTexto(x)}</dd></div>
       </dl>
