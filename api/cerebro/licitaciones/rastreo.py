@@ -86,6 +86,27 @@ def configuracion(cfg: dict | None = None) -> dict:
     return {"max_por_dia": max(0, int(c.get("max_por_dia", 10))), "dias_minimos": max(0, int(c.get("dias_minimos_hasta_plazo", 3)))}
 
 
+class SinInforme(RuntimeError):
+    """Viabilidad no ha devuelto un informe utilizable."""
+
+
+async def valorar(lid: int, invocar, ahora: datetime | None = None, reemplazar: bool = False) -> dict:
+    """Pide a Viabilidad el informe de UNA licitación (la pide una persona con «Pedir informe de viabilidad») y lo guarda. Es el mismo trabajo que el rastreo diario pero para la
+    licitación elegida, sin los filtros del rastreo (una persona sabe por qué la pide) y, con `reemplazar`, sustituyendo el informe anterior. Sigue siendo consultivo: no cambia el
+    estado ni la decisión. Si el modelo no está disponible relanza el fallo (la tarea decide si reintenta); sin informe utilizable, SinInforme."""
+    fila = await embudo.obtener(lid)
+    if not fila or not fila.get("motor_id"):
+        raise embudo.ErrorEmbudo("Esa licitación no existe o no está vinculada a un expediente del motor")
+    ahora = ahora or datetime.now(timezone.utc)
+    estado = await invocar(AGENTE, construir_peticion(fila))
+    informe = interpretar((estado or {}).get("respuesta"), ahora)
+    if informe is None or (estado or {}).get("error"):
+        raise SinInforme(f"Viabilidad no ha dado informe de la licitación {lid}")
+    await embudo.guardar_viabilidad(lid, informe, reemplazar=reemplazar)
+    log.info("viabilidad pedida: licitación %s (%s) → %s", lid, _una_linea(fila["titulo"], 60), informe["recomendacion"])
+    return informe
+
+
 async def revisar(invocar, cfg: dict | None = None, ahora: datetime | None = None) -> dict:
     """Una pasada del rastreo. `invocar(agente_id, peticion)` ejecuta al agente y devuelve su estado (con «respuesta»). Devuelve las cifras de lo hecho.
     Si el modelo no está disponible, relanza el fallo para que la tarea se reintente: lo guardado hasta entonces se conserva y lo pendiente se retoma."""

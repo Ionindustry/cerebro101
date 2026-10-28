@@ -105,6 +105,35 @@ class TestRutasDelEmbudo(unittest.TestCase):
         self.assertEqual(c.post("/licitaciones/embudo/7/estado", json={}).status_code, 422)          # falta el estado
         self.assertEqual(c.post("/licitaciones/embudo/no-es-numero/estado", json={"estado": "presentada"}).status_code, 422)
 
+    def test_pedir_viabilidad_encola_y_traduce_los_rechazos(self):
+        e = main.embudo_licitaciones
+        peticion = {"estado": "en_curso", "por": "u", "en": "2026-10-28T10:00:00+00:00"}
+        c = como(("usuario", "responsable"), ("finanzas", "comercial"))
+        with mock.patch.object(e, "reservar_peticion_viabilidad", mock.AsyncMock()) as reservar:
+            self.assertEqual(c.post("/licitaciones/embudo/7/viabilidad").status_code, 403)
+            reservar.assert_not_called()
+        c = como(("direccion",))
+        with mock.patch.object(e, "reservar_peticion_viabilidad", mock.AsyncMock(return_value=peticion)) as reservar, mock.patch("cerebro.tareas.celery_app.app.send_task") as encolar:
+            r = c.post("/licitaciones/embudo/7/viabilidad", json={"reemplazar": True})
+            self.assertEqual((r.status_code, r.json()["viabilidad_peticion"]), (202, peticion))
+            self.assertEqual(reservar.await_args.args[0], 7)
+            self.assertTrue(reservar.await_args.args[2])
+            encolar.assert_called_once_with("cerebro.tareas.celery_app.pedir_viabilidad", args=[7], queue="peticiones")
+            self.assertEqual(c.post("/licitaciones/embudo/7/viabilidad").status_code, 202)         # sin cuerpo: no reemplaza
+            self.assertFalse(reservar.await_args.args[2])
+        for fallo, codigo in ((e.NoExiste("x"), 404), (e.Conflicto("x"), 409), (e.ErrorEmbudo("x"), 422)):
+            with mock.patch.object(e, "reservar_peticion_viabilidad", mock.AsyncMock(side_effect=fallo)), mock.patch("cerebro.tareas.celery_app.app.send_task") as encolar:
+                self.assertEqual(c.post("/licitaciones/embudo/7/viabilidad").status_code, codigo)
+                encolar.assert_not_called()
+
+    def test_si_no_se_puede_encolar_se_deshace_la_reserva(self):
+        e = main.embudo_licitaciones
+        c = como(("direccion",))
+        with mock.patch.object(e, "reservar_peticion_viabilidad", mock.AsyncMock(return_value={})), mock.patch.object(e, "cerrar_peticion_viabilidad", mock.AsyncMock()) as cerrar, \
+                mock.patch("cerebro.tareas.celery_app.app.send_task", side_effect=OSError("sin cola")):
+            self.assertEqual(c.post("/licitaciones/embudo/7/viabilidad").status_code, 503)
+            cerrar.assert_awaited_once()
+
     def test_estudiar_sin_motor_o_con_un_expediente_que_no_existe(self):
         e = main.embudo_licitaciones
         c = como(("direccion",))
@@ -138,7 +167,7 @@ class TestRutasDeAlertas(unittest.TestCase):
                 mock.patch.object(a, "cambiar", mock.AsyncMock(return_value=self.ALERTA)) as cambiar, mock.patch.object(a, "borrar", mock.AsyncMock()) as borrar:
             c = como(("usuario",), ("licitaciones",))
             lista = c.get("/licitaciones/alertas").json()
-            self.assertEqual((lista["items"], lista["canales"], "licitacion.nueva" in lista["eventos"]), ([self.ALERTA], ["panel", "resumen_diario"], True))
+            self.assertEqual((lista["items"], lista["canales"], "licitacion.nueva" in lista["eventos"]), ([self.ALERTA], ["panel", "resumen_diario", "correo"], True))
             self.assertEqual(c.post("/licitaciones/alertas", json=self.ENTRADA).json(), self.ALERTA)
             self.assertEqual(crear.await_args.args[1]["filtro"], {"cpv": ["32"]})
             self.assertEqual(c.post("/licitaciones/alertas/3", json={"activa": False}).status_code, 200)

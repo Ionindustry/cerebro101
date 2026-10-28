@@ -258,7 +258,7 @@ test("las alertas en el resumen: solo las de departamento, y las cifras lo cuent
   assert.equal(admiteResumen({ ambito: "departamento" }), true);
   assert.equal(admiteResumen({ ambito: "personal" }), false);
   assert.equal(admiteResumen(null), false);
-  assert.deepEqual(CANALES_ALERTA.map(([k]) => k), ["panel", "resumen_diario"]);
+  assert.deepEqual(CANALES_ALERTA.map(([k]) => k), ["panel", "resumen_diario", "correo"]);
   assert.equal(canalEtiqueta("resumen_diario"), "En el panel y en el resumen de las 16:00");
   assert.equal(canalEtiqueta("panel"), "Solo en el panel");
   assert.equal(totalesTexto({ oportunidades: 2, alertas: 1 }), "2 oportunidades · 1 aviso de alertas");
@@ -438,4 +438,57 @@ test("un 404 de «la ruta no existe» (motor desactualizado) no se confunde con 
   assert.equal(mensajeDeError(404), "No se ha encontrado.");
   assert.match(mensajeDeError(401, "x"), /sesión/);
   assert.match(mensajeDeError(503, "El motor de licitaciones no está disponible"), /no está disponible/);
+});
+
+// ---- Petición del informe de viabilidad (botón del embudo) ----
+import { hayPeticionEnCurso, peticionViabilidad, puedePedirViabilidad, textoPedirViabilidad } from "../lib/licitaciones.js";
+
+test("peticionViabilidad: en curso si es reciente, error con su texto, y una vieja se da por perdida", () => {
+  const ahora = Date.parse("2026-10-28T10:30:00Z");
+  assert.equal(peticionViabilidad({}, ahora), null);
+  assert.equal(peticionViabilidad({ viabilidad_peticion: null }, ahora), null);
+  assert.deepEqual(peticionViabilidad({ viabilidad_peticion: { estado: "en_curso", en: "2026-10-28T10:20:00Z" } }, ahora), { estado: "en_curso" });
+  assert.equal(peticionViabilidad({ viabilidad_peticion: { estado: "en_curso", en: "2026-10-28T10:00:00Z" } }, ahora), null);   // 30 min: perdida
+  assert.equal(peticionViabilidad({ viabilidad_peticion: { estado: "en_curso", en: "basura" } }, ahora), null);
+  assert.deepEqual(peticionViabilidad({ viabilidad_peticion: { estado: "error", error: "El modelo no está disponible" } }, ahora), { estado: "error", error: "El modelo no está disponible" });
+  assert.equal(peticionViabilidad({ viabilidad_peticion: { estado: "error" } }, ahora).error, "No se ha podido generar el informe.");
+});
+
+test("puedePedirViabilidad: solo viva, vinculada al motor y sin otra petición en curso", () => {
+  const ahora = Date.parse("2026-10-28T10:30:00Z");
+  const base = { motor_id: "u", estado: "detectada" };
+  assert.equal(puedePedirViabilidad(base, ahora), true);
+  assert.equal(puedePedirViabilidad({ ...base, estado: "en_estudio" }, ahora), true);
+  assert.equal(puedePedirViabilidad({ ...base, motor_id: null }, ahora), false);
+  for (const estado of ["ganada", "perdida", "descartada"]) assert.equal(puedePedirViabilidad({ ...base, estado }, ahora), false, estado);
+  assert.equal(puedePedirViabilidad({ ...base, viabilidad_peticion: { estado: "en_curso", en: "2026-10-28T10:25:00Z" } }, ahora), false);
+  assert.equal(puedePedirViabilidad({ ...base, viabilidad_peticion: { estado: "error", error: "x" } }, ahora), true);        // tras un error se puede reintentar
+});
+
+test("textoPedirViabilidad y hayPeticionEnCurso", () => {
+  assert.equal(textoPedirViabilidad({}), "Pedir informe de viabilidad");
+  assert.equal(textoPedirViabilidad({ viabilidad: { recomendacion: "ir" } }), "Volver a pedir el informe de viabilidad");
+  const ahora = Date.parse("2026-10-28T10:30:00Z");
+  assert.equal(hayPeticionEnCurso([{}, { viabilidad_peticion: { estado: "en_curso", en: "2026-10-28T10:29:00Z" } }], ahora), true);
+  assert.equal(hayPeticionEnCurso([{}, { viabilidad_peticion: { estado: "error", error: "x" } }], ahora), false);
+  assert.equal(hayPeticionEnCurso(undefined, ahora), false);
+});
+
+// ---- Canal «correo» de las alertas ----
+import { canalDeAlertaTexto, canalesDe, correoValido } from "../lib/licitaciones.js";
+
+test("canalesDe: el resumen solo para departamentos; el correo para todos", () => {
+  assert.deepEqual(canalesDe("personal").map(([k]) => k), ["panel", "correo"]);
+  assert.deepEqual(canalesDe("departamento").map(([k]) => k), ["panel", "resumen_diario", "correo"]);
+});
+
+test("correoValido: solo direcciones @101.cat", () => {
+  for (const ok of ["albert@101.cat", " Marta.Puig+x@101.CAT "]) assert.equal(correoValido(ok), true, ok);
+  for (const mal of ["", null, "x@gmail.com", "x@101.cat.evil.com", "x@sub.101.cat", "x@evil101.cat", "a b@101.cat", "a@101.cat,b@gmail.com", "x@101.cat\nBcc: y@z.com"]) assert.equal(correoValido(mal), false, String(mal));
+});
+
+test("canalDeAlertaTexto: dónde avisa una alerta", () => {
+  assert.equal(canalDeAlertaTexto({ canal: "correo", correo_destino: "a@101.cat" }), "Por correo a a@101.cat");
+  assert.equal(canalDeAlertaTexto({ canal: "resumen_diario" }), "En el panel y en el resumen de las 16:00");
+  assert.equal(canalDeAlertaTexto({ canal: "panel" }), "");
 });

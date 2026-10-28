@@ -62,6 +62,10 @@ class NoExiste(LookupError):
     pass
 
 
+class Conflicto(ErrorEmbudo):
+    """La petición choca con lo que ya hay (por ejemplo, ya hay un informe en curso); el mensaje es para quien la hace."""
+
+
 def validar_cambio(actual: str, nuevo: str, motivo: str | None) -> str | None:
     """Comprueba el paso de `actual` a `nuevo` y devuelve el motivo que hay que guardar (solo las perdidas lo llevan)."""
     if nuevo not in ESTADOS:
@@ -159,7 +163,7 @@ def datos_de_ficha(ficha: dict, cfg: dict, ahora: datetime) -> dict:
 # ---- Base de datos ----
 
 COLUMNAS = ("id, motor_id, motor_version, expediente, organismo, titulo, cpv, importe, fecha_limite, enlace, encaje, estado, estado_motor, motivo_perdida, "
-            "decision, viabilidad, creado, actualizado, decidida_en, presentada_en, resuelta_en")
+            "decision, viabilidad, viabilidad_peticion, creado, actualizado, decidida_en, presentada_en, resuelta_en")
 
 
 def _fila(f: dict) -> dict:
@@ -329,8 +333,61 @@ async def contar_pendientes_de_viabilidad(dias_minimos: int = 3, ahora: datetime
         return (await cur.fetchone())["n"]
 
 
-async def guardar_viabilidad(lid: int, informe: dict) -> bool:
-    """Guarda el informe de viabilidad de una licitación, solo si aún no tenía (nunca pisa uno anterior). Devuelve True si lo guarda."""
+async def guardar_viabilidad(lid: int, informe: dict, reemplazar: bool = False) -> bool:
+    """Guarda el informe de viabilidad de una licitación. Por defecto solo si aún no tenía (el rastreo diario nunca pisa uno anterior); con `reemplazar` (una persona lo ha
+    vuelto a pedir) lo sustituye. Al guardarse se borra la petición en curso. Devuelve True si lo guarda."""
+    donde = "" if reemplazar else " AND viabilidad IS NULL"
     async with await psycopg.AsyncConnection.connect(ajustes.database_url, row_factory=dict_row) as conn:
-        cur = await conn.execute("UPDATE licitaciones SET viabilidad = %s WHERE id = %s AND viabilidad IS NULL RETURNING id", [Jsonb(informe), lid])
+        cur = await conn.execute(f"UPDATE licitaciones SET viabilidad = %s, viabilidad_peticion = NULL WHERE id = %s{donde} RETURNING id", [Jsonb(informe), lid])
         return await cur.fetchone() is not None
+
+
+ESTADOS_RESUELTOS = ("ganada", "perdida", "descartada")
+VENTANA_PETICION = timedelta(minutes=20)      # una petición «en curso» más antigua se da por perdida (el trabajador se cayó) y se puede volver a pedir
+
+
+async def obtener(lid: int) -> dict | None:
+    async with await psycopg.AsyncConnection.connect(ajustes.database_url, row_factory=dict_row) as conn:
+        cur = await conn.execute(f"SELECT {COLUMNAS} FROM licitaciones WHERE id = %s", [lid])
+        f = await cur.fetchone()
+        return _fila(f) if f else None
+
+
+async def reservar_peticion_viabilidad(lid: int, usuario: str, reemplazar: bool = False, ahora: datetime | None = None) -> dict:
+    """Anota que una persona pide el informe de viabilidad de una licitación, antes de encolar el trabajo. Rechaza lo que no tiene sentido: una licitación que no existe
+    (NoExiste), ya resuelta o sin expediente en el motor (ErrorEmbudo), o que ya tiene informe (sin `reemplazar`) o ya tiene uno en curso (Conflicto)."""
+    ahora = ahora or datetime.now(timezone.utc)
+    async with await psycopg.AsyncConnection.connect(ajustes.database_url, row_factory=dict_row) as conn:
+        async with conn.transaction():
+            cur = await conn.execute("SELECT estado, motor_id, viabilidad, viabilidad_peticion FROM licitaciones WHERE id = %s FOR UPDATE", [lid])
+            f = await cur.fetchone()
+            if not f:
+                raise NoExiste("No existe esa licitación en el embudo")
+            if f["estado"] in ESTADOS_RESUELTOS:
+                raise ErrorEmbudo("Esa licitación ya está resuelta: no hace falta valorar su viabilidad")
+            if not f["motor_id"]:
+                raise ErrorEmbudo("Esa licitación no está vinculada a un expediente del motor de licitaciones")
+            p = f["viabilidad_peticion"] or {}
+            if p.get("estado") == "en_curso" and _hace_menos(p.get("en"), VENTANA_PETICION, ahora):
+                raise Conflicto("Ya se ha pedido el informe: está en curso")
+            if f["viabilidad"] and not reemplazar:
+                raise Conflicto("Esa licitación ya tiene informe de viabilidad; para pedir otro hay que confirmar que se sustituye")
+            peticion = {"estado": "en_curso", "por": usuario, "en": ahora.isoformat()}
+            await conn.execute("UPDATE licitaciones SET viabilidad_peticion = %s WHERE id = %s", [Jsonb(peticion), lid])
+            return peticion
+
+
+def _hace_menos(cuando, ventana: timedelta, ahora: datetime) -> bool:
+    try:
+        t = datetime.fromisoformat(str(cuando))
+    except ValueError:
+        return False
+    return t.tzinfo is not None and ahora - t < ventana
+
+
+async def cerrar_peticion_viabilidad(lid: int, error: str | None = None, ahora: datetime | None = None) -> None:
+    """Termina la petición sin informe: con `error` queda anotado para que el panel lo diga; sin él, se borra."""
+    ahora = ahora or datetime.now(timezone.utc)
+    nuevo = Jsonb({"estado": "error", "error": str(error)[:300], "en": ahora.isoformat()}) if error else None
+    async with await psycopg.AsyncConnection.connect(ajustes.database_url, row_factory=dict_row) as conn:
+        await conn.execute("UPDATE licitaciones SET viabilidad_peticion = %s WHERE id = %s", [nuevo, lid])

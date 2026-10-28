@@ -1,7 +1,7 @@
 "use client";
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
-import { accionEmbudo, avisoEstadoMotor, viabilidadEtiqueta, diasDePeriodo, encajeClase, ESTADOS_EMBUDO, etiquetaEmbudo, fechaTexto, horasTexto, importeTexto, mensajeEmbudo, PERIODOS_EMBUDO, tasaExitoTexto } from "../../../lib/licitaciones";
+import { accionEmbudo, avisoEstadoMotor, hayPeticionEnCurso, peticionViabilidad, puedePedirViabilidad, textoPedirViabilidad, viabilidadEtiqueta, diasDePeriodo, encajeClase, ESTADOS_EMBUDO, etiquetaEmbudo, fechaTexto, horasTexto, importeTexto, mensajeEmbudo, PERIODOS_EMBUDO, tasaExitoTexto } from "../../../lib/licitaciones";
 import { pedirCerebro } from "../cliente";
 
 const enviar = (cuerpo) => ({ method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(cuerpo) });
@@ -26,7 +26,7 @@ function Resumen({ r }) {
   );
 }
 
-function Fila({ x, transiciones, motivos, onCambio }) {
+function Fila({ x, transiciones, motivos, onCambio, onViabilidad }) {
   const [motivo, setMotivo] = useState("");
   const [pidiendoMotivo, setPidiendoMotivo] = useState(false);
   const [trabajando, setTrabajando] = useState(false);
@@ -37,6 +37,13 @@ function Fila({ x, transiciones, motivos, onCambio }) {
     finally { setTrabajando(false); }
   };
   const destinos = transiciones[x.estado] || [];
+  const peticion = peticionViabilidad(x);
+  const pedir = async () => {
+    if (x.viabilidad && !window.confirm("Ya hay un informe de viabilidad. ¿Pedir otro y sustituir el anterior?")) return;
+    setTrabajando(true);
+    try { await onViabilidad(x.id, Boolean(x.viabilidad)); }
+    finally { setTrabajando(false); }
+  };
   return (
     <li className="tarjeta lic-item">
       <span className="lic-fila">
@@ -57,6 +64,13 @@ function Fila({ x, transiciones, motivos, onCambio }) {
           <p className="meta">Lo ha escrito un agente de IA el {fechaTexto(x.viabilidad.generado)} como ayuda: puede equivocarse y no decide nada. Ir o no ir lo decide una persona.</p>
           <pre className="lic-informe-texto">{x.viabilidad.informe}</pre>
         </details>
+      )}
+      {(puedePedirViabilidad(x) || peticion) && (
+        <span className="lic-fila">
+          {peticion?.estado === "en_curso" && <span className="meta" role="status" aria-busy="true">Viabilidad está preparando el informe… puede tardar unos minutos.</span>}
+          {peticion?.estado === "error" && <span className="lic-etiqueta aviso" role="alert">{peticion.error}</span>}
+          {puedePedirViabilidad(x) && <button className="boton no" disabled={trabajando} onClick={pedir}>{textoPedirViabilidad(x)}</button>}
+        </span>
       )}
       {destinos.length > 0 && (
         <span className="lic-fila">
@@ -97,6 +111,20 @@ export default function Embudo() {
     catch (e) { setError(e); }
   };
 
+  const pedirViabilidad = async (id, reemplazar) => {
+    setError(null);
+    try { await pedirCerebro(`licitaciones/embudo/${id}/viabilidad`, enviar({ reemplazar })); await cargar(); }
+    catch (e) { setError(e); }
+  };
+
+  // Mientras Viabilidad prepara un informe, la lista se refresca sola hasta que aparece (o falla).
+  const esperando = hayPeticionEnCurso(lista?.items);
+  useEffect(() => {
+    if (!esperando) return undefined;
+    const t = setInterval(cargar, 8000);
+    return () => clearInterval(t);
+  }, [esperando, cargar]);
+
   return (
     <div className="lic">
       <p className="lic-vuelve"><Link href="/licitaciones">← Licitaciones</Link></p>
@@ -115,7 +143,7 @@ export default function Embudo() {
         return (
           <section key={k} className="lic" aria-label={etiquetaEmbudo(k)}>
             <h2>{etiquetaEmbudo(k)} <span className="meta">· {items.length}</span></h2>
-            {items.length === 0 ? <p className="meta">Ninguna.</p> : <ul className="lic-lista">{items.map((x) => <Fila key={x.id} x={x} transiciones={lista.transiciones} motivos={lista.motivos_perdida} onCambio={cambiar} />)}</ul>}
+            {items.length === 0 ? <p className="meta">Ninguna.</p> : <ul className="lic-lista">{items.map((x) => <Fila key={x.id} x={x} transiciones={lista.transiciones} motivos={lista.motivos_perdida} onCambio={cambiar} onViabilidad={pedirViabilidad} />)}</ul>}
           </section>
         );
       })}

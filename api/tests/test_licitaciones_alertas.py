@@ -67,17 +67,32 @@ class TestFiltro(unittest.TestCase):
                 alertas.limpiar_nombre(mal)
         self.assertEqual(alertas.limpiar_canal("panel"), "panel")
         self.assertEqual(alertas.limpiar_canal("resumen_diario", "departamento"), "resumen_diario")
-        for mal in ("correo", "sms", None, ""):
+        for mal in ("sms", None, ""):
             with self.assertRaises(ErrorAlerta, msg=mal):
                 alertas.limpiar_canal(mal)
         with self.assertRaises(ErrorAlerta):                                       # una personal no puede salir en el resumen que ve Dirección
             alertas.limpiar_canal("resumen_diario", "personal")
         self.assertEqual(alertas.limpiar_canal("panel", "personal"), "panel")
+        self.assertEqual(alertas.limpiar_canal("correo", "personal"), "correo")                # el correo lo puede pedir también una alerta personal
         self.assertIsNone(alertas.limpiar_departamento("personal", None))
         self.assertEqual(alertas.limpiar_departamento("departamento", "licitaciones"), "licitaciones")
         for ambito, d in (("personal", "licitaciones"), ("departamento", None), ("departamento", "No Valido"), ("otro", None)):
             with self.assertRaises(ErrorAlerta, msg=(ambito, d)):
                 alertas.limpiar_departamento(ambito, d)
+
+    def test_el_correo_de_destino_solo_de_la_empresa(self):
+        dom = ["101.cat"]
+        self.assertEqual(alertas.limpiar_correo("  Marta.Puig@101.CAT ", dom), "marta.puig@101.cat")
+        self.assertEqual(alertas.limpiar_correo("a+b@101.cat"), "a+b@101.cat")                 # con la configuración real (config/buzones.yaml)
+        for mal in ("", None, 5, "sin-arroba", "x@gmail.com", "x@101.cat.evil.com", "x@evil101.cat", "x@sub.101.cat", "a@b@101.cat", "x y@101.cat", "x@101.cat\nBcc: z@y.com",
+                    "a@101.cat,b@gmail.com", "<x@101.cat>", "x" * 65 + "@101.cat"):
+            with self.assertRaises(ErrorAlerta, msg=mal):
+                alertas.limpiar_correo(mal, dom)
+        self.assertIsNone(alertas.limpiar_destino("panel", "x@101.cat", dom))                  # con otro canal no se guarda
+        self.assertEqual(alertas.limpiar_destino("correo", "x@101.cat", dom), "x@101.cat")
+        for falta in (None, ""):
+            with self.assertRaises(ErrorAlerta):
+                alertas.limpiar_destino("correo", falta, dom)
 
     def test_la_consulta_al_motor_lleva_el_filtro_la_fuente_y_el_id_de_origen(self):
         p = alertas.parametros_de_consulta({"cpv": ["72"]}, "placsp", "https://x/1")
@@ -250,6 +265,41 @@ class TestEnBase(unittest.TestCase):
         # La base de datos lo impide aunque alguien se saltara el código.
         with psycopg.connect(self.url_directa(), autocommit=True) as c, self.assertRaises(psycopg.errors.CheckViolation):
             c.execute("UPDATE licitaciones_alertas SET canal = 'resumen_diario' WHERE id = %s", [mia["id"]])
+
+    def test_canal_correo_crear_cambiar_y_proteger(self):
+        a = ejecutar(alertas.crear(ALBERT, entrada(canal="correo", correo_destino="Albert@101.cat")))              # una personal sí puede
+        self.assertEqual((a["canal"], a["correo_destino"]), ("correo", "albert@101.cat"))
+        for mal in ({"canal": "correo"}, {"canal": "correo", "correo_destino": "x@gmail.com"}, {"canal": "correo", "correo_destino": None}):
+            with self.assertRaises(ErrorAlerta, msg=mal):
+                ejecutar(alertas.crear(ALBERT, entrada(**mal)))
+        self.assertIsNone(ejecutar(alertas.crear(ALBERT, entrada(correo_destino="x@101.cat")))["correo_destino"])      # con canal «panel» se ignora
+        b = ejecutar(alertas.cambiar(ALBERT, a["id"], {"correo_destino": "otra@101.cat"}))                             # cambiar solo la dirección
+        self.assertEqual((b["canal"], b["correo_destino"]), ("correo", "otra@101.cat"))
+        with self.assertRaises(ErrorAlerta):
+            ejecutar(alertas.cambiar(ALBERT, a["id"], {"correo_destino": "fuera@gmail.com"}))
+        with self.assertRaises(ErrorAlerta):
+            ejecutar(alertas.cambiar(ALBERT, a["id"], {"correo_destino": None}))
+        c = ejecutar(alertas.cambiar(ALBERT, a["id"], {"canal": "panel"}))                                             # al dejar el correo se borra la dirección
+        self.assertEqual((c["canal"], c["correo_destino"]), ("panel", None))
+        with self.assertRaises(ErrorAlerta):
+            ejecutar(alertas.cambiar(ALBERT, a["id"], {"canal": "correo"}))                                            # sin dirección no se puede pasar a correo
+        d = ejecutar(alertas.cambiar(ALBERT, a["id"], {"canal": "correo", "correo_destino": "albert@101.cat"}))
+        self.assertEqual((d["canal"], d["correo_destino"]), ("correo", "albert@101.cat"))
+        with psycopg.connect(self.url_directa(), autocommit=True) as cn, self.assertRaises(psycopg.errors.CheckViolation):      # y la base lo impide también
+            cn.execute("UPDATE licitaciones_alertas SET correo_destino = NULL WHERE id = %s", [a["id"]])
+        with psycopg.connect(self.url_directa(), autocommit=True) as cn, self.assertRaises(psycopg.errors.CheckViolation):
+            cn.execute("UPDATE licitaciones_alertas SET canal = 'panel' WHERE id = %s", [a["id"]])                      # «panel» con dirección tampoco
+        dep = ejecutar(alertas.crear(RESPONSABLE, entrada(ambito="departamento", departamento="licitaciones", canal="correo", correo_destino="licitaciones@101.cat")))
+        self.assertEqual(dep["correo_destino"], "licitaciones@101.cat")
+
+    def test_pasar_a_correo_no_envia_los_avisos_que_ya_habia(self):
+        a = ejecutar(alertas.crear(ALBERT, entrada()))
+        ejecutar(alertas.registrar_aviso(a["id"], "ev1", "licitacion.nueva", self.datos(), AHORA))
+        ejecutar(alertas.cambiar(ALBERT, a["id"], {"canal": "correo", "correo_destino": "albert@101.cat"}))
+        ejecutar(alertas.registrar_aviso(a["id"], "ev2", "licitacion.nueva", self.datos(), AHORA))
+        with psycopg.connect(self.url_directa(), autocommit=True) as cn:
+            filas = dict(cn.execute("SELECT evento_id, correo_enviado IS NULL FROM licitaciones_avisos").fetchall())
+        self.assertEqual(filas, {"ev1": False, "ev2": True})                                  # el viejo se da por enviado; solo el nuevo queda pendiente
 
     def test_el_esquema_de_antes_se_actualiza_para_admitir_el_canal_del_resumen(self):
         with psycopg.connect(self.url_directa(), autocommit=True) as c:

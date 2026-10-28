@@ -23,6 +23,8 @@ app.conf.timezone = ajustes.zona_horaria
 app.conf.task_routes = {"cerebro.tareas.celery_app.ejecutar_programada": {"queue": "lote"},
                         "cerebro.tareas.celery_app.resumen_licitaciones": {"queue": "lote"},
                         "cerebro.tareas.celery_app.rastreo_embudo": {"queue": "lote"},
+                        "cerebro.tareas.celery_app.enviar_avisos_correo": {"queue": "lote"},
+                        "cerebro.tareas.celery_app.pedir_viabilidad": {"queue": "peticiones"},
                         "cerebro.tareas.celery_app.volcar_constancia": {"queue": "peticiones"}}
 
 
@@ -61,6 +63,7 @@ def _rastreo_embudo() -> dict:
 
 
 app.conf.beat_schedule = {**_calendario(), **_resumen_licitaciones(), **_rastreo_embudo(),
+                          "avisos-por-correo": {"task": "cerebro.tareas.celery_app.enviar_avisos_correo", "schedule": 300.0},
                           "constancia-pendiente": {"task": "cerebro.tareas.celery_app.volcar_constancia", "schedule": 300.0}}
 
 
@@ -120,3 +123,31 @@ def rastreo_embudo() -> dict:
     no cambia el estado de nada. Si el modelo no está disponible se reintenta; lo ya valorado se conserva y no se repite (cerebro/licitaciones/rastreo.py)."""
     from ..licitaciones.rastreo import revisar
     return asyncio.run(revisar(_ejecutar))
+
+
+@app.task(name="cerebro.tareas.celery_app.pedir_viabilidad", bind=True, max_retries=3)
+def pedir_viabilidad(self, lid: int) -> dict:
+    """Una persona ha pedido el informe de viabilidad de una licitación del embudo (botón «Pedir informe de viabilidad»). Si el modelo no está disponible se reintenta hasta 3
+    veces con espera creciente; si no hay manera, o falla de otro modo, la petición queda anotada como error para que el panel lo diga. Consultivo: no cambia estado ni decisión."""
+    import logging
+    from ..licitaciones import embudo, rastreo
+    try:
+        informe = asyncio.run(rastreo.valorar(lid, _ejecutar, reemplazar=True))
+    except rastreo.FALLOS_DEL_MODELO:
+        if self.request.retries < self.max_retries:
+            raise self.retry(countdown=min(60 * 2 ** self.request.retries, 900))
+        asyncio.run(embudo.cerrar_peticion_viabilidad(lid, "El modelo de IA no está disponible ahora: inténtalo de nuevo en unos minutos"))
+        return {"estado": "error", "motivo": "modelo no disponible"}
+    except Exception as e:      # noqa: BLE001 — cualquier otro fallo deja la petición como error, no «en curso» para siempre
+        logging.getLogger("cerebro.tareas").warning("pedir_viabilidad %s: %s: %s", lid, type(e).__name__, e)
+        asyncio.run(embudo.cerrar_peticion_viabilidad(lid, "No se ha podido generar el informe: inténtalo de nuevo"))
+        return {"estado": "error", "motivo": type(e).__name__}
+    return {"estado": "ok", "recomendacion": informe["recomendacion"]}
+
+
+@app.task(name="cerebro.tareas.celery_app.enviar_avisos_correo")
+def enviar_avisos_correo() -> dict:
+    """Envía por correo los avisos pendientes de las alertas con canal «correo» (cada 5 minutos). Correo interno, solo a direcciones de la empresa;
+    lo que falla se reintenta en el siguiente ciclo (cerebro/licitaciones/avisos_correo.py)."""
+    from ..licitaciones.avisos_correo import enviar_pendientes
+    return asyncio.run(enviar_pendientes())

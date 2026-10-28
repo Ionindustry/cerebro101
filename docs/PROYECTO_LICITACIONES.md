@@ -358,6 +358,19 @@ Documento de partida: «Plataforma de detección y análisis de concursos públi
   se guarda siempre y sigue visible en el panel: el canal solo añade el resumen. Una alerta **personal** no puede usar ese canal (el resumen lo ven Dirección y
   Licitaciones): lo rechaza el código y también la base de datos (`licitaciones_alertas_resumen_solo_departamento`). La sección sale **aunque el motor no responda** (los
   avisos ya están guardados) y, si no se pueden leer, el resumen sale igual y lo dice. Se activa por alerta desde `/licitaciones/alertas` («Incluir en el resumen»).
+- **Alertas por correo** (hecho): el canal `correo` de una alerta (personal o de departamento) envía los avisos a una dirección `correo_destino` **de la empresa**
+  (`avisos.dominios` en `config/buzones.yaml`, por ahora `101.cat`): es correo interno y automático, así que no pasa por la bandeja de aprobaciones (que es para lo que
+  sale de la empresa) y una dirección de fuera se rechaza al crear la alerta, otra vez justo antes de enviar y también en la base de datos (`licitaciones_alertas_correo_destino`:
+  hay dirección si y solo si el canal es `correo`). Sale del buzón `notificaciones` (sin departamentos: ningún agente lo usa; ya está en
+  `config/buzones.yaml`; falta su contraseña: `python3 scripts/buzon_alta.py --id notificaciones --solo-clave` y reiniciar la API y el worker; sin clave no envía y lo dice en el
+  registro). El consumidor solo deja el aviso; la tarea `enviar_avisos_correo` (`api/cerebro/licitaciones/avisos_correo.py`, cola `lote`, cada 5 minutos) manda los pendientes
+  (`licitaciones_avisos.correo_enviado IS NULL`), agrupados por alerta (hasta `max_por_correo` = 20 por mensaje), con `Auto-Submitted: auto-generated`. Un fallo del servidor se
+  anota (`correo_error`) y se reintenta hasta `max_intentos` = 5; un aviso de más de `max_antiguedad_horas` = 48 ya no se envía; al pasar una alerta a `correo` no se envía lo que
+  ya había. El canal es único: «correo» incluye el panel pero no el resumen de las 16:00. Desde `/licitaciones/alertas`.
+- **Informe de viabilidad a petición** (hecho): en el embudo, el botón «Pedir informe de viabilidad» (`POST /licitaciones/embudo/{id}/viabilidad`, 202) encola la tarea
+  `pedir_viabilidad` (cola `peticiones`): Viabilidad valora esa licitación (sin los filtros del rastreo) y guarda el informe; «Volver a pedir…» lo sustituye tras confirmar
+  (`reemplazar`). Solo hay una petición en curso por licitación (se da por perdida a los 20 minutos); si el modelo no responde se reintenta hasta 3 veces y, si no, la tarjeta
+  muestra el error y se puede volver a pedir. Sigue siendo consultivo: no cambia el estado ni decide nada. La lista del embudo se refresca sola mientras hay una petición en curso.
 - **Rastreo diario del embudo** (hecho): la tarea `rastreo_embudo` (`api/cerebro/licitaciones/rastreo.py`, cola `lote`, 06:30 según `rastreo.hora`) elige las `detectada`
   **abiertas en el motor y con plazo** (a más de `rastreo.dias_minimos_hasta_plazo` = 3 días), de más a menos encaje y hasta `rastreo.max_por_dia` = 10 (**POR VALIDAR**:
   si Viabilidad se satura, bajarlo o subir `embudo.encaje_min`), y pide a **Viabilidad** (agente `viabilidad`, modelo «juez») un informe de cada una. El informe se guarda en
@@ -407,4 +420,7 @@ Documento de partida: «Plataforma de detección y análisis de concursos públi
   que sea la misma empresa; una persona física lo dice. Filtros por periodo y CPV en la dirección. Los nombres de empresas y organismos de «Competencia», «Contratos que vencen»
   y la ficha de una licitación enlazan a su ficha. Los errores se distinguen: «esa organización no existe» (404 con datos) no es lo mismo que «el motor todavía no tiene esta función»
   (404 «La ruta no existe»: motor desactualizado, hay que reconstruir `api` y `proyector`) ni que una dirección con NIF (solo se abre por UUID). La pasarela del panel deja pasar `organizations/{uuid}` solo con UUID (nunca por nombre ni NIF desde el navegador).
+- **Reprocesar expedientes antiguos** (motor, hecho): `proyector reproyectar [-simular] [-fuente F] [-limite N] [-despues ID]` (tarea de una sola vez; ver `licitaciones/README.md`) relee de `raw` el
+  original de cada expediente ya proyectado y rehace su modelo de lectura con el parser actual, para que los antiguos tengan, por ejemplo, el texto de las prórrogas. Comprueba el SHA-256 de cada
+  original; no resucita los anulados, no pisa un expediente que cambió mientras tanto, no toca versión, original ni fecha de actualización y es idempotente. `-simular` cuenta cuántos cambiarían sin escribir.
 - Pendiente: canal `correo`; un botón «Pedir informe de viabilidad» para una licitación concreta; y llevar a Viabilidad lo que ya sabe 101.cat de cada organismo.

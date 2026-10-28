@@ -231,6 +231,7 @@ export function mensajeEmbudo(status) {
   if (status === 401) return "Tu sesión ha caducado.";
   if (status === 403) return "El embudo es para Dirección y el departamento de Licitaciones.";
   if (status === 404) return "Esa licitación ya no está en el embudo.";
+  if (status === 409) return "Ya hay un informe en curso o ya existe: actualiza la página.";
   if (status === 422) return "Ese cambio no está permitido para el estado actual.";
   if (status === 503) return "No se ha podido consultar el motor de licitaciones. Inténtalo en unos minutos.";
   return "No se ha podido completar la operación. Inténtalo en unos minutos.";
@@ -292,11 +293,18 @@ export function mensajeAlertas(status) {
   if (status === 401) return "Tu sesión ha caducado.";
   if (status === 403) return "No tienes permiso para esto. Las alertas de un departamento las crea su responsable o Dirección.";
   if (status === 404) return "Esa alerta ya no existe.";
-  if (status === 422) return "Revisa los datos de la alerta: necesita un nombre, al menos un criterio de búsqueda y un evento.";
+  if (status === 422) return "Revisa los datos de la alerta: necesita un nombre, al menos un criterio de búsqueda y un evento; por correo, solo a direcciones @101.cat.";
   return "No se ha podido completar la operación. Inténtalo en unos minutos.";
 }
 
-export const CANALES_ALERTA = [["panel", "Solo en el panel"], ["resumen_diario", "En el panel y en el resumen de las 16:00"]];
+export const CANALES_ALERTA = [["panel", "Solo en el panel"], ["resumen_diario", "En el panel y en el resumen de las 16:00"], ["correo", "En el panel y por correo"]];
+/** El resumen solo admite alertas de departamento; el correo, cualquiera (personal o de departamento). */
+export const canalesDe = (ambito) => CANALES_ALERTA.filter(([k]) => k !== "resumen_diario" || ambito === "departamento");
+/** Los avisos por correo salen solo a direcciones de la empresa: lo mismo que comprueba la API (config/buzones.yaml). */
+export const DOMINIO_CORREO = "101.cat";
+export const correoValido = (t) => /^[a-z0-9._%+-]{1,64}@101\.cat$/.test(String(t || "").trim().toLowerCase());
+/** Lo que se muestra del canal de una alerta: en «correo», a qué dirección. */
+export const canalDeAlertaTexto = (a) => (a?.canal === "correo" ? `Por correo a ${a.correo_destino || "?"}` : a?.canal === "resumen_diario" ? canalEtiqueta("resumen_diario") : "");
 export const canalEtiqueta = (c) => (CANALES_ALERTA.find(([k]) => k === c) || [, c || "—"])[1];
 
 /** Solo una alerta de departamento puede salir en el resumen (lo ven Dirección y Licitaciones): una personal, nunca. */
@@ -320,6 +328,28 @@ export function viabilidadEtiqueta(v) {
   return { texto: `Viabilidad: ${texto}`, clase };
 }
 
+/** Una petición «en curso» más vieja que esto se da por perdida (el trabajador se cayó): igual que en la API, para no esperar para siempre. */
+export const VENTANA_PETICION_MS = 20 * 60 * 1000;
+
+/** Estado de la petición del informe de una licitación: "en_curso", "error" (con su texto) o null. */
+export function peticionViabilidad(x, ahora = Date.now()) {
+  const p = x?.viabilidad_peticion;
+  if (!p || typeof p !== "object") return null;
+  if (p.estado === "error") return { estado: "error", error: p.error || "No se ha podido generar el informe." };
+  const t = Date.parse(p.en);
+  if (p.estado === "en_curso" && Number.isFinite(t) && ahora - t < VENTANA_PETICION_MS) return { estado: "en_curso" };
+  return null;
+}
+
+/** Se puede pedir el informe si la licitación está viva en el embudo, vinculada al motor y sin otra petición en curso. */
+export const puedePedirViabilidad = (x, ahora = Date.now()) =>
+  Boolean(x?.motor_id) && !["ganada", "perdida", "descartada"].includes(x.estado) && peticionViabilidad(x, ahora)?.estado !== "en_curso";
+
+/** Texto del botón: pedir, o volver a pedir (sustituye el informe anterior). */
+export const textoPedirViabilidad = (x) => (x?.viabilidad ? "Volver a pedir el informe de viabilidad" : "Pedir informe de viabilidad");
+
+/** Si alguna licitación tiene el informe en curso, la lista se refresca sola. */
+export const hayPeticionEnCurso = (items, ahora = Date.now()) => (items || []).some((x) => peticionViabilidad(x, ahora)?.estado === "en_curso");
 
 // ---- Competencia (GET /competitors y /awards del motor) ----
 

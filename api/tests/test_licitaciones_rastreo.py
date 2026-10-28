@@ -231,6 +231,61 @@ class TestEnBase(unittest.TestCase):
         r = ejecutar(rastreo.revisar(invocar, None, AHORA))
         self.assertEqual((r["revisadas"], r["pendientes"], llamadas), (0, 0, []))
 
+    def test_pedir_viabilidad_reserva_valora_reemplaza_y_no_decide(self):
+        a = self.alta()
+        lid = self.por_motor()[a]["id"]
+        peticion = ejecutar(embudo.reservar_peticion_viabilidad(lid, "u1", ahora=AHORA))
+        self.assertEqual((peticion["estado"], peticion["por"]), ("en_curso", "u1"))
+        self.assertEqual(self.por_motor()[a]["viabilidad_peticion"]["estado"], "en_curso")
+        with self.assertRaises(embudo.Conflicto):                                              # ya hay una en curso
+            ejecutar(embudo.reservar_peticion_viabilidad(lid, "u2", ahora=AHORA + timedelta(minutes=5)))
+        pedidas = []
+
+        async def invocar(agente, peticion):
+            pedidas.append(agente)
+            return {"respuesta": "Encaja.\nRECOMENDACIÓN: IR\nMOTIVO: CPV exacto"}
+        informe = ejecutar(rastreo.valorar(lid, invocar, AHORA, reemplazar=True))
+        self.assertEqual((informe["recomendacion"], pedidas), ("ir", ["viabilidad"]))
+        f = self.por_motor()[a]
+        self.assertEqual((f["viabilidad"]["recomendacion"], f["viabilidad_peticion"], f["estado"]), ("ir", None, "detectada"))
+        with self.assertRaises(embudo.Conflicto):                                              # ya hay informe y no se confirma el reemplazo
+            ejecutar(embudo.reservar_peticion_viabilidad(lid, "u1", ahora=AHORA))
+        ejecutar(embudo.reservar_peticion_viabilidad(lid, "u1", reemplazar=True, ahora=AHORA))
+
+        async def otra(agente, peticion):
+            return {"respuesta": "RECOMENDACIÓN: NO IR\nMOTIVO: plazo"}
+        ejecutar(rastreo.valorar(lid, otra, AHORA, reemplazar=True))
+        self.assertEqual(self.por_motor()[a]["viabilidad"]["recomendacion"], "no_ir")
+
+    def test_una_peticion_en_curso_antigua_se_da_por_perdida(self):
+        m = self.alta()
+        lid = self.por_motor()[m]["id"]
+        ejecutar(embudo.reservar_peticion_viabilidad(lid, "u1", ahora=AHORA))
+        ejecutar(embudo.reservar_peticion_viabilidad(lid, "u1", ahora=AHORA + timedelta(minutes=21)))
+
+    def test_pedir_viabilidad_rechaza_lo_que_no_tiene_sentido(self):
+        with self.assertRaises(embudo.NoExiste):
+            ejecutar(embudo.reservar_peticion_viabilidad(999, "u1"))
+        m = self.alta()
+        lid = self.por_motor()[m]["id"]
+        ejecutar(embudo.cambiar_estado(lid, "descartada", ahora=AHORA))
+        with self.assertRaises(embudo.ErrorEmbudo):
+            ejecutar(embudo.reservar_peticion_viabilidad(lid, "u1"))
+
+    def test_sin_informe_utilizable_la_peticion_queda_como_error(self):
+        m = self.alta()
+        lid = self.por_motor()[m]["id"]
+        ejecutar(embudo.reservar_peticion_viabilidad(lid, "u1", ahora=AHORA))
+
+        async def vacia(agente, peticion):
+            return {"respuesta": ""}
+        with self.assertRaises(rastreo.SinInforme):
+            ejecutar(rastreo.valorar(lid, vacia, AHORA))
+        ejecutar(embudo.cerrar_peticion_viabilidad(lid, "no disponible", AHORA))
+        p = ejecutar(embudo.obtener(lid))["viabilidad_peticion"]
+        self.assertEqual((p["estado"], p["error"]), ("error", "no disponible"))
+        ejecutar(embudo.reservar_peticion_viabilidad(lid, "u1", ahora=AHORA))              # tras un error se puede volver a pedir
+
 
 if __name__ == "__main__":
     unittest.main()
