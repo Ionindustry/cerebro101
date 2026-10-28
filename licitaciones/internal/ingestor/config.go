@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"net/url"
+	"os"
 	"strconv"
 	"strings"
 	"time"
@@ -28,6 +29,10 @@ const (
 	EnvMaxPages   = "LIC_MAX_PAGINAS"      // tope de páginas por ejecución; por defecto 50
 	EnvTimeout    = "LIC_TIMEOUT_DESCARGA" // plazo por descarga; por defecto 5m (PLACSP sirve las páginas despacio), entre 30s y 15m
 	EnvContact    = "LIC_CONTACTO"         // correo o web que se anuncia en el User-Agent, para que la fuente sepa a quién avisar
+
+	EnvHistoricoDesde = "LIC_HISTORICO_DESDE" // año (2023) o año-mes (2023-06) desde el que cargar los ZIP del histórico; vacía = no se carga
+	EnvHistoricoDir   = "LIC_HISTORICO_DIR"   // carpeta de trabajo para bajar un ZIP; por defecto la temporal del sistema
+	EnvTimeoutZip     = "LIC_TIMEOUT_ZIP"     // plazo por descarga de un ZIP; por defecto 30m, entre 1m y 6h (se continúa donde se cortó)
 )
 
 // MinInterval es el intervalo mínimo permitido entre ingestas de una misma fuente.
@@ -54,6 +59,7 @@ type Config struct {
 	MaxPages                   int
 	Timeout                    time.Duration
 	Contact                    string
+	Historico                  *HistoricoConfig // nil = sin carga del histórico
 }
 
 // FromEnv lee y valida la configuración. Los errores nombran la variable, nunca su valor (puede ser una clave).
@@ -105,6 +111,24 @@ func FromEnv(getenv func(string) string) (Config, error) {
 			return c, fmt.Errorf("%s no válido: una duración entre 30s y 15m", EnvTimeout)
 		}
 		c.Timeout = d
+	}
+	if v := strings.TrimSpace(getenv(EnvHistoricoDesde)); v != "" {
+		since, err := ParseSince(v, time.Now())
+		if err != nil {
+			return c, err
+		}
+		h := &HistoricoConfig{Since: since, Dir: strings.TrimSpace(getenv(EnvHistoricoDir)), Timeout: 30 * time.Minute}
+		if h.Dir == "" {
+			h.Dir = os.TempDir()
+		}
+		if v := getenv(EnvTimeoutZip); v != "" {
+			d, err := time.ParseDuration(v)
+			if err != nil || d < time.Minute || d > 6*time.Hour {
+				return c, fmt.Errorf("%s no válido: una duración entre 1m y 6h", EnvTimeoutZip)
+			}
+			h.Timeout = d
+		}
+		c.Historico = h
 	}
 	list := getenv(EnvSources)
 	if strings.TrimSpace(list) == "" {

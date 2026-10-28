@@ -79,6 +79,10 @@ services:
       LIC_INTERVALO: "${LIC_INTERVALO:-1h}"
       LIC_TIMEOUT_DESCARGA: "${LIC_TIMEOUT_DESCARGA:-5m}"
       LIC_CONTACTO: "${LIC_CONTACTO:-}"
+      LIC_HISTORICO_DESDE: "${LIC_HISTORICO_DESDE:-}"       # vacío = sin histórico; p. ej. 2023 o 2023-06
+      LIC_HISTORICO_DIR: /scratch
+      LIC_TIMEOUT_ZIP: "${LIC_TIMEOUT_ZIP:-30m}"
+    volumes: ["historico-tmp:/scratch"]                    # aquí se baja cada ZIP (hasta unos GB) y se borra al terminarlo
     mem_limit: 256m
     cpus: 0.5
 
@@ -129,3 +133,4 @@ volumes:
   s3-datos:
   pg-datos:
   nats-datos:
+  historico-tmp:                 # carpeta de trabajo del ingestor para los ZIP del histórico (ver README, «Histórico antiguo»)
