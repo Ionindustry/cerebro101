@@ -10,7 +10,7 @@ guarda los originales en el almacén S3 (RustFS), el estado en su propio Postgre
 (`compose.yaml`). El **proyector** consume esos eventos y mantiene el modelo de lectura de los expedientes en Postgres (tabla `expedientes`, con
 búsqueda de texto en castellano y catalán). La **API** (`cmd/api`) sirve ese modelo: `GET /api/v1/tenders` (texto, CPV, NUTS, estado, procedimiento,
 fuente, importes, fechas, orden y paginación por cursor firmado), `GET /api/v1/tenders/{id}` (ficha con lotes, adjudicaciones y evidencia, con `ETag`)
-`GET /api/v1/awards` (adjudicaciones por lote: quién ganó, por cuánto y con qué baja), `GET /api/v1/competitors` (ranking de empresas de un mercado con su cuota), `GET /api/v1/expiring-contracts` (contratos que terminan en un periodo)
+`GET /api/v1/awards` (adjudicaciones por lote: quién ganó, por cuánto y con qué baja), `GET /api/v1/competitors` (ranking de empresas de un mercado con su cuota), `GET /api/v1/expiring-contracts` (contratos que terminan en un periodo), `GET /api/v1/organizations/{id}` (ficha de comprador o de adjudicatario)
 y `GET /api/v1/ops/status`. Exige `Authorization: Bearer <LIC_API_TOKEN>` y no publica ningún puerto; los parámetros del contrato que aún no
 existen (`area`, `facetas`, `encaje_min`, `publicada_*`) dan 400 en vez de ignorarse en silencio. La autenticación con Keycloak llegará después.
 
@@ -43,7 +43,7 @@ Credenciales: de momento el ingestor usa la del almacén y la del bus tal cual (
 
 ## Estructura
 ```
-cmd/api        API REST (contrato en api/openapi.yaml; hoy: tenders, ficha, adjudicaciones, competidores, contratos que vencen y estado; internal/api)
+cmd/api        API REST (contrato en api/openapi.yaml; hoy: tenders, ficha, adjudicaciones, competidores, contratos que vencen, fichas de organización y estado; internal/api)
 cmd/ingestor   servicio de ingesta (internal/ingestor: configuración, cerrojo de líder, planificador y relay)
 cmd/proyector  proyector del modelo de lectura (internal/projector); los de grafo y búsqueda llegarán después (ADR 0009)
 internal/domain    modelo normalizado (licitación, lotes, resultados, bajas); importes con moneda y significado, sin datos de contacto

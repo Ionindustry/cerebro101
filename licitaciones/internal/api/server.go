@@ -27,6 +27,7 @@ type Repo interface {
 	BuscarAdjudicaciones(ctx context.Context, f pg.FiltroAdjudicaciones) ([]pg.Adjudicacion, int, bool, error)
 	Competidores(ctx context.Context, f pg.FiltroCompetidores) ([]pg.Competidor, int, pg.MuestraMercado, error)
 	ContratosQueVencen(ctx context.Context, f pg.FiltroVencimientos) ([]pg.ContratoVence, int, bool, error)
+	Organizacion(ctx context.Context, f pg.FiltroOrganizacion) (*pg.FichaOrganizacion, error)
 	Fuentes(ctx context.Context) ([]pg.EstadoFuente, error)
 	Ping(ctx context.Context) (time.Duration, error)
 }
@@ -63,6 +64,7 @@ func (s *Server) Register(mux *http.ServeMux) {
 	mux.Handle("GET /api/v1/awards", s.wrap(s.adjudicaciones))
 	mux.Handle("GET /api/v1/competitors", s.wrap(s.competidores))
 	mux.Handle("GET /api/v1/expiring-contracts", s.wrap(s.contratosQueVencen))
+	mux.Handle("GET /api/v1/organizations/{id}", s.wrap(s.organizacion))
 	mux.Handle("GET /api/v1/ops/status", s.wrap(s.estado))
 	mux.Handle("/api/", s.wrap(func(w http.ResponseWriter, r *http.Request) {
 		writeProblem(w, r, newProblem(http.StatusNotFound, codNoEncontrado, "No encontrado", "La ruta no existe."))
