@@ -59,5 +59,64 @@ class TestRutas(unittest.TestCase):
         generar.assert_awaited_once_with("manual")
 
 
+
+class TestRutasDelEmbudo(unittest.TestCase):
+    FILA = {"id": 7, "motor_id": "0b1f7a3e-1111-4222-8333-444444444444", "estado": "en_estudio"}
+
+    def tearDown(self):
+        main.app.dependency_overrides.clear()
+
+    def test_los_demas_reciben_403_y_no_se_toca_nada(self):
+        e = main.embudo_licitaciones
+        espias = {n: mock.AsyncMock() for n in ("resumen", "listar", "estudiar", "cambiar_estado")}
+        with mock.patch.multiple(e, **espias):
+            c = como(("usuario", "responsable"), ("finanzas", "comercial"))
+            for metodo, ruta, cuerpo in (("get", "/licitaciones/embudo/resumen", None), ("get", "/licitaciones/embudo", None),
+                                         ("post", "/licitaciones/embudo/estudiar", {"motor_id": "x"}), ("post", "/licitaciones/embudo/7/estado", {"estado": "presentada"})):
+                r = getattr(c, metodo)(ruta, json=cuerpo) if cuerpo else getattr(c, metodo)(ruta)
+                self.assertEqual(r.status_code, 403, ruta)
+        for n, espia in espias.items():
+            espia.assert_not_called()
+
+    def test_direccion_y_licitaciones_lo_ven_y_lo_cambian(self):
+        e = main.embudo_licitaciones
+        with mock.patch.object(e, "resumen", mock.AsyncMock(return_value={"dias": 30})), mock.patch.object(e, "listar", mock.AsyncMock(return_value=[self.FILA])), \
+                mock.patch.object(e, "estudiar", mock.AsyncMock(return_value=self.FILA)), mock.patch.object(e, "cambiar_estado", mock.AsyncMock(return_value=self.FILA)) as cambiar:
+            for roles, deps in ((("direccion",), ()), ((), ("licitaciones",))):
+                c = como(roles, deps)
+                self.assertEqual(c.get("/licitaciones/embudo/resumen?dias=7").json(), {"dias": 30})
+                lista = c.get("/licitaciones/embudo?estado=en_estudio").json()
+                self.assertEqual(lista["items"], [self.FILA])
+                self.assertIn("precio", lista["motivos_perdida"])
+                self.assertEqual(lista["transiciones"]["presentada"], ["ganada", "perdida"])
+                self.assertEqual(c.post("/licitaciones/embudo/estudiar", json={"motor_id": self.FILA["motor_id"]}).json(), self.FILA)
+                self.assertEqual(c.post("/licitaciones/embudo/7/estado", json={"estado": "perdida", "motivo_perdida": "precio"}).status_code, 200)
+            cambiar.assert_awaited_with(7, "perdida", "precio")
+
+    def test_errores_de_validacion_y_de_existencia(self):
+        e = main.embudo_licitaciones
+        c = como(("direccion",))
+        with mock.patch.object(e, "resumen", mock.AsyncMock(side_effect=e.ErrorEmbudo("dias debe estar entre 1 y 365"))):
+            self.assertEqual(c.get("/licitaciones/embudo/resumen?dias=0").status_code, 422)
+        with mock.patch.object(e, "cambiar_estado", mock.AsyncMock(side_effect=e.ErrorEmbudo("No se puede"))):
+            self.assertEqual(c.post("/licitaciones/embudo/7/estado", json={"estado": "ganada"}).status_code, 422)
+        with mock.patch.object(e, "cambiar_estado", mock.AsyncMock(side_effect=e.NoExiste("No existe"))):
+            self.assertEqual(c.post("/licitaciones/embudo/99/estado", json={"estado": "presentada"}).status_code, 404)
+        self.assertEqual(c.post("/licitaciones/embudo/7/estado", json={}).status_code, 422)          # falta el estado
+        self.assertEqual(c.post("/licitaciones/embudo/no-es-numero/estado", json={"estado": "presentada"}).status_code, 422)
+
+    def test_estudiar_sin_motor_o_con_un_expediente_que_no_existe(self):
+        e = main.embudo_licitaciones
+        c = como(("direccion",))
+        with mock.patch.object(e, "estudiar", mock.AsyncMock(side_effect=main.MotorNoDisponible("no responde"))):
+            r = c.post("/licitaciones/embudo/estudiar", json={"motor_id": "0b1f7a3e-1111-4222-8333-444444444444"})
+            self.assertEqual(r.status_code, 503)
+            self.assertIn("no responde", r.json()["detail"])
+        with mock.patch.object(e, "estudiar", mock.AsyncMock(side_effect=LookupError("x"))):
+            self.assertEqual(c.post("/licitaciones/embudo/estudiar", json={"motor_id": "0b1f7a3e-1111-4222-8333-444444444444"}).status_code, 404)
+        with mock.patch.object(e, "estudiar", mock.AsyncMock(side_effect=e.ErrorEmbudo("motor_id no es un identificador válido"))):
+            self.assertEqual(c.post("/licitaciones/embudo/estudiar", json={"motor_id": "mal"}).status_code, 422)
+
+
 if __name__ == "__main__":
     unittest.main()

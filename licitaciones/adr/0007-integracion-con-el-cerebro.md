@@ -160,7 +160,7 @@ adjudicado sin IVA en Mercado) y sin mezclar: lo que no tiene ese dato se cuenta
 (`calculado_en`, generación del índice, `estado_motor`); si `/ops/status` dice `caido`, el panel pinta el bloque en rojo
 y **no muestra cifras** (§8). Ninguna cifra la calcula la IA.
 
-**Embudo propio (Cerebro, fase 4, sin implementar)**. Endpoint propuesto en `api/cerebro/api/main.py`, mismo estilo que
+**Embudo propio (Cerebro, fase 4; la tabla, el cálculo, las rutas y la pantalla están hechos, falta el consumidor de eventos)**. Implementado en `api/cerebro/licitaciones/embudo.py`; ver «Embudo propio» en `docs/PROYECTO_LICITACIONES.md` §Estado para las diferencias con lo propuesto abajo (cambio de estado por `POST`, identidad por `motor_id`, motivos de pérdida POR VALIDAR). Endpoint propuesto en `api/cerebro/api/main.py`, mismo estilo que
 `/aprobaciones/resumen`:
 ```python
 @app.get("/licitaciones/embudo/resumen")

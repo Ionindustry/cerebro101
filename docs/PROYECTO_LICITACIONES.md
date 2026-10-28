@@ -327,5 +327,12 @@ Documento de partida: «Plataforma de detección y análisis de concursos públi
   estaba apagado a las 16:00. Lo ven Dirección y el departamento de Licitaciones.
   Diferencias con el ADR 0007: el motor aún no tiene `publicada_desde`, `encaje_min` ni `orden=encaje`, así que la ventana usa `actualizada_desde`
   (la fecha de la versión en origen) y el encaje se calcula en el Cerebro con los datos de la ficha; pasará al motor cuando se proyecte el encaje (§7.9).
-- Pendiente: competencia, alertas, embudo y el consumidor de eventos del Cerebro (fase 4 del plan); entrega del resumen por otros canales (correo) si
-  Dirección lo pide.
+- **Embudo propio** (hecho): la tabla `licitaciones` del Cerebro pasa a ser el embudo (`motor_id`, `encaje`, estados `detectada → en_estudio → presentada →
+  ganada | perdida`, y `descartada` para el no ir; fechas de cada paso). `api/cerebro/licitaciones/embudo.py` (cálculo puro y probado), rutas
+  `GET /licitaciones/embudo/resumen`, `GET /licitaciones/embudo`, `POST /licitaciones/embudo/estudiar` y `POST /licitaciones/embudo/{id}/estado`
+  (Dirección y departamento de Licitaciones), pantalla `/licitaciones/embudo`, botón «Estudiar» en la ficha y bloque en el dashboard. Diferencias con el
+  ADR 0007: el cambio de estado es un `POST` (la pasarela `/cerebro` solo deja pasar GET y POST); el código de expediente deja de ser único (se repite
+  entre organismos) y la identidad es `motor_id`; los motivos de pérdida son una lista cerrada **POR VALIDAR con Licitaciones** (`MOTIVOS_PERDIDA`).
+  Los datos de «Estudiar» los pide el servidor al motor: el navegador solo manda el identificador.
+- Pendiente: competencia, alertas guardadas, el consumidor de eventos del Cerebro (`cerebro-embudo`, que alimentará el embudo con las `detectada`) y el
+  pase de `detectada` a Viabilidad por el Rastreador (fase 4 del plan); entrega del resumen por otros canales (correo) si Dirección lo pide.

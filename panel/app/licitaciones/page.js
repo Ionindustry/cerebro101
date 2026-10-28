@@ -2,7 +2,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
-import { antiguedadTexto, estadoMotor, fechaCivilTexto, nombreFuente, totalesTexto } from "../../lib/licitaciones";
+import { antiguedadTexto, estadoMotor, ESTADOS_EMBUDO, fechaCivilTexto, nombreFuente, tasaExitoTexto, totalesTexto } from "../../lib/licitaciones";
 import { Fallo, Item, Oportunidad, pedir, pedirCerebro } from "./cliente";
 
 function EstadoDelMotor() {
@@ -54,6 +54,23 @@ function ResumenDelDia() {
   );
 }
 
+// Embudo propio: lo que 101.cat estudia, presenta, gana o pierde. Solo para quien puede verlo (Dirección y Licitaciones).
+function EmbudoPropio() {
+  const [r, setR] = useState(null);
+  useEffect(() => { pedirCerebro("licitaciones/embudo/resumen?dias=30").then(setR).catch(() => setR(null)); }, []);
+  if (!r) return null;
+  return (
+    <section className="tarjeta" aria-labelledby="lic-emb-t">
+      <header>
+        <h2 id="lic-emb-t">Embudo propio · 30 días</h2>
+        <Link href="/licitaciones/embudo" className="lic-vuelve">Ver el embudo</Link>
+      </header>
+      <p className="meta">{ESTADOS_EMBUDO.map(([k, n]) => `${n}: ${r.por_estado[k] ?? 0}`).join(" · ")}</p>
+      <p className="meta">Tasa de éxito: {tasaExitoTexto(r.tasa_exito)}</p>
+    </section>
+  );
+}
+
 function Novedades() {
   const [d, setD] = useState(null);
   const [error, setError] = useState(null);
@@ -84,6 +101,7 @@ export default function Licitaciones() {
         <button className="boton si" type="submit">Buscar</button>
       </form>
       <ResumenDelDia />
+      <EmbudoPropio />
       <EstadoDelMotor />
       <Novedades />
     </div>

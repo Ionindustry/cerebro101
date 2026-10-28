@@ -341,3 +341,8 @@ a.kp-fila:hover { background: var(--fondo); }
 .lic-historial { list-style: none; margin: 8px 0 0; padding: 0; display: grid; gap: 2px; }
 .lic-enlace { border: 0; background: none; padding: 6px 0; text-align: left; font: inherit; cursor: pointer; text-decoration: underline; text-underline-offset: 3px; }
 .lic-enlace[aria-current="true"] { font-weight: 700; text-decoration: none; }
+
+/* Embudo de licitaciones */
+.lic-cifras { display: grid; grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)); gap: 10px; margin-bottom: 8px; }
+.lic-cifra { display: flex; flex-direction: column; gap: 2px; }
+.lic-cifra strong { font-size: 24px; }

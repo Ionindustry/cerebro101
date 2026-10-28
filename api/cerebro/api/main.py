@@ -17,6 +17,8 @@ from ..ajustes import ajustes
 from ..aprobaciones import bandeja, objetivos
 from ..aprobaciones.logica import DecisionNoValida
 from .. import actividad, constancia, kpis, modelos_externos, oficina
+from ..herramientas.licitaciones import MotorNoDisponible
+from ..licitaciones import embudo as embudo_licitaciones
 from ..licitaciones import resumen as resumen_licitaciones
 from ..cotizador import Solicitud, calcular
 from ..grafo import construir, nodos
@@ -232,6 +234,75 @@ async def generar_resumen_licitaciones(usuario: Usuario = Depends(usuario_actual
         raise HTTPException(403, "El resumen de licitaciones es para Dirección y el departamento de Licitaciones")
     r = await resumen_licitaciones.generar("manual")
     return await resumen_licitaciones.leer(r["id"])
+
+
+# ---- Embudo propio (ADR 0007 §3-4): lo que 101.cat estudia, presenta, gana o pierde. Lo ven y lo cambian Dirección y el departamento de Licitaciones ----
+
+
+class EstudiarEntrada(BaseModel):
+    motor_id: str
+
+
+class CambioEstadoEntrada(BaseModel):
+    estado: str
+    motivo_perdida: str | None = None
+
+
+def _exige_licitaciones(usuario: Usuario) -> None:
+    if not _ve_licitaciones(usuario):
+        raise HTTPException(403, "El embudo de licitaciones es para Dirección y el departamento de Licitaciones")
+
+
+@app.get("/licitaciones/embudo/resumen")
+async def resumen_embudo_licitaciones(dias: int = 30, usuario: Usuario = Depends(usuario_actual)):
+    """Dashboard de Licitaciones, bloque «Embudo propio»: foto por estado, lo ocurrido en el periodo, tasa de éxito y motivos de pérdida."""
+    _exige_licitaciones(usuario)
+    try:
+        return await embudo_licitaciones.resumen(dias)
+    except embudo_licitaciones.ErrorEmbudo as e:
+        raise HTTPException(422, str(e)) from None
+
+
+@app.get("/licitaciones/embudo")
+async def listar_embudo_licitaciones(estado: str | None = None, motor_id: str | None = None, limite: int = 200,
+                                     usuario: Usuario = Depends(usuario_actual)):
+    _exige_licitaciones(usuario)
+    try:
+        return {"items": await embudo_licitaciones.listar(estado, motor_id, limite), "motivos_perdida": embudo_licitaciones.MOTIVOS_PERDIDA,
+                "transiciones": {k: sorted(v) for k, v in embudo_licitaciones.TRANSICIONES.items()}}
+    except embudo_licitaciones.ErrorEmbudo as e:
+        raise HTTPException(422, str(e)) from None
+
+
+@app.post("/licitaciones/embudo/estudiar")
+async def estudiar_licitacion(entrada: EstudiarEntrada, usuario: Usuario = Depends(usuario_actual)):
+    """«Estudiar»: pasa un expediente del motor al embudo. Los datos se piden al motor desde el servidor."""
+    _exige_licitaciones(usuario)
+    try:
+        fila = await embudo_licitaciones.estudiar(entrada.motor_id)
+    except embudo_licitaciones.ErrorEmbudo as e:
+        raise HTTPException(422, str(e)) from None
+    except LookupError:
+        raise HTTPException(404, "No existe ese expediente en el motor de licitaciones") from None
+    except (MotorNoDisponible, ValueError) as e:
+        raise HTTPException(503, f"No se ha podido consultar el motor de licitaciones: {e}") from None
+    log.info("embudo: %s estudia %s (estado %s)", usuario.id, fila["motor_id"], fila["estado"])
+    return fila
+
+
+@app.post("/licitaciones/embudo/{lid}/estado")
+async def cambiar_estado_licitacion(lid: int, entrada: CambioEstadoEntrada, usuario: Usuario = Depends(usuario_actual)):
+    """Anota la decisión de una persona: pasar a en estudio, presentada, ganada, perdida (con motivo) o descartada."""
+    _exige_licitaciones(usuario)
+    try:
+        fila = await embudo_licitaciones.cambiar_estado(lid, entrada.estado, entrada.motivo_perdida)
+    except embudo_licitaciones.NoExiste as e:
+        raise HTTPException(404, str(e)) from None
+    except embudo_licitaciones.ErrorEmbudo as e:
+        raise HTTPException(422, str(e)) from None
+    log.info("embudo: %s pasa la licitación %s a %s", usuario.id, lid, fila["estado"])
+    return fila
+
 
 
 class ObjetivoNuevo(BaseModel):
