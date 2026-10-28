@@ -5,6 +5,10 @@ import {
   nombreFuente, queryAFiltros, rutaPermitida, totalTexto, urlSegura,
 } from "../lib/licitaciones.js";
 import { viabilidadEtiqueta, admiteResumen, avisosDeAlertaTexto, canalEtiqueta, CANALES_ALERTA, ambitoTexto, eventoEtiqueta, filtroDeAlerta, filtroTexto, mensajeAlertas, sinLeerTexto } from "../lib/licitaciones.js";
+import {
+  COMPETENCIA_VACIA, adjudicacionesDeCompetidor, bajaTexto, competenciaAQuery, competenciaAcotada, cuotaTexto, limpiarNifs, mercadoTexto, muestraPoca, muestraTexto,
+  queryACompetencia, tendenciaEtiqueta,
+} from "../lib/licitaciones.js";
 import { accionEmbudo, avisoEstadoMotor, diasDePeriodo, ESTADOS_EMBUDO, etiquetaEmbudo, horasTexto, mensajeEmbudo, tasaExitoTexto } from "../lib/licitaciones.js";
 
 const ID = "0b1f7a3e-1111-4222-8333-444444444444";
@@ -265,4 +269,58 @@ test("el informe de Viabilidad: una etiqueta clara y nunca una decisión", () =>
   assert.equal(viabilidadEtiqueta({ recomendacion: "sin_recomendacion" }).texto, "Viabilidad: Sin recomendación");
   assert.equal(viabilidadEtiqueta({ recomendacion: "lo que sea" }).texto, "Viabilidad: Sin recomendación");   // un valor raro no rompe la pantalla
   for (const nada of [null, undefined, "", 5]) assert.equal(viabilidadEtiqueta(nada), null);                    // sin informe, sin etiqueta
+});
+
+
+test("la pasarela deja pasar la lista de adjudicaciones y de competidores, y nada más de ellas", () => {
+  assert.ok(rutaPermitida(["awards"], "GET"));
+  assert.ok(rutaPermitida(["competitors"], "GET"));
+  for (const r of [["awards", ID], ["competitors", "x"], ["awards", "export"], ["organizations", ID], ["expiring-contracts"]]) assert.ok(!rutaPermitida(r, "GET"), JSON.stringify(r));
+  assert.ok(!rutaPermitida(["awards"], "POST"));
+});
+
+test("competencia: el mercado hay que acotarlo con CPV, zona o comprador", () => {
+  assert.ok(!competenciaAcotada(COMPETENCIA_VACIA));
+  assert.ok(!competenciaAcotada({ ...COMPETENCIA_VACIA, desde: "2025-01-01", cpv: "abc" }));
+  assert.ok(competenciaAcotada({ ...COMPETENCIA_VACIA, cpv: "72" }));
+  assert.ok(competenciaAcotada({ ...COMPETENCIA_VACIA, nuts: "es512" }));
+  assert.ok(competenciaAcotada({ ...COMPETENCIA_VACIA, comprador: "p1708500e" }));
+  assert.ok(!competenciaAcotada({ ...COMPETENCIA_VACIA, comprador: "corto" }));
+});
+
+test("competencia: filtros del formulario a parámetros del motor y de vuelta", () => {
+  assert.deepEqual(limpiarNifs("p1708500e, nif:B12345678 x B12345678 corto"), ["nif:P1708500E", "nif:B12345678"]);
+  const f = { cpv: "72 35125 mal", nuts: "es512", comprador: "p1708500e", desde: "2025-01-01", hasta: "2026-10-27", orden: "contratos" };
+  const q = competenciaAQuery(f);
+  assert.deepEqual([q.getAll("cpv"), q.getAll("nuts"), q.getAll("comprador"), q.get("desde"), q.get("hasta"), q.get("orden")],
+    [["72", "35125"], ["ES512"], ["nif:P1708500E"], "2025-01-01", "2026-10-27", "contratos"]);
+  assert.deepEqual(queryACompetencia(q), { cpv: "72 35125", nuts: "ES512", comprador: "P1708500E", desde: "2025-01-01", hasta: "2026-10-27", orden: "contratos" });
+  // lo que no es válido se omite en vez de mandar un 400: fechas imposibles, desde posterior a hasta, orden desconocido
+  const m = competenciaAQuery({ cpv: "72", desde: "2026-13-45", hasta: "ayer", orden: "plazo" });
+  assert.equal(m.toString(), "cpv=72");
+  assert.equal(competenciaAQuery({ cpv: "72", desde: "2026-05-01", hasta: "2026-01-01" }).has("hasta"), false);
+  assert.equal(competenciaAQuery({ cpv: "72", orden: "cuota" }).has("orden"), false);
+});
+
+test("competencia: las adjudicaciones de una empresa usan los mismos filtros del mercado", () => {
+  const p = adjudicacionesDeCompetidor({ ...COMPETENCIA_VACIA, cpv: "72", desde: "2025-01-01", orden: "contratos" }, "uuid-1");
+  assert.deepEqual([p.get("cpv"), p.get("adjudicada_desde"), p.get("adjudicatario"), p.get("resultado"), p.get("orden"), p.get("limit")], ["72", "2025-01-01", "uuid-1", "adjudicado", "fecha", "5"]);
+  assert.ok(!p.has("desde") && !p.has("hasta"));
+});
+
+test("competencia: cuota, baja, tendencia y muestra se muestran con sus límites", () => {
+  assert.equal(cuotaTexto(0.66667), "66,7 %");
+  assert.equal(cuotaTexto(1), "100,0 %");
+  assert.equal(cuotaTexto(0.0004), "<0,1 %");
+  assert.equal(cuotaTexto(0), "0,0 %");
+  for (const malo of [null, undefined, -0.1, 1.5, NaN, "0.5"]) assert.equal(cuotaTexto(malo), "—", String(malo));
+  assert.equal(bajaTexto(0.2), "20,0 %");
+  for (const malo of [null, undefined, -0.5, 1.2, "x"]) assert.equal(bajaTexto(malo), "—", String(malo));
+  assert.equal(tendenciaEtiqueta("sube").texto, "Sube");
+  assert.equal(tendenciaEtiqueta("raro").texto, "Sin datos");
+  assert.equal(muestraTexto({ adjudicaciones: 6, desde: "2025-02-01", hasta: "2026-09-01" }), "6 adjudicaciones entre febrero de 2025 y septiembre de 2026");
+  assert.equal(muestraTexto({ adjudicaciones: 1 }), "1 adjudicación");
+  assert.match(muestraTexto({ adjudicaciones: 0 }), /No hay adjudicaciones/);
+  assert.ok(muestraPoca({ adjudicaciones: 9 }) && !muestraPoca({ adjudicaciones: 10 }) && !muestraPoca({ adjudicaciones: 0 }) && !muestraPoca(null));
+  assert.equal(mercadoTexto({ cpv: "72", nuts: "es512", comprador: "p1708500e", desde: "2025-01-01", hasta: "" }), "CPV 72 · zona ES512 · comprador P1708500E · desde 2025-01-01");
 });

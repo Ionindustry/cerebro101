@@ -376,4 +376,9 @@ Documento de partida: «Plataforma de detección y análisis de concursos públi
   tapado, por su nombre. **Tendencia** = contratos de los últimos 12 meses frente a los 12 anteriores (`sin_datos` con menos de 3). Solo cuenta lo adjudicado en euros. La
   herramienta `licitaciones` de los agentes tiene las operaciones nuevas `adjudicaciones` y `competidores`. **Aún no**: `/organizations/{id}`, `/expiring-contracts` (la
   fecha de fin del contrato no se extrae todavía), `area`, ni el ranking de licitadores no adjudicatarios (solo se publica en las actas de la mesa).
+- **Página «Competencia» del panel** (hecho): `/licitaciones/competencia` enseña el ranking de `/competitors` de un mercado que se elige con CPV, zona (NUTS) o NIF del comprador
+  (más fechas y orden); la dirección de la página es la consulta, así que se puede compartir. Cada empresa muestra cuota (barra y %), contratos, importe, baja media y mediana,
+  tendencia y última adjudicación, y se abre para ver sus **últimas adjudicaciones en ese mismo mercado** (`/awards` con los mismos filtros), enlazadas a la ficha de la
+  licitación. Siempre dice cuántas adjudicaciones hay detrás y, con menos de 10, avisa de que las cifras son orientativas. La pasarela del panel deja pasar `awards` y
+  `competitors` (solo la lista, solo lectura). Los nombres son datos de terceros: se escriben como texto, nunca como HTML.
 - Pendiente: canal `correo`; fichas de organismo y contratos que vencen; un botón «Pedir informe de viabilidad» para una licitación concreta; y llevar a Viabilidad lo que ya sabe 101.cat de cada organismo.

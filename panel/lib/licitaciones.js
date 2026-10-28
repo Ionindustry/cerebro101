@@ -16,6 +16,7 @@ export function rutaPermitida(segmentos, metodo) {
   const [a, b, ...resto] = segmentos;
   if (resto.length > 0) return false;
   if (a === "tenders") return b === undefined || UUID.test(b);
+  if (a === "awards" || a === "competitors") return b === undefined;                   // solo la lista, con sus filtros en la dirección
   return a === "ops" && b === "status";
 }
 
@@ -313,4 +314,103 @@ export function viabilidadEtiqueta(v) {
   if (!v || typeof v !== "object") return null;
   const [texto, clase] = VIABILIDAD[v.recomendacion] || VIABILIDAD.sin_recomendacion;
   return { texto: `Viabilidad: ${texto}`, clase };
+}
+
+
+// ---- Competencia (GET /competitors y /awards del motor) ----
+
+export const ORDENES_COMPETENCIA = [["importe", "Mayor importe adjudicado"], ["contratos", "Más contratos ganados"]];
+export const COMPETENCIA_VACIA = { cpv: "", nuts: "", comprador: "", desde: "", hasta: "", orden: "" };
+/** Atajos de mercado para empezar (CPV de las áreas de 101.cat; el usuario puede escribir los suyos). */
+export const MERCADOS_EJEMPLO = [["Informática y software", "72"], ["Videovigilancia", "35125"], ["Telecomunicaciones", "64200000"], ["Mantenimiento de equipos", "50300000"]];
+
+/** NIF del comprador tal como lo pide el motor («nif:P1708500E»); lo que no tiene 9 letras o cifras se omite. */
+export const limpiarNifs = (t) => [...new Set(String(t || "").split(LISTA).map((c) => c.replace(/^nif:/i, "")).filter((c) => /^[0-9A-Za-z]{9}$/.test(c)).map((c) => `nif:${c.toUpperCase()}`))].slice(0, 20);
+const fechaValida = (t) => (/^\d{4}-\d{2}-\d{2}$/.test(t || "") && !Number.isNaN(new Date(`${t}T12:00:00Z`).getTime()) ? t : "");
+
+/** El motor exige acotar el mercado con al menos un CPV, una zona o un comprador: sin eso no se le pregunta. */
+export const competenciaAcotada = (f) => limpiarCpv(f.cpv).length + limpiarNuts(f.nuts).length + limpiarNifs(f.comprador).length > 0;
+
+/** Filtros del formulario → parámetros de GET /competitors. */
+export function competenciaAQuery(f) {
+  const p = new URLSearchParams();
+  for (const c of limpiarCpv(f.cpv)) p.append("cpv", c);
+  for (const c of limpiarNuts(f.nuts)) p.append("nuts", c);
+  for (const c of limpiarNifs(f.comprador)) p.append("comprador", c);
+  const desde = fechaValida(f.desde), hasta = fechaValida(f.hasta);
+  if (desde) p.set("desde", desde);
+  if (hasta && (!desde || desde <= hasta)) p.set("hasta", hasta);
+  if (ORDENES_COMPETENCIA.some(([k]) => k === f.orden)) p.set("orden", f.orden);
+  return p;
+}
+
+/** Parámetros de la dirección de la página → filtros del formulario. */
+export function queryACompetencia(sp) {
+  return {
+    cpv: sp.getAll("cpv").join(" "), nuts: sp.getAll("nuts").join(" "), comprador: sp.getAll("comprador").map((c) => c.replace(/^nif:/i, "")).join(" "),
+    desde: sp.get("desde") || "", hasta: sp.get("hasta") || "", orden: sp.get("orden") || "",
+  };
+}
+
+/** Las últimas adjudicaciones de una empresa EN EL MISMO MERCADO que se está mirando: mismos filtros, más el adjudicatario. */
+export function adjudicacionesDeCompetidor(filtros, organizacionId, limite = 5) {
+  const p = competenciaAQuery(filtros);
+  p.delete("orden");
+  if (p.has("desde")) { p.set("adjudicada_desde", p.get("desde")); p.delete("desde"); }
+  if (p.has("hasta")) { p.set("adjudicada_hasta", p.get("hasta")); p.delete("hasta"); }
+  p.set("adjudicatario", organizacionId);
+  p.set("resultado", "adjudicado");
+  p.set("orden", "fecha");
+  p.set("limit", String(limite));
+  return p;
+}
+
+const pct = new Intl.NumberFormat("es-ES", { minimumFractionDigits: 1, maximumFractionDigits: 1 });
+/** Cuota de mercado (0–1) como porcentaje: «66,7 %»; lo que no llega al 0,1 % es «<0,1 %». */
+export function cuotaTexto(c) {
+  if (typeof c !== "number" || !Number.isFinite(c) || c < 0 || c > 1.0001) return "—";
+  if (c > 0 && c < 0.001) return "<0,1 %";
+  return `${pct.format(c * 100)} %`;
+}
+
+/** Baja (0–1) como porcentaje sobre el presupuesto base; sin dato (presupuesto no fiable) es «—». */
+export function bajaTexto(b) {
+  if (typeof b !== "number" || !Number.isFinite(b) || b < 0 || b > 1) return "—";
+  return `${pct.format(b * 100)} %`;
+}
+
+export const TENDENCIAS = {
+  sube: { texto: "Sube", clase: "ok", ayuda: "Más contratos en los últimos 12 meses que en los 12 anteriores" },
+  estable: { texto: "Estable", clase: "", ayuda: "Los mismos contratos que en los 12 meses anteriores" },
+  baja: { texto: "Baja", clase: "caido", ayuda: "Menos contratos en los últimos 12 meses que en los 12 anteriores" },
+  sin_datos: { texto: "Sin datos", clase: "", ayuda: "Menos de 3 contratos: no hay base para hablar de tendencia" },
+};
+export const tendenciaEtiqueta = (t) => TENDENCIAS[t] || TENDENCIAS.sin_datos;
+
+const MUESTRA_MINIMA = 10;
+const mes = new Intl.DateTimeFormat("es-ES", { month: "long", year: "numeric", timeZone: "UTC" });
+const mesTexto = (f) => (/^\d{4}-\d{2}-\d{2}$/.test(f || "") ? mes.format(new Date(`${f}T12:00:00Z`)) : "");
+
+/** Cuántos datos hay detrás de las cifras (siempre visible): «34 adjudicaciones entre marzo de 2025 y septiembre de 2026». */
+export function muestraTexto(m) {
+  if (!m || !m.adjudicaciones) return "No hay adjudicaciones en este mercado y periodo.";
+  const n = new Intl.NumberFormat("es-ES").format(m.adjudicaciones);
+  const base = m.adjudicaciones === 1 ? "1 adjudicación" : `${n} adjudicaciones`;
+  const d = mesTexto(m.desde), h = mesTexto(m.hasta);
+  return d && h ? `${base} entre ${d} y ${h}` : base;
+}
+
+/** Con pocas adjudicaciones las cuotas y las bajas son orientativas: la página lo avisa. */
+export const muestraPoca = (m) => Boolean(m) && m.adjudicaciones > 0 && m.adjudicaciones < MUESTRA_MINIMA;
+
+/** Resumen de los filtros del mercado para el título («CPV 72 · ES512 · desde 2025-01-01»). */
+export function mercadoTexto(f) {
+  const p = [];
+  const cpv = limpiarCpv(f.cpv), nuts = limpiarNuts(f.nuts), nifs = limpiarNifs(f.comprador);
+  if (cpv.length) p.push(`CPV ${cpv.join(", ")}`);
+  if (nuts.length) p.push(`zona ${nuts.join(", ")}`);
+  if (nifs.length) p.push(`comprador ${nifs.map((n) => n.slice(4)).join(", ")}`);
+  if (fechaValida(f.desde)) p.push(`desde ${f.desde}`);
+  if (fechaValida(f.hasta)) p.push(`hasta ${f.hasta}`);
+  return p.join(" · ");
 }
