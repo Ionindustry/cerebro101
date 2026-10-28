@@ -61,6 +61,8 @@ func Run(ctx context.Context, d Deps, source, startURL string, opt RunOptions) (
 			if page == 0 {
 				total.NotModified = true
 				d.log().Info("fuente sin cambios", "fuente", source)
+				// Una comprobación sin cambios también es una ejecución completa: se anota para que «última ingesta» diga la verdad.
+				first = Checkpoint{LastRun: d.now(), Validators: cp.Validators}
 			}
 			break
 		}
