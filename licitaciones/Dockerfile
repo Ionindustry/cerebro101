@@ -9,8 +9,11 @@ RUN go mod download
 COPY . .
 ARG VERSION=dev
 RUN go build -trimpath -ldflags="-s -w -X github.com/ionindustry/cerebro101/licitaciones/internal/version.Version=${VERSION}" -o /out/ ./cmd/...
+# Carpeta de trabajo del ingestor para bajar los ZIP del histórico: la imagen final no tiene shell, y un volumen nuevo hereda el dueño de la carpeta.
+RUN mkdir -p /out/scratch
 
 FROM gcr.io/distroless/static-debian12:nonroot
 COPY --from=build /out/api /out/ingestor /out/proyector /
+COPY --from=build --chown=65532:65532 /out/scratch /scratch
 USER 65532:65532
 ENTRYPOINT ["/api"]

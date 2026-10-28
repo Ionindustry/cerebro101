@@ -83,6 +83,28 @@ Las pruebas de PostgreSQL necesitan una base de pruebas (la variable `LICITACION
 | `LIC_MAX_PAGINAS` | `50` | Páginas como máximo por ejecución |
 | `LIC_TIMEOUT_DESCARGA` | `5m` | Plazo por descarga (entre `30s` y `15m`); PLACSP sirve las páginas despacio |
 | `LIC_CONTACTO` | vacío | Correo o web que se anuncia a la fuente en el `User-Agent` |
+| `LIC_HISTORICO_DESDE` | vacío | Carga el histórico en ZIP desde esta fecha: `2023` (desde el 1 de enero) o `2023-06`. Vacío = no se carga (ver «Histórico antiguo») |
+| `LIC_TIMEOUT_ZIP` | `30m` | Plazo por descarga de un ZIP (entre `1m` y `6h`); si se corta, la siguiente vuelta continúa donde quedó |
+| `LIC_HISTORICO_DIR` | carpeta temporal | Dónde se baja el ZIP; en compose es el volumen `historico-tmp` (`/scratch`) |
+
+## Histórico antiguo
+La sindicación en vivo solo llega al principio del mes en curso. Lo anterior está en ZIP de datos abiertos de PLACSP: **uno por año cerrado**
+(`…Completo3_2025.zip`) y **uno por mes cerrado del año en curso** (`…Completo3_202609.zip`). Con `LIC_HISTORICO_DESDE=2023` el ingestor, después de
+cada vuelta de la fuente en vivo (que tiene prioridad), toma **un ZIP pendiente por vuelta**, del más reciente al más antiguo:
+1. lo baja al volumen `historico-tmp` (continúa con `Range` una descarga cortada; si el servidor no admite rangos, la repite entera);
+2. lo abre sin descomprimirlo en disco y pasa cada `.atom` por **el mismo camino que una página en vivo** (original y página en el almacén, observación
+   en el estado, eventos por el outbox). Los límites (SEC-010…013): 64 MiB por `.atom`, 20 000 ficheros, 32 GiB descomprimidos; nada se da por bueno por lo que
+   declare el ZIP;
+3. anota cada `.atom` ingerido y, al final, el ZIP entero (`paginas_ingeridas`, claves `zip:AAAAMM[/fichero]`): un fallo o un reinicio retoma en el
+   siguiente fichero, y un ZIP ya cargado no se vuelve a bajar;
+4. borra el ZIP. Un ZIP que aún no existe (404) se salta sin bloquear a los demás y se reintenta en la vuelta siguiente.
+
+Un orden distinto al cronológico no importa: una versión antigua de una licitación no pisa a la nueva (cuenta como `superadas`). El ZIP en sí no se guarda en
+`raw` (ADR 0004 lo preveía): cada página y cada entrada que contiene sí, con la misma clave y metadatos que las de la sindicación en vivo, así que la
+evidencia es la misma. **POR VERIFICAR** con una descarga real: el servidor exacto de los ZIP (se prueban `contrataciondelsectorpublico.gob.es` y
+`contrataciondelestado.es`) y los nombres de los `.atom` de dentro (solo se usa la extensión). Solo `placsp-643`. Mientras no exista el consumidor del
+Cerebro, los eventos del histórico van al mismo flujo `LICITACIONES`; cuando exista habrá que llevarlos a `LIC_HISTORICO` (ADR 0002) para que el Cerebro no reciba
+millones de «nuevas».
 
 ## Imagen
 `docker build -f licitaciones/Dockerfile --build-arg VERSION=$(git rev-parse HEAD) -t licitaciones:local licitaciones`
