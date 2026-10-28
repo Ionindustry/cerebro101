@@ -281,10 +281,55 @@ class TestAdjudicacionesYCompetidores(unittest.TestCase):
         self.assertNotIn("siguiente_cursor", r)
 
 
+VENCEN = {
+    "items": [{"adjudicacion_id": ID, "licitacion_id": ID, "expediente": "EXP-1", "titulo": "Cámaras\n de   vigilancia", "lote": "1",
+               "comprador": {"id": "x", "nombre": "Ayuntamiento de Girona"}, "adjudicatario": {"id": "y", "nombre": "Uno Sistemas SL", "nif": "B11111111"},
+               "importe_adjudicado": {"valor": "100000.00", "moneda": "EUR", "impuestos": "sin_iva", "significado": "adjudicado"}, "fecha_formalizacion": "2025-03-01",
+               "fecha_fin": "2027-02-28", "prorrogas_posibles": True, "fecha_fin_con_prorrogas": None, "prorrogas_texto": "Podrá ser prorrogado por un año más " + "x" * 500,
+               "cpv": ["35125300"], "nuts": ["ES512"], "confianza": 0.7}],
+    "siguiente_cursor": None, "total": {"valor": 1, "relacion": "eq"}, "periodo": {"vence_desde": "2027-01-01", "vence_hasta": "2027-12-31"},
+}
+
+
+@unittest.skipUnless(HTTPX_REAL, "requiere httpx real (se ejecuta en el contenedor)")
+class TestContratosQueVencen(unittest.TestCase):
+    def test_traduce_los_argumentos_y_resume(self):
+        vistas = []
+
+        def manejar(req):
+            vistas.append(req)
+            return httpx.Response(200, json=VENCEN)
+        with entorno(), con_motor(manejar):
+            r = ejecutar(licitaciones.contratos_que_vencen(cpv=["35125"], nuts=["es512"], comprador_nif="p1708500e", importe_min=50000, desde="2027-01-01",
+                                                          hasta="2027-12-31", con_prorrogas=True, limite=99))
+        q = vistas[0].url.params
+        self.assertEqual(vistas[0].url.path, "/api/v1/expiring-contracts")
+        self.assertEqual((q["cpv"], q["nuts"], q["comprador"], q["importe_min"], q["vence_desde"], q["vence_hasta"], q["con_prorrogas"], q["limit"]),
+                         ("35125", "ES512", "nif:P1708500E", "50000.00", "2027-01-01", "2027-12-31", "true", "25"))
+        c = r["contratos"][0]
+        self.assertEqual((c["titulo"], c["fecha_fin"], c["prorrogas_posibles"], c["fecha_fin_con_prorrogas"], c["confianza"]),
+                         ("Cámaras de vigilancia", "2027-02-28", True, None, 0.7))
+        self.assertEqual(c["adjudicatario_actual"], {"nombre": "Uno Sistemas SL", "nif": "B11111111"})
+        self.assertLessEqual(len(c["texto_prorrogas_del_pliego"]), 300)
+        self.assertIn("estimación", r["aviso"])
+        self.assertEqual(r["periodo"]["vence_hasta"], "2027-12-31")
+
+    def test_sin_argumentos_no_manda_el_periodo_y_valida_antes_de_llamar(self):
+        vistas = []
+        with entorno(), con_motor(lambda req: (vistas.append(req), httpx.Response(200, json=VENCEN))[1]):
+            ejecutar(licitaciones.contratos_que_vencen())
+        self.assertNotIn("vence_desde", vistas[0].url.params)
+        self.assertNotIn("con_prorrogas", vistas[0].url.params)
+        for kw in ({"desde": "mañana"}, {"comprador_nif": "x"}, {"importe_min": -5}):
+            with self.subTest(kw), entorno(), con_motor(lambda r: self.fail("no debe llamar al motor")):
+                with self.assertRaises(ValueError):
+                    ejecutar(licitaciones.contratos_que_vencen(**kw))
+
+
 class TestRegistro(unittest.TestCase):
     def test_esta_registrada_y_es_de_solo_lectura(self):
         h = base._REGISTRO["licitaciones"]
-        self.assertEqual(set(h.operaciones), {"buscar", "ficha", "novedades_desde", "adjudicaciones", "competidores", "estado_motor"})
+        self.assertEqual(set(h.operaciones), {"buscar", "ficha", "novedades_desde", "adjudicaciones", "competidores", "contratos_que_vencen", "estado_motor"})
         self.assertEqual(h.externas, frozenset())             # ninguna operación tiene impacto fuera: no necesita aprobación
         self.assertEqual(set(h.ayuda), set(h.operaciones))
 

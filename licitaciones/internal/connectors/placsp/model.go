@@ -71,6 +71,8 @@ type xmlProject struct {
 	CPVs     []string     `xml:"RequiredCommodityClassification>ItemClassificationCode"`
 	NUTS     []string     `xml:"RealizedLocation>CountrySubentityCode"`
 	Duration *xmlDuration `xml:"PlannedPeriod>DurationMeasure"`
+	// Prórrogas previstas: texto libre del pliego («Cabe la opción de tres (3) prórrogas de un (1) año cada una»).
+	Extension string `xml:"ContractExtension>OptionValidityPeriod>Description"`
 }
 
 type xmlDuration struct {

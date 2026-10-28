@@ -54,6 +54,7 @@ type Licitacion struct {
 	NUTS []string `json:"nuts,omitempty"` // niveles mezclados: ES, ES51, ES511…
 
 	Duration       *Duration  `json:"duration,omitempty"`
+	Extension      *Extension `json:"extension,omitempty"` // prórrogas previstas del contrato
 	TenderDeadline *time.Time `json:"tender_deadline,omitempty"`
 
 	Notices       []Notice         `json:"notices,omitempty"`
@@ -85,6 +86,15 @@ type Duration struct {
 	Unit  string `json:"unit"`
 }
 
+// Extension son las prórrogas que prevé el pliego. Text es el texto libre de origen (lo único seguro); Count, Each y Allowed solo se rellenan
+// cuando el texto lo dice con claridad: «tres (3) prórrogas de un (1) año cada una», «Número de prórrogas: 1 / Duración máxima de cada prórroga: 2 años».
+type Extension struct {
+	Text    string    `json:"text"`
+	Allowed *bool     `json:"allowed,omitempty"` // true si se admiten, false si el texto dice que no; ausente si no se sabe
+	Count   int       `json:"count,omitempty"`
+	Each    *Duration `json:"each,omitempty"`
+}
+
 // Notice es una publicación del expediente (anuncio de licitación, de adjudicación, de formalización…).
 type Notice struct {
 	Type        string `json:"type"`                   // DOC_CN, DOC_CAN_ADJ, DOC_FORM, DESISTIMIENTO…
@@ -102,12 +112,14 @@ type AwardCriterion struct {
 
 // Lot es un lote del expediente. En la fuente 1044 solo vienen el identificador y el nombre.
 type Lot struct {
-	ID                string   `json:"id"`
-	Name              string   `json:"name,omitempty"`
-	BaseBudgetExclVAT *Money   `json:"base_budget_excl_vat,omitempty"`
-	BaseBudgetInclVAT *Money   `json:"base_budget_incl_vat,omitempty"`
-	CPV               []string `json:"cpv,omitempty"`
-	NUTS              []string `json:"nuts,omitempty"`
+	ID                string     `json:"id"`
+	Name              string     `json:"name,omitempty"`
+	BaseBudgetExclVAT *Money     `json:"base_budget_excl_vat,omitempty"`
+	BaseBudgetInclVAT *Money     `json:"base_budget_incl_vat,omitempty"`
+	CPV               []string   `json:"cpv,omitempty"`
+	NUTS              []string   `json:"nuts,omitempty"`
+	Duration          *Duration  `json:"duration,omitempty"`  // la del lote, si el lote la trae (manda sobre la del expediente)
+	Extension         *Extension `json:"extension,omitempty"` // ídem
 }
 
 // Códigos de resultado de una licitación (TenderResultCode-2.09); en las muestras solo se han visto estos.

@@ -374,11 +374,19 @@ Documento de partida: «Plataforma de detección y análisis de concursos públi
   solo se calcula cuando el presupuesto es fiable: el del lote, o el del expediente si no tiene lotes; si hay varios adjudicatarios en el mismo lote, o lo adjudicado supera
   el presupuesto (contratos plurianuales: en las muestras hay uno con el cuádruple), queda vacía. Un adjudicatario se identifica por su NIF; una persona física con el NIF
   tapado, por su nombre. **Tendencia** = contratos de los últimos 12 meses frente a los 12 anteriores (`sin_datos` con menos de 3). Solo cuenta lo adjudicado en euros. La
-  herramienta `licitaciones` de los agentes tiene las operaciones nuevas `adjudicaciones` y `competidores`. **Aún no**: `/organizations/{id}`, `/expiring-contracts` (la
-  fecha de fin del contrato no se extrae todavía), `area`, ni el ranking de licitadores no adjudicatarios (solo se publica en las actas de la mesa).
+  herramienta `licitaciones` de los agentes tiene las operaciones nuevas `adjudicaciones` y `competidores`. **Aún no**: `/organizations/{id}`, `area`, ni el ranking de licitadores no adjudicatarios (solo se publica en las actas de la mesa).
 - **Página «Competencia» del panel** (hecho): `/licitaciones/competencia` enseña el ranking de `/competitors` de un mercado que se elige con CPV, zona (NUTS) o NIF del comprador
   (más fechas y orden); la dirección de la página es la consulta, así que se puede compartir. Cada empresa muestra cuota (barra y %), contratos, importe, baja media y mediana,
   tendencia y última adjudicación, y se abre para ver sus **últimas adjudicaciones en ese mismo mercado** (`/awards` con los mismos filtros), enlazadas a la ficha de la
   licitación. Siempre dice cuántas adjudicaciones hay detrás y, con menos de 10, avisa de que las cifras son orientativas. La pasarela del panel deja pasar `awards` y
   `competitors` (solo la lista, solo lectura). Los nombres son datos de terceros: se escriben como texto, nunca como HTML.
-- Pendiente: canal `correo`; fichas de organismo y contratos que vencen; un botón «Pedir informe de viabilidad» para una licitación concreta; y llevar a Viabilidad lo que ya sabe 101.cat de cada organismo.
+- **Contratos que vencen** (motor, hecho): `GET /api/v1/expiring-contracts` (CPV, zona, comprador, importe mínimo, `vence_desde`/`vence_hasta`, por defecto de hoy + 3 meses a hoy
+  + 12 meses y como máximo 36 meses de anchura, `con_prorrogas`). **Fecha de fin = inicio + duración prevista − 1 día**; la duración es la del lote (si la trae) o la del
+  expediente; el inicio, por orden de fiabilidad, la entrada en vigor publicada (`confianza` 0,9), la formalización (0,7) o la adjudicación (0,4). Sin duración o sin inicio no hay
+  fecha. Las **prórrogas** vienen en el pliego como texto libre («Cabe la opción de tres (3) prórrogas de un (1) año cada una», «Podrá ser prorrogado por un año más»…): el
+  parser reconoce solo lo que se dice sin ambigüedad (cuántas y de cuánto, o que se admiten o no) y **no suma por adivinación** (dos cláusulas distintas, «hasta un máximo
+  de…»); en esos casos `prorrogas_posibles` es sí/no/desconocido y el texto original va en `prorrogas_texto` para que lo lea una persona. **Limitaciones conocidas**: no
+  se tienen en cuenta modificaciones posteriores del contrato ni prórrogas ya ejecutadas (la fecha es la prevista en origen); y los expedientes ingeridos antes de esta
+  versión no traen el texto de las prórrogas hasta que se vuelvan a proyectar (nueva versión del expediente o repetir los eventos, ADR 0003). La herramienta de los agentes
+  tiene la operación `contratos_que_vencen`.
+- Pendiente: canal `correo`; ficha de organismo y página de contratos que vencen en el panel; un botón «Pedir informe de viabilidad» para una licitación concreta; y llevar a Viabilidad lo que ya sabe 101.cat de cada organismo.
