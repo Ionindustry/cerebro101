@@ -374,6 +374,11 @@ Documento de partida: «Plataforma de detección y análisis de concursos públi
   (`licitaciones_avisos.correo_enviado IS NULL`), agrupados por alerta (hasta `max_por_correo` = 20 por mensaje), con `Auto-Submitted: auto-generated`. Un fallo del servidor se
   anota (`correo_error`) y se reintenta hasta `max_intentos` = 5; un aviso de más de `max_antiguedad_horas` = 48 ya no se envía; al pasar una alerta a `correo` no se envía lo que
   ya había. El canal es único: «correo» incluye el panel pero no el resumen de las 16:00. Desde `/licitaciones/alertas`.
+- **Viabilidad frente a lo que hizo la gente** (hecho): el resumen del embudo (`GET /licitaciones/embudo/resumen`) lleva un bloque `viabilidad` y el embudo del panel un cuadro
+  desplegable. Cuenta, por recomendación (IR, NO IR, REVISAR), los informes **generados en el periodo** y lo que pasó después: **seguidos** (IR con la licitación presentada, o NO IR con la
+  licitación descartada), **en contra** (al revés), **pendientes** (aún detectada o en estudio) y cómo han acabado (ganadas y perdidas). No dice quién «acierta»: la gente decide por motivos
+  que el informe no ve, y una licitación no presentada no da resultado. Con menos de 5 licitaciones resueltas el cuadro avisa de que es pronto para sacar conclusiones. Es solo lectura
+  (se calcula al pedirlo, a partir de la tabla `licitaciones`) y no cambia nada. Sirve para decidir, cuando haya datos, si el informe merece más o menos peso en el rastreo.
 - **Informe de viabilidad a petición** (hecho): en el embudo, el botón «Pedir informe de viabilidad» (`POST /licitaciones/embudo/{id}/viabilidad`, 202) encola la tarea
   `pedir_viabilidad` (cola `peticiones`): Viabilidad valora esa licitación (sin los filtros del rastreo) y guarda el informe; «Volver a pedir…» lo sustituye tras confirmar
   (`reemplazar`). Solo hay una petición en curso por licitación (se da por perdida a los 20 minutos); si el modelo no responde se reintenta hasta 3 veces y, si no, la tarjeta

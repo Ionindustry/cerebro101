@@ -215,6 +215,31 @@ export function tasaExitoTexto(t) {
   return `${Math.round(t.valor * 100)} % (${t.ganadas} de ${t.decididas})`;
 }
 
+// ---- Viabilidad frente a lo que decidió la gente (resumen del embudo, bloque `viabilidad`): solo cuenta lo ocurrido, no dice quién «acierta» ----
+
+const plural = (n, uno, varios) => `${n} ${n === 1 ? uno : varios}`;
+const REC_TITULO = { ir: "Recomendó IR", no_ir: "Recomendó NO IR", revisar: "Pidió REVISAR" };
+
+/** Las filas del cuadro: una por recomendación con informes. «Seguimiento» = lo que hizo la gente (ir → se presentó; no ir → se descartó); «resultado» = lo que acabó pasando. */
+export function viabilidadFilas(v) {
+  const por = v?.por_recomendacion;
+  if (!por) return [];
+  return ["ir", "no_ir", "revisar"].filter((k) => por[k]?.informes > 0).map((k) => {
+    const c = por[k];
+    const partes = k === "revisar" ? [] : [plural(c.seguidos, "seguida", "seguidas"), plural(c.contrarios, "en contra", "en contra")];
+    if (c.pendientes) partes.push(plural(c.pendientes, "pendiente", "pendientes"));
+    const resultado = c.ganadas + c.perdidas ? `${plural(c.ganadas, "ganada", "ganadas")} · ${plural(c.perdidas, "perdida", "perdidas")}` : "—";
+    return { clave: k, titulo: REC_TITULO[k], informes: c.informes, seguimiento: partes.join(" · ") || "—", resultado };
+  });
+}
+
+/** Con pocas licitaciones resueltas, comparar no significa nada: se avisa en vez de enseñarlo como una cifra firme. */
+export const viabilidadPocosDatos = (v) => {
+  const por = v?.por_recomendacion || {};
+  const resueltas = Object.values(por).reduce((n, c) => n + (c.ganadas || 0) + (c.perdidas || 0), 0);
+  return resueltas < (v?.minimo ?? 5);
+};
+
 /** Horas como «3 h» o «2,5 días»; null es «—». */
 export function horasTexto(h) {
   if (h === null || h === undefined || Number.isNaN(Number(h))) return "—";

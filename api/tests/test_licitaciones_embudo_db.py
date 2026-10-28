@@ -135,8 +135,17 @@ class TestEmbudoEnBase(unittest.TestCase):
         res = ejecutar(embudo.resumen(7))
         self.assertEqual(res["por_estado"]["presentada"], 1)
         self.assertEqual(res["en_periodo"]["presentadas"], 1)
+        self.assertEqual(res["viabilidad"]["informes"], 0)
         with self.assertRaises(embudo.ErrorEmbudo):
             ejecutar(embudo.resumen(0))
+
+    def test_resumen_cuenta_los_informes_de_viabilidad_y_lo_que_hizo_la_gente(self):
+        r = self.estudiar()
+        informe = {"recomendacion": "ir", "generado": datetime.now(timezone.utc).isoformat()}
+        self.assertTrue(ejecutar(embudo.guardar_viabilidad(r["id"], informe)))
+        ejecutar(embudo.cambiar_estado(r["id"], "presentada", ahora=datetime.now(timezone.utc)))
+        v = ejecutar(embudo.resumen(7))["viabilidad"]
+        self.assertEqual((v["informes"], v["por_recomendacion"]["ir"]["seguidos"], v["por_recomendacion"]["ir"]["pendientes"]), (1, 1, 0))
 
     # ---- Lo que escribe el consumidor de eventos ----
 

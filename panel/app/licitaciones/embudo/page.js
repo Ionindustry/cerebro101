@@ -1,7 +1,7 @@
 "use client";
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
-import { accionEmbudo, avisoEstadoMotor, hayPeticionEnCurso, peticionViabilidad, puedePedirViabilidad, textoPedirViabilidad, viabilidadEtiqueta, diasDePeriodo, encajeClase, ESTADOS_EMBUDO, etiquetaEmbudo, fechaTexto, horasTexto, importeTexto, mensajeEmbudo, PERIODOS_EMBUDO, tasaExitoTexto } from "../../../lib/licitaciones";
+import { accionEmbudo, avisoEstadoMotor, hayPeticionEnCurso, peticionViabilidad, puedePedirViabilidad, textoPedirViabilidad, viabilidadEtiqueta, diasDePeriodo, encajeClase, ESTADOS_EMBUDO, etiquetaEmbudo, fechaTexto, horasTexto, importeTexto, mensajeEmbudo, PERIODOS_EMBUDO, tasaExitoTexto, viabilidadFilas, viabilidadPocosDatos } from "../../../lib/licitaciones";
 import { pedirCerebro } from "../cliente";
 
 const enviar = (cuerpo) => ({ method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(cuerpo) });
@@ -22,7 +22,27 @@ function Resumen({ r }) {
         <div><dt>Horas hasta decidir ir o no ir (mediana)</dt><dd>{horasTexto(r.horas_hasta_decision_p50)}</dd></div>
         <div><dt>Motivos de pérdida</dt><dd>{r.motivos_perdida.length === 0 ? "—" : r.motivos_perdida.map((m) => `${m.etiqueta} (${m.total})`).join(" · ")}</dd></div>
       </dl>
+      <Viabilidad v={r.viabilidad} />
     </section>
+  );
+}
+
+function Viabilidad({ v }) {
+  const filas = viabilidadFilas(v);
+  if (filas.length === 0) return null;
+  return (
+    <details className="lic-informe">
+      <summary>Qué ha hecho la gente con los informes de Viabilidad · {v.informes} en el periodo</summary>
+      <table className="lic-tabla">
+        <thead><tr><th>Viabilidad</th><th>Informes</th><th>Lo que hizo la gente</th><th>Cómo ha acabado</th></tr></thead>
+        <tbody>{filas.map((f) => <tr key={f.clave}><td>{f.titulo}</td><td>{f.informes}</td><td>{f.seguimiento}</td><td>{f.resultado}</td></tr>)}</tbody>
+      </table>
+      <p className="meta">
+        Solo cuenta lo que ha pasado después de cada informe (informes generados en el periodo). Un informe «seguido» es IR con la licitación presentada, o NO IR con la licitación descartada.
+        Viabilidad es una ayuda y no decide nada: que una persona no la siga no significa que se equivoque ninguno de los dos.
+        {viabilidadPocosDatos(v) && " Hay todavía muy pocas licitaciones resueltas para sacar conclusiones."}
+      </p>
+    </details>
   );
 }
 

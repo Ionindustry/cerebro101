@@ -526,3 +526,31 @@ test("textos de una alerta de competencia y de su aviso", () => {
     ["Ganó Seguridad SL · B12345678 · 90.000 € sin IVA · lote 2", "Ganó Pedro Pérez"]);
   assert.deepEqual(ganadoresTexto(null), []);
 });
+
+// ---- Cuadro «qué ha hecho la gente con Viabilidad» ----
+import { viabilidadFilas, viabilidadPocosDatos } from "../lib/licitaciones.js";
+
+const VIAB = { informes: 14, minimo: 5, por_recomendacion: {
+  ir: { informes: 6, seguidos: 3, contrarios: 1, pendientes: 2, ganadas: 1, perdidas: 1 },
+  no_ir: { informes: 1, seguidos: 1, contrarios: 0, pendientes: 0, ganadas: 0, perdidas: 0 },
+  revisar: { informes: 0, seguidos: 0, contrarios: 0, pendientes: 0, ganadas: 0, perdidas: 0 } } };
+
+test("viabilidadFilas: una fila por recomendación con informes, con singular y plural", () => {
+  assert.deepEqual(viabilidadFilas(VIAB), [
+    { clave: "ir", titulo: "Recomendó IR", informes: 6, seguimiento: "3 seguidas · 1 en contra · 2 pendientes", resultado: "1 ganada · 1 perdida" },
+    { clave: "no_ir", titulo: "Recomendó NO IR", informes: 1, seguimiento: "1 seguida · 0 en contra", resultado: "—" },
+  ]);
+  assert.deepEqual(viabilidadFilas(null), []);
+  assert.deepEqual(viabilidadFilas({ por_recomendacion: { ir: { informes: 0 } } }), []);
+});
+
+test("viabilidadFilas: «revisar» no tiene seguimiento, solo pendientes y resultado", () => {
+  const f = viabilidadFilas({ por_recomendacion: { revisar: { informes: 3, seguidos: 0, contrarios: 0, pendientes: 1, ganadas: 2, perdidas: 0 } } });
+  assert.deepEqual(f, [{ clave: "revisar", titulo: "Pidió REVISAR", informes: 3, seguimiento: "1 pendiente", resultado: "2 ganadas · 0 perdidas" }]);
+});
+
+test("viabilidadPocosDatos: con menos resueltas que el mínimo no se concluye nada", () => {
+  assert.equal(viabilidadPocosDatos(VIAB), true);                                                  // 2 resueltas de 5
+  assert.equal(viabilidadPocosDatos({ minimo: 5, por_recomendacion: { ir: { ganadas: 3, perdidas: 2 } } }), false);
+  assert.equal(viabilidadPocosDatos(null), true);
+});
