@@ -104,9 +104,51 @@ def _en(f: datetime | None, desde: datetime, hasta: datetime) -> bool:
     return f is not None and desde <= f <= hasta
 
 
+RECOMENDACIONES = ("ir", "no_ir", "revisar")
+_SIGUEN = ("presentada", "ganada", "perdida")        # la gente siguió adelante con la licitación
+_SEGUIDAS = {"ir": _SIGUEN, "no_ir": ("descartada",)}
+_CONTRARIAS = {"ir": ("descartada",), "no_ir": _SIGUEN}
+
+
+def _fecha(t) -> datetime | None:
+    try:
+        d = datetime.fromisoformat(str(t))
+    except ValueError:
+        return None
+    return d if d.tzinfo else None
+
+
+def calcular_viabilidad(filas: list[dict], desde: datetime, hasta: datetime) -> dict:
+    """¿Qué ha hecho la gente con lo que recomendó Viabilidad, y cómo ha acabado? Cuenta los informes generados en el periodo, por recomendación:
+    `seguidos` (ir y se presentó, o no ir y se descartó), `contrarios` (al revés), `pendientes` (aún sin decidir) y el resultado de las resueltas (`ganadas`, `perdidas`).
+    «Revisar» no recomienda nada, así que solo cuenta pendientes y resultados. Es consultivo: no mide si el agente «acierta», solo lo que ha pasado después. Pura."""
+    por = {r: {"informes": 0, "seguidos": 0, "contrarios": 0, "pendientes": 0, "ganadas": 0, "perdidas": 0} for r in RECOMENDACIONES}
+    otros = 0
+    for f in filas:
+        v = f.get("viabilidad")
+        g = _fecha(v.get("generado")) if isinstance(v, dict) else None
+        if g is None or not desde <= g <= hasta:
+            continue
+        rec = v.get("recomendacion")
+        if rec not in por:
+            otros += 1
+            continue
+        c, e = por[rec], f.get("estado")
+        c["informes"] += 1
+        if e in _SEGUIDAS.get(rec, ()):
+            c["seguidos"] += 1
+        elif e in _CONTRARIAS.get(rec, ()):
+            c["contrarios"] += 1
+        elif e in ("detectada", "en_estudio"):
+            c["pendientes"] += 1
+        c["ganadas"] += e == "ganada"
+        c["perdidas"] += e == "perdida"
+    return {"informes": sum(c["informes"] for c in por.values()) + otros, "sin_recomendacion": otros, "por_recomendacion": por, "minimo": MIN_DECIDIDAS}
+
+
 def calcular_resumen(filas: list[dict], dias: int, ahora: datetime, zona: str) -> dict:
     """El bloque «Embudo propio» del dashboard. `filas` son las filas de la tabla (estado, creado, decidida_en, presentada_en, resuelta_en,
-    motivo_perdida). Pura: no toca la base de datos ni el reloj."""
+    motivo_perdida y, si lo hay, viabilidad). Pura: no toca la base de datos ni el reloj."""
     if not 1 <= dias <= 365:
         raise ErrorEmbudo("dias debe estar entre 1 y 365")
     desde, hasta = desde_periodo(ahora, zona, dias), ahora
@@ -132,6 +174,7 @@ def calcular_resumen(filas: list[dict], dias: int, ahora: datetime, zona: str) -
                        "minimo": MIN_DECIDIDAS},
         "motivos_perdida": [{"motivo": m, "etiqueta": MOTIVOS_PERDIDA.get(m, m), "total": n} for m, n in sorted(motivos.items(), key=lambda x: (-x[1], x[0]))[:TOP_MOTIVOS]],
         "horas_hasta_decision_p50": round(statistics.median(horas), 1) if horas else None,
+        "viabilidad": calcular_viabilidad(filas, desde, hasta),
     }
 
 
@@ -197,7 +240,7 @@ async def resumen(dias: int = 30, ahora: datetime | None = None) -> dict:
     if not 1 <= dias <= 365:
         raise ErrorEmbudo("dias debe estar entre 1 y 365")
     async with await psycopg.AsyncConnection.connect(ajustes.database_url, row_factory=dict_row) as conn:
-        cur = await conn.execute("SELECT estado, creado, decidida_en, presentada_en, resuelta_en, motivo_perdida FROM licitaciones")
+        cur = await conn.execute("SELECT estado, creado, decidida_en, presentada_en, resuelta_en, motivo_perdida, viabilidad FROM licitaciones")
         filas = await cur.fetchall()
     return calcular_resumen(filas, dias, ahora or datetime.now(timezone.utc), ajustes.zona_horaria)
 

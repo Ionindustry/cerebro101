@@ -94,6 +94,28 @@ class TestResumen(unittest.TestCase):
         t = calcular_resumen(filas, 30, AHORA, ZONA)["tasa_exito"]
         self.assertEqual((t["valor"], t["ganadas"], t["decididas"]), (0.4, 2, 5))
 
+    def test_viabilidad_lo_que_hizo_la_gente_con_cada_recomendacion(self):
+        hoy = (AHORA - timedelta(days=1)).isoformat()
+
+        def v(rec, estado, generado=hoy):
+            return fila(estado, viabilidad={"recomendacion": rec, "generado": generado})
+        filas = [v("ir", "presentada"), v("ir", "ganada"), v("ir", "perdida"), v("ir", "descartada"), v("ir", "en_estudio"), v("ir", "detectada"),
+                 v("no_ir", "descartada"), v("no_ir", "descartada"), v("no_ir", "perdida"), v("no_ir", "detectada"),
+                 v("revisar", "ganada"), v("revisar", "descartada"), v("revisar", "en_estudio"),
+                 v("sin_recomendacion", "ganada"),
+                 v("ir", "ganada", generado=(AHORA - timedelta(days=90)).isoformat()),                  # fuera del periodo
+                 v("ir", "ganada", generado="no es una fecha"), v("ir", "ganada", generado=None),
+                 fila("ganada"), fila("detectada", viabilidad="texto raro")]                             # sin informe o con un informe que no es un objeto
+        r = calcular_resumen(filas, 30, AHORA, ZONA)["viabilidad"]
+        self.assertEqual((r["informes"], r["sin_recomendacion"], r["minimo"]), (14, 1, 5))
+        self.assertEqual(r["por_recomendacion"]["ir"], {"informes": 6, "seguidos": 3, "contrarios": 1, "pendientes": 2, "ganadas": 1, "perdidas": 1})
+        self.assertEqual(r["por_recomendacion"]["no_ir"], {"informes": 4, "seguidos": 2, "contrarios": 1, "pendientes": 1, "ganadas": 0, "perdidas": 1})
+        self.assertEqual(r["por_recomendacion"]["revisar"], {"informes": 3, "seguidos": 0, "contrarios": 0, "pendientes": 1, "ganadas": 1, "perdidas": 0})
+
+    def test_viabilidad_sin_informes_o_sin_la_columna(self):
+        r = calcular_resumen([fila("ganada")], 30, AHORA, ZONA)["viabilidad"]
+        self.assertEqual((r["informes"], r["por_recomendacion"]["ir"]["informes"]), (0, 0))
+
     def test_motivos_de_perdida_ordenados_y_acotados(self):
         d = AHORA - timedelta(days=1)
         motivos = ["precio"] * 3 + ["solvencia"] * 2 + ["plazo", "otro", "documentacion", "puntuacion_tecnica"]
