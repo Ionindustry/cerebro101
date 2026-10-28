@@ -291,6 +291,35 @@ async def estudiar_licitacion(entrada: EstudiarEntrada, usuario: Usuario = Depen
     return fila
 
 
+class ViabilidadEntrada(BaseModel):
+    reemplazar: bool = False          # volver a pedirlo aunque ya haya informe (se sustituye)
+
+
+@app.post("/licitaciones/embudo/{lid}/viabilidad", status_code=202)
+async def pedir_viabilidad_licitacion(lid: int, entrada: ViabilidadEntrada | None = None, usuario: Usuario = Depends(usuario_actual)):
+    """«Pedir informe de viabilidad»: encola que Viabilidad valore esta licitación (tarda: es un modelo de IA). Responde 202 con la petición en curso; el panel consulta el embudo
+    hasta que aparece el informe. Es consultivo: no cambia el estado ni la decisión."""
+    _exige_licitaciones(usuario)
+    entrada = entrada or ViabilidadEntrada()
+    try:
+        peticion = await embudo_licitaciones.reservar_peticion_viabilidad(lid, usuario.id, entrada.reemplazar)
+    except embudo_licitaciones.NoExiste as e:
+        raise HTTPException(404, str(e)) from None
+    except embudo_licitaciones.Conflicto as e:
+        raise HTTPException(409, str(e)) from None
+    except embudo_licitaciones.ErrorEmbudo as e:
+        raise HTTPException(422, str(e)) from None
+    try:
+        from ..tareas.celery_app import app as celery
+        celery.send_task("cerebro.tareas.celery_app.pedir_viabilidad", args=[lid], queue="peticiones")
+    except Exception as e:      # noqa: BLE001 — sin cola no hay trabajo: se deshace la reserva para poder volver a pedirlo
+        log.error("embudo: no se ha podido encolar la viabilidad de %s: %s: %s", lid, type(e).__name__, e)
+        await embudo_licitaciones.cerrar_peticion_viabilidad(lid, "No se ha podido encolar la petición: inténtalo de nuevo")
+        raise HTTPException(503, "No se ha podido encolar la petición") from None
+    log.info("embudo: %s pide el informe de viabilidad de la licitación %s", usuario.id, lid)
+    return {"id": lid, "viabilidad_peticion": peticion}
+
+
 @app.post("/licitaciones/embudo/{lid}/estado")
 async def cambiar_estado_licitacion(lid: int, entrada: CambioEstadoEntrada, usuario: Usuario = Depends(usuario_actual)):
     """Anota la decisión de una persona: pasar a en estudio, presentada, ganada, perdida (con motivo) o descartada."""

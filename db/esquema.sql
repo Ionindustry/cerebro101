@@ -236,6 +236,9 @@ ALTER TABLE licitaciones ADD COLUMN IF NOT EXISTS presentada_en   timestamptz;
 ALTER TABLE licitaciones ADD COLUMN IF NOT EXISTS resuelta_en     timestamptz;
 -- Estado del expediente en el motor (abierta, adjudicada, anulada…); lo actualiza el consumidor de eventos (cerebro/licitaciones/consumidor.py).
 ALTER TABLE licitaciones ADD COLUMN IF NOT EXISTS estado_motor    text;
+-- Petición de un informe de viabilidad por una persona («Pedir informe de viabilidad»): {"estado": "en_curso"|"error", "por": usuario, "en": hora, "error": texto}.
+-- Evita pedirlo dos veces a la vez; se borra al guardarse el informe.
+ALTER TABLE licitaciones ADD COLUMN IF NOT EXISTS viabilidad_peticion jsonb;
 -- El código de expediente no es único entre organismos: la identidad de una fila es el expediente del motor.
 ALTER TABLE licitaciones DROP CONSTRAINT IF EXISTS licitaciones_expediente_key;
 CREATE UNIQUE INDEX IF NOT EXISTS licitaciones_motor_id ON licitaciones (motor_id);
