@@ -20,7 +20,7 @@ from psycopg.types.json import Jsonb
 from ..ajustes import ajustes
 
 EVENTOS = ("licitacion.nueva", "licitacion.modificada", "licitacion.adjudicada", "licitacion.formalizada", "licitacion.anulada")
-CANALES = ("panel", "resumen_diario")      # «correo» cuando haya envío (ver db/esquema.sql)
+CANALES = ("panel", "resumen_diario", "correo")      # correo: un mensaje a `correo_destino` (avisos_correo.py); no se combina con el resumen
 SOLO_DEPARTAMENTO = {"resumen_diario"}       # canales que solo admite una alerta de departamento (una personal no puede salir en un resumen que ve Dirección)
 AMBITOS = ("personal", "departamento")
 
@@ -36,6 +36,7 @@ RE_CPV = re.compile(r"^[0-9]{2,8}$")
 RE_NUTS = re.compile(r"^[A-Z]{2}[0-9A-Z]{0,3}$")
 RE_IMPORTE = re.compile(r"^[0-9]{1,12}(\.[0-9]{1,2})?$")
 RE_COMPRADOR = re.compile(r"^(nif:[0-9A-Z]{9}|dir3:[0-9A-Z]{9,10})$")
+RE_CORREO = re.compile(r"^[a-z0-9._%+-]{1,64}@([a-z0-9-]+(?:\.[a-z0-9-]+)+)$")
 RE_DEPARTAMENTO = re.compile(r"^[a-z0-9_-]{1,40}$")
 LISTAS = {"cpv": (20, RE_CPV.match, "2 a 8 cifras"), "nuts": (20, RE_NUTS.match, "código NUTS, p. ej. ES512"),
           "estado": (7, lambda s: s in ESTADOS_MOTOR, "estado desconocido"), "procedimiento": (10, lambda s: s in PROCEDIMIENTOS, "procedimiento desconocido"),
@@ -151,7 +152,32 @@ def parametros_de_consulta(filtro: dict, fuente_externa: str, id_origen: str) ->
 
 # ---- Base de datos ----
 
-COLUMNAS = "id, nombre, propietario, ambito, departamento, filtro, eventos, canal, activa, creada, cambiada, ultima_entrega"
+def limpiar_correo(c, dominios=None) -> str:
+    """La dirección a la que llega el aviso: tiene que ser de la empresa (config/buzones.yaml, `avisos.dominios`). Es correo interno y sin aprobación, así que una
+    dirección de fuera se rechaza aquí y otra vez al enviar."""
+    if dominios is None:
+        from ..herramientas import buzones
+        dominios = (buzones.cargar().get("avisos") or {}).get("dominios") or []
+    dominios = [d.lower() for d in dominios]
+    t = c.strip().lower() if isinstance(c, str) else ""
+    m = RE_CORREO.match(t)
+    if not m:
+        raise ErrorAlerta("correo_destino: indica una dirección de correo")
+    if m.group(1) not in dominios:
+        raise ErrorAlerta("correo_destino: solo se envían avisos a direcciones de la empresa (" + ", ".join(f"@{d}" for d in dominios) + ")")
+    return t
+
+
+def limpiar_destino(canal: str, destino, dominios=None) -> str | None:
+    """El destino que se guarda con el canal: obligatorio con «correo» y solo con él (con otro canal se ignora)."""
+    if canal != "correo":
+        return None
+    if not destino:
+        raise ErrorAlerta("correo_destino: indica a qué dirección enviar el aviso")
+    return limpiar_correo(destino, dominios)
+
+
+COLUMNAS = "id, nombre, propietario, ambito, departamento, filtro, eventos, canal, correo_destino, activa, creada, cambiada, ultima_entrega"
 
 
 def _alerta(f: dict, usuario=None) -> dict:
@@ -185,16 +211,17 @@ async def crear(usuario, datos: dict) -> dict:
     departamento = limpiar_departamento(ambito, datos.get("departamento"))
     if not puede_crear(usuario, ambito, departamento):
         raise SinPermiso("No puedes crear esa alerta" + (": las de un departamento las crea su responsable o Dirección" if ambito == "departamento" else ""))
+    canal = limpiar_canal(datos.get("canal", "panel"), ambito)
     valores = (limpiar_nombre(datos.get("nombre")), usuario.id, ambito, departamento, Jsonb(limpiar_filtro(datos.get("filtro"))),
-               limpiar_eventos(datos.get("eventos")), limpiar_canal(datos.get("canal", "panel"), ambito), bool(datos.get("activa", True)))
+               limpiar_eventos(datos.get("eventos")), canal, limpiar_destino(canal, datos.get("correo_destino")), bool(datos.get("activa", True)))
     async with await _conectar() as conn:
         async with conn.transaction():
             cur = await conn.execute("SELECT count(*) AS n FROM licitaciones_alertas WHERE propietario = %s", [usuario.id])
             if (await cur.fetchone())["n"] >= MAX_ALERTAS_POR_PERSONA:
                 raise ErrorAlerta(f"Has llegado al máximo de {MAX_ALERTAS_POR_PERSONA} alertas: borra alguna")
             cur = await conn.execute(
-                f"""INSERT INTO licitaciones_alertas (nombre, propietario, ambito, departamento, filtro, eventos, canal, activa)
-                    VALUES (%s,%s,%s,%s,%s,%s,%s,%s) RETURNING {COLUMNAS}""", valores)
+                f"""INSERT INTO licitaciones_alertas (nombre, propietario, ambito, departamento, filtro, eventos, canal, correo_destino, activa)
+                    VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s) RETURNING {COLUMNAS}""", valores)
             return _alerta(await cur.fetchone(), usuario)
 
 
@@ -209,12 +236,12 @@ async def _leer(conn, aid: int, usuario, para_cambiar: bool) -> dict:
 
 
 async def cambiar(usuario, aid: int, datos: dict) -> dict:
-    """Cambia nombre, filtro, eventos, canal y/o activa. El ámbito, el departamento y el dueño no se cambian: se borra y se crea otra."""
+    """Cambia nombre, filtro, eventos, canal (y su dirección de correo) y/o activa. El ámbito, el departamento y el dueño no se cambian: se borra y se crea otra."""
     if not con_acceso(usuario):
         raise SinPermiso("Tu usuario no tiene acceso a Licitaciones")
     if not isinstance(datos, dict) or not datos:
         raise ErrorAlerta("Indica qué cambiar")
-    permitido = {"nombre", "filtro", "eventos", "activa", "canal"}
+    permitido = {"nombre", "filtro", "eventos", "activa", "canal", "correo_destino"}
     if set(datos) - permitido:
         raise ErrorAlerta("Solo se puede cambiar: " + ", ".join(sorted(permitido)))
     nuevo: dict = {}
@@ -226,6 +253,8 @@ async def cambiar(usuario, aid: int, datos: dict) -> dict:
         nuevo["eventos"] = limpiar_eventos(datos["eventos"])
     if "canal" in datos:
         nuevo["canal"] = limpiar_canal(datos["canal"])          # la regla del ámbito se comprueba abajo, con la alerta delante
+    if "correo_destino" in datos and datos["correo_destino"] is not None and not isinstance(datos["correo_destino"], str):
+        raise ErrorAlerta("correo_destino: indica una dirección de correo")
     if "activa" in datos:
         if not isinstance(datos["activa"], bool):
             raise ErrorAlerta("activa: verdadero o falso")
@@ -235,6 +264,13 @@ async def cambiar(usuario, aid: int, datos: dict) -> dict:
             actual = await _leer(conn, aid, usuario, True)
             if "canal" in nuevo:
                 limpiar_canal(nuevo["canal"], actual["ambito"])
+            if "canal" in nuevo or "correo_destino" in datos:
+                canal = nuevo.get("canal", actual["canal"])
+                nuevo["canal"] = canal
+                nuevo["correo_destino"] = limpiar_destino(canal, datos.get("correo_destino", actual["correo_destino"]))
+                if canal == "correo" and actual["canal"] != "correo":
+                    # los avisos que ya había no se envían por correo ahora: solo los que lleguen desde este momento
+                    await conn.execute("UPDATE licitaciones_avisos SET correo_enviado = now() WHERE alerta_id = %s AND correo_enviado IS NULL", [aid])
             sets = ", ".join(f"{k} = %s" for k in nuevo) + ", cambiada = now()"
             cur = await conn.execute(f"UPDATE licitaciones_alertas SET {sets} WHERE id = %s RETURNING {COLUMNAS}", [*nuevo.values(), aid])
             return _alerta(await cur.fetchone(), usuario)

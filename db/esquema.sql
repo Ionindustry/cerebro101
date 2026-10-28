@@ -263,7 +263,7 @@ CREATE TABLE IF NOT EXISTS licitaciones_alertas (
   departamento    text,                                -- obligatorio si ambito = departamento
   filtro          jsonb NOT NULL,
   eventos         text[] NOT NULL,                     -- licitacion.nueva, .modificada, .adjudicada, .formalizada, .anulada
-  canal           text NOT NULL DEFAULT 'panel',       -- panel: solo el aviso en el panel · resumen_diario: además, en el resumen de las 16:00 (solo alertas de departamento); «correo», cuando haya envío
+  canal           text NOT NULL DEFAULT 'panel',       -- panel: solo el aviso en el panel · resumen_diario: además, en el resumen de las 16:00 (solo alertas de departamento); correo: además, un correo a `correo_destino` (solo @101.cat; sale del buzón «notificaciones»)
   activa          boolean NOT NULL DEFAULT true,
   creada          timestamptz NOT NULL DEFAULT now(),
   cambiada        timestamptz NOT NULL DEFAULT now(),
@@ -273,7 +273,11 @@ CREATE TABLE IF NOT EXISTS licitaciones_alertas (
 CREATE INDEX IF NOT EXISTS licitaciones_alertas_activas ON licitaciones_alertas (activa) WHERE activa;
 -- Las reglas del canal van con nombre y se reaplican en cada arranque (así una base creada antes, que solo admitía «panel», pasa a admitir «resumen_diario»).
 ALTER TABLE licitaciones_alertas DROP CONSTRAINT IF EXISTS licitaciones_alertas_canal_check;
-ALTER TABLE licitaciones_alertas ADD CONSTRAINT licitaciones_alertas_canal_check CHECK (canal IN ('panel','resumen_diario'));
+ALTER TABLE licitaciones_alertas ADD COLUMN IF NOT EXISTS correo_destino text;
+ALTER TABLE licitaciones_alertas ADD CONSTRAINT licitaciones_alertas_canal_check CHECK (canal IN ('panel','resumen_diario','correo'));
+-- Con canal «correo» hay dirección de destino, y solo entonces.
+ALTER TABLE licitaciones_alertas DROP CONSTRAINT IF EXISTS licitaciones_alertas_correo_destino;
+ALTER TABLE licitaciones_alertas ADD CONSTRAINT licitaciones_alertas_correo_destino CHECK ((canal = 'correo') = (correo_destino IS NOT NULL));
 ALTER TABLE licitaciones_alertas DROP CONSTRAINT IF EXISTS licitaciones_alertas_resumen_solo_departamento;
 -- El resumen lo ven Dirección y Licitaciones: una alerta PERSONAL nunca puede aparecer en él.
 ALTER TABLE licitaciones_alertas ADD CONSTRAINT licitaciones_alertas_resumen_solo_departamento CHECK (canal <> 'resumen_diario' OR ambito = 'departamento');
@@ -296,6 +300,11 @@ CREATE TABLE IF NOT EXISTS licitaciones_avisos (
   creado       timestamptz NOT NULL DEFAULT now(),
   UNIQUE (alerta_id, evento_id)
 );
+-- Envío por correo (canal «correo»): NULL = pendiente de enviar; se reintenta hasta agotar los intentos (cerebro/licitaciones/avisos_correo.py).
+ALTER TABLE licitaciones_avisos ADD COLUMN IF NOT EXISTS correo_enviado timestamptz;
+ALTER TABLE licitaciones_avisos ADD COLUMN IF NOT EXISTS correo_intentos integer NOT NULL DEFAULT 0;
+ALTER TABLE licitaciones_avisos ADD COLUMN IF NOT EXISTS correo_error text;
+CREATE INDEX IF NOT EXISTS licitaciones_avisos_correo_pendiente ON licitaciones_avisos (alerta_id, creado) WHERE correo_enviado IS NULL;
 CREATE INDEX IF NOT EXISTS licitaciones_avisos_no_leidos ON licitaciones_avisos (creado DESC) WHERE NOT leido;
 
 -- Resumen diario de licitaciones (a las 16:00, para Dirección; ver api/cerebro/licitaciones/resumen.py). El contenido es un documento completo:

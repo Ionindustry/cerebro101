@@ -23,6 +23,7 @@ app.conf.timezone = ajustes.zona_horaria
 app.conf.task_routes = {"cerebro.tareas.celery_app.ejecutar_programada": {"queue": "lote"},
                         "cerebro.tareas.celery_app.resumen_licitaciones": {"queue": "lote"},
                         "cerebro.tareas.celery_app.rastreo_embudo": {"queue": "lote"},
+                        "cerebro.tareas.celery_app.enviar_avisos_correo": {"queue": "lote"},
                         "cerebro.tareas.celery_app.pedir_viabilidad": {"queue": "peticiones"},
                         "cerebro.tareas.celery_app.volcar_constancia": {"queue": "peticiones"}}
 
@@ -62,6 +63,7 @@ def _rastreo_embudo() -> dict:
 
 
 app.conf.beat_schedule = {**_calendario(), **_resumen_licitaciones(), **_rastreo_embudo(),
+                          "avisos-por-correo": {"task": "cerebro.tareas.celery_app.enviar_avisos_correo", "schedule": 300.0},
                           "constancia-pendiente": {"task": "cerebro.tareas.celery_app.volcar_constancia", "schedule": 300.0}}
 
 
@@ -141,3 +143,11 @@ def pedir_viabilidad(self, lid: int) -> dict:
         asyncio.run(embudo.cerrar_peticion_viabilidad(lid, "No se ha podido generar el informe: inténtalo de nuevo"))
         return {"estado": "error", "motivo": type(e).__name__}
     return {"estado": "ok", "recomendacion": informe["recomendacion"]}
+
+
+@app.task(name="cerebro.tareas.celery_app.enviar_avisos_correo")
+def enviar_avisos_correo() -> dict:
+    """Envía por correo los avisos pendientes de las alertas con canal «correo» (cada 5 minutos). Correo interno, solo a direcciones de la empresa;
+    lo que falla se reintenta en el siguiente ciclo (cerebro/licitaciones/avisos_correo.py)."""
+    from ..licitaciones.avisos_correo import enviar_pendientes
+    return asyncio.run(enviar_pendientes())

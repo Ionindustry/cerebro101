@@ -1,7 +1,7 @@
 "use client";
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
-import { admiteResumen, ambitoTexto, CANALES_ALERTA, canalEtiqueta, encajeClase, EVENTOS_ALERTA, eventoEtiqueta, fechaTexto, filtroDeAlerta, filtroTexto, importeTexto, mensajeAlertas, sinLeerTexto } from "../../../lib/licitaciones";
+import { admiteResumen, ambitoTexto, canalDeAlertaTexto, canalesDe, correoValido, DOMINIO_CORREO, encajeClase, EVENTOS_ALERTA, eventoEtiqueta, fechaTexto, filtroDeAlerta, filtroTexto, importeTexto, mensajeAlertas, sinLeerTexto } from "../../../lib/licitaciones";
 import { pedirCerebro } from "../cliente";
 
 const enviar = (cuerpo) => ({ method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(cuerpo || {}) });
@@ -37,15 +37,17 @@ function Avisos({ avisos, onLeer }) {
   );
 }
 
-const FORMULARIO_VACIO = { nombre: "", q: "", cpv: "", nuts: "", importeMin: "", importeMax: "", eventos: ["licitacion.nueva"], ambito: "personal", departamento: "", canal: "panel" };
+const FORMULARIO_VACIO = { nombre: "", q: "", cpv: "", nuts: "", importeMin: "", importeMax: "", eventos: ["licitacion.nueva"], ambito: "personal", departamento: "", canal: "panel", correo: "" };
 
 function Formulario({ onCrear, trabajando }) {
   const [f, setF] = useState(FORMULARIO_VACIO);
   const poner = (k) => (ev) => setF((x) => ({ ...x, [k]: ev.target.value }));
+  const canal = canalesDe(f.ambito).some(([k]) => k === f.canal) ? f.canal : "panel";       // «resumen_diario» solo para departamentos: al pasar a «Mía» vuelve a «panel»
+  const correoMal = canal === "correo" && !correoValido(f.correo);
   const alternar = (e) => setF((x) => ({ ...x, eventos: x.eventos.includes(e) ? x.eventos.filter((y) => y !== e) : [...x.eventos, e] }));
   const enviarForm = async (ev) => {
     ev.preventDefault();
-    if (await onCrear(f)) setF(FORMULARIO_VACIO);
+    if (await onCrear({ ...f, canal })) setF(FORMULARIO_VACIO);
   };
   return (
     <form className="tarjeta lic-form" onSubmit={enviarForm}>
@@ -65,10 +67,14 @@ function Formulario({ onCrear, trabajando }) {
           </select>
         </label>
         {f.ambito === "departamento" && <label>Departamento<input type="text" value={f.departamento} onChange={poner("departamento")} placeholder="licitaciones" required /><span className="ayuda">Solo su responsable o Dirección pueden crearla</span></label>}
-        {f.ambito === "departamento" && (
-          <label>Dónde avisa
-            <select value={f.canal} onChange={poner("canal")}>{CANALES_ALERTA.map(([k, t]) => <option key={k} value={k}>{t}</option>)}</select>
-            <span className="ayuda">El resumen lo ven Dirección y Licitaciones</span>
+        <label>Dónde avisa
+          <select value={canal} onChange={poner("canal")}>{canalesDe(f.ambito).map(([k, t]) => <option key={k} value={k}>{t}</option>)}</select>
+          <span className="ayuda">{f.ambito === "departamento" ? "El resumen lo ven Dirección y Licitaciones" : "El correo solo llega a direcciones de la empresa"}</span>
+        </label>
+        {canal === "correo" && (
+          <label>Correo de destino
+            <input type="email" value={f.correo} onChange={poner("correo")} required placeholder={`nombre@${DOMINIO_CORREO}`} maxLength={254} />
+            <span className="ayuda">{correoMal && f.correo ? `Tiene que ser una dirección @${DOMINIO_CORREO}` : `Solo direcciones @${DOMINIO_CORREO}; los avisos salen cada pocos minutos`}</span>
           </label>
         )}
       </div>
@@ -76,7 +82,7 @@ function Formulario({ onCrear, trabajando }) {
         <legend>Avisar de</legend>
         {EVENTOS_ALERTA.map(([k, t]) => <label key={k}><input type="checkbox" checked={f.eventos.includes(k)} onChange={() => alternar(k)} />{t}</label>)}
       </fieldset>
-      <div className="lic-fila"><button className="boton si" type="submit" disabled={trabajando || f.eventos.length === 0}>{trabajando ? "Guardando…" : "Guardar alerta"}</button></div>
+      <div className="lic-fila"><button className="boton si" type="submit" disabled={trabajando || f.eventos.length === 0 || correoMal}>{trabajando ? "Guardando…" : "Guardar alerta"}</button></div>
     </form>
   );
 }
@@ -105,7 +111,8 @@ export default function Alertas() {
     const filtro = filtroDeAlerta(f);
     return accion("licitaciones/alertas", {
       nombre: f.nombre, ambito: f.ambito, departamento: f.ambito === "departamento" ? f.departamento.trim().toLowerCase() : null, filtro, eventos: f.eventos,
-      canal: f.ambito === "departamento" ? f.canal : "panel",
+      canal: f.canal,
+      ...(f.canal === "correo" ? { correo_destino: f.correo.trim().toLowerCase() } : {}),
     });
   };
 
@@ -125,11 +132,14 @@ export default function Alertas() {
                 <li key={a.id} className="tarjeta lic-item">
                   <span className="lic-fila"><span className="titulo">{a.nombre}</span>{!a.activa && <span className="lic-etiqueta">En pausa</span>}<span className="lic-etiqueta">{ambitoTexto(a)}</span></span>
                   <span className="meta">{filtroTexto(a.filtro) || "—"}</span>
-                  <span className="meta">Avisa de: {a.eventos.map(eventoEtiqueta).join(", ")}{a.ultima_entrega ? ` · último aviso ${fechaTexto(a.ultima_entrega)}` : ""}{admiteResumen(a) ? ` · ${canalEtiqueta(a.canal)}` : ""}</span>
+                  <span className="meta">Avisa de: {a.eventos.map(eventoEtiqueta).join(", ")}{a.ultima_entrega ? ` · último aviso ${fechaTexto(a.ultima_entrega)}` : ""}{canalDeAlertaTexto(a) ? ` · ${canalDeAlertaTexto(a)}` : ""}</span>
                   {a.puede_cambiar && (
                     <span className="lic-fila">
                       <button className="boton no" disabled={trabajando} onClick={() => accion(`licitaciones/alertas/${a.id}`, { activa: !a.activa })}>{a.activa ? "Pausar" : "Reactivar"}</button>
                       {admiteResumen(a) && <button className="boton no" disabled={trabajando} onClick={() => accion(`licitaciones/alertas/${a.id}`, { canal: a.canal === "resumen_diario" ? "panel" : "resumen_diario" })}>{a.canal === "resumen_diario" ? "Quitar del resumen" : "Incluir en el resumen"}</button>}
+                      {a.canal === "correo"
+                        ? <button className="boton no" disabled={trabajando} onClick={() => accion(`licitaciones/alertas/${a.id}`, { canal: "panel" })}>Dejar de avisar por correo</button>
+                        : <button className="boton no" disabled={trabajando} onClick={() => { const c = window.prompt(`¿A qué dirección @${DOMINIO_CORREO} enviar los avisos?`); if (c && correoValido(c)) accion(`licitaciones/alertas/${a.id}`, { canal: "correo", correo_destino: c.trim().toLowerCase() }); else if (c) window.alert(`Tiene que ser una dirección @${DOMINIO_CORREO}`); }}>Avisar por correo</button>}
                       <button className="boton no" disabled={trabajando} onClick={() => { if (window.confirm(`¿Borrar la alerta «${a.nombre}» y sus avisos?`)) accion(`licitaciones/alertas/${a.id}/borrar`); }}>Borrar</button>
                     </span>
                   )}

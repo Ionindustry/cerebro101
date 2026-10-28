@@ -258,7 +258,7 @@ test("las alertas en el resumen: solo las de departamento, y las cifras lo cuent
   assert.equal(admiteResumen({ ambito: "departamento" }), true);
   assert.equal(admiteResumen({ ambito: "personal" }), false);
   assert.equal(admiteResumen(null), false);
-  assert.deepEqual(CANALES_ALERTA.map(([k]) => k), ["panel", "resumen_diario"]);
+  assert.deepEqual(CANALES_ALERTA.map(([k]) => k), ["panel", "resumen_diario", "correo"]);
   assert.equal(canalEtiqueta("resumen_diario"), "En el panel y en el resumen de las 16:00");
   assert.equal(canalEtiqueta("panel"), "Solo en el panel");
   assert.equal(totalesTexto({ oportunidades: 2, alertas: 1 }), "2 oportunidades · 1 aviso de alertas");
@@ -472,4 +472,23 @@ test("textoPedirViabilidad y hayPeticionEnCurso", () => {
   assert.equal(hayPeticionEnCurso([{}, { viabilidad_peticion: { estado: "en_curso", en: "2026-10-28T10:29:00Z" } }], ahora), true);
   assert.equal(hayPeticionEnCurso([{}, { viabilidad_peticion: { estado: "error", error: "x" } }], ahora), false);
   assert.equal(hayPeticionEnCurso(undefined, ahora), false);
+});
+
+// ---- Canal «correo» de las alertas ----
+import { canalDeAlertaTexto, canalesDe, correoValido } from "../lib/licitaciones.js";
+
+test("canalesDe: el resumen solo para departamentos; el correo para todos", () => {
+  assert.deepEqual(canalesDe("personal").map(([k]) => k), ["panel", "correo"]);
+  assert.deepEqual(canalesDe("departamento").map(([k]) => k), ["panel", "resumen_diario", "correo"]);
+});
+
+test("correoValido: solo direcciones @101.cat", () => {
+  for (const ok of ["albert@101.cat", " Marta.Puig+x@101.CAT "]) assert.equal(correoValido(ok), true, ok);
+  for (const mal of ["", null, "x@gmail.com", "x@101.cat.evil.com", "x@sub.101.cat", "x@evil101.cat", "a b@101.cat", "a@101.cat,b@gmail.com", "x@101.cat\nBcc: y@z.com"]) assert.equal(correoValido(mal), false, String(mal));
+});
+
+test("canalDeAlertaTexto: dónde avisa una alerta", () => {
+  assert.equal(canalDeAlertaTexto({ canal: "correo", correo_destino: "a@101.cat" }), "Por correo a a@101.cat");
+  assert.equal(canalDeAlertaTexto({ canal: "resumen_diario" }), "En el panel y en el resumen de las 16:00");
+  assert.equal(canalDeAlertaTexto({ canal: "panel" }), "");
 });

@@ -358,6 +358,19 @@ Documento de partida: «Plataforma de detección y análisis de concursos públi
   se guarda siempre y sigue visible en el panel: el canal solo añade el resumen. Una alerta **personal** no puede usar ese canal (el resumen lo ven Dirección y
   Licitaciones): lo rechaza el código y también la base de datos (`licitaciones_alertas_resumen_solo_departamento`). La sección sale **aunque el motor no responda** (los
   avisos ya están guardados) y, si no se pueden leer, el resumen sale igual y lo dice. Se activa por alerta desde `/licitaciones/alertas` («Incluir en el resumen»).
+- **Alertas por correo** (hecho): el canal `correo` de una alerta (personal o de departamento) envía los avisos a una dirección `correo_destino` **de la empresa**
+  (`avisos.dominios` en `config/buzones.yaml`, por ahora `101.cat`): es correo interno y automático, así que no pasa por la bandeja de aprobaciones (que es para lo que
+  sale de la empresa) y una dirección de fuera se rechaza al crear la alerta, otra vez justo antes de enviar y también en la base de datos (`licitaciones_alertas_correo_destino`:
+  hay dirección si y solo si el canal es `correo`). Sale del buzón `notificaciones` (sin departamentos: ningún agente lo usa; ya está en
+  `config/buzones.yaml`; falta su contraseña: `python3 scripts/buzon_alta.py --id notificaciones --solo-clave` y reiniciar la API y el worker; sin clave no envía y lo dice en el
+  registro). El consumidor solo deja el aviso; la tarea `enviar_avisos_correo` (`api/cerebro/licitaciones/avisos_correo.py`, cola `lote`, cada 5 minutos) manda los pendientes
+  (`licitaciones_avisos.correo_enviado IS NULL`), agrupados por alerta (hasta `max_por_correo` = 20 por mensaje), con `Auto-Submitted: auto-generated`. Un fallo del servidor se
+  anota (`correo_error`) y se reintenta hasta `max_intentos` = 5; un aviso de más de `max_antiguedad_horas` = 48 ya no se envía; al pasar una alerta a `correo` no se envía lo que
+  ya había. El canal es único: «correo» incluye el panel pero no el resumen de las 16:00. Desde `/licitaciones/alertas`.
+- **Informe de viabilidad a petición** (hecho): en el embudo, el botón «Pedir informe de viabilidad» (`POST /licitaciones/embudo/{id}/viabilidad`, 202) encola la tarea
+  `pedir_viabilidad` (cola `peticiones`): Viabilidad valora esa licitación (sin los filtros del rastreo) y guarda el informe; «Volver a pedir…» lo sustituye tras confirmar
+  (`reemplazar`). Solo hay una petición en curso por licitación (se da por perdida a los 20 minutos); si el modelo no responde se reintenta hasta 3 veces y, si no, la tarjeta
+  muestra el error y se puede volver a pedir. Sigue siendo consultivo: no cambia el estado ni decide nada. La lista del embudo se refresca sola mientras hay una petición en curso.
 - **Rastreo diario del embudo** (hecho): la tarea `rastreo_embudo` (`api/cerebro/licitaciones/rastreo.py`, cola `lote`, 06:30 según `rastreo.hora`) elige las `detectada`
   **abiertas en el motor y con plazo** (a más de `rastreo.dias_minimos_hasta_plazo` = 3 días), de más a menos encaje y hasta `rastreo.max_por_dia` = 10 (**POR VALIDAR**:
   si Viabilidad se satura, bajarlo o subir `embudo.encaje_min`), y pide a **Viabilidad** (agente `viabilidad`, modelo «juez») un informe de cada una. El informe se guarda en

@@ -293,11 +293,18 @@ export function mensajeAlertas(status) {
   if (status === 401) return "Tu sesión ha caducado.";
   if (status === 403) return "No tienes permiso para esto. Las alertas de un departamento las crea su responsable o Dirección.";
   if (status === 404) return "Esa alerta ya no existe.";
-  if (status === 422) return "Revisa los datos de la alerta: necesita un nombre, al menos un criterio de búsqueda y un evento.";
+  if (status === 422) return "Revisa los datos de la alerta: necesita un nombre, al menos un criterio de búsqueda y un evento; por correo, solo a direcciones @101.cat.";
   return "No se ha podido completar la operación. Inténtalo en unos minutos.";
 }
 
-export const CANALES_ALERTA = [["panel", "Solo en el panel"], ["resumen_diario", "En el panel y en el resumen de las 16:00"]];
+export const CANALES_ALERTA = [["panel", "Solo en el panel"], ["resumen_diario", "En el panel y en el resumen de las 16:00"], ["correo", "En el panel y por correo"]];
+/** El resumen solo admite alertas de departamento; el correo, cualquiera (personal o de departamento). */
+export const canalesDe = (ambito) => CANALES_ALERTA.filter(([k]) => k !== "resumen_diario" || ambito === "departamento");
+/** Los avisos por correo salen solo a direcciones de la empresa: lo mismo que comprueba la API (config/buzones.yaml). */
+export const DOMINIO_CORREO = "101.cat";
+export const correoValido = (t) => /^[a-z0-9._%+-]{1,64}@101\.cat$/.test(String(t || "").trim().toLowerCase());
+/** Lo que se muestra del canal de una alerta: en «correo», a qué dirección. */
+export const canalDeAlertaTexto = (a) => (a?.canal === "correo" ? `Por correo a ${a.correo_destino || "?"}` : a?.canal === "resumen_diario" ? canalEtiqueta("resumen_diario") : "");
 export const canalEtiqueta = (c) => (CANALES_ALERTA.find(([k]) => k === c) || [, c || "—"])[1];
 
 /** Solo una alerta de departamento puede salir en el resumen (lo ven Dirección y Licitaciones): una personal, nunca. */

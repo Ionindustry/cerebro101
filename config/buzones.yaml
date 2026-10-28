@@ -30,6 +30,15 @@ pie_comercial: >-
   Has recibido este mensaje porque nos diste tu consentimiento o eres cliente de 101.cat.
   Si no quieres recibir más comunicaciones, responde con la palabra BAJA.
 
+# Avisos automáticos del propio sistema (alertas de licitaciones con canal «correo»). Salen del buzón `buzon` y SOLO a direcciones de los `dominios`:
+# es correo interno entre la gente de la empresa, así que no pasa por aprobación; cualquier otra dirección se rechaza al crear la alerta y otra vez al enviar.
+avisos:
+  buzon: notificaciones
+  dominios: [101.cat]
+  max_por_correo: 20            # avisos que caben en un correo (si hay más, salen en el siguiente)
+  max_intentos: 5               # envíos fallidos antes de darlo por perdido
+  max_antiguedad_horas: 48      # un aviso que no se ha podido enviar en este tiempo ya no se envía
+
 buzones:
   administracion:
     direccion: administracion@101.cat
@@ -61,3 +70,8 @@ buzones:
     departamentos: [licitaciones]
     descripcion: "Concursos y licitaciones públicas"
     firma: "Licitaciones · 101.cat"
+  notificaciones:
+    direccion: notificaciones@101.cat
+    departamentos: []           # ningún agente lo usa: solo lo usa el sistema para los avisos de arriba
+    descripcion: "Avisos automáticos del sistema (alertas de licitaciones)"
+    firma: "Cerebro · 101.cat"

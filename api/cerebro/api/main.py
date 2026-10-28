@@ -343,6 +343,7 @@ class AlertaEntrada(BaseModel):
     filtro: dict
     eventos: list[str]
     canal: str = "panel"
+    correo_destino: str | None = None        # con canal «correo»: dirección de la empresa a la que llega el aviso
 
 
 class AlertaCambio(BaseModel):
@@ -351,6 +352,7 @@ class AlertaCambio(BaseModel):
     eventos: list[str] | None = None
     activa: bool | None = None
     canal: str | None = None
+    correo_destino: str | None = None
 
 
 class AvisosLeidos(BaseModel):
