@@ -61,6 +61,10 @@ x-api: &api
     ANONIMIZACION_MODELO_SPACY: "${ANONIMIZACION_MODELO_SPACY:-es_core_news_md}"
     AGENT_REACH_URL: "${AGENT_REACH_URL:-http://agent-reach:8090}"
     SEARXNG_URL: "${SEARXNG_URL:-http://searxng:8080}"           # buscador propio de Jarvis (internet)
+    # Motor de licitaciones (carpeta licitaciones/): su API interna y la credencial. Sin credencial la herramienta avisa y no llama.
+    # El motor se une a la red «cerebro» con licitaciones/compose.cerebro.yaml; si no corre, la herramienta responde que no está disponible.
+    LICITACIONES_API_URL: "${LICITACIONES_API_URL:-http://licitaciones-api:8080}"
+    LICITACIONES_API_TOKEN: "${LICITACIONES_API_TOKEN:-${LIC_API_TOKEN:-}}"
     # Calendarios (los buzones de correo van por secretos/buzones.env, no por el .env)
     CALENDARIO_USUARIO: "${CALENDARIO_USUARIO:-}"
     CALENDARIO_CLAVE: "${CALENDARIO_CLAVE:-}"
@@ -194,6 +198,8 @@ services:
       KEYCLOAK_URL_INTERNA: "http://keycloak:8080"                            # la que usa el panel por dentro
       PANEL_URL: "${PANEL_URL:-http://localhost:3000}"
       PANEL_USUARIO_DESARROLLO: "${PANEL_USUARIO_DESARROLLO:-}"               # solo con CEREBRO_MODO=desarrollo
+      LICITACIONES_API_URL: "${LICITACIONES_API_URL:-http://licitaciones-api:8080}"   # sección «Licitaciones»: la pasarela la llama desde el servidor
+      LICITACIONES_API_TOKEN: "${LICITACIONES_API_TOKEN:-${LIC_API_TOKEN:-}}"
     ports: ["127.0.0.1:3000:3000"]
     depends_on: [api, redis-panel]
     networks: [cerebro]

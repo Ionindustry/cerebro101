@@ -16,6 +16,7 @@ herramientas:
   jev:                       {local: false, sensibilidad_max: media, nota: "nube de TypeSafe; media solo con retención cero y datos anonimizados"}
   jeff:                      {local: true,  sensibilidad_max: alta,  nota: "sustituto local de Jev"}
   plataformas_contratacion:  {local: false, sensibilidad_max: baja}
+  licitaciones:              {local: true,  sensibilidad_max: alta,  nota: "motor de licitaciones propio (red interna), solo lectura de datos públicos; no sale ningún dato"}
   mayorista:                 {local: false, sensibilidad_max: alta,  nota: "portal o API del mayorista de telecom"}
 
 # Si una herramienta externa no admite la sensibilidad del agente, se usa esta alternativa local.

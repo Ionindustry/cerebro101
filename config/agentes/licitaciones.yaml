@@ -8,6 +8,7 @@ agentes:
   herramientas:
   - conocimiento
   - calendario
+  - licitaciones
   aprobacion: libre
   horario: 0 7 * * 1-5
   sensibilidad: baja
@@ -21,6 +22,7 @@ agentes:
   herramientas:
   - conocimiento
   - plataformas_contratacion
+  - licitaciones
   - jev
   aprobacion: libre
   horario: 0 6 * * *
@@ -34,6 +36,7 @@ agentes:
   modelo: juez
   herramientas:
   - conocimiento
+  - licitaciones
   - jev
   - cuaderno
   aprobacion: libre

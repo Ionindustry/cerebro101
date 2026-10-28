@@ -297,3 +297,38 @@ a.kp-fila:hover { background: var(--fondo); }
 .ap-numeros { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; }
 .ap-objetivo { display: grid; gap: 4px; margin-bottom: 10px; }
 .ap-lote ol { margin: 6px 0 0; padding-left: 20px; display: grid; gap: 10px; }
+
+/* Licitaciones */
+.lic { max-width: 1000px; display: grid; gap: 16px; padding-bottom: 40px; }
+.lic h2 { font-size: 17px; font-weight: 600; margin: 0; }
+.lic-fila { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+.lic-estado { display: inline-flex; align-items: center; gap: 6px; border-radius: 99px; padding: 3px 12px; font-size: 14px; font-weight: 600; }
+.lic-estado.ok { background: #e8f3ec; color: #1f5a37; }
+.lic-estado.aviso { background: var(--senal-suave); color: #7a5206; }
+.lic-estado.caido { background: #fbe8e6; color: #8c2118; }
+.lic-fuentes { list-style: none; margin: 10px 0 0; padding: 0; display: grid; gap: 4px; font-size: 14px; }
+.lic-busca { display: flex; gap: 8px; }
+.lic-busca input, .lic-form input[type="text"], .lic-form input[type="date"], .lic-form select { font: inherit; border: 1px solid var(--linea); background: var(--superficie); border-radius: var(--radio); padding: 9px 12px; min-width: 0; }
+.lic-busca input { flex: 1; }
+.lic-form { display: grid; gap: 14px; }
+.lic-campos { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; }
+.lic-campos label, .lic-estados legend { display: grid; gap: 4px; font-size: 13px; color: var(--secundario); font-weight: 600; }
+.lic-campos label span.ayuda { font-weight: 400; }
+.lic-estados { border: 0; padding: 0; margin: 0; display: flex; flex-wrap: wrap; gap: 6px 14px; }
+.lic-estados legend { width: 100%; padding: 0; margin-bottom: 4px; }
+.lic-estados label { display: inline-flex; gap: 6px; align-items: center; font-size: 14px; color: var(--tinta); font-weight: 400; }
+.lic-lista { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
+.lic-item { display: grid; gap: 4px; }
+.lic-item .titulo { font-weight: 600; font-size: 16px; overflow-wrap: anywhere; }
+.lic-etiqueta { font-size: 12px; font-weight: 600; background: var(--fondo); border-radius: 99px; padding: 2px 10px; white-space: nowrap; }
+.lic-etiqueta.abierta { background: #e8f3ec; color: #1f5a37; }
+.lic-etiqueta.anulada, .lic-etiqueta.desierta { background: #fbe8e6; color: #8c2118; }
+.lic-error { background: #fbe8e6; color: #8c2118; border-radius: var(--radio); padding: 12px 16px; }
+.lic-ficha { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px 16px; margin: 0; }
+.lic-ficha dt { font-size: 12px; text-transform: uppercase; letter-spacing: .05em; color: var(--secundario); }
+.lic-ficha dd { margin: 2px 0 0; overflow-wrap: anywhere; }
+.lic-tabla { width: 100%; border-collapse: collapse; font-size: 14px; }
+.lic-tabla th { text-align: left; font-size: 12px; text-transform: uppercase; letter-spacing: .05em; color: var(--secundario); padding: 6px 8px; }
+.lic-tabla td { padding: 8px; border-top: 1px solid var(--linea); vertical-align: top; overflow-wrap: anywhere; }
+.lic-vuelve { font-size: 14px; }
+@media (max-width: 760px) { .lic-busca { flex-direction: column; } .lic-tabla { display: block; overflow-x: auto; } }

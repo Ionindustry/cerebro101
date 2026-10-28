@@ -13,6 +13,15 @@ fuente, importes, fechas, orden y paginación por cursor firmado), `GET /api/v1/
 y `GET /api/v1/ops/status`. Exige `Authorization: Bearer <LIC_API_TOKEN>` y no publica ningún puerto; los parámetros del contrato que aún no
 existen (`area`, `facetas`, `encaje_min`, `publicada_*`) dan 400 en vez de ignorarse en silencio. La autenticación con Keycloak llegará después.
 
+**Verla desde el Cerebro** (herramienta `licitaciones` de los agentes y sección «Licitaciones» del panel). Con el Cerebro arrancado, une la API del
+motor a su red (`licitaciones-api`) y reinicia `api`, `worker` y `panel` para que lean el token:
+```bash
+docker compose -f licitaciones/compose.yaml -f licitaciones/compose.cerebro.yaml --env-file .env up -d
+docker compose up -d api worker panel          # el Cerebro usa por defecto LIC_API_TOKEN del mismo .env
+```
+Los agentes de Licitaciones (Director, Rastreador y Viabilidad) tienen la herramienta; el panel la muestra a quien esté en los grupos `licitaciones`,
+`direccion`, `comercial`, `telecom` o `areas` (y a la cuenta de servicio). Los datos del motor siguen en su red interna: el Cerebro solo ve la API.
+
 **Probar la API desde el propio equipo** (publica 127.0.0.1:8090, solo en local):
 ```bash
 docker compose -f licitaciones/compose.yaml -f licitaciones/compose.dev.yaml --env-file .env up -d
