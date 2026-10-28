@@ -4,7 +4,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useRef, useState } from "react";
 import {
   COMPETENCIA_VACIA, MERCADOS_EJEMPLO, ORDENES_COMPETENCIA, adjudicacionesDeCompetidor, bajaTexto, competenciaAQuery, competenciaAcotada, cuotaTexto,
-  fechaCivilTexto, importeTexto, mercadoTexto, muestraPoca, muestraTexto, queryACompetencia, tendenciaEtiqueta, totalTexto,
+  fechaCivilTexto, importeTexto, mercadoTexto, vencenDeMercado, muestraPoca, muestraTexto, queryACompetencia, tendenciaEtiqueta, totalTexto,
 } from "../../../lib/licitaciones";
 import { Fallo, pedir } from "../cliente";
 
@@ -135,7 +135,7 @@ function Competencia() {
 
       {acotada && (
         <>
-          <h2>{mercadoTexto(filtros)}</h2>
+          <div className="lic-fila"><h2>{mercadoTexto(filtros)}</h2><Link href={vencenDeMercado(filtros)} className="lic-vuelve">Ver los contratos que vencen en este mercado</Link></div>
           {error && <Fallo e={error} />}
           {d && (
             <>

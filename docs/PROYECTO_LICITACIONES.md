@@ -389,4 +389,9 @@ Documento de partida: «Plataforma de detección y análisis de concursos públi
   se tienen en cuenta modificaciones posteriores del contrato ni prórrogas ya ejecutadas (la fecha es la prevista en origen); y los expedientes ingeridos antes de esta
   versión no traen el texto de las prórrogas hasta que se vuelvan a proyectar (nueva versión del expediente o repetir los eventos, ADR 0003). La herramienta de los agentes
   tiene la operación `contratos_que_vencen`.
-- Pendiente: canal `correo`; ficha de organismo y página de contratos que vencen en el panel; un botón «Pedir informe de viabilidad» para una licitación concreta; y llevar a Viabilidad lo que ya sabe 101.cat de cada organismo.
+- **Página «Contratos que vencen» del panel** (hecho): `/licitaciones/vencen` lista, agrupados por mes de fin, los contratos que terminan en un periodo (por defecto de aquí a 3 meses hasta
+  dentro de 12; filtros CPV, zona, comprador, importe mínimo, fechas con tope de 36 meses —se valida antes de preguntar— y «contar las prórrogas posibles»). Cada contrato dice cuándo
+  termina y **cuánto fiarse de esa fecha** (inicio publicado / calculada desde la formalización / desde la adjudicación: orientativa), quién lo tiene ahora, el importe, qué se sabe de las
+  prórrogas (sin prórrogas / con prórrogas hasta tal fecha / admite sin fecha / no consta) y, desplegable, el texto del pliego tal cual (dato de un tercero: se escribe como texto, nunca como
+  HTML). Avisa de que la fecha es la prevista en origen. Desde «Competencia» hay un enlace con el mismo mercado. La pasarela del panel deja pasar `expiring-contracts` (solo la lista).
+- Pendiente: canal `correo`; ficha de organismo; un botón «Pedir informe de viabilidad» para una licitación concreta; y llevar a Viabilidad lo que ya sabe 101.cat de cada organismo.
