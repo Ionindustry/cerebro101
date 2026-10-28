@@ -1,0 +1,13 @@
+# Conecta el motor de licitaciones con el Cerebro: la API del motor se une a la red «cerebro» (la de docker-compose.yml de la raíz) con el nombre
+# licitaciones-api, que es donde la buscan la herramienta «licitaciones» de los agentes y la pasarela del panel. Los datos del motor (Postgres,
+# almacén, bus) siguen en su red interna: el Cerebro solo ve la API, y la API exige el token.
+# Requiere que el Cerebro esté arrancado (la red «cerebro» tiene que existir):
+#   docker compose -f licitaciones/compose.yaml -f licitaciones/compose.cerebro.yaml --env-file .env up -d
+services:
+  api:
+    networks:
+      interna: {}
+      cerebro: {aliases: [licitaciones-api]}
+
+networks:
+  cerebro: {name: cerebro, external: true}

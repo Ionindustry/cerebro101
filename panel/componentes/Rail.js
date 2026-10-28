@@ -6,6 +6,7 @@ import { useEffect, useState } from "react";
 const SECCIONES = [
   { ruta: "/", nombre: "Jarvis" },
   { ruta: "/oficina", nombre: "Oficina" },
+  { ruta: "/licitaciones", nombre: "Licitaciones" },
   { ruta: "/aprobaciones", nombre: "Aprobaciones" },
   { ruta: "/agentes", nombre: "Agentes" },
 ];
@@ -29,7 +30,7 @@ export default function Rail() {
     <nav className="rail" aria-label="Secciones">
       <div className="marca">101<span>.cat</span></div>
       {SECCIONES.map((s) => (
-        <Link key={s.ruta} href={s.ruta} aria-current={ruta === s.ruta ? "page" : undefined}>
+        <Link key={s.ruta} href={s.ruta} aria-current={ruta === s.ruta || (s.ruta !== "/" && ruta.startsWith(s.ruta + "/")) ? "page" : undefined}>
           {s.nombre}
           {s.ruta === "/aprobaciones" && pendientes > 0 && <span className="contador" aria-label={`${pendientes} pendientes`}>{pendientes}</span>}
         </Link>

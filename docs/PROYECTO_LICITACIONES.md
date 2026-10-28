@@ -309,3 +309,12 @@ PLACSP (datos abiertos): https://www.hacienda.gob.es/es-ES/GobiernoAbierto/Datos
 TED Search API: https://docs.ted.europa.eu/api/latest/search.html · Swagger TED: https://api.ted.europa.eu/swagger ·
 Transparència Catalunya: https://analisi.transparenciacatalunya.cat/ · Cataluña, integración: https://contractaciopublica.cat/es/manuals/integrador ·
 Documento de partida: «Plataforma de detección y análisis de concursos públicos» (octubre de 2026).
+
+---
+### Estado de la integración con el Cerebro (28/10/2026)
+- **Herramienta `licitaciones`** (`api/cerebro/herramientas/licitaciones.py`): `buscar`, `ficha`, `novedades_desde` y `estado_motor`, solo lectura, sin
+  aprobación. La tienen el Director de Licitaciones, el Rastreador y Viabilidad. Usa el token compartido del motor (`LICITACIONES_API_TOKEN`);
+  Keycloak sustituirá al token cuando lo usen más clientes (SEC-031).
+- **Sección «Licitaciones» del panel** (`/licitaciones`): estado del motor, últimas novedades, buscador con filtros y paginación, y ficha del expediente
+  con lotes, adjudicaciones y evidencia. La pasarela (`/licitaciones-api`) comprueba el grupo del usuario y solo deja pasar lecturas.
+- Pendiente: competencia, alertas, embudo, resumen de las 16:00 y el consumidor de eventos del Cerebro (fase 4 del plan).

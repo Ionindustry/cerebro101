@@ -145,9 +145,9 @@ AGENTES = {
         ("auditor-cerebro", "Auditor del Cerebro", "Supervisión de agentes", "Revisa una muestra de respuestas de cada agente y propone ajustes", "juez", K + ["jev"], "libre", "0 5 * * *", "media"),
     ],
     "licitaciones": [
-        ("director-licitaciones", "Director de Licitaciones", "Vigilancia de oportunidades", "Coordina el ciclo completo de cada concurso y controla todos los plazos", "principal", K + ["calendario"], "libre", "0 7 * * 1-5", "baja"),
-        ("rastreador", "Rastreador", "Vigilancia de oportunidades", "Revisa a diario las plataformas de contratación y filtra por CPV, importe y zona", "rapido", K + ["plataformas_contratacion", "jev"], "libre", "0 6 * * *", "baja"),
-        ("viabilidad", "Viabilidad", "Vigilancia de oportunidades", "Puntúa solvencia, plazos, presupuesto, capacidad, competencia y certificaciones; informe ir/no ir", "juez", K + ["jev"], "libre", None, "baja"),
+        ("director-licitaciones", "Director de Licitaciones", "Vigilancia de oportunidades", "Coordina el ciclo completo de cada concurso y controla todos los plazos", "principal", K + ["calendario", "licitaciones"], "libre", "0 7 * * 1-5", "baja"),
+        ("rastreador", "Rastreador", "Vigilancia de oportunidades", "Revisa a diario las plataformas de contratación y filtra por CPV, importe y zona", "rapido", K + ["plataformas_contratacion", "licitaciones", "jev"], "libre", "0 6 * * *", "baja"),
+        ("viabilidad", "Viabilidad", "Vigilancia de oportunidades", "Puntúa solvencia, plazos, presupuesto, capacidad, competencia y certificaciones; informe ir/no ir", "juez", K + ["licitaciones", "jev"], "libre", None, "baja"),
         ("administrativo-licitaciones", "Administrativo", "Documentación administrativa", "DEUC, declaraciones responsables, solvencia y certificados vigentes", "principal", K + ["ficheros"], "doble", None, "media"),
         ("presentacion-requerimientos", "Presentación y Requerimientos", "Documentación administrativa", "Calendario, aclaraciones, paquete de oferta listo para que una persona firme y presente, y subsanaciones", "principal", K + ["plataformas_contratacion", "calendario", "correo"], "doble", None, "media"),
         ("analista-pliegos", "Analista de Pliegos", "Oferta técnica", "Extrae requisitos, criterios, puntuación y formato; crea la matriz de cumplimiento", "vision", K + ["ficheros", "scrapegraph", "jev"], "libre", None, "baja"),
