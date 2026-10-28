@@ -19,6 +19,7 @@ from zoneinfo import ZoneInfo
 
 import psycopg
 from psycopg.rows import dict_row
+from psycopg.types.json import Jsonb
 
 from ..ajustes import ajustes
 from ..herramientas import licitaciones as motor
@@ -158,7 +159,7 @@ def datos_de_ficha(ficha: dict, cfg: dict, ahora: datetime) -> dict:
 # ---- Base de datos ----
 
 COLUMNAS = ("id, motor_id, motor_version, expediente, organismo, titulo, cpv, importe, fecha_limite, enlace, encaje, estado, estado_motor, motivo_perdida, "
-            "decision, creado, actualizado, decidida_en, presentada_en, resuelta_en")
+            "decision, viabilidad, creado, actualizado, decidida_en, presentada_en, resuelta_en")
 
 
 def _fila(f: dict) -> dict:
@@ -299,3 +300,37 @@ async def actualizar_estado_motor(motor_id: str, version: int, estado_motor: str
                RETURNING estado""", {"em": estado_motor, "v": version, "id": str(uuid.UUID(motor_id)), "ahora": ahora})
         fila = await cur.fetchone()
     return None if fila is None else fila["estado"]
+
+
+# ---- Lo que usa el rastreo diario (cerebro/licitaciones/rastreo.py): el informe de Viabilidad es consultivo, nunca cambia el estado ni `decision` ----
+
+async def pendientes_de_viabilidad(limite: int, dias_minimos: int = 3, ahora: datetime | None = None) -> list[dict]:
+    """Las licitaciones «detectada» a las que aún no se ha pedido informe de viabilidad y que merece la pena valorar: siguen abiertas en el motor y su plazo, si lo
+    hay, queda a más de `dias_minimos` días (con menos no da tiempo a preparar una oferta). De más a menos encaje, y a igualdad, la de plazo más próximo."""
+    ahora = ahora or datetime.now(timezone.utc)
+    async with await psycopg.AsyncConnection.connect(ajustes.database_url, row_factory=dict_row) as conn:
+        cur = await conn.execute(
+            f"""SELECT {COLUMNAS} FROM licitaciones
+                WHERE estado = 'detectada' AND viabilidad IS NULL AND motor_id IS NOT NULL
+                  AND (estado_motor IS NULL OR estado_motor IN ('abierta','anuncio_previo'))
+                  AND (fecha_limite IS NULL OR fecha_limite > %s::timestamptz + make_interval(days => %s))
+                ORDER BY encaje DESC NULLS LAST, fecha_limite ASC NULLS LAST, id ASC LIMIT %s""", [ahora, dias_minimos, max(0, int(limite))])
+        return [_fila(f) for f in await cur.fetchall()]
+
+
+async def contar_pendientes_de_viabilidad(dias_minimos: int = 3, ahora: datetime | None = None) -> int:
+    ahora = ahora or datetime.now(timezone.utc)
+    async with await psycopg.AsyncConnection.connect(ajustes.database_url, row_factory=dict_row) as conn:
+        cur = await conn.execute(
+            """SELECT count(*) AS n FROM licitaciones
+               WHERE estado = 'detectada' AND viabilidad IS NULL AND motor_id IS NOT NULL
+                 AND (estado_motor IS NULL OR estado_motor IN ('abierta','anuncio_previo'))
+                 AND (fecha_limite IS NULL OR fecha_limite > %s::timestamptz + make_interval(days => %s))""", [ahora, dias_minimos])
+        return (await cur.fetchone())["n"]
+
+
+async def guardar_viabilidad(lid: int, informe: dict) -> bool:
+    """Guarda el informe de viabilidad de una licitación, solo si aún no tenía (nunca pisa uno anterior). Devuelve True si lo guarda."""
+    async with await psycopg.AsyncConnection.connect(ajustes.database_url, row_factory=dict_row) as conn:
+        cur = await conn.execute("UPDATE licitaciones SET viabilidad = %s WHERE id = %s AND viabilidad IS NULL RETURNING id", [Jsonb(informe), lid])
+        return await cur.fetchone() is not None

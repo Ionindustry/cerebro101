@@ -146,7 +146,7 @@ AGENTES = {
     ],
     "licitaciones": [
         ("director-licitaciones", "Director de Licitaciones", "Vigilancia de oportunidades", "Coordina el ciclo completo de cada concurso y controla todos los plazos", "principal", K + ["calendario", "licitaciones"], "libre", "0 7 * * 1-5", "baja"),
-        ("rastreador", "Rastreador", "Vigilancia de oportunidades", "Revisa a diario las plataformas de contratación y filtra por CPV, importe y zona", "rapido", K + ["plataformas_contratacion", "licitaciones", "jev"], "libre", "0 6 * * *", "baja"),
+        ("rastreador", "Rastreador", "Vigilancia de oportunidades", "Cada día pide a Viabilidad el informe ir/no ir de las licitaciones detectadas con mejor encaje (tarea del calendario «rastreo_embudo»); no decide ni presenta nada", "rapido", K + ["plataformas_contratacion", "licitaciones", "jev"], "libre", None, "baja"),
         ("viabilidad", "Viabilidad", "Vigilancia de oportunidades", "Puntúa solvencia, plazos, presupuesto, capacidad, competencia y certificaciones; informe ir/no ir", "juez", K + ["licitaciones", "jev"], "libre", None, "baja"),
         ("administrativo-licitaciones", "Administrativo", "Documentación administrativa", "DEUC, declaraciones responsables, solvencia y certificados vigentes", "principal", K + ["ficheros"], "doble", None, "media"),
         ("presentacion-requerimientos", "Presentación y Requerimientos", "Documentación administrativa", "Calendario, aclaraciones, paquete de oferta listo para que una persona firme y presente, y subsanaciones", "principal", K + ["plataformas_contratacion", "calendario", "correo"], "doble", None, "media"),

@@ -136,7 +136,7 @@
 | Agente | Subárea | Modelo | Aprobación | Horario | Tareas |
 | --- | --- | --- | --- | --- | --- |
 | **Director de Licitaciones** | Vigilancia de oportunidades | principal | libre | 0 7 * * 1-5 | Coordina el ciclo completo de cada concurso y controla todos los plazos |
-| Rastreador | Vigilancia de oportunidades | rapido | libre | 0 6 * * * | Revisa a diario las plataformas de contratación y filtra por CPV, importe y zona |
+| Rastreador | Vigilancia de oportunidades | rapido | libre | bajo petición | Cada día pide a Viabilidad el informe ir/no ir de las licitaciones detectadas con mejor encaje (tarea del calendario «rastreo_embudo»); no decide ni presenta nada |
 | Viabilidad | Vigilancia de oportunidades | juez | libre | bajo petición | Puntúa solvencia, plazos, presupuesto, capacidad, competencia y certificaciones; informe ir/no ir |
 | Administrativo | Documentación administrativa | principal | doble | bajo petición | DEUC, declaraciones responsables, solvencia y certificados vigentes |
 | Presentación y Requerimientos | Documentación administrativa | principal | doble | bajo petición | Calendario, aclaraciones, paquete de oferta listo para que una persona firme y presente, y subsanaciones |
