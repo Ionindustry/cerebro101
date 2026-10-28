@@ -1,7 +1,7 @@
 "use client";
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
-import { fechaCivilTexto, fechaTexto, mensajeResumen, ORIGEN_RESUMEN, totalesTexto, urlSegura, ventanaTexto } from "../../../lib/licitaciones";
+import { avisosDeAlertaTexto, encajeClase, eventoEtiqueta, fechaCivilTexto, fechaTexto, mensajeResumen, ORIGEN_RESUMEN, totalesTexto, urlSegura, ventanaTexto } from "../../../lib/licitaciones";
 import { Item, Oportunidad, pedirCerebro } from "../cliente";
 
 const Aviso = ({ children }) => <p role="status" className="lic-aviso">{children}</p>;
@@ -17,6 +17,37 @@ function Lista({ titulo, items, vacio, total }) {
 
 // Adjudicaciones y anulaciones: misma tarjeta que el listado general (sin plazo ni encaje destacado)
 const Otra = ({ x }) => <Item x={{ ...x, comprador: { nombre: x.comprador }, actualizada_en: null }} />;
+
+// Avisos de las alertas de departamento con canal «resumen_diario»: salen aunque el motor no responda (los avisos ya estaban guardados).
+function AlertasDelResumen({ a }) {
+  if (!a) return null;
+  if (a.estado === "error") return <Aviso>{a.aviso}</Aviso>;
+  if (a.items.length === 0) return null;
+  return (
+    <section className="lic" aria-label="Alertas de departamento">
+      <h2>Alertas de departamento <span className="meta">· {a.total} {a.total === 1 ? "aviso" : "avisos"}</span></h2>
+      {a.items.map((g) => (
+        <div key={g.alerta_id}>
+          <h3>{g.nombre} <span className="meta">· {g.departamento} · {avisosDeAlertaTexto(g)}</span></h3>
+          <ul className="lic-lista">
+            {g.avisos.map((x) => (
+              <li key={`${x.motor_id}-${x.tipo}`}>
+                <Link href={`/licitaciones/expedientes/${x.motor_id}`} className="tarjeta tarjeta-enlace lic-item">
+                  <span className="lic-fila">
+                    {x.encaje != null && <span className={`lic-encaje ${encajeClase(x.encaje)}`} title="Encaje con 101.cat (0–100)">{x.encaje}</span>}
+                    <span className="titulo">{x.titulo}</span>
+                  </span>
+                  <span className="meta">{[x.organismo, eventoEtiqueta(x.tipo)].filter(Boolean).join(" · ")}</span>
+                  {x.fecha_limite && <span className="meta">Plazo: {fechaTexto(x.fecha_limite)}</span>}
+                </Link>
+              </li>
+            ))}
+          </ul>
+        </div>
+      ))}
+    </section>
+  );
+}
 
 export default function Resumen() {
   const [lista, setLista] = useState([]);
@@ -83,6 +114,7 @@ export default function Resumen() {
               <Lista titulo="Anuladas" items={c.anuladas} total={c.totales.anuladas} vacio="Ninguna anulación." />
             </>
           )}
+          <AlertasDelResumen a={c.alertas} />
         </>
       )}
 

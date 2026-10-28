@@ -4,7 +4,7 @@ import {
   antiguedadTexto, conAcceso, decidir, estadoEtiqueta, estadoMotor, filtrosAQuery, fechaTexto, importeTexto, limpiarCpv, limpiarNuts, mensajeDeError,
   nombreFuente, queryAFiltros, rutaPermitida, totalTexto, urlSegura,
 } from "../lib/licitaciones.js";
-import { ambitoTexto, eventoEtiqueta, filtroDeAlerta, filtroTexto, mensajeAlertas, sinLeerTexto } from "../lib/licitaciones.js";
+import { admiteResumen, avisosDeAlertaTexto, canalEtiqueta, CANALES_ALERTA, ambitoTexto, eventoEtiqueta, filtroDeAlerta, filtroTexto, mensajeAlertas, sinLeerTexto } from "../lib/licitaciones.js";
 import { accionEmbudo, avisoEstadoMotor, diasDePeriodo, ESTADOS_EMBUDO, etiquetaEmbudo, horasTexto, mensajeEmbudo, tasaExitoTexto } from "../lib/licitaciones.js";
 
 const ID = "0b1f7a3e-1111-4222-8333-444444444444";
@@ -241,4 +241,19 @@ test("mensajes de las alertas en castellano y sin detalles internos", () => {
   assert.match(mensajeAlertas(422), /al menos un criterio/);
   assert.match(mensajeAlertas(404), /ya no existe/);
   assert.ok(!/token|Bearer|psycopg|Traceback/i.test([401, 403, 404, 422, 500].map(mensajeAlertas).join(" ")));
+});
+
+test("las alertas en el resumen: solo las de departamento, y las cifras lo cuentan", () => {
+  assert.equal(admiteResumen({ ambito: "departamento" }), true);
+  assert.equal(admiteResumen({ ambito: "personal" }), false);
+  assert.equal(admiteResumen(null), false);
+  assert.deepEqual(CANALES_ALERTA.map(([k]) => k), ["panel", "resumen_diario"]);
+  assert.equal(canalEtiqueta("resumen_diario"), "En el panel y en el resumen de las 16:00");
+  assert.equal(canalEtiqueta("panel"), "Solo en el panel");
+  assert.equal(totalesTexto({ oportunidades: 2, alertas: 1 }), "2 oportunidades · 1 aviso de alertas");
+  assert.equal(totalesTexto({ oportunidades: 2, alertas: 6 }), "2 oportunidades · 6 avisos de alertas");
+  assert.equal(totalesTexto({ oportunidades: 2, alertas: 0 }), "2 oportunidades");
+  assert.equal(avisosDeAlertaTexto({ total: 1, avisos: [{}] }), "1 aviso");
+  assert.equal(avisosDeAlertaTexto({ total: 7, avisos: [{}, {}, {}] }), "7 avisos (se detallan 3)");
+  assert.equal(avisosDeAlertaTexto(null), "");
 });

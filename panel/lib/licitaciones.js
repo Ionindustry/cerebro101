@@ -176,6 +176,7 @@ export function totalesTexto(t) {
   p.push(n(t.oportunidades ?? 0, "oportunidad", "oportunidades"));
   if (t.adjudicaciones) p.push(n(t.adjudicaciones, "adjudicación", "adjudicaciones"));
   if (t.anuladas) p.push(n(t.anuladas, "anulada", "anuladas"));
+  if (t.alertas) p.push(n(t.alertas, "aviso de alertas", "avisos de alertas"));
   return p.join(" · ");
 }
 
@@ -288,4 +289,17 @@ export function mensajeAlertas(status) {
   if (status === 404) return "Esa alerta ya no existe.";
   if (status === 422) return "Revisa los datos de la alerta: necesita un nombre, al menos un criterio de búsqueda y un evento.";
   return "No se ha podido completar la operación. Inténtalo en unos minutos.";
+}
+
+export const CANALES_ALERTA = [["panel", "Solo en el panel"], ["resumen_diario", "En el panel y en el resumen de las 16:00"]];
+export const canalEtiqueta = (c) => (CANALES_ALERTA.find(([k]) => k === c) || [, c || "—"])[1];
+
+/** Solo una alerta de departamento puede salir en el resumen (lo ven Dirección y Licitaciones): una personal, nunca. */
+export const admiteResumen = (a) => a?.ambito === "departamento";
+
+/** «3 avisos» / «se detallan 2 de 5»: lo que se cuenta de una alerta en el resumen. */
+export function avisosDeAlertaTexto(g) {
+  if (!g) return "";
+  const t = `${g.total} ${g.total === 1 ? "aviso" : "avisos"}`;
+  return g.total > (g.avisos?.length ?? 0) ? `${t} (se detallan ${g.avisos.length})` : t;
 }

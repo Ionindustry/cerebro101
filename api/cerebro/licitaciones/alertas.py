@@ -20,7 +20,8 @@ from psycopg.types.json import Jsonb
 from ..ajustes import ajustes
 
 EVENTOS = ("licitacion.nueva", "licitacion.modificada", "licitacion.adjudicada", "licitacion.formalizada", "licitacion.anulada")
-CANALES = ("panel",)           # «resumen_diario» y «correo» cuando existan (ver db/esquema.sql)
+CANALES = ("panel", "resumen_diario")      # «correo» cuando haya envío (ver db/esquema.sql)
+SOLO_DEPARTAMENTO = {"resumen_diario"}       # canales que solo admite una alerta de departamento (una personal no puede salir en un resumen que ve Dirección)
 AMBITOS = ("personal", "departamento")
 
 # Quién consulta licitaciones: los mismos grupos que la pasarela del panel (panel/lib/licitaciones.js).
@@ -94,9 +95,12 @@ def limpiar_nombre(n) -> str:
     return n.strip()
 
 
-def limpiar_canal(c) -> str:
+def limpiar_canal(c, ambito: str | None = None) -> str:
+    """El canal de entrega. Con `ambito` también comprueba que una alerta personal no pida un canal que solo admiten las de departamento."""
     if c not in CANALES:
-        raise ErrorAlerta("canal: de momento solo «panel»")
+        raise ErrorAlerta("canal: " + " o ".join(f"«{x}»" for x in CANALES))
+    if c in SOLO_DEPARTAMENTO and ambito is not None and ambito != "departamento":
+        raise ErrorAlerta("El canal «resumen_diario» es solo para alertas de departamento: el resumen lo ven Dirección y Licitaciones")
     return c
 
 
@@ -182,7 +186,7 @@ async def crear(usuario, datos: dict) -> dict:
     if not puede_crear(usuario, ambito, departamento):
         raise SinPermiso("No puedes crear esa alerta" + (": las de un departamento las crea su responsable o Dirección" if ambito == "departamento" else ""))
     valores = (limpiar_nombre(datos.get("nombre")), usuario.id, ambito, departamento, Jsonb(limpiar_filtro(datos.get("filtro"))),
-               limpiar_eventos(datos.get("eventos")), limpiar_canal(datos.get("canal", "panel")), bool(datos.get("activa", True)))
+               limpiar_eventos(datos.get("eventos")), limpiar_canal(datos.get("canal", "panel"), ambito), bool(datos.get("activa", True)))
     async with await _conectar() as conn:
         async with conn.transaction():
             cur = await conn.execute("SELECT count(*) AS n FROM licitaciones_alertas WHERE propietario = %s", [usuario.id])
@@ -205,12 +209,12 @@ async def _leer(conn, aid: int, usuario, para_cambiar: bool) -> dict:
 
 
 async def cambiar(usuario, aid: int, datos: dict) -> dict:
-    """Cambia nombre, filtro, eventos y/o activa. El ámbito, el departamento y el dueño no se cambian: se borra y se crea otra."""
+    """Cambia nombre, filtro, eventos, canal y/o activa. El ámbito, el departamento y el dueño no se cambian: se borra y se crea otra."""
     if not con_acceso(usuario):
         raise SinPermiso("Tu usuario no tiene acceso a Licitaciones")
     if not isinstance(datos, dict) or not datos:
         raise ErrorAlerta("Indica qué cambiar")
-    permitido = {"nombre", "filtro", "eventos", "activa"}
+    permitido = {"nombre", "filtro", "eventos", "activa", "canal"}
     if set(datos) - permitido:
         raise ErrorAlerta("Solo se puede cambiar: " + ", ".join(sorted(permitido)))
     nuevo: dict = {}
@@ -220,13 +224,17 @@ async def cambiar(usuario, aid: int, datos: dict) -> dict:
         nuevo["filtro"] = Jsonb(limpiar_filtro(datos["filtro"]))
     if "eventos" in datos:
         nuevo["eventos"] = limpiar_eventos(datos["eventos"])
+    if "canal" in datos:
+        nuevo["canal"] = limpiar_canal(datos["canal"])          # la regla del ámbito se comprueba abajo, con la alerta delante
     if "activa" in datos:
         if not isinstance(datos["activa"], bool):
             raise ErrorAlerta("activa: verdadero o falso")
         nuevo["activa"] = datos["activa"]
     async with await _conectar() as conn:
         async with conn.transaction():
-            await _leer(conn, aid, usuario, True)
+            actual = await _leer(conn, aid, usuario, True)
+            if "canal" in nuevo:
+                limpiar_canal(nuevo["canal"], actual["ambito"])
             sets = ", ".join(f"{k} = %s" for k in nuevo) + ", cambiada = now()"
             cur = await conn.execute(f"UPDATE licitaciones_alertas SET {sets} WHERE id = %s RETURNING {COLUMNAS}", [*nuevo.values(), aid])
             return _alerta(await cur.fetchone(), usuario)
@@ -313,3 +321,26 @@ async def marcar_leidos(usuario, ids: list[int] | None = None) -> int:
             "UPDATE licitaciones_avisos SET leido = true WHERE NOT leido AND alerta_id = ANY (%s) AND (%s::bigint[] IS NULL OR id = ANY (%s::bigint[]))",
             [visibles, ids, ids])
         return cur.rowcount
+
+
+# ---- Lo que usa el resumen de las 16:00 (cerebro/licitaciones/resumen.py) ----
+
+async def avisos_para_resumen(desde: datetime, hasta: datetime, por_alerta: int = 5) -> dict:
+    """Los avisos del periodo [desde, hasta) de las alertas de departamento con canal «resumen_diario», agrupados por alerta. Una alerta personal no entra nunca
+    (también lo impide la base de datos). Devuelve {total, items: [{alerta_id, nombre, departamento, total, avisos: [...los `por_alerta` de más encaje]}]}."""
+    async with await _conectar() as conn:
+        cur = await conn.execute(
+            """SELECT a.id AS alerta_id, a.nombre, a.departamento, v.tipo, v.motor_id, v.titulo, v.organismo, v.encaje, v.importe, v.fecha_limite, v.estado_motor, v.creado
+               FROM licitaciones_avisos v JOIN licitaciones_alertas a ON a.id = v.alerta_id
+               WHERE a.canal = 'resumen_diario' AND a.ambito = 'departamento' AND v.creado >= %s AND v.creado < %s
+               ORDER BY a.nombre, a.id, v.encaje DESC NULLS LAST, v.creado DESC, v.id DESC""", [desde, hasta])
+        filas = await cur.fetchall()
+    grupos: dict[int, dict] = {}
+    for f in filas:
+        g = grupos.setdefault(f["alerta_id"], {"alerta_id": f["alerta_id"], "nombre": f["nombre"], "departamento": f["departamento"], "total": 0, "avisos": []})
+        g["total"] += 1
+        if len(g["avisos"]) < por_alerta:
+            g["avisos"].append({"motor_id": str(f["motor_id"]), "tipo": f["tipo"], "titulo": f["titulo"], "organismo": f["organismo"], "estado_motor": f["estado_motor"],
+                                "encaje": float(f["encaje"]) if f["encaje"] is not None else None, "importe": float(f["importe"]) if f["importe"] is not None else None,
+                                "fecha_limite": f["fecha_limite"].isoformat() if f["fecha_limite"] else None})
+    return {"total": len(filas), "items": list(grupos.values())}

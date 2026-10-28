@@ -58,9 +58,13 @@ class TestVentana(unittest.TestCase):
         self.assertEqual(d, datetime(2026, 10, 27, 8, 30, tzinfo=timezone.utc))
 
 
+async def sin_avisos(desde, hasta, por_alerta):
+    return {"total": 0, "items": []}
+
+
 class TestConstruir(unittest.TestCase):
-    def construir(self, motor_sim):
-        return ejecutar(resumen.construir(AHORA, motor_sim))
+    def construir(self, motor_sim, avisos=sin_avisos):
+        return ejecutar(resumen.construir(AHORA, motor_sim, avisos=avisos))
 
     def test_consulta_con_la_ventana_y_los_cpv_de_interes(self):
         m = Motor([lic(1)])
@@ -85,7 +89,7 @@ class TestConstruir(unittest.TestCase):
         self.assertEqual([o["encaje"] for o in r["oportunidades"]], sorted((o["encaje"] for o in r["oportunidades"]), reverse=True))
         self.assertEqual({a["id"] for a in r["adjudicaciones"]}, {"id-4", "id-5"})
         self.assertEqual([a["id"] for a in r["anuladas"]], ["id-6"])
-        self.assertEqual(r["totales"], {"novedades": 7, "oportunidades": 3, "adjudicaciones": 2, "anuladas": 1, "fuera_de_importe": 0, "otras": 1, "truncado": False})
+        self.assertEqual(r["totales"], {"novedades": 7, "oportunidades": 3, "adjudicaciones": 2, "anuladas": 1, "fuera_de_importe": 0, "otras": 1, "truncado": False, "alertas": 0})
         self.assertEqual(r["estado"], "ok")
         self.assertIsNone(r["aviso"])
 
@@ -141,6 +145,49 @@ class TestConstruir(unittest.TestCase):
         # mismo encaje máximo: el plazo más próximo primero
         self.assertEqual(r["oportunidades"][0]["encaje"], r["oportunidades"][1]["encaje"])
         self.assertEqual(r["oportunidades"][0]["id"], "id-2")
+
+
+class TestAlertasEnElResumen(unittest.TestCase):
+    """La sección «Alertas» del resumen: los avisos de las alertas de departamento con canal «resumen_diario» del periodo."""
+    AVISOS = {"total": 4, "items": [{"alerta_id": 2, "nombre": "Del equipo", "departamento": "licitaciones", "total": 4,
+                                     "avisos": [{"motor_id": "0b1f7a3e-1111-4222-8333-444444444444", "tipo": "licitacion.nueva", "titulo": "Videovigilancia", "encaje": 82.0}]}]}
+
+    def construir(self, motor_sim, avisos):
+        return ejecutar(resumen.construir(AHORA, motor_sim, avisos=avisos))
+
+    def test_la_seccion_lleva_los_avisos_y_el_total_en_las_cifras(self):
+        llamadas = []
+
+        async def avisos(desde, hasta, por_alerta):
+            llamadas.append((desde, hasta, por_alerta))
+            return self.AVISOS
+        r = self.construir(Motor([lic(1)]), avisos)
+        self.assertEqual((r["alertas"]["estado"], r["alertas"]["total"], r["alertas"]["items"], r["alertas"]["aviso"]), ("ok", 4, self.AVISOS["items"], None))
+        self.assertEqual(r["totales"]["alertas"], 4)
+        desde, hasta, por_alerta = llamadas[0]
+        self.assertEqual((desde.isoformat(), hasta.isoformat(), por_alerta), (r["ventana"]["desde"], r["ventana"]["hasta"], CFG["resumen"]["avisos_por_alerta"]))   # la misma ventana que las novedades
+
+    def test_sin_alertas_la_seccion_esta_vacia_pero_existe(self):
+        r = self.construir(Motor([lic(1)]), sin_avisos)
+        self.assertEqual(r["alertas"], {"estado": "ok", "total": 0, "items": [], "aviso": None})
+        self.assertEqual(r["totales"]["alertas"], 0)
+
+    def test_si_el_motor_no_responde_los_avisos_salen_igual(self):
+        async def avisos(desde, hasta, por_alerta):
+            return self.AVISOS
+        r = self.construir(Motor([], falla=("/tenders", motor.MotorNoDisponible("no responde"))), avisos)
+        self.assertEqual(r["estado"], "sin_datos")
+        self.assertEqual(r["alertas"]["total"], 4)                      # los avisos ya están guardados: no dependen del motor
+
+    def test_si_no_se_pueden_leer_los_avisos_el_resumen_sale_y_lo_dice(self):
+        async def roto(desde, hasta, por_alerta):
+            raise OSError("la base de datos no responde")
+        r = self.construir(Motor([lic(1)]), roto)
+        self.assertEqual(r["estado"], "ok")
+        self.assertEqual(len(r["oportunidades"]), 1)                    # lo demás no se pierde
+        self.assertEqual((r["alertas"]["estado"], r["alertas"]["total"], r["alertas"]["items"]), ("error", 0, []))
+        self.assertIn("no los incluye", r["alertas"]["aviso"])
+        self.assertIsNone(r["aviso"])                                   # el aviso general es del motor, no de esto
 
 
 class TestConsultaDeCpv(unittest.TestCase):

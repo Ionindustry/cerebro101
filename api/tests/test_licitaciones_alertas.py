@@ -12,7 +12,8 @@ import _sin_servicios  # noqa: F401
 
 try:
     import psycopg
-    from cerebro.licitaciones import alertas
+    from cerebro.herramientas import licitaciones as motor
+    from cerebro.licitaciones import alertas, resumen
     from cerebro.licitaciones.alertas import ErrorAlerta, NoExiste, SinPermiso
 except ImportError as e:      # pragma: no cover
     raise unittest.SkipTest(str(e))
@@ -65,9 +66,13 @@ class TestFiltro(unittest.TestCase):
             with self.assertRaises(ErrorAlerta, msg=mal):
                 alertas.limpiar_nombre(mal)
         self.assertEqual(alertas.limpiar_canal("panel"), "panel")
-        for mal in ("correo", "resumen_diario", None):
+        self.assertEqual(alertas.limpiar_canal("resumen_diario", "departamento"), "resumen_diario")
+        for mal in ("correo", "sms", None, ""):
             with self.assertRaises(ErrorAlerta, msg=mal):
                 alertas.limpiar_canal(mal)
+        with self.assertRaises(ErrorAlerta):                                       # una personal no puede salir en el resumen que ve Dirección
+            alertas.limpiar_canal("resumen_diario", "personal")
+        self.assertEqual(alertas.limpiar_canal("panel", "personal"), "panel")
         self.assertIsNone(alertas.limpiar_departamento("personal", None))
         self.assertEqual(alertas.limpiar_departamento("departamento", "licitaciones"), "licitaciones")
         for ambito, d in (("personal", "licitaciones"), ("departamento", None), ("departamento", "No Valido"), ("otro", None)):
@@ -189,14 +194,14 @@ class TestEnBase(unittest.TestCase):
             ejecutar(alertas.crear(ALBERT, entrada(ambito="departamento", departamento="licitaciones")))
         with self.assertRaises(SinPermiso):
             ejecutar(alertas.crear(SIN_ACCESO, entrada()))
-        for mal in (entrada(filtro={}), entrada(eventos=[]), entrada(nombre=""), entrada(canal="correo"), entrada(departamento="licitaciones")):
+        for mal in (entrada(filtro={}), entrada(eventos=[]), entrada(nombre=""), entrada(canal="correo"), entrada(departamento="licitaciones"), entrada(canal="resumen_diario")):
             with self.assertRaises(ErrorAlerta, msg=mal):
                 ejecutar(alertas.crear(ALBERT, mal))
         self.assertEqual(ejecutar(alertas.listar(ALBERT)), [])
 
     def test_el_cambio_solo_admite_ciertos_campos(self):
         a = ejecutar(alertas.crear(ALBERT, entrada()))
-        for mal in ({}, {"ambito": "departamento"}, {"propietario": "otro"}, {"activa": "si"}, {"filtro": {}}, {"canal": "correo"}):
+        for mal in ({}, {"ambito": "departamento"}, {"propietario": "otro"}, {"activa": "si"}, {"filtro": {}}, {"canal": "correo"}, {"canal": "resumen_diario"}):
             with self.assertRaises(ErrorAlerta, msg=mal):
                 ejecutar(alertas.cambiar(ALBERT, a["id"], mal))
 
@@ -233,6 +238,65 @@ class TestEnBase(unittest.TestCase):
         self.assertEqual(ejecutar(alertas.marcar_leidos(ALBERT)), 1)
         with self.assertRaises(ErrorAlerta):
             ejecutar(alertas.marcar_leidos(ALBERT, ["x"]))
+
+    def test_el_canal_del_resumen_solo_en_alertas_de_departamento_tambien_al_cambiarlo(self):
+        dep = ejecutar(alertas.crear(RESPONSABLE, entrada(ambito="departamento", departamento="licitaciones", canal="resumen_diario")))
+        self.assertEqual(dep["canal"], "resumen_diario")
+        self.assertEqual(ejecutar(alertas.cambiar(RESPONSABLE, dep["id"], {"canal": "panel"}))["canal"], "panel")
+        self.assertEqual(ejecutar(alertas.cambiar(RESPONSABLE, dep["id"], {"canal": "resumen_diario"}))["canal"], "resumen_diario")
+        mia = ejecutar(alertas.crear(ALBERT, entrada()))
+        with self.assertRaises(ErrorAlerta):
+            ejecutar(alertas.cambiar(ALBERT, mia["id"], {"canal": "resumen_diario"}))
+        # La base de datos lo impide aunque alguien se saltara el código.
+        with psycopg.connect(self.url_directa(), autocommit=True) as c, self.assertRaises(psycopg.errors.CheckViolation):
+            c.execute("UPDATE licitaciones_alertas SET canal = 'resumen_diario' WHERE id = %s", [mia["id"]])
+
+    def test_el_esquema_de_antes_se_actualiza_para_admitir_el_canal_del_resumen(self):
+        with psycopg.connect(self.url_directa(), autocommit=True) as c:
+            c.execute("ALTER TABLE licitaciones_alertas DROP CONSTRAINT licitaciones_alertas_canal_check")
+            c.execute("ALTER TABLE licitaciones_alertas ADD CONSTRAINT licitaciones_alertas_canal_check CHECK (canal IN ('panel'))")     # como era antes
+            c.execute(self.bloque)                                                                                                        # el arranque de siempre
+        dep = ejecutar(alertas.crear(RESPONSABLE, entrada(ambito="departamento", departamento="licitaciones", canal="resumen_diario")))
+        self.assertEqual(dep["canal"], "resumen_diario")
+
+    def test_avisos_para_el_resumen_solo_de_departamento_con_ese_canal_y_del_periodo(self):
+        eq = ejecutar(alertas.crear(RESPONSABLE, entrada(ambito="departamento", departamento="licitaciones", canal="resumen_diario", nombre="Del equipo")))
+        solo_panel = ejecutar(alertas.crear(RESPONSABLE, entrada(ambito="departamento", departamento="licitaciones", nombre="Solo panel")))
+        mia = ejecutar(alertas.crear(ALBERT, entrada(nombre="Personal")))
+        desde, hasta = datetime(2026, 10, 27, 15, 0, tzinfo=timezone.utc), datetime(2026, 10, 28, 15, 0, tzinfo=timezone.utc)
+        dentro = datetime(2026, 10, 28, 9, 0, tzinfo=timezone.utc)
+        for i, encaje in enumerate((60, 90, 75, 50)):
+            ejecutar(alertas.registrar_aviso(eq["id"], f"e{i}", "licitacion.nueva", self.datos(motor_id=f"0b1f7a3e-1111-4222-8333-44444444444{i}", titulo=f"T{encaje}", encaje=encaje), dentro))
+        ejecutar(alertas.registrar_aviso(eq["id"], "antes", "licitacion.nueva", self.datos(titulo="de ayer por la mañana"), datetime(2026, 10, 27, 9, 0, tzinfo=timezone.utc)))
+        ejecutar(alertas.registrar_aviso(eq["id"], "limite", "licitacion.nueva", self.datos(titulo="justo a las 16:00"), hasta))                   # el fin no entra: [desde, hasta)
+        ejecutar(alertas.registrar_aviso(solo_panel["id"], "p", "licitacion.nueva", self.datos(), dentro))
+        ejecutar(alertas.registrar_aviso(mia["id"], "m", "licitacion.nueva", self.datos(), dentro))
+        r = ejecutar(alertas.avisos_para_resumen(desde, hasta, por_alerta=2))
+        self.assertEqual(r["total"], 4)
+        self.assertEqual(len(r["items"]), 1)                                                                                    # ni la de solo panel ni la personal
+        g = r["items"][0]
+        self.assertEqual((g["nombre"], g["departamento"], g["total"]), ("Del equipo", "licitaciones", 4))
+        self.assertEqual([a["titulo"] for a in g["avisos"]], ["T90", "T75"])                                                  # los 2 de más encaje; el resto se cuenta
+        self.assertEqual(ejecutar(alertas.avisos_para_resumen(hasta, hasta.replace(day=29)), ) ["items"][0]["avisos"][0]["titulo"], "justo a las 16:00")
+
+    def test_el_resumen_con_avisos_reales_se_guarda_y_se_lee_incluso_con_el_motor_caido(self):
+        with psycopg.connect(self.url_directa(), autocommit=True) as c:
+            t = ESQUEMA.read_text(encoding="utf-8")
+            c.execute(t[t.index("CREATE TABLE IF NOT EXISTS licitaciones_resumenes"):])                    # el almacén de los resúmenes
+        eq = ejecutar(alertas.crear(RESPONSABLE, entrada(ambito="departamento", departamento="licitaciones", canal="resumen_diario", nombre="Del equipo")))
+        ahora = datetime(2026, 10, 28, 15, 0, tzinfo=timezone.utc)                                         # las 16:00 en Madrid
+        ejecutar(alertas.registrar_aviso(eq["id"], "e1", "licitacion.nueva", self.datos(), datetime(2026, 10, 28, 9, 0, tzinfo=timezone.utc)))
+        ajustes = SimpleNamespace(database_url=alertas.ajustes.database_url, zona_horaria="Europe/Madrid", dir_config=resumen.ajustes.dir_config)
+
+        async def motor_caido(ruta, params=None):
+            raise motor.MotorNoDisponible("el motor no responde")
+        with mock.patch.object(resumen, "ajustes", ajustes):
+            doc = ejecutar(resumen.construir(ahora, motor_caido))
+            self.assertEqual((doc["estado"], doc["alertas"]["estado"], doc["alertas"]["total"], doc["totales"]["alertas"]), ("sin_datos", "ok", 1, 1))
+            rid = ejecutar(resumen.guardar(doc, "programada"))
+            leido = ejecutar(resumen.leer(rid))
+        g = leido["contenido"]["alertas"]["items"][0]
+        self.assertEqual((g["nombre"], g["departamento"], g["total"], g["avisos"][0]["titulo"], g["avisos"][0]["encaje"]), ("Del equipo", "licitaciones", 1, "Videovigilancia del puerto", 82.0))
 
     def test_borrar_una_alerta_borra_sus_avisos(self):
         a = ejecutar(alertas.crear(ALBERT, entrada()))

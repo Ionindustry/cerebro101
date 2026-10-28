@@ -23,6 +23,7 @@ from psycopg.types.json import Jsonb
 
 from ..ajustes import ajustes
 from ..herramientas import licitaciones as motor
+from . import alertas as alertas_mod
 from . import encaje
 
 log = logging.getLogger("cerebro.licitaciones.resumen")
@@ -96,8 +97,19 @@ async def _estado_motor(consulta) -> dict:
     return {"estado": r.get("estado", "desconocido"), "antiguedad_h": round(max(ages) / 3600, 1) if ages else None, "sin_ingesta_completa": sin_ingesta}
 
 
-async def construir(ahora: datetime | None = None, consulta=None, cfg: dict | None = None) -> dict:
-    """El resumen del día como documento (ver los campos abajo). No toca la base de datos."""
+async def _alertas(avisos, cfg: dict, desde: datetime, hasta: datetime) -> dict:
+    """La sección «Alertas»: avisos del periodo de las alertas de departamento con canal «resumen_diario». No depende del motor (los avisos ya están guardados) y si
+    no se pueden leer lo dice, sin tumbar el resto del resumen."""
+    try:
+        r = await avisos(desde, hasta, int(cfg["resumen"].get("avisos_por_alerta", 5)))
+    except Exception as e:                  # la base de datos no responde: el resumen sale igual, avisando de lo que falta
+        log.warning("resumen: no se han podido leer los avisos de las alertas: %s", e)
+        return {"estado": "error", "total": 0, "items": [], "aviso": "No se han podido leer los avisos de las alertas de departamento: este resumen no los incluye."}
+    return {"estado": "ok", "total": r["total"], "items": r["items"], "aviso": None}
+
+
+async def construir(ahora: datetime | None = None, consulta=None, cfg: dict | None = None, avisos=None) -> dict:
+    """El resumen del día como documento (ver los campos abajo). Lee del motor (`consulta`) y de los avisos de las alertas de departamento (`avisos`, la base de datos)."""
     ahora = ahora or datetime.now(timezone.utc)
     cfg = cfg or config()
     consulta = consulta or motor._get
@@ -106,8 +118,10 @@ async def construir(ahora: datetime | None = None, consulta=None, cfg: dict | No
         "version": VERSION, "estado": "ok", "aviso": None, "ventana": {"desde": desde.isoformat(), "hasta": hasta.isoformat()},
         "generado": ahora.astimezone(timezone.utc).isoformat(), "motor": {"estado": "desconocido", "antiguedad_h": None},
         "totales": {"novedades": 0, "oportunidades": 0, "adjudicaciones": 0, "anuladas": 0, "fuera_de_importe": 0, "otras": 0, "truncado": False},
-        "oportunidades": [], "adjudicaciones": [], "anuladas": [],
+        "oportunidades": [], "adjudicaciones": [], "anuladas": [], "alertas": {"estado": "ok", "total": 0, "items": [], "aviso": None},
     }
+    out["alertas"] = await _alertas(avisos or alertas_mod.avisos_para_resumen, cfg, desde, hasta)
+    out["totales"]["alertas"] = out["alertas"]["total"]
     try:
         items, truncado = await _leer(consulta, cfg, desde)
     except (motor.MotorNoDisponible, ValueError) as e:

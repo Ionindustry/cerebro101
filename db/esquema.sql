@@ -260,7 +260,7 @@ CREATE TABLE IF NOT EXISTS licitaciones_alertas (
   departamento    text,                                -- obligatorio si ambito = departamento
   filtro          jsonb NOT NULL,
   eventos         text[] NOT NULL,                     -- licitacion.nueva, .modificada, .adjudicada, .formalizada, .anulada
-  canal           text NOT NULL DEFAULT 'panel' CHECK (canal IN ('panel')),     -- «resumen_diario» llegará con el resumen de las 16:00; «correo», cuando haya envío
+  canal           text NOT NULL DEFAULT 'panel',       -- panel: solo el aviso en el panel · resumen_diario: además, en el resumen de las 16:00 (solo alertas de departamento); «correo», cuando haya envío
   activa          boolean NOT NULL DEFAULT true,
   creada          timestamptz NOT NULL DEFAULT now(),
   cambiada        timestamptz NOT NULL DEFAULT now(),
@@ -268,6 +268,12 @@ CREATE TABLE IF NOT EXISTS licitaciones_alertas (
   CHECK ((ambito = 'departamento') = (departamento IS NOT NULL))
 );
 CREATE INDEX IF NOT EXISTS licitaciones_alertas_activas ON licitaciones_alertas (activa) WHERE activa;
+-- Las reglas del canal van con nombre y se reaplican en cada arranque (así una base creada antes, que solo admitía «panel», pasa a admitir «resumen_diario»).
+ALTER TABLE licitaciones_alertas DROP CONSTRAINT IF EXISTS licitaciones_alertas_canal_check;
+ALTER TABLE licitaciones_alertas ADD CONSTRAINT licitaciones_alertas_canal_check CHECK (canal IN ('panel','resumen_diario'));
+ALTER TABLE licitaciones_alertas DROP CONSTRAINT IF EXISTS licitaciones_alertas_resumen_solo_departamento;
+-- El resumen lo ven Dirección y Licitaciones: una alerta PERSONAL nunca puede aparecer en él.
+ALTER TABLE licitaciones_alertas ADD CONSTRAINT licitaciones_alertas_resumen_solo_departamento CHECK (canal <> 'resumen_diario' OR ambito = 'departamento');
 
 -- Avisos: una fila por alerta y evento (UNIQUE: una alerta no avisa dos veces del mismo evento, ADR 0003). Guardan los datos del expediente tal como eran al avisar.
 CREATE TABLE IF NOT EXISTS licitaciones_avisos (
