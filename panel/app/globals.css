@@ -365,3 +365,8 @@ a.kp-fila:hover { background: var(--fondo); }
 .lic-etiqueta.caido { background: #fbe8e6; color: #8c2118; }
 .lic-comp header { justify-content: flex-start; }
 .lic-comp header .lic-etiqueta { margin-left: auto; }
+.lic-venc { display: grid; gap: 8px; }
+.lic-venc .titulo { font-weight: 600; font-size: 16px; overflow-wrap: anywhere; }
+.lic-mes { margin: 18px 0 8px; font-size: 18px; }
+.lic-mes::first-letter { text-transform: uppercase; }
+.lic-check { display: inline-flex; gap: 8px; align-items: center; font-size: 14px; }

@@ -6,6 +6,9 @@ import {
 } from "../lib/licitaciones.js";
 import { viabilidadEtiqueta, admiteResumen, avisosDeAlertaTexto, canalEtiqueta, CANALES_ALERTA, ambitoTexto, eventoEtiqueta, filtroDeAlerta, filtroTexto, mensajeAlertas, sinLeerTexto } from "../lib/licitaciones.js";
 import {
+  VENCEN_VACIO, agruparPorMes, confianzaFinTexto, prorrogasTexto, queryAVencen, vencenAQuery, vencenDeMercado, vencenProblema, venceEnTexto,
+} from "../lib/licitaciones.js";
+import {
   COMPETENCIA_VACIA, adjudicacionesDeCompetidor, bajaTexto, competenciaAQuery, competenciaAcotada, cuotaTexto, limpiarNifs, mercadoTexto, muestraPoca, muestraTexto,
   queryACompetencia, tendenciaEtiqueta,
 } from "../lib/licitaciones.js";
@@ -275,7 +278,7 @@ test("el informe de Viabilidad: una etiqueta clara y nunca una decisión", () =>
 test("la pasarela deja pasar la lista de adjudicaciones y de competidores, y nada más de ellas", () => {
   assert.ok(rutaPermitida(["awards"], "GET"));
   assert.ok(rutaPermitida(["competitors"], "GET"));
-  for (const r of [["awards", ID], ["competitors", "x"], ["awards", "export"], ["organizations", ID], ["expiring-contracts"]]) assert.ok(!rutaPermitida(r, "GET"), JSON.stringify(r));
+  for (const r of [["awards", ID], ["competitors", "x"], ["awards", "export"], ["organizations", ID], ["alerts"]]) assert.ok(!rutaPermitida(r, "GET"), JSON.stringify(r));
   assert.ok(!rutaPermitida(["awards"], "POST"));
 });
 
@@ -300,6 +303,7 @@ test("competencia: filtros del formulario a parámetros del motor y de vuelta", 
   assert.equal(m.toString(), "cpv=72");
   assert.equal(competenciaAQuery({ cpv: "72", desde: "2026-05-01", hasta: "2026-01-01" }).has("hasta"), false);
   assert.equal(competenciaAQuery({ cpv: "72", orden: "cuota" }).has("orden"), false);
+  assert.equal(competenciaAQuery({ cpv: "72", desde: "2027-02-30" }).has("desde"), false);            // una fecha que no existe no se manda
 });
 
 test("competencia: las adjudicaciones de una empresa usan los mismos filtros del mercado", () => {
@@ -323,4 +327,62 @@ test("competencia: cuota, baja, tendencia y muestra se muestran con sus límites
   assert.match(muestraTexto({ adjudicaciones: 0 }), /No hay adjudicaciones/);
   assert.ok(muestraPoca({ adjudicaciones: 9 }) && !muestraPoca({ adjudicaciones: 10 }) && !muestraPoca({ adjudicaciones: 0 }) && !muestraPoca(null));
   assert.equal(mercadoTexto({ cpv: "72", nuts: "es512", comprador: "p1708500e", desde: "2025-01-01", hasta: "" }), "CPV 72 · zona ES512 · comprador P1708500E · desde 2025-01-01");
+});
+
+
+test("la pasarela deja pasar la lista de contratos que vencen y nada más de ella", () => {
+  assert.ok(rutaPermitida(["expiring-contracts"], "GET"));
+  assert.ok(!rutaPermitida(["expiring-contracts", ID], "GET"));
+  assert.ok(!rutaPermitida(["expiring-contracts"], "POST"));
+});
+
+test("contratos que vencen: filtros del formulario a parámetros del motor y de vuelta", () => {
+  const f = { cpv: "72 mal", nuts: "es512", comprador: "p1708500e", importeMin: "50000,50", desde: "2027-01-01", hasta: "2027-12-31", conProrrogas: true };
+  const q = vencenAQuery(f);
+  assert.deepEqual([q.getAll("cpv"), q.getAll("nuts"), q.getAll("comprador"), q.get("importe_min"), q.get("vence_desde"), q.get("vence_hasta"), q.get("con_prorrogas")],
+    [["72"], ["ES512"], ["nif:P1708500E"], "50000.50", "2027-01-01", "2027-12-31", "true"]);
+  assert.deepEqual(queryAVencen(q), { cpv: "72", nuts: "ES512", comprador: "P1708500E", importeMin: "50000.50", desde: "2027-01-01", hasta: "2027-12-31", conProrrogas: true });
+  assert.equal(vencenAQuery(VENCEN_VACIO).toString(), "");                       // sin nada: el motor usa sus fechas por defecto
+  assert.equal(vencenAQuery({ ...VENCEN_VACIO, desde: "2027-02-30", importeMin: "abc" }).toString(), "");
+});
+
+test("contratos que vencen: el periodo se valida antes de preguntar al motor", () => {
+  assert.equal(vencenProblema(VENCEN_VACIO), null);
+  assert.equal(vencenProblema({ desde: "2027-01-01", hasta: "2027-12-31" }), null);
+  assert.equal(vencenProblema({ desde: "2027-01-01", hasta: "2030-01-01" }), null);              // 36 meses justos
+  assert.match(vencenProblema({ desde: "2027-01-01", hasta: "2030-01-02" }), /36 meses/);
+  assert.match(vencenProblema({ desde: "2027-05-01", hasta: "2027-01-01" }), /posterior/);
+  assert.equal(vencenProblema({ desde: "2027-01-01" }), null);
+});
+
+test("contratos que vencen: agrupación por mes, plazos y fiabilidad", () => {
+  const g = agruparPorMes([{ fecha_fin: "2027-02-10" }, { fecha_fin: "2027-02-28" }, { fecha_fin: "2027-05-31" }, { fecha_fin: null }]);
+  assert.deepEqual(g.map((x) => [x.mes, x.titulo, x.items.length]), [["2027-02", "febrero de 2027", 2], ["2027-05", "mayo de 2027", 1], ["sin-fecha", "Sin fecha", 1]]);
+  assert.deepEqual(agruparPorMes(null), []);
+  const hoy = "2026-10-28";
+  assert.equal(venceEnTexto("2026-10-01", hoy), "ya ha terminado");
+  assert.equal(venceEnTexto("2026-10-28", hoy), "termina hoy");
+  assert.equal(venceEnTexto("2026-10-29", hoy), "termina mañana");
+  assert.equal(venceEnTexto("2026-11-20", hoy), "en 23 días");
+  assert.equal(venceEnTexto("2027-02-28", hoy), "en 4 meses");
+  assert.equal(venceEnTexto("2030-02-28", hoy), "en 3 años");
+  assert.equal(venceEnTexto("mal", hoy), "");
+  assert.match(confianzaFinTexto(0.9), /fiable/);
+  assert.match(confianzaFinTexto(0.7), /formalización/);
+  assert.match(confianzaFinTexto(0.4), /orientativa/);
+  assert.equal(confianzaFinTexto(null), "fecha estimada");
+});
+
+test("contratos que vencen: qué se dice de las prórrogas sin inventar", () => {
+  const f = (x) => `«${x}»`;
+  assert.equal(prorrogasTexto({ prorrogas_posibles: false }, f), "Sin prórrogas previstas");
+  assert.equal(prorrogasTexto({ prorrogas_posibles: true, fecha_fin_con_prorrogas: "2029-02-28" }, f), "Con prórrogas podría llegar hasta el «2029-02-28»");
+  assert.match(prorrogasTexto({ prorrogas_posibles: true, fecha_fin_con_prorrogas: null }, f), /sin fecha calculada/);
+  assert.match(prorrogasTexto({ prorrogas_posibles: null, prorrogas_texto: "Consultar el pliego" }, f), /pliego/);
+  assert.equal(prorrogasTexto({ prorrogas_posibles: null, prorrogas_texto: null }, f), "Prórrogas: no consta");
+});
+
+test("contratos que vencen: enlace desde competencia con el mismo mercado", () => {
+  assert.equal(vencenDeMercado({ cpv: "72 35125", nuts: "es512", comprador: "" }), "/licitaciones/vencen?cpv=72&cpv=35125&nuts=ES512");
+  assert.equal(vencenDeMercado({ cpv: "", nuts: "", comprador: "" }), "/licitaciones/vencen");
 });

@@ -16,7 +16,7 @@ export function rutaPermitida(segmentos, metodo) {
   const [a, b, ...resto] = segmentos;
   if (resto.length > 0) return false;
   if (a === "tenders") return b === undefined || UUID.test(b);
-  if (a === "awards" || a === "competitors") return b === undefined;                   // solo la lista, con sus filtros en la dirección
+  if (a === "awards" || a === "competitors" || a === "expiring-contracts") return b === undefined;                   // solo la lista, con sus filtros en la dirección
   return a === "ops" && b === "status";
 }
 
@@ -326,7 +326,11 @@ export const MERCADOS_EJEMPLO = [["Informática y software", "72"], ["Videovigil
 
 /** NIF del comprador tal como lo pide el motor («nif:P1708500E»); lo que no tiene 9 letras o cifras se omite. */
 export const limpiarNifs = (t) => [...new Set(String(t || "").split(LISTA).map((c) => c.replace(/^nif:/i, "")).filter((c) => /^[0-9A-Za-z]{9}$/.test(c)).map((c) => `nif:${c.toUpperCase()}`))].slice(0, 20);
-const fechaValida = (t) => (/^\d{4}-\d{2}-\d{2}$/.test(t || "") && !Number.isNaN(new Date(`${t}T12:00:00Z`).getTime()) ? t : "");
+const fechaValida = (t) => {                                    // «2027-02-30» no existe: Date lo corrige a marzo, así que se compara de vuelta
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(t || "")) return "";
+  const d = new Date(`${t}T12:00:00Z`);
+  return !Number.isNaN(d.getTime()) && d.toISOString().slice(0, 10) === t ? t : "";
+};
 
 /** El motor exige acotar el mercado con al menos un CPV, una zona o un comprador: sin eso no se le pregunta. */
 export const competenciaAcotada = (f) => limpiarCpv(f.cpv).length + limpiarNuts(f.nuts).length + limpiarNifs(f.comprador).length > 0;
@@ -413,4 +417,96 @@ export function mercadoTexto(f) {
   if (fechaValida(f.desde)) p.push(`desde ${f.desde}`);
   if (fechaValida(f.hasta)) p.push(`hasta ${f.hasta}`);
   return p.join(" · ");
+}
+
+
+// ---- Contratos que vencen (GET /expiring-contracts del motor) ----
+
+export const VENCEN_VACIO = { cpv: "", nuts: "", comprador: "", importeMin: "", desde: "", hasta: "", conProrrogas: false };
+const MAX_MESES_VENCEN = 36;
+
+const sumarMeses = (f, n) => { const d = new Date(`${f}T12:00:00Z`); d.setUTCMonth(d.getUTCMonth() + n); return d.toISOString().slice(0, 10); };
+
+/** Mensaje si el periodo pedido no lo admite el motor (desde posterior a hasta, o más de 36 meses); null si está bien. */
+export function vencenProblema(f) {
+  const desde = fechaValida(f.desde), hasta = fechaValida(f.hasta);
+  if (desde && hasta && desde > hasta) return "«Desde» no puede ser posterior a «hasta».";
+  if (desde && hasta && hasta > sumarMeses(desde, MAX_MESES_VENCEN)) return "El periodo no puede pasar de 36 meses.";
+  return null;
+}
+
+/** Filtros del formulario → parámetros de GET /expiring-contracts. Sin fechas, el motor mira de hoy + 3 meses a hoy + 12 meses. */
+export function vencenAQuery(f) {
+  const p = new URLSearchParams();
+  for (const c of limpiarCpv(f.cpv)) p.append("cpv", c);
+  for (const c of limpiarNuts(f.nuts)) p.append("nuts", c);
+  for (const c of limpiarNifs(f.comprador)) p.append("comprador", c);
+  const min = importeValido(f.importeMin);
+  if (min) p.set("importe_min", min);
+  const desde = fechaValida(f.desde), hasta = fechaValida(f.hasta);
+  if (desde) p.set("vence_desde", desde);
+  if (hasta) p.set("vence_hasta", hasta);
+  if (f.conProrrogas) p.set("con_prorrogas", "true");
+  return p;
+}
+
+/** Parámetros de la dirección de la página → filtros del formulario. */
+export function queryAVencen(sp) {
+  return {
+    cpv: sp.getAll("cpv").join(" "), nuts: sp.getAll("nuts").join(" "), comprador: sp.getAll("comprador").map((c) => c.replace(/^nif:/i, "")).join(" "),
+    importeMin: sp.get("importe_min") || "", desde: sp.get("vence_desde") || "", hasta: sp.get("vence_hasta") || "", conProrrogas: sp.get("con_prorrogas") === "true",
+  };
+}
+
+const mesLargo = new Intl.DateTimeFormat("es-ES", { month: "long", year: "numeric", timeZone: "UTC" });
+/** Agrupa contratos (ya ordenados por fecha de fin) por mes de fin: [{ mes: «2027-02», titulo: «febrero de 2027», items }]. */
+export function agruparPorMes(items) {
+  const grupos = [];
+  for (const x of items || []) {
+    const mes = /^\d{4}-\d{2}/.test(x.fecha_fin || "") ? x.fecha_fin.slice(0, 7) : "sin-fecha";
+    let g = grupos[grupos.length - 1];
+    if (!g || g.mes !== mes) {
+      g = { mes, titulo: mes === "sin-fecha" ? "Sin fecha" : mesLargo.format(new Date(`${mes}-15T12:00:00Z`)), items: [] };
+      grupos.push(g);
+    }
+    g.items.push(x);
+  }
+  return grupos;
+}
+
+/** «ya ha terminado», «termina hoy», «en 12 días», «en 4 meses» a partir de la fecha de fin y de «hoy» (ambas «AAAA-MM-DD»). */
+export function venceEnTexto(fin, hoy) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(fin || "") || !/^\d{4}-\d{2}-\d{2}$/.test(hoy || "")) return "";
+  const dias = Math.round((new Date(`${fin}T12:00:00Z`) - new Date(`${hoy}T12:00:00Z`)) / 86400000);
+  if (dias < 0) return "ya ha terminado";
+  if (dias === 0) return "termina hoy";
+  if (dias === 1) return "termina mañana";
+  if (dias < 60) return `en ${dias} días`;
+  const meses = Math.round(dias / 30.44);
+  return meses < 24 ? `en ${meses} meses` : `en ${Math.round(meses / 12)} años`;
+}
+
+/** Cuánto fiarse de la fecha de fin: depende de qué fecha de inicio había (0,9 entrada en vigor publicada, 0,7 formalización, 0,4 adjudicación). */
+export function confianzaFinTexto(c) {
+  if (typeof c !== "number") return "fecha estimada";
+  if (c >= 0.85) return "inicio publicado: fecha fiable";
+  if (c >= 0.65) return "calculada desde la formalización";
+  return "calculada desde la adjudicación: orientativa";
+}
+
+/** Qué se sabe de las prórrogas de un contrato, en una línea. */
+export function prorrogasTexto(x, conFecha = fechaCivilTexto) {
+  if (x.prorrogas_posibles === false) return "Sin prórrogas previstas";
+  if (x.prorrogas_posibles === true) return x.fecha_fin_con_prorrogas ? `Con prórrogas podría llegar hasta el ${conFecha(x.fecha_fin_con_prorrogas)}` : "Admite prórrogas (sin fecha calculada)";
+  return x.prorrogas_texto ? "Prórrogas: léelo en el pliego (abajo)" : "Prórrogas: no consta";
+}
+
+/** Dirección de «contratos que vencen» con el mismo mercado que se está mirando en Competencia. */
+export function vencenDeMercado(filtros) {
+  const p = new URLSearchParams();
+  for (const c of limpiarCpv(filtros.cpv)) p.append("cpv", c);
+  for (const c of limpiarNuts(filtros.nuts)) p.append("nuts", c);
+  for (const c of limpiarNifs(filtros.comprador)) p.append("comprador", c);
+  const q = p.toString();
+  return q ? `/licitaciones/vencen?${q}` : "/licitaciones/vencen";
 }
