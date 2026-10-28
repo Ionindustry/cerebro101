@@ -7,8 +7,8 @@
 #   COPIA_SIN_TRAZAS=1: no copia ClickHouse ni MinIO (las trazas de Langfuse, lo que más pesa); sí copia su base de datos.
 #   --parar:     detiene Langfuse y ClickHouse unos segundos para copiarlos de forma consistente y los vuelve a arrancar.
 #
-# Guarda: cerebro.sql.gz (aprobaciones, registro de acciones, conocimiento…), langfuse.sql.gz, erpnext.sql.gz y
-#         erpnext_sitios.tar.gz (si ERPNext está instalado),
+# Guarda: cerebro.sql.gz (aprobaciones, registro de acciones, conocimiento…), langfuse.sql.gz, licitaciones.sql.gz (si el motor de
+#         licitaciones está en marcha), erpnext.sql.gz y erpnext_sitios.tar.gz (si ERPNext está instalado),
 #         clickhouse.tar.gz y minio.tar.gz (trazas), y SHA256SUMS. Llevad la carpeta a un almacenamiento
 # externo y probad la restauración de vez en cuando (docs/SEGURIDAD.md).
 set -euo pipefail
@@ -24,6 +24,13 @@ echo "→ PostgreSQL del Cerebro (aprobaciones, registro de acciones, conocimien
 docker compose exec -T postgres pg_dump -U cerebro --no-owner cerebro | gzip > "$DESTINO/cerebro.sql.gz"
 echo "→ PostgreSQL de Langfuse"
 docker compose exec -T langfuse-db pg_dump -U langfuse --no-owner langfuse | gzip > "$DESTINO/langfuse.sql.gz"
+
+# Motor de licitaciones (si está en marcha): su base de datos (estado de la ingesta y modelo de lectura). Los originales de las licitaciones están en el
+# almacén S3 del motor (RustFS), que no se copia aquí por su tamaño: con los originales el modelo de lectura se puede regenerar (ADR 0003).
+if docker ps --format '{{.Names}}' | grep -qx 'licitaciones-lic-db-1'; then
+  echo "→ PostgreSQL del motor de licitaciones"
+  docker exec licitaciones-lic-db-1 pg_dump -U lic --no-owner licitaciones | gzip > "$DESTINO/licitaciones.sql.gz"
+fi
 
 if [ "$PARAR" = 1 ]; then
   echo "→ Deteniendo Langfuse y ClickHouse un momento"
