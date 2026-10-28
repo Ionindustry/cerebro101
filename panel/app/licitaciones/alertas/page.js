@@ -1,7 +1,7 @@
 "use client";
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
-import { admiteResumen, ambitoTexto, canalDeAlertaTexto, canalesDe, correoValido, DOMINIO_CORREO, encajeClase, EVENTOS_ALERTA, eventoEtiqueta, fechaTexto, filtroDeAlerta, filtroTexto, importeTexto, mensajeAlertas, sinLeerTexto } from "../../../lib/licitaciones";
+import { admiteResumen, ambitoTexto, canalDeAlertaTexto, canalesDe, competenciaGuardable, competidoresDeTexto, correoValido, DOMINIO_CORREO, esCompetencia, ganadoresTexto, TIPOS_ALERTA, vigilaTexto, encajeClase, EVENTOS_ALERTA, eventoEtiqueta, fechaTexto, filtroDeAlerta, filtroTexto, importeTexto, mensajeAlertas, sinLeerTexto } from "../../../lib/licitaciones";
 import { pedirCerebro } from "../cliente";
 
 const enviar = (cuerpo) => ({ method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(cuerpo || {}) });
@@ -23,6 +23,7 @@ function Avisos({ avisos, onLeer }) {
                 {!x.leido && <span className="lic-etiqueta abierta">Nuevo</span>}
               </span>
               <span className="meta">{[x.organismo, `Alerta «${x.alerta}»`, eventoEtiqueta(x.tipo)].filter(Boolean).join(" · ")}</span>
+              {ganadoresTexto(x.detalle).map((t, i) => <span key={i} className="meta"><strong>{t}</strong></span>)}
               <span className="lic-fila">
                 {x.importe != null && <span className="meta">{importeTexto({ valor: String(x.importe), moneda: "EUR", impuestos: "sin_iva" })}</span>}
                 {x.fecha_limite && <span className="meta">Plazo: {fechaTexto(x.fecha_limite)}</span>}
@@ -37,13 +38,15 @@ function Avisos({ avisos, onLeer }) {
   );
 }
 
-const FORMULARIO_VACIO = { nombre: "", q: "", cpv: "", nuts: "", importeMin: "", importeMax: "", eventos: ["licitacion.nueva"], ambito: "personal", departamento: "", canal: "panel", correo: "" };
+const FORMULARIO_VACIO = { nombre: "", q: "", cpv: "", nuts: "", importeMin: "", importeMax: "", tipo: "licitacion", competidores: "", comprador: "", eventos: ["licitacion.nueva"], ambito: "personal", departamento: "", canal: "panel", correo: "" };
 
 function Formulario({ onCrear, trabajando }) {
   const [f, setF] = useState(FORMULARIO_VACIO);
   const poner = (k) => (ev) => setF((x) => ({ ...x, [k]: ev.target.value }));
   const canal = canalesDe(f.ambito).some(([k]) => k === f.canal) ? f.canal : "panel";       // «resumen_diario» solo para departamentos: al pasar a «Mía» vuelve a «panel»
   const correoMal = canal === "correo" && !correoValido(f.correo);
+  const competencia = f.tipo === "competencia";
+  const sinCriterios = competencia && !competenciaGuardable(f);
   const alternar = (e) => setF((x) => ({ ...x, eventos: x.eventos.includes(e) ? x.eventos.filter((y) => y !== e) : [...x.eventos, e] }));
   const enviarForm = async (ev) => {
     ev.preventDefault();
@@ -54,10 +57,20 @@ function Formulario({ onCrear, trabajando }) {
       <h2>Nueva alerta</h2>
       <p className="meta">Avisa cuando llegue un evento de una licitación que cumpla estos criterios. También puedes crearla desde el buscador con «Guardar como alerta».</p>
       <div className="lic-campos">
+        <label>Qué vigila
+          <select value={f.tipo} onChange={poner("tipo")}>{TIPOS_ALERTA.map(([k, t]) => <option key={k} value={k}>{t}</option>)}</select>
+        </label>
+        {competencia && (
+          <label>Competidores (NIF)
+            <input type="text" value={f.competidores} onChange={poner("competidores")} placeholder="B12345678 A08000143 (vacío = cualquiera)" />
+            <span className="ayuda">{f.competidores.trim() && competidoresDeTexto(f.competidores).length === 0 ? "No reconozco ningún NIF (9 letras o cifras)" : "Sin NIF, avisa de cualquier adjudicación del mercado que elijas abajo"}</span>
+          </label>
+        )}
         <label>Nombre<input type="text" value={f.nombre} onChange={poner("nombre")} maxLength={120} required placeholder="Videovigilancia en Girona" /></label>
         <label>Texto<input type="text" value={f.q} onChange={poner("q")} maxLength={200} placeholder="castellano o catalán" /></label>
         <label>CPV<input type="text" value={f.cpv} onChange={poner("cpv")} placeholder="32323500 72" /></label>
         <label>Zona (NUTS)<input type="text" value={f.nuts} onChange={poner("nuts")} placeholder="ES512" /></label>
+        <label>Comprador (NIF)<input type="text" value={f.comprador} onChange={poner("comprador")} placeholder="P1708500E" /></label>
         <label>Importe mínimo (€)<input type="text" inputMode="decimal" value={f.importeMin} onChange={poner("importeMin")} /></label>
         <label>Importe máximo (€)<input type="text" inputMode="decimal" value={f.importeMax} onChange={poner("importeMax")} /></label>
         <label>De quién es
@@ -78,11 +91,12 @@ function Formulario({ onCrear, trabajando }) {
           </label>
         )}
       </div>
-      <fieldset className="lic-estados">
+      {competencia && <p className="meta">Una alerta de competencia avisa solo cuando se adjudica una licitación del mercado elegido (y una sola vez por licitación). Los datos de quién gana los publica la plataforma de contratación; solo se compara por NIF.</p>}
+      {!competencia && <fieldset className="lic-estados">
         <legend>Avisar de</legend>
         {EVENTOS_ALERTA.map(([k, t]) => <label key={k}><input type="checkbox" checked={f.eventos.includes(k)} onChange={() => alternar(k)} />{t}</label>)}
-      </fieldset>
-      <div className="lic-fila"><button className="boton si" type="submit" disabled={trabajando || f.eventos.length === 0 || correoMal}>{trabajando ? "Guardando…" : "Guardar alerta"}</button></div>
+      </fieldset>}
+      <div className="lic-fila"><button className="boton si" type="submit" disabled={trabajando || (!competencia && f.eventos.length === 0) || correoMal || sinCriterios}>{trabajando ? "Guardando…" : "Guardar alerta"}</button></div>
     </form>
   );
 }
@@ -110,7 +124,8 @@ export default function Alertas() {
   const crear = async (f) => {
     const filtro = filtroDeAlerta(f);
     return accion("licitaciones/alertas", {
-      nombre: f.nombre, ambito: f.ambito, departamento: f.ambito === "departamento" ? f.departamento.trim().toLowerCase() : null, filtro, eventos: f.eventos,
+      nombre: f.nombre, ambito: f.ambito, departamento: f.ambito === "departamento" ? f.departamento.trim().toLowerCase() : null, filtro,
+      ...(f.tipo === "competencia" ? { tipo: "competencia", competidores: competidoresDeTexto(f.competidores) } : { eventos: f.eventos }),
       canal: f.canal,
       ...(f.canal === "correo" ? { correo_destino: f.correo.trim().toLowerCase() } : {}),
     });
@@ -130,9 +145,9 @@ export default function Alertas() {
             <ul className="lic-lista">
               {alertas.items.map((a) => (
                 <li key={a.id} className="tarjeta lic-item">
-                  <span className="lic-fila"><span className="titulo">{a.nombre}</span>{!a.activa && <span className="lic-etiqueta">En pausa</span>}<span className="lic-etiqueta">{ambitoTexto(a)}</span></span>
+                  <span className="lic-fila"><span className="titulo">{a.nombre}</span>{!a.activa && <span className="lic-etiqueta">En pausa</span>}<span className="lic-etiqueta">{ambitoTexto(a)}</span>{esCompetencia(a) && <span className="lic-etiqueta aviso">Competencia</span>}</span>
                   <span className="meta">{filtroTexto(a.filtro) || "—"}</span>
-                  <span className="meta">Avisa de: {a.eventos.map(eventoEtiqueta).join(", ")}{a.ultima_entrega ? ` · último aviso ${fechaTexto(a.ultima_entrega)}` : ""}{canalDeAlertaTexto(a) ? ` · ${canalDeAlertaTexto(a)}` : ""}</span>
+                  <span className="meta">{esCompetencia(a) ? `Avisa cuando gane ${vigilaTexto(a)}` : `Avisa de: ${a.eventos.map(eventoEtiqueta).join(", ")}`}{a.ultima_entrega ? ` · último aviso ${fechaTexto(a.ultima_entrega)}` : ""}{canalDeAlertaTexto(a) ? ` · ${canalDeAlertaTexto(a)}` : ""}</span>
                   {a.puede_cambiar && (
                     <span className="lic-fila">
                       <button className="boton no" disabled={trabajando} onClick={() => accion(`licitaciones/alertas/${a.id}`, { activa: !a.activa })}>{a.activa ? "Pausar" : "Reactivar"}</button>

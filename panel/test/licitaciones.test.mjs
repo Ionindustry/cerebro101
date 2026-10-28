@@ -492,3 +492,37 @@ test("canalDeAlertaTexto: dónde avisa una alerta", () => {
   assert.equal(canalDeAlertaTexto({ canal: "resumen_diario" }), "En el panel y en el resumen de las 16:00");
   assert.equal(canalDeAlertaTexto({ canal: "panel" }), "");
 });
+
+// ---- Alertas de competencia ----
+import { competenciaGuardable, competidoresDeTexto, esCompetencia, ganadoresTexto, TIPOS_ALERTA, vigilaTexto } from "../lib/licitaciones.js";
+
+test("competidoresDeTexto: NIF de la lista, sin repetidos y sin lo que no lo es", () => {
+  assert.deepEqual(competidoresDeTexto("b12345678, A08000143\nnif:b12345678 Seguridad corto"), ["B12345678", "A08000143"]);
+  assert.deepEqual(competidoresDeTexto(""), []);
+  assert.deepEqual(competidoresDeTexto(null), []);
+  assert.equal(competidoresDeTexto(Array.from({ length: 30 }, (_, i) => `A${String(i).padStart(8, "0")}`).join(" ")).length, 20);
+});
+
+test("competenciaGuardable: competidores concretos o algún criterio de mercado", () => {
+  assert.equal(competenciaGuardable({ competidores: "B12345678" }), true);
+  assert.equal(competenciaGuardable({ competidores: "", cpv: "32323500" }), true);
+  assert.equal(competenciaGuardable({ competidores: "", comprador: "P1708500E" }), true);
+  assert.equal(competenciaGuardable({ competidores: "Seguridad SL", cpv: "" }), false);
+  assert.equal(competenciaGuardable({ competidores: "" }), false);
+});
+
+test("filtroDeAlerta lleva el comprador como nif:", () => {
+  assert.deepEqual(filtroDeAlerta({ comprador: "p1708500e" }), { comprador: ["nif:P1708500E"] });
+});
+
+test("textos de una alerta de competencia y de su aviso", () => {
+  assert.equal(esCompetencia({ tipo: "competencia" }), true);
+  assert.equal(esCompetencia({ tipo: "licitacion" }), false);
+  assert.deepEqual(TIPOS_ALERTA.map(([k]) => k), ["licitacion", "competencia"]);
+  assert.equal(vigilaTexto({ competidores: ["B12345678", "A08000143"] }), "B12345678, A08000143");
+  assert.equal(vigilaTexto({ competidores: [] }), "cualquier adjudicatario");
+  assert.equal(eventoEtiqueta("competencia.adjudicada"), "Competencia: adjudicada");
+  assert.deepEqual(ganadoresTexto({ ganadores: [{ nombre: "Seguridad SL", nif: "B12345678", importe: "90000.00", lote: "2" }, { nombre: "Pedro Pérez", nif: null, importe: null, lote: "1" }] }),
+    ["Ganó Seguridad SL · B12345678 · 90.000 € sin IVA · lote 2", "Ganó Pedro Pérez"]);
+  assert.deepEqual(ganadoresTexto(null), []);
+});

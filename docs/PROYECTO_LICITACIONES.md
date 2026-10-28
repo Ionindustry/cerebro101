@@ -352,12 +352,19 @@ Documento de partida: «Plataforma de detección y análisis de concursos públi
   es solo de su dueño (ni Dirección la ve); una de departamento la ven sus miembros y Dirección, y la crean o cambian el responsable del departamento y Dirección.
   Diferencias con el contrato `/alerts` del motor (`openapi.yaml`): viven en el Cerebro y no en el motor porque la API del motor aún no sabe quién es cada
   usuario (Keycloak en el motor, SEC-031); cambiar y borrar van por `POST` (la pasarela solo deja GET y POST); sin `If-Match` (v1); solo los criterios que el motor
-  filtra hoy (texto, CPV, NUTS, comprador, estado, procedimiento, importes; no `area`, `fuente` ni `encaje_min`); sin alertas de competencia.
+  filtra hoy (texto, CPV, NUTS, comprador, estado, procedimiento, importes; no `area`, `fuente` ni `encaje_min`); las de competencia son un tipo aparte (ver abajo).
 - **Alertas en el resumen de las 16:00** (hecho): una alerta de **departamento** puede tener el canal `resumen_diario`; sus avisos del periodo salen en una sección
   «Alertas de departamento» del resumen (`alertas` en el documento y `totales.alertas`; hasta `resumen.avisos_por_alerta` = 5 por alerta, el resto se cuenta). El aviso
   se guarda siempre y sigue visible en el panel: el canal solo añade el resumen. Una alerta **personal** no puede usar ese canal (el resumen lo ven Dirección y
   Licitaciones): lo rechaza el código y también la base de datos (`licitaciones_alertas_resumen_solo_departamento`). La sección sale **aunque el motor no responda** (los
   avisos ya están guardados) y, si no se pueden leer, el resumen sale igual y lo dice. Se activa por alerta desde `/licitaciones/alertas` («Incluir en el resumen»).
+- **Alertas de competencia** (hecho): una alerta de `tipo = competencia` avisa cuando una licitación que cumple su filtro (CPV, zona, comprador…) **se adjudica** a uno de
+  los competidores de su lista (NIF) o, con la lista vacía, a cualquiera («nuevo competidor» queda fuera: sin el histórico cargado todo adjudicatario parecería nuevo). Solo
+  avisa del evento `adjudicada` (la base lo exige: `licitaciones_alertas_competencia`), **una sola vez por expediente y alerta**, y con el mismo límite de antigüedad que las
+  demás (7 días: la carga del histórico no inunda). El consumidor comprueba el filtro con el motor como siempre y luego lee la ficha (`GET /tenders/{id}`) para ver los
+  adjudicatarios; el aviso (`tipo = competencia.adjudicada`) guarda en `detalle` quién ganó, por qué importe sin IVA y en qué lote. Un adjudicatario **sin NIF** no se puede comparar
+  con la lista (el motor no une empresas por nombre) y solo salta si la lista está vacía; el NIF de una **persona física** no se guarda en el aviso. Los permisos, el canal
+  (`panel`, `correo`, `resumen_diario` para departamentos) y la pantalla son los de las demás alertas: `/licitaciones/alertas` → «Qué vigila: Competencia».
 - **Alertas por correo** (hecho): el canal `correo` de una alerta (personal o de departamento) envía los avisos a una dirección `correo_destino` **de la empresa**
   (`avisos.dominios` en `config/buzones.yaml`, por ahora `101.cat`): es correo interno y automático, así que no pasa por la bandeja de aprobaciones (que es para lo que
   sale de la empresa) y una dirección de fuera se rechaza al crear la alerta, otra vez justo antes de enviar y también en la base de datos (`licitaciones_alertas_correo_destino`:

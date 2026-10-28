@@ -29,7 +29,7 @@ log = logging.getLogger("cerebro.licitaciones.avisos_correo")
 
 DEFECTO = {"buzon": "notificaciones", "dominios": [], "max_por_correo": 20, "max_intentos": 5, "max_antiguedad_horas": 48}
 ETIQUETAS = {"licitacion.nueva": "Nueva", "licitacion.modificada": "Modificada", "licitacion.adjudicada": "Adjudicada", "licitacion.formalizada": "Formalizada",
-             "licitacion.anulada": "Anulada"}
+             "licitacion.anulada": "Anulada", "competencia.adjudicada": "Competencia"}
 
 
 def configuracion() -> dict:
@@ -41,7 +41,10 @@ def _una_linea(t, n: int = 200) -> str:
 
 
 def _importe(v) -> str:
-    return f"{float(v):,.0f} €".replace(",", ".") if v is not None else ""
+    try:
+        return f"{float(v):,.0f} €".replace(",", ".") if v is not None else ""
+    except (TypeError, ValueError):
+        return ""
 
 
 def redactar(alerta: dict, avisos: list[dict], zona: str = "Europe/Madrid") -> tuple[str, str]:
@@ -59,6 +62,9 @@ def redactar(alerta: dict, avisos: list[dict], zona: str = "Europe/Madrid") -> t
         detalle = " · ".join(d for d in detalle if d)
         if detalle:
             lineas.append(f"  {detalle}")
+        for g in ((a.get("detalle") or {}).get("ganadores") or [])[:5]:
+            lineas.append("  Ganó: " + " · ".join(x for x in (_una_linea(g.get("nombre"), 120), g.get("nif") or "", f"{_importe(g['importe'])} sin IVA" if g.get("importe") else "",
+                                                           f"lote {_una_linea(g['lote'], 20)}" if g.get("lote") not in (None, "", "1") else "") if x))
         if a.get("enlace"):
             lineas.append(f"  {_una_linea(a['enlace'], 300)}")
         lineas.append("")
@@ -87,7 +93,7 @@ async def pendientes(cfg: dict, ahora: datetime) -> list[tuple[dict, list[dict]]
     desde = ahora - timedelta(hours=int(cfg["max_antiguedad_horas"]))
     async with await _conectar() as conn:
         cur = await conn.execute(
-            """SELECT a.id AS a_id, a.nombre, a.correo_destino, v.id, v.tipo, v.titulo, v.organismo, v.encaje, v.importe, v.fecha_limite, v.enlace, v.creado
+            """SELECT a.id AS a_id, a.nombre, a.correo_destino, v.id, v.tipo, v.titulo, v.organismo, v.encaje, v.importe, v.fecha_limite, v.enlace, v.creado, v.detalle
                FROM licitaciones_avisos v JOIN licitaciones_alertas a ON a.id = v.alerta_id
                WHERE a.canal = 'correo' AND a.activa AND v.correo_enviado IS NULL AND v.correo_intentos < %s AND v.creado >= %s
                ORDER BY a.id, v.creado, v.id""", [int(cfg["max_intentos"]), desde])

@@ -344,6 +344,8 @@ class AlertaEntrada(BaseModel):
     eventos: list[str]
     canal: str = "panel"
     correo_destino: str | None = None        # con canal «correo»: dirección de la empresa a la que llega el aviso
+    tipo: str = "licitacion"                 # «competencia»: avisa cuando un competidor gana (solo adjudicaciones)
+    competidores: list[str] | None = None    # NIF de los competidores a vigilar; vacío = cualquier adjudicatario del mercado del filtro
 
 
 class AlertaCambio(BaseModel):
@@ -353,6 +355,7 @@ class AlertaCambio(BaseModel):
     activa: bool | None = None
     canal: str | None = None
     correo_destino: str | None = None
+    competidores: list[str] | None = None
 
 
 class AvisosLeidos(BaseModel):

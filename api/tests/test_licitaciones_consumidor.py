@@ -275,5 +275,69 @@ def motor_caido():
     return consumidor.motor.MotorNoDisponible("El motor no responde")
 
 
+class TestAlertasDeCompetencia(unittest.IsolatedAsyncioTestCase):
+    """Una alerta de competencia avisa de una adjudicación cuando el expediente cumple el filtro y la ha ganado un competidor de la lista (o cualquiera)."""
+    FICHA = {"id": ID, "adjudicaciones": [
+        {"lote": "1", "resultado": "adjudicado", "adjudicatario": {"nombre": "Seguridad SL", "nif": "B12345678"}, "importes": [{"valor": "90000.00", "moneda": "EUR", "impuestos": "sin_iva"}]},
+        {"lote": "2", "resultado": "adjudicado", "adjudicatario": {"nombre": "Pedro Pérez", "nif": "12345678Z"}, "importes": []},
+        {"lote": "3", "resultado": "desierto"}]}
+
+    def preparar(self, pedidas, ya_expediente=()):
+        self.registrados = []
+        self.rutas = []
+        parches = [
+            mock.patch.object(alertas, "activas_para", mock.AsyncMock(return_value=pedidas)),
+            mock.patch.object(alertas, "ya_avisada", mock.AsyncMock(return_value=False)),
+            mock.patch.object(alertas, "ya_avisada_expediente", mock.AsyncMock(side_effect=lambda a, m, t: a in ya_expediente)),
+            mock.patch.object(alertas, "registrar_aviso", mock.AsyncMock(side_effect=lambda a, e, t, d, ahora, detalle=None: self.registrados.append((a, t, detalle)) or True)),
+        ]
+        for p in parches:
+            p.start()
+            self.addCleanup(p.stop)
+        it = item(estado="adjudicada", actualizada_en="2026-10-27T10:00:00Z", version_entidad=2)
+
+        async def consulta(ruta, params=None):
+            self.rutas.append(ruta)
+            if ruta == f"/tenders/{ID}":
+                return self.FICHA
+            return {"items": [it]}
+        return consulta
+
+    def alerta(self, id, competidores=(), **filtro):
+        return {"id": id, "tipo": "competencia", "competidores": list(competidores), "filtro": filtro}
+
+    async def lanzar(self, consulta):
+        return await procesar_alertas(decodificar(mensaje("licitacion.adjudicada", version=2)), consulta=consulta, cfg={**CFG, "alertas": {"max_antiguedad_dias": 7}}, ahora=AHORA)
+
+    async def test_avisa_si_gana_un_competidor_de_la_lista_con_quien_y_cuanto(self):
+        c = self.preparar([self.alerta(1, ["B12345678"], cpv=["32"])])
+        self.assertEqual(await self.lanzar(c), "1 aviso(s) de 1 alerta(s)")
+        (a, tipo, detalle), = self.registrados
+        self.assertEqual((a, tipo), (1, "competencia.adjudicada"))
+        self.assertEqual(detalle["ganadores"], [{"nombre": "Seguridad SL", "nif": "B12345678", "lote": "1", "importe": "90000.00", "moneda": "EUR"}])
+
+    async def test_si_gana_otro_no_avisa_ni_pide_la_ficha_de_mas(self):
+        c = self.preparar([self.alerta(1, ["A08000143"], cpv=["32"])])
+        self.assertEqual(await self.lanzar(c), "0 aviso(s) de 1 alerta(s)")
+        self.assertEqual(self.registrados, [])
+
+    async def test_sin_lista_avisa_de_cualquier_adjudicado_pero_no_enseña_el_nif_de_una_persona(self):
+        c = self.preparar([self.alerta(1, [], cpv=["32"])])
+        await self.lanzar(c)
+        g = self.registrados[0][2]["ganadores"]
+        self.assertEqual([(x["nombre"], x["nif"]) for x in g], [("Seguridad SL", "B12345678"), ("Pedro Pérez", None)])       # el desierto no cuenta
+
+    async def test_una_sola_vez_por_expediente_y_la_ficha_solo_se_lee_si_hace_falta(self):
+        c = self.preparar([self.alerta(1, ["B12345678"], cpv=["32"])], ya_expediente=(1,))
+        self.assertEqual(await self.lanzar(c), "0 aviso(s) de 1 alerta(s)")
+        self.assertNotIn(f"/tenders/{ID}", self.rutas)
+        self.assertEqual(self.registrados, [])
+
+    async def test_una_alerta_normal_y_una_de_competencia_conviven(self):
+        c = self.preparar([{"id": 2, "filtro": {"cpv": ["32"]}}, self.alerta(1, ["B12345678"], cpv=["32"])])
+        self.assertEqual(await self.lanzar(c), "2 aviso(s) de 2 alerta(s)")
+        self.assertEqual([(a, t) for a, t, _ in self.registrados], [(2, "licitacion.adjudicada"), (1, "competencia.adjudicada")])
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -275,6 +275,15 @@ CREATE INDEX IF NOT EXISTS licitaciones_alertas_activas ON licitaciones_alertas 
 ALTER TABLE licitaciones_alertas DROP CONSTRAINT IF EXISTS licitaciones_alertas_canal_check;
 ALTER TABLE licitaciones_alertas ADD COLUMN IF NOT EXISTS correo_destino text;
 ALTER TABLE licitaciones_alertas ADD CONSTRAINT licitaciones_alertas_canal_check CHECK (canal IN ('panel','resumen_diario','correo'));
+-- Alertas de competencia: avisan cuando una licitación (que cumple el filtro) se adjudica a un competidor de la lista (NIF) o, con la lista vacía, a cualquiera.
+-- Solo del evento «adjudicada»; una alerta de licitaciones normal no lleva competidores.
+ALTER TABLE licitaciones_alertas ADD COLUMN IF NOT EXISTS tipo text NOT NULL DEFAULT 'licitacion';
+ALTER TABLE licitaciones_alertas ADD COLUMN IF NOT EXISTS competidores text[] NOT NULL DEFAULT '{}';
+ALTER TABLE licitaciones_alertas DROP CONSTRAINT IF EXISTS licitaciones_alertas_tipo_check;
+ALTER TABLE licitaciones_alertas ADD CONSTRAINT licitaciones_alertas_tipo_check CHECK (tipo IN ('licitacion','competencia'));
+ALTER TABLE licitaciones_alertas DROP CONSTRAINT IF EXISTS licitaciones_alertas_competencia;
+ALTER TABLE licitaciones_alertas ADD CONSTRAINT licitaciones_alertas_competencia CHECK (
+  (tipo = 'competencia' AND eventos = ARRAY['licitacion.adjudicada']::text[]) OR (tipo = 'licitacion' AND cardinality(competidores) = 0));
 -- Con canal «correo» hay dirección de destino, y solo entonces.
 ALTER TABLE licitaciones_alertas DROP CONSTRAINT IF EXISTS licitaciones_alertas_correo_destino;
 ALTER TABLE licitaciones_alertas ADD CONSTRAINT licitaciones_alertas_correo_destino CHECK ((canal = 'correo') = (correo_destino IS NOT NULL));
@@ -301,6 +310,7 @@ CREATE TABLE IF NOT EXISTS licitaciones_avisos (
   UNIQUE (alerta_id, evento_id)
 );
 -- Envío por correo (canal «correo»): NULL = pendiente de enviar; se reintenta hasta agotar los intentos (cerebro/licitaciones/avisos_correo.py).
+ALTER TABLE licitaciones_avisos ADD COLUMN IF NOT EXISTS detalle jsonb;        -- alertas de competencia: quién ha ganado ({"ganadores": [...]})
 ALTER TABLE licitaciones_avisos ADD COLUMN IF NOT EXISTS correo_enviado timestamptz;
 ALTER TABLE licitaciones_avisos ADD COLUMN IF NOT EXISTS correo_intentos integer NOT NULL DEFAULT 0;
 ALTER TABLE licitaciones_avisos ADD COLUMN IF NOT EXISTS correo_error text;

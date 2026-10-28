@@ -51,6 +51,13 @@ class TestRedactar(unittest.TestCase):
         self.assertIn("ha encontrado 2 licitaciones:", cuerpo)
         self.assertIn("• [Adjudicada] Videovigilancia del puerto\n\n", cuerpo)             # sin detalle ni enlace no quedan líneas vacías de más
 
+    def test_un_aviso_de_competencia_dice_quien_ha_ganado(self):
+        d = {"ganadores": [{"nombre": "Seguridad SL", "nif": "B12345678", "lote": "2", "importe": "90000.00"}, {"nombre": "Pedro Pérez", "nif": None, "lote": "1", "importe": None}]}
+        _, cuerpo = ac.redactar({"nombre": "Rivales"}, [aviso(tipo="competencia.adjudicada", detalle=d)])
+        self.assertIn("• [Competencia]", cuerpo)
+        self.assertIn("  Ganó: Seguridad SL · B12345678 · 90.000 € sin IVA · lote 2", cuerpo)
+        self.assertIn("  Ganó: Pedro Pérez\n", cuerpo)
+
     def test_el_texto_de_terceros_no_rompe_el_correo(self):
         asunto, cuerpo = ac.redactar({"nombre": "Mala\r\nBcc: x@y.com"}, [aviso(titulo="Obras\r\nBcc: x@y.com\x00" + "z" * 500)])
         self.assertNotIn("\n", asunto)

@@ -149,10 +149,29 @@ async def procesar_alertas(ev: Evento, *, consulta=None, cfg: dict | None = None
         except ValueError as e:        # el motor rechaza ese filtro (no debería: se valida al crear): se salta la alerta, no se pierde el evento
             log.warning("la alerta %s tiene un filtro que el motor rechaza: %s", a["id"], e)
             continue
-        if r.get("items"):
-            if await alertas_mod.registrar_aviso(a["id"], ev.id, f"licitacion.{ev.tipo}", d, ahora):
+        if not r.get("items"):
+            continue
+        if a.get("tipo") == "competencia":
+            if await _avisar_competencia(a, ev, item, d, ahora, consulta):
                 avisos += 1
+        elif await alertas_mod.registrar_aviso(a["id"], ev.id, f"licitacion.{ev.tipo}", d, ahora):
+            avisos += 1
     return f"{avisos} aviso(s) de {len(pedidas)} alerta(s)"
+
+
+TIPO_COMPETENCIA = "competencia.adjudicada"
+
+
+async def _avisar_competencia(a: dict, ev: Evento, item: dict, d: dict, ahora: datetime, consulta=None) -> bool:
+    """Alerta de competencia: el expediente ya cumple el filtro de la alerta; avisa si lo han ganado los competidores de la lista (o cualquiera, con la lista vacía).
+    Lee los adjudicatarios de la ficha del motor. Una sola vez por expediente y alerta."""
+    if await alertas_mod.ya_avisada_expediente(a["id"], str(d["motor_id"]), TIPO_COMPETENCIA):
+        return False
+    ficha = await (consulta or motor._get)(f"/tenders/{item['id']}")
+    ganadores = alertas_mod.ganadores(ficha, list(a.get("competidores") or []))
+    if not ganadores:
+        return False
+    return await alertas_mod.registrar_aviso(a["id"], ev.id, TIPO_COMPETENCIA, d, ahora, {"ganadores": ganadores})
 
 
 def espera(entregas: int) -> int:

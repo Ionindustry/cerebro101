@@ -94,6 +94,23 @@ class TestFiltro(unittest.TestCase):
             with self.assertRaises(ErrorAlerta):
                 alertas.limpiar_destino("correo", falta, dom)
 
+    def test_competidores_por_nif_y_ganadores_de_una_ficha(self):
+        self.assertEqual(alertas.limpiar_competidores(["nif:b12345678", "B12345678", " a08000143 "]), ["B12345678", "A08000143"])
+        self.assertEqual(alertas.limpiar_competidores(None), [])
+        self.assertEqual(alertas.limpiar_competidores([]), [])
+        for mal in ("B12345678", ["Seguridad SL"], ["B1234567"], [5], ["x" * 9 + "y"], ["Seguridad"], ["ABCDEFGHI"], ["B12345678"] * 1 + [f"A{n:08d}" for n in range(20)]):
+            with self.assertRaises(ErrorAlerta, msg=mal):
+                alertas.limpiar_competidores(mal)
+        with self.assertRaises(ErrorAlerta):
+            alertas.limpiar_filtro({})
+        self.assertEqual(alertas.limpiar_filtro({}, permitir_vacio=True), {})
+        ficha = {"adjudicaciones": [{"lote": "1", "resultado": "adjudicado", "adjudicatario": {"nombre": "A", "nif": "b12345678"}, "importes": [{"valor": "10", "impuestos": "con_iva"}, {"valor": "8", "moneda": "EUR", "impuestos": "sin_iva"}]},
+                                    {"lote": "2", "resultado": "adjudicado", "adjudicatario": {"nombre": "Sin NIF"}, "importes": []}]}
+        self.assertEqual([g["importe"] for g in alertas.ganadores(ficha, ["B12345678"])], ["8"])
+        self.assertEqual(len(alertas.ganadores(ficha, [])), 2)                                     # sin lista: todos (también el que no tiene NIF)
+        self.assertEqual(alertas.ganadores(ficha, ["A08000143"]), [])
+        self.assertEqual(alertas.ganadores({}, []), [])
+
     def test_la_consulta_al_motor_lleva_el_filtro_la_fuente_y_el_id_de_origen(self):
         p = alertas.parametros_de_consulta({"cpv": ["72"]}, "placsp", "https://x/1")
         self.assertEqual(p, {"cpv": ["72"], "fuente": "placsp", "id_origen": "https://x/1", "limit": 1})
@@ -291,6 +308,39 @@ class TestEnBase(unittest.TestCase):
             cn.execute("UPDATE licitaciones_alertas SET canal = 'panel' WHERE id = %s", [a["id"]])                      # «panel» con dirección tampoco
         dep = ejecutar(alertas.crear(RESPONSABLE, entrada(ambito="departamento", departamento="licitaciones", canal="correo", correo_destino="licitaciones@101.cat")))
         self.assertEqual(dep["correo_destino"], "licitaciones@101.cat")
+
+    def test_alertas_de_competencia_crear_cambiar_y_proteger(self):
+        a = ejecutar(alertas.crear(ALBERT, entrada(tipo="competencia", competidores=["nif:b12345678"], filtro={"cpv": ["32323500"]}, eventos=["licitacion.nueva"])))
+        self.assertEqual((a["tipo"], a["competidores"], a["eventos"]), ("competencia", ["B12345678"], ["licitacion.adjudicada"]))       # los eventos los fija el tipo
+        solo = ejecutar(alertas.crear(ALBERT, entrada(tipo="competencia", competidores=["A08000143"], filtro={})))                     # con competidores, sin otro criterio
+        self.assertEqual(solo["filtro"], {})
+        for mal in (entrada(tipo="competencia", filtro={}), entrada(tipo="competencia", competidores=["x"]), entrada(competidores=["B12345678"]), entrada(tipo="otra")):
+            with self.assertRaises(ErrorAlerta, msg=mal):
+                ejecutar(alertas.crear(ALBERT, mal))
+        b = ejecutar(alertas.cambiar(ALBERT, a["id"], {"competidores": ["A08000143", "B12345678"]}))
+        self.assertEqual(b["competidores"], ["A08000143", "B12345678"])
+        self.assertEqual(ejecutar(alertas.cambiar(ALBERT, a["id"], {"competidores": []}))["competidores"], [])                         # cualquiera, pero queda el filtro por CPV
+        with self.assertRaises(ErrorAlerta):                                                                                            # ni lista ni filtro: avisaría de todo
+            ejecutar(alertas.cambiar(ALBERT, solo["id"], {"competidores": []}))
+        with self.assertRaises(ErrorAlerta):
+            ejecutar(alertas.cambiar(ALBERT, a["id"], {"eventos": ["licitacion.nueva"]}))
+        normal = ejecutar(alertas.crear(ALBERT, entrada()))
+        with self.assertRaises(ErrorAlerta):
+            ejecutar(alertas.cambiar(ALBERT, normal["id"], {"competidores": ["B12345678"]}))
+        self.assertEqual([x["id"] for x in ejecutar(alertas.activas_para("licitacion.adjudicada"))], [a["id"], solo["id"]])
+        with psycopg.connect(self.url_directa(), autocommit=True) as cn, self.assertRaises(psycopg.errors.CheckViolation):             # y la base de datos lo impide también
+            cn.execute("UPDATE licitaciones_alertas SET eventos = ARRAY['licitacion.nueva'] WHERE id = %s", [a["id"]])
+        with psycopg.connect(self.url_directa(), autocommit=True) as cn, self.assertRaises(psycopg.errors.CheckViolation):
+            cn.execute("UPDATE licitaciones_alertas SET competidores = ARRAY['B12345678'] WHERE id = %s", [normal["id"]])
+
+    def test_el_aviso_de_competencia_guarda_el_detalle_y_se_lista(self):
+        a = ejecutar(alertas.crear(ALBERT, entrada(tipo="competencia", competidores=["B12345678"])))
+        detalle = {"ganadores": [{"nombre": "Seguridad SL", "nif": "B12345678", "lote": "1", "importe": "90000.00", "moneda": "EUR"}]}
+        self.assertTrue(ejecutar(alertas.registrar_aviso(a["id"], "e1", "competencia.adjudicada", self.datos(), AHORA, detalle)))
+        self.assertTrue(ejecutar(alertas.ya_avisada_expediente(a["id"], ID, "competencia.adjudicada")))
+        self.assertFalse(ejecutar(alertas.ya_avisada_expediente(a["id"], ID, "licitacion.adjudicada")))
+        x = ejecutar(alertas.listar_avisos(ALBERT))["items"][0]
+        self.assertEqual((x["tipo"], x["detalle"], x["alerta_tipo"]), ("competencia.adjudicada", detalle, "competencia"))
 
     def test_pasar_a_correo_no_envia_los_avisos_que_ya_habia(self):
         a = ejecutar(alertas.crear(ALBERT, entrada()))

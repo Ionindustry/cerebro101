@@ -249,7 +249,8 @@ export const EVENTOS_ALERTA = [
   ["licitacion.nueva", "Nueva licitación"], ["licitacion.modificada", "Modificada"], ["licitacion.adjudicada", "Adjudicada"],
   ["licitacion.formalizada", "Formalizada"], ["licitacion.anulada", "Anulada"],
 ];
-export const eventoEtiqueta = (e) => (EVENTOS_ALERTA.find(([k]) => k === e) || [, String(e || "").replace("licitacion.", "")])[1];
+const ETIQUETA_COMPETENCIA = "Competencia: adjudicada";
+export const eventoEtiqueta = (e) => e === "competencia.adjudicada" ? ETIQUETA_COMPETENCIA : (EVENTOS_ALERTA.find(([k]) => k === e) || [, String(e || "").replace("licitacion.", "")])[1];
 
 /** Los filtros del buscador (formulario) → el filtro de una alerta (lo que no es válido se omite; sin criterios queda vacío y la alerta no se puede guardar). */
 export function filtroDeAlerta(f) {
@@ -264,6 +265,8 @@ export function filtroDeAlerta(f) {
   const min = importeValido(f.importeMin), max = importeValido(f.importeMax);
   if (min) out.importe_min = min;
   if (max) out.importe_max = max;
+  const comprador = limpiarNifs(f.comprador);
+  if (comprador.length) out.comprador = comprador;
   return out;
 }
 
@@ -284,6 +287,21 @@ export function filtroTexto(f) {
   return p.join(" · ");
 }
 
+// ---- Alertas de competencia: avisan cuando un competidor gana (solo adjudicaciones) ----
+
+export const TIPOS_ALERTA = [["licitacion", "Licitaciones: nuevas, cambios, adjudicaciones…"], ["competencia", "Competencia: avisar cuando un competidor gane"]];
+/** Los NIF de la lista de competidores escrita en el formulario (separados por espacios, comas o líneas); lo que no es un NIF se omite. Máximo 20. */
+const FORMA_NIF = /^([A-Z][0-9]{7}[0-9A-Z]|[0-9]{8}[A-Z]|[XYZ][0-9]{7}[A-Z])$/;          // una palabra de 9 letras («Seguridad») no es un NIF
+export const competidoresDeTexto = (t) => limpiarNifs(t).map((c) => c.replace(/^nif:/, "")).filter((c) => FORMA_NIF.test(c));
+/** Una alerta de competencia necesita competidores concretos o, si no, algún criterio de mercado (CPV, zona, comprador…): sin ninguno avisaría de toda adjudicación. */
+export const competenciaGuardable = (f) => competidoresDeTexto(f.competidores).length > 0 || Object.keys(filtroDeAlerta(f)).length > 0;
+export const esCompetencia = (a) => a?.tipo === "competencia";
+/** Quién tiene que ganar para que salte la alerta: «B12345678, A08000143» o «cualquier adjudicatario». */
+export const vigilaTexto = (a) => (a?.competidores?.length ? a.competidores.join(", ") : "cualquier adjudicatario");
+/** Las líneas «Ganó X (NIF) · 90.000 € sin IVA» de un aviso de competencia. */
+export const ganadoresTexto = (detalle) =>
+  (detalle?.ganadores || []).map((g) => ["Ganó " + (g.nombre || "(sin nombre)"), g.nif, g.importe != null ? `${euros(g.importe)} sin IVA` : "", g.lote && g.lote !== "1" ? `lote ${g.lote}` : ""].filter(Boolean).join(" · "));
+
 export const ambitoTexto = (a) => (a.ambito === "departamento" ? `Departamento ${a.departamento}` : "Personal");
 
 /** «3 avisos sin leer», «1 aviso sin leer», «Sin avisos nuevos». */
@@ -293,7 +311,7 @@ export function mensajeAlertas(status) {
   if (status === 401) return "Tu sesión ha caducado.";
   if (status === 403) return "No tienes permiso para esto. Las alertas de un departamento las crea su responsable o Dirección.";
   if (status === 404) return "Esa alerta ya no existe.";
-  if (status === 422) return "Revisa los datos de la alerta: necesita un nombre, al menos un criterio de búsqueda y un evento; por correo, solo a direcciones @101.cat.";
+  if (status === 422) return "Revisa los datos de la alerta: necesita un nombre, al menos un criterio de búsqueda y un evento (o, en competencia, competidores o un criterio de mercado); por correo, solo a direcciones @101.cat.";
   return "No se ha podido completar la operación. Inténtalo en unos minutos.";
 }
 
