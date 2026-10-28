@@ -401,4 +401,9 @@ Documento de partida: «Plataforma de detección y análisis de concursos públi
   solo proveedor). `desde`, `hasta` y `cpv` acotan las cifras pero no la existencia. Los otros nombres con que aparece son informativos y **nunca unen** organizaciones. La
   migración 0006 añade `expedientes.comprador_id` (columna generada con la misma función `lic_uuid8`) para poder buscar compradores por UUID. La herramienta de los agentes
   tiene la operación `organizacion`.
-- Pendiente: canal `correo`; página de la ficha en el panel; un botón «Pedir informe de viabilidad» para una licitación concreta; y llevar a Viabilidad lo que ya sabe 101.cat de cada organismo.
+- **Página de la ficha de organización del panel** (hecho): `/licitaciones/organizaciones/{uuid}` enseña, por cada papel (comprador y/o adjudicataria), la muestra (con aviso si son menos de 10),
+  contratos, importe, baja media y percentiles, ofertas por licitación, a quién adjudica (con cuánto se concentra: ≥ 50 % en un solo adjudicatario se marca como mercado muy concentrado)
+  o a quién vende, en qué mercados (enlaces a «Competencia» por CPV) y una gráfica de contratos por trimestre. Los otros nombres con que aparece salen aparte y avisan de que no prueban
+  que sea la misma empresa; una persona física lo dice. Filtros por periodo y CPV en la dirección. Los nombres de empresas y organismos de «Competencia», «Contratos que vencen»
+  y la ficha de una licitación enlazan a su ficha. La pasarela del panel deja pasar `organizations/{uuid}` solo con UUID (nunca por nombre ni NIF desde el navegador).
+- Pendiente: canal `correo`; un botón «Pedir informe de viabilidad» para una licitación concreta; y llevar a Viabilidad lo que ya sabe 101.cat de cada organismo.

@@ -2,7 +2,7 @@
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useEffect, useState } from "react";
-import { estadoEtiqueta, etiquetaEmbudo, fechaTexto, importeTexto, mensajeEmbudo, nombreFuente, urlSegura } from "../../../../lib/licitaciones";
+import { estadoEtiqueta, etiquetaEmbudo, fechaTexto, fichaOrgHref, importeTexto, mensajeEmbudo, nombreFuente, urlSegura } from "../../../../lib/licitaciones";
 import { Fallo, pedir, pedirCerebro } from "../../cliente";
 
 const Dato = ({ t, children }) => <div><dt>{t}</dt><dd>{children ?? "—"}</dd></div>;
@@ -62,7 +62,7 @@ export default function Ficha() {
             <dl className="lic-ficha">
               <Dato t="Estado"><span className={`lic-etiqueta ${x.estado}`}>{estadoEtiqueta(x.estado)}</span>{x.estado_origen ? ` (en origen: ${x.estado_origen})` : ""}</Dato>
               <Dato t="Expediente">{x.expediente}</Dato>
-              <Dato t="Comprador">{x.comprador?.nombre}{x.comprador?.nif ? ` · ${x.comprador.nif}` : ""}</Dato>
+              <Dato t="Comprador">{fichaOrgHref(x.comprador?.id) ? <Link href={fichaOrgHref(x.comprador.id)}>{x.comprador.nombre}</Link> : x.comprador?.nombre}{x.comprador?.nif ? ` · ${x.comprador.nif}` : ""}</Dato>
               <Dato t="Procedimiento">{x.procedimiento?.replace(/_/g, " ")}</Dato>
               <Dato t="Plazo de presentación">{x.plazos?.presentacion ? fechaTexto(x.plazos.presentacion) : null}</Dato>
               <Dato t="Última actualización">{fechaTexto(x.actualizada_en)}</Dato>
@@ -107,7 +107,7 @@ export default function Ficha() {
                 <tbody>{x.adjudicaciones.map((a) => (
                   <tr key={a.id}>
                     <td>{a.lote}</td><td>{a.resultado}</td>
-                    <td>{a.adjudicatario?.nombre || "—"}{a.adjudicatario?.nif ? <span className="meta"> · {a.adjudicatario.nif}</span> : null}</td>
+                    <td>{fichaOrgHref(a.adjudicatario?.id) ? <Link href={fichaOrgHref(a.adjudicatario.id)}>{a.adjudicatario.nombre || "—"}</Link> : (a.adjudicatario?.nombre || "—")}{a.adjudicatario?.nif ? <span className="meta"> · {a.adjudicatario.nif}</span> : null}</td>
                     <td>{(a.importes || []).filter((i) => i.significado === "adjudicado").map((i) => importeTexto(i)).join(" · ") || "—"}</td>
                     <td>{typeof a.baja === "number" ? `${(a.baja * 100).toFixed(1).replace(".", ",")} %` : "—"}</td>
                     <td>{a.ofertas_recibidas ?? "—"}</td>

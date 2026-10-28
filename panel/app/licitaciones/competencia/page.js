@@ -4,7 +4,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useRef, useState } from "react";
 import {
   COMPETENCIA_VACIA, MERCADOS_EJEMPLO, ORDENES_COMPETENCIA, adjudicacionesDeCompetidor, bajaTexto, competenciaAQuery, competenciaAcotada, cuotaTexto,
-  fechaCivilTexto, importeTexto, mercadoTexto, vencenDeMercado, muestraPoca, muestraTexto, queryACompetencia, tendenciaEtiqueta, totalTexto,
+  fechaCivilTexto, fichaOrgHref, importeTexto, mercadoTexto, vencenDeMercado, muestraPoca, muestraTexto, queryACompetencia, tendenciaEtiqueta, totalTexto,
 } from "../../../lib/licitaciones";
 import { Fallo, pedir } from "../cliente";
 
@@ -26,7 +26,7 @@ function UltimasAdjudicaciones({ filtros, organizacionId }) {
           <tr key={a.id}>
             <td>{fechaCivilTexto(a.fecha_adjudicacion)}</td>
             <td><Link href={`/licitaciones/expedientes/${a.licitacion_id}`}>{a.titulo || a.expediente || "(sin título)"}</Link>{a.lote && a.lote !== "1" ? ` · lote ${a.lote}` : ""}</td>
-            <td>{a.comprador?.nombre || "—"}</td>
+            <td>{fichaOrgHref(a.comprador?.id) ? <Link href={fichaOrgHref(a.comprador.id)}>{a.comprador.nombre || "—"}</Link> : (a.comprador?.nombre || "—")}</td>
             <td>{importeTexto((a.importes || []).find((i) => i.significado === "adjudicado" && i.impuestos === "sin_iva"))}</td>
             <td>{bajaTexto(a.baja)}</td>
             <td>{a.ofertas_recibidas ?? "—"}</td>
@@ -45,7 +45,7 @@ function Competidor({ x, filtros, puesto }) {
     <li className="tarjeta lic-comp">
       <header className="lic-fila">
         <span className="lic-puesto" aria-label={`Puesto ${puesto}`}>{puesto}</span>
-        <h3>{o.nombre || "(sin nombre)"}</h3>
+        <h3>{fichaOrgHref(o.id) ? <Link href={fichaOrgHref(o.id)}>{o.nombre || "(sin nombre)"}</Link> : (o.nombre || "(sin nombre)")}</h3>
         {o.nif && <span className="meta">{o.nif}</span>}
         <span className={`lic-etiqueta ${t.clase}`} title={t.ayuda}>{t.texto}</span>
       </header>
