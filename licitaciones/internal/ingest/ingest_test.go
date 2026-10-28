@@ -373,6 +373,27 @@ func TestTrasUnFalloSeRecuperanLasPaginasQueQuedaronAtras(t *testing.T) {
 	}
 }
 
+// Regresión: una fuente que responde «sin cambios» (304) sigue estando al día; el punto de control tiene que reflejar la última comprobación
+// y no la última vez que hubo novedades, o el estado del motor la daría por caída pasadas unas horas.
+func TestSinCambiosRefrescaElPuntoDeControl(t *testing.T) {
+	f := &fakeFetcher{paginas: map[string][]byte{inicio: pagina(entrada("1", "2026-10-25T10:00:00.000+01:00", "PUB"))}, etag: `"v1"`}
+	d, _, st := deps(f)
+	if _, err := Run(context.Background(), d, src, inicio, RunOptions{}); err != nil {
+		t.Fatal(err)
+	}
+	primero, _ := st.Checkpoint(context.Background(), src)
+	// Pasan tres horas y la fuente sigue igual.
+	d.Now = func() time.Time { return ahora.Add(3 * time.Hour) }
+	s, err := Run(context.Background(), d, src, inicio, RunOptions{})
+	if err != nil || !s.NotModified {
+		t.Fatalf("debía responder sin cambios: %+v %v", s, err)
+	}
+	segundo, _ := st.Checkpoint(context.Background(), src)
+	if !segundo.LastRun.Equal(ahora.Add(3*time.Hour)) || segundo.Validators != primero.Validators {
+		t.Fatalf("el punto de control debe refrescar la fecha y conservar los validadores: %+v → %+v", primero, segundo)
+	}
+}
+
 func TestXMLNoValidoEnLaPaginaDevuelveError(t *testing.T) {
 	f := &fakeFetcher{paginas: map[string][]byte{inicio: []byte(`<feed><entry>`)}}
 	d, _, _ := deps(f)
