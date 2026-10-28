@@ -1,0 +1,44 @@
+# Perfil de 101.cat para el resumen diario de licitaciones (y la puntuación de encaje). Decisiones de Dirección del 26/10/2026
+# (docs/PROYECTO_LICITACIONES.md §12); los PESOS son una propuesta POR VALIDAR con Dirección: se cambian aquí, sin tocar código.
+resumen:
+  hora: "16:00"               # hora local (TZ) a la que se genera y se entrega en el panel (ver tareas/celery_app.py)
+  oportunidades_max: 20       # cuántas oportunidades se detallan (las demás se cuentan)
+  otras_max: 10               # adjudicaciones y anulaciones que se detallan
+  paginas_max: 5              # páginas de 100 que se leen del motor como máximo (si hay más, el resumen lo dice)
+
+# CPV de interés (§12.1). Cada código cubre también sus descendientes («jerarquía», propuesta por validar): 72000000 cubre toda la división 72.
+cpv:
+  - {codigo: "72000000", area: "Servicios TI"}
+  - {codigo: "72200000", area: "Servicios TI"}
+  - {codigo: "72230000", area: "Servicios TI"}
+  - {codigo: "72262000", area: "Servicios TI"}
+  - {codigo: "72267000", area: "Servicios TI"}
+  - {codigo: "32323500", area: "Videovigilancia"}
+  - {codigo: "32235000", area: "Videovigilancia"}
+  - {codigo: "32234000", area: "Videovigilancia"}
+  - {codigo: "35125300", area: "Videovigilancia"}
+  - {codigo: "35120000", area: "Videovigilancia"}
+  - {codigo: "34970000", area: "Control de tráfico"}
+  - {codigo: "34923000", area: "Control de tráfico"}
+  - {codigo: "34971000", area: "Control de tráfico"}
+  - {codigo: "34972000", area: "Control de tráfico"}
+  - {codigo: "63712710", area: "Control de tráfico"}
+  - {codigo: "45316210", area: "Control de tráfico"}
+  - {codigo: "42961000", area: "Mando y control"}
+  - {codigo: "42961100", area: "Mando y control"}
+  - {codigo: "32420000", area: "Redes"}
+  - {codigo: "32441100", area: "Vigilancia telemétrica"}
+
+zona:
+  prioritaria: "ES51"         # Cataluña primero (NUTS)
+  pais: "ES"                  # toda España puntúa algo (§12.2: ingesta todo y se puntúa por zona)
+
+importe_max: 1000000          # euros, sin IVA (§12.4); por encima no se detalla en el resumen (se cuenta)
+
+# Puntos máximos de cada criterio (suman 100). El encaje es la suma de lo obtenido sobre lo aplicable, en tanto por ciento.
+pesos:
+  cpv: 40
+  zona: 20
+  importe: 15
+  plazo: 15
+  procedimiento: 10

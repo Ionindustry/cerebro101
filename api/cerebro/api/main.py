@@ -17,6 +17,7 @@ from ..ajustes import ajustes
 from ..aprobaciones import bandeja, objetivos
 from ..aprobaciones.logica import DecisionNoValida
 from .. import actividad, constancia, kpis, modelos_externos, oficina
+from ..licitaciones import resumen as resumen_licitaciones
 from ..cotizador import Solicitud, calcular
 from ..grafo import construir, nodos
 from ..llm import ErrorModelo, circuito, estado_modelos
@@ -188,6 +189,49 @@ async def resumen_aprobaciones(dias: int = 30, usuario: Usuario = Depends(usuari
     """Dashboard de Aprobaciones: pendientes, resueltas, tiempos, por departamento, por día, agentes y acciones más frecuentes."""
     deps = None if "direccion" in usuario.roles else usuario.departamentos
     return await bandeja.resumen(deps, dias)
+
+
+def _ve_licitaciones(usuario: Usuario) -> bool:
+    """El resumen de licitaciones lo ve Dirección y el departamento de Licitaciones."""
+    return "direccion" in usuario.roles or "licitaciones" in usuario.departamentos
+
+
+@app.get("/licitaciones/resumenes")
+async def listar_resumenes_licitaciones(limite: int = 14, usuario: Usuario = Depends(usuario_actual)):
+    """Los últimos resúmenes diarios de licitaciones (el de las 16:00 y los generados a mano), del más reciente al más antiguo."""
+    if not _ve_licitaciones(usuario):
+        raise HTTPException(403, "El resumen de licitaciones es para Dirección y el departamento de Licitaciones")
+    return await resumen_licitaciones.listar(limite)
+
+
+@app.get("/licitaciones/resumenes/ultimo")
+async def ultimo_resumen_licitaciones(usuario: Usuario = Depends(usuario_actual)):
+    if not _ve_licitaciones(usuario):
+        raise HTTPException(403, "El resumen de licitaciones es para Dirección y el departamento de Licitaciones")
+    r = await resumen_licitaciones.leer()
+    if r is None:
+        raise HTTPException(404, "Todavía no hay ningún resumen")
+    return r
+
+
+@app.get("/licitaciones/resumenes/{rid}")
+async def ver_resumen_licitaciones(rid: int, usuario: Usuario = Depends(usuario_actual)):
+    if not _ve_licitaciones(usuario):
+        raise HTTPException(403, "El resumen de licitaciones es para Dirección y el departamento de Licitaciones")
+    r = await resumen_licitaciones.leer(rid)
+    if r is None:
+        raise HTTPException(404, "No existe ese resumen")
+    return r
+
+
+@app.post("/licitaciones/resumenes")
+async def generar_resumen_licitaciones(usuario: Usuario = Depends(usuario_actual)):
+    """Genera ahora un resumen (las últimas 24 horas) sin esperar a las 16:00: p. ej. si el equipo estaba apagado a esa hora. Es de consulta
+    (no cambia nada del motor); si ya se generó uno a mano hace menos de un minuto, devuelve ese en vez de repetir la consulta."""
+    if not _ve_licitaciones(usuario):
+        raise HTTPException(403, "El resumen de licitaciones es para Dirección y el departamento de Licitaciones")
+    r = await resumen_licitaciones.generar("manual")
+    return await resumen_licitaciones.leer(r["id"])
 
 
 class ObjetivoNuevo(BaseModel):

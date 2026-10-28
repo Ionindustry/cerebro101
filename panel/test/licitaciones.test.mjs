@@ -114,3 +114,53 @@ test("totales, antigüedad, estados y errores en castellano", () => {
   assert.match(mensajeDeError(502), /no está disponible/);
   assert.ok(!/10\.0|token|Bearer/i.test([401, 403, 400, 404, 429, 500].map(mensajeDeError).join(" ")));
 });
+
+import { diasTexto, encajeClase, fechaCivilTexto, mensajeResumen, ORIGEN_RESUMEN, totalesTexto, ventanaTexto } from "../lib/licitaciones.js";
+
+test("encaje: clases por tramos y sin dato", () => {
+  assert.equal(encajeClase(100), "alto");
+  assert.equal(encajeClase(70), "alto");
+  assert.equal(encajeClase(69), "medio");
+  assert.equal(encajeClase(45), "medio");
+  assert.equal(encajeClase(44), "bajo");
+  assert.equal(encajeClase(0), "bajo");
+  assert.equal(encajeClase(null), "sin");
+  assert.equal(encajeClase(undefined), "sin");
+});
+
+test("plazos en días", () => {
+  assert.equal(diasTexto(-1), "plazo terminado");
+  assert.equal(diasTexto(0.4), "cierra hoy");
+  assert.equal(diasTexto(1.2), "queda 1 día");
+  assert.equal(diasTexto(12.9), "quedan 12 días");
+  assert.equal(diasTexto(null), "");
+});
+
+test("la fecha del resumen es una fecha civil: no salta de día por la zona horaria", () => {
+  assert.match(fechaCivilTexto("2026-10-28"), /28 de octubre de 2026/);
+  assert.match(fechaCivilTexto("2026-01-01"), /1 de enero de 2026/);
+  for (const malo of ["", null, "28/10/2026", "2026-13-45x", undefined]) assert.equal(fechaCivilTexto(malo), "—");
+});
+
+test("la ventana se muestra en hora de Madrid", () => {
+  const t = ventanaTexto({ desde: "2026-10-27T15:00:00Z", hasta: "2026-10-28T15:00:00Z" });
+  assert.match(t, /16:00/);
+  assert.match(t, /→/);
+  assert.equal(ventanaTexto(null), "");
+  assert.equal(ventanaTexto({ desde: "no", hasta: "no" }), "");
+});
+
+test("cifras del resumen en una línea", () => {
+  assert.equal(totalesTexto({ oportunidades: 1 }), "1 oportunidad");
+  assert.equal(totalesTexto({ oportunidades: 12, adjudicaciones: 3, anuladas: 1 }), "12 oportunidades · 3 adjudicaciones · 1 anulada");
+  assert.equal(totalesTexto({ oportunidades: 0, adjudicaciones: 0 }), "0 oportunidades");
+  assert.equal(totalesTexto(null), "");
+  assert.equal(ORIGEN_RESUMEN.programada, "de las 16:00");
+});
+
+test("mensajes del resumen en castellano y sin detalles internos", () => {
+  assert.match(mensajeResumen(403), /Dirección/);
+  assert.match(mensajeResumen(404), /16:00/);
+  assert.match(mensajeResumen(500), /No se ha podido/);
+  assert.ok(!/token|Bearer|10\.0/i.test([401, 403, 404, 500].map(mensajeResumen).join(" ")));
+});

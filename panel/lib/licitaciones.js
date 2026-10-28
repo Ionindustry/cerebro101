@@ -138,3 +138,53 @@ export function mensajeDeError(status) {
   if (status === 429) return "Demasiadas consultas seguidas: espera un momento.";
   return "El motor de licitaciones no está disponible ahora. Inténtalo en unos minutos.";
 }
+
+// ---- Resumen de las 16:00 ----
+
+/** Clase de color del encaje (0–100): alto desde 70, medio desde 45. */
+export const encajeClase = (n) => (n === null || n === undefined ? "sin" : n >= 70 ? "alto" : n >= 45 ? "medio" : "bajo");
+
+export function diasTexto(d) {
+  if (d === null || d === undefined) return "";
+  if (d < 0) return "plazo terminado";
+  if (d < 1) return "cierra hoy";
+  const n = Math.floor(d);
+  return n === 1 ? "queda 1 día" : `quedan ${n} días`;
+}
+
+const dia = new Intl.DateTimeFormat("es-ES", { dateStyle: "long", timeZone: "Europe/Madrid" });
+/** «28 de octubre de 2026» a partir de una fecha «AAAA-MM-DD» (se lee como fecha civil, sin saltos de día por la zona horaria). */
+export function fechaCivilTexto(f) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(f || "")) return "—";
+  return dia.format(new Date(`${f}T12:00:00Z`));
+}
+
+/** «de ayer a las 16:00 a hoy a las 16:00», en hora de Madrid, a partir de la ventana del resumen. */
+export function ventanaTexto(v) {
+  if (!v?.desde || !v?.hasta) return "";
+  const hora = new Intl.DateTimeFormat("es-ES", { dateStyle: "medium", timeStyle: "short", timeZone: "Europe/Madrid" });
+  const d = new Date(v.desde), h = new Date(v.hasta);
+  if (Number.isNaN(d.getTime()) || Number.isNaN(h.getTime())) return "";
+  return `${hora.format(d)} → ${hora.format(h)}`;
+}
+
+/** Una línea con las cifras del resumen para la lista de resúmenes y la tarjeta del dashboard. */
+export function totalesTexto(t) {
+  if (!t) return "";
+  const p = [];
+  const n = (x, uno, varios) => `${x} ${x === 1 ? uno : varios}`;
+  p.push(n(t.oportunidades ?? 0, "oportunidad", "oportunidades"));
+  if (t.adjudicaciones) p.push(n(t.adjudicaciones, "adjudicación", "adjudicaciones"));
+  if (t.anuladas) p.push(n(t.anuladas, "anulada", "anuladas"));
+  return p.join(" · ");
+}
+
+export const ORIGEN_RESUMEN = { programada: "de las 16:00", manual: "generado a mano" };
+
+/** Mensaje para una respuesta de error de la API del Cerebro al pedir el resumen. */
+export function mensajeResumen(status) {
+  if (status === 401) return "Tu sesión ha caducado.";
+  if (status === 403) return "El resumen de licitaciones es para Dirección y el departamento de Licitaciones.";
+  if (status === 404) return "Todavía no hay ningún resumen. Se genera cada día a las 16:00; también puedes generarlo ahora.";
+  return "No se ha podido cargar el resumen. Inténtalo en unos minutos.";
+}

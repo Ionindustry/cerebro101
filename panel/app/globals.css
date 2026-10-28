@@ -332,3 +332,12 @@ a.kp-fila:hover { background: var(--fondo); }
 .lic-tabla td { padding: 8px; border-top: 1px solid var(--linea); vertical-align: top; overflow-wrap: anywhere; }
 .lic-vuelve { font-size: 14px; }
 @media (max-width: 760px) { .lic-busca { flex-direction: column; } .lic-tabla { display: block; overflow-x: auto; } }
+.lic-encaje { display: inline-grid; place-items: center; min-width: 38px; height: 28px; border-radius: 99px; font-weight: 700; font-size: 14px; background: var(--fondo); }
+.lic-encaje.alto { background: #e8f3ec; color: #1f5a37; }
+.lic-encaje.medio { background: var(--senal-suave); color: #7a5206; }
+.lic-encaje.bajo { background: #eee; color: var(--secundario); }
+.lic-razones { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 2px; }
+.lic-aviso { background: var(--senal-suave); color: #7a5206; border-radius: var(--radio); padding: 10px 14px; margin: 8px 0 0; font-size: 14px; }
+.lic-historial { list-style: none; margin: 8px 0 0; padding: 0; display: grid; gap: 2px; }
+.lic-enlace { border: 0; background: none; padding: 6px 0; text-align: left; font: inherit; cursor: pointer; text-decoration: underline; text-underline-offset: 3px; }
+.lic-enlace[aria-current="true"] { font-weight: 700; text-decoration: none; }

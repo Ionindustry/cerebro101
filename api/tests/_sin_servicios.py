@@ -17,5 +17,11 @@ if _falta("psycopg"):
     filas = types.ModuleType("psycopg.rows")
     filas.dict_row = None
     psycopg.rows = filas
+    tipos, json_ = types.ModuleType("psycopg.types"), types.ModuleType("psycopg.types.json")
+    json_.Jsonb = lambda x: x
+    tipos.json = json_
+    psycopg.types = tipos
     sys.modules["psycopg"] = psycopg
     sys.modules["psycopg.rows"] = filas
+    sys.modules["psycopg.types"] = tipos
+    sys.modules["psycopg.types.json"] = json_

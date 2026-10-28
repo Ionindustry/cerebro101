@@ -2,8 +2,8 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
-import { antiguedadTexto, estadoMotor, nombreFuente } from "../../lib/licitaciones";
-import { Fallo, Item, pedir } from "./cliente";
+import { antiguedadTexto, estadoMotor, fechaCivilTexto, nombreFuente, totalesTexto } from "../../lib/licitaciones";
+import { Fallo, Item, Oportunidad, pedir, pedirCerebro } from "./cliente";
 
 function EstadoDelMotor() {
   const [d, setD] = useState(null);
@@ -27,6 +27,29 @@ function EstadoDelMotor() {
         ))}
         {(d.fuentes || []).length === 0 && <li className="meta">Todavía no hay fuentes ingeridas.</li>}
       </ul>
+    </section>
+  );
+}
+
+// Resumen de las 16:00: solo se muestra a quien lo puede ver (Dirección y Licitaciones); para los demás, la tarjeta no aparece.
+function ResumenDelDia() {
+  const [r, setR] = useState(null);
+  useEffect(() => { pedirCerebro("licitaciones/resumenes/ultimo").then(setR).catch(() => setR(null)); }, []);
+  if (!r) return null;
+  const c = r.contenido;
+  return (
+    <section className="tarjeta" aria-labelledby="lic-res-t">
+      <header>
+        <h2 id="lic-res-t">Resumen de las 16:00 · {fechaCivilTexto(r.fecha)}</h2>
+        <Link href="/licitaciones/resumen" className="lic-vuelve">Ver el resumen</Link>
+      </header>
+      {c.estado !== "ok" ? <p role="status" className="lic-aviso">{c.aviso}</p> : (
+        <>
+          <p className="meta">{totalesTexto(c.totales)}</p>
+          {c.aviso && <p role="status" className="lic-aviso">{c.aviso}</p>}
+          {c.oportunidades.length > 0 && <ul className="lic-lista">{c.oportunidades.slice(0, 3).map((x) => <Oportunidad key={x.id} x={x} />)}</ul>}
+        </>
+      )}
     </section>
   );
 }
@@ -60,6 +83,7 @@ export default function Licitaciones() {
         <input type="text" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Buscar por texto: videovigilancia, software, mantenimiento…" aria-label="Buscar licitaciones" maxLength={200} />
         <button className="boton si" type="submit">Buscar</button>
       </form>
+      <ResumenDelDia />
       <EstadoDelMotor />
       <Novedades />
     </div>
