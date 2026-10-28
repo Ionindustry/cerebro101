@@ -126,7 +126,7 @@ para auditoría**: nunca amplían permisos.
 | **Buscador** | `/licitaciones/buscar?<parámetros de GET /tenders>` | `GET /tenders` (facetas en la primera página) | 3 |
 | **Ficha** | `/licitaciones/expedientes/[id]` | `GET /tenders/{id}`, `/tenders/{id}/history` | 3 básica (resumen, lotes, importes con significado, plazos, enlaces a las fuentes originales, encaje explicado) · 4 completa (historial de versiones, documentos, adjudicaciones, botón «Estudiar») · 5b «Simular» |
 | **Competencia** | `/licitaciones/competencia` (ranking), `/licitaciones/competencia/adjudicaciones?<parámetros de GET /awards>`, `/licitaciones/competencia/vencen?<parámetros de GET /expiring-contracts>`, `/licitaciones/organizaciones/[id]` | `/competitors`, `/awards`, `/expiring-contracts`, `/organizations/{id}` | 4 (listados y ranking) · 5 (fichas de competidor y organismo completas, actas, alertas de competencia) |
-| **Alertas** | `/licitaciones/alertas` | `/alerts` | 4 |
+| **Alertas** | `/licitaciones/alertas` | ~~`/alerts` del motor~~ → **API del Cerebro** `/licitaciones/alertas` y `/licitaciones/avisos` (hecho; ver `docs/PROYECTO_LICITACIONES.md` §Estado: el motor aún no conoce a los usuarios) | 4 |
 | **Estado del motor** | `/licitaciones/estado` | `GET /ops/status` (alcance según rol) | 3 (mismo endpoint que el bloque del dashboard: no añade backend) |
 | (embudo, desde el bloque 3) | `/licitaciones/embudo?estado=…` | API del Cerebro `GET /licitaciones?estado=…` (fase 4, a proponer con la migración) | 4 |
 

@@ -18,6 +18,7 @@ from ..aprobaciones import bandeja, objetivos
 from ..aprobaciones.logica import DecisionNoValida
 from .. import actividad, constancia, kpis, modelos_externos, oficina
 from ..herramientas.licitaciones import MotorNoDisponible
+from ..licitaciones import alertas as alertas_licitaciones
 from ..licitaciones import embudo as embudo_licitaciones
 from ..licitaciones import resumen as resumen_licitaciones
 from ..cotizador import Solicitud, calcular
@@ -302,6 +303,90 @@ async def cambiar_estado_licitacion(lid: int, entrada: CambioEstadoEntrada, usua
         raise HTTPException(422, str(e)) from None
     log.info("embudo: %s pasa la licitación %s a %s", usuario.id, lid, fila["estado"])
     return fila
+
+
+# ---- Alertas guardadas y avisos (cerebro/licitaciones/alertas.py): personales o de un departamento. Cambiar y borrar van por POST (la pasarela solo deja GET y POST) ----
+
+class AlertaEntrada(BaseModel):
+    nombre: str
+    ambito: str
+    departamento: str | None = None
+    filtro: dict
+    eventos: list[str]
+    canal: str = "panel"
+
+
+class AlertaCambio(BaseModel):
+    nombre: str | None = None
+    filtro: dict | None = None
+    eventos: list[str] | None = None
+    activa: bool | None = None
+
+
+class AvisosLeidos(BaseModel):
+    ids: list[int] | None = None
+
+
+def _alerta_error(e: Exception) -> HTTPException:
+    if isinstance(e, alertas_licitaciones.NoExiste):
+        return HTTPException(404, str(e))
+    if isinstance(e, alertas_licitaciones.SinPermiso):
+        return HTTPException(403, str(e))
+    return HTTPException(422, str(e))
+
+
+@app.get("/licitaciones/alertas")
+async def listar_alertas_licitaciones(usuario: Usuario = Depends(usuario_actual)):
+    """Las alertas que ve el usuario (las suyas personales y las de sus departamentos), y los valores que admite el formulario."""
+    try:
+        return {"items": await alertas_licitaciones.listar(usuario), "eventos": list(alertas_licitaciones.EVENTOS), "canales": list(alertas_licitaciones.CANALES)}
+    except alertas_licitaciones.SinPermiso as e:
+        raise _alerta_error(e) from None
+
+
+@app.post("/licitaciones/alertas")
+async def crear_alerta_licitaciones(entrada: AlertaEntrada, usuario: Usuario = Depends(usuario_actual)):
+    try:
+        a = await alertas_licitaciones.crear(usuario, entrada.model_dump())
+    except (alertas_licitaciones.ErrorAlerta, alertas_licitaciones.SinPermiso) as e:
+        raise _alerta_error(e) from None
+    log.info("alertas: %s crea la alerta %s (%s)", usuario.id, a["id"], a["ambito"])
+    return a
+
+
+@app.post("/licitaciones/alertas/{aid}")
+async def cambiar_alerta_licitaciones(aid: int, cambio: AlertaCambio, usuario: Usuario = Depends(usuario_actual)):
+    try:
+        return await alertas_licitaciones.cambiar(usuario, aid, cambio.model_dump(exclude_unset=True))
+    except (alertas_licitaciones.ErrorAlerta, alertas_licitaciones.SinPermiso, alertas_licitaciones.NoExiste) as e:
+        raise _alerta_error(e) from None
+
+
+@app.post("/licitaciones/alertas/{aid}/borrar")
+async def borrar_alerta_licitaciones(aid: int, usuario: Usuario = Depends(usuario_actual)):
+    try:
+        await alertas_licitaciones.borrar(usuario, aid)
+    except (alertas_licitaciones.SinPermiso, alertas_licitaciones.NoExiste) as e:
+        raise _alerta_error(e) from None
+    log.info("alertas: %s borra la alerta %s", usuario.id, aid)
+    return {"borrada": aid}
+
+
+@app.get("/licitaciones/avisos")
+async def listar_avisos_licitaciones(no_leidos: bool = False, limite: int = 50, usuario: Usuario = Depends(usuario_actual)):
+    """Los avisos de las alertas que ve el usuario, del más reciente al más antiguo, y cuántos hay sin leer."""
+    try:
+        return await alertas_licitaciones.listar_avisos(usuario, no_leidos, limite)
+    except alertas_licitaciones.SinPermiso as e:
+        raise _alerta_error(e) from None
+
+
+@app.post("/licitaciones/avisos/leer")
+async def leer_avisos_licitaciones(entrada: AvisosLeidos, usuario: Usuario = Depends(usuario_actual)):
+    try:
+        return {"leidos": await alertas_licitaciones.marcar_leidos(usuario, entrada.ids)}
+    except (alertas_licitaciones.ErrorAlerta, alertas_licitaciones.SinPermiso) as e:
+        raise _alerta_error(e) from None
 
 
 

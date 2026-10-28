@@ -4,6 +4,7 @@ import {
   antiguedadTexto, conAcceso, decidir, estadoEtiqueta, estadoMotor, filtrosAQuery, fechaTexto, importeTexto, limpiarCpv, limpiarNuts, mensajeDeError,
   nombreFuente, queryAFiltros, rutaPermitida, totalTexto, urlSegura,
 } from "../lib/licitaciones.js";
+import { ambitoTexto, eventoEtiqueta, filtroDeAlerta, filtroTexto, mensajeAlertas, sinLeerTexto } from "../lib/licitaciones.js";
 import { accionEmbudo, avisoEstadoMotor, diasDePeriodo, ESTADOS_EMBUDO, etiquetaEmbudo, horasTexto, mensajeEmbudo, tasaExitoTexto } from "../lib/licitaciones.js";
 
 const ID = "0b1f7a3e-1111-4222-8333-444444444444";
@@ -208,4 +209,36 @@ test("aviso cuando el expediente ya no está abierto en el motor", () => {
   assert.equal(avisoEstadoMotor(undefined), null);
   assert.equal(avisoEstadoMotor("anulada"), "En el motor: Anulada");
   assert.equal(avisoEstadoMotor("adjudicada"), "En el motor: Adjudicada");
+});
+
+test("del buscador a una alerta: solo lo válido y siempre listas", () => {
+  assert.deepEqual(filtroDeAlerta({ q: " cámaras ", cpv: "32323500 72 xx 72", nuts: "es512", estados: ["abierta", "rara"], importeMin: "1000", importeMax: "2,5" }),
+    { q: "cámaras", cpv: ["32323500", "72"], nuts: ["ES512"], estado: ["abierta"], importe_min: "1000", importe_max: "2.5" });
+  assert.deepEqual(filtroDeAlerta({ q: "a", cpv: "", nuts: "", estados: [], importeMin: "mucho" }), {});        // sin criterios válidos: no hay alerta posible
+  assert.deepEqual(filtroDeAlerta({}), {});
+});
+
+test("la frase de una alerta cuenta lo que busca", () => {
+  assert.equal(filtroTexto({ q: "cámaras", cpv: ["32323500"], nuts: ["ES512"], estado: ["abierta"], importe_min: "100000" }),
+    "texto «cámaras» · CPV 32323500 · zona ES512 · estado abierta · desde 100.000 €");
+  assert.equal(filtroTexto({ procedimiento: ["abierto_simplificado"], comprador: ["nif:P1708500E"] }), "comprador nif:P1708500E · procedimiento abierto simplificado");
+  assert.equal(filtroTexto(null), "");
+  assert.equal(filtroTexto({}), "");
+});
+
+test("etiquetas, ámbito y avisos sin leer", () => {
+  assert.equal(eventoEtiqueta("licitacion.nueva"), "Nueva licitación");
+  assert.equal(eventoEtiqueta("licitacion.rara"), "rara");
+  assert.equal(ambitoTexto({ ambito: "personal" }), "Personal");
+  assert.equal(ambitoTexto({ ambito: "departamento", departamento: "licitaciones" }), "Departamento licitaciones");
+  assert.equal(sinLeerTexto(0), "Sin avisos nuevos");
+  assert.equal(sinLeerTexto(1), "1 aviso sin leer");
+  assert.equal(sinLeerTexto(7), "7 avisos sin leer");
+});
+
+test("mensajes de las alertas en castellano y sin detalles internos", () => {
+  assert.match(mensajeAlertas(403), /responsable o Dirección/);
+  assert.match(mensajeAlertas(422), /al menos un criterio/);
+  assert.match(mensajeAlertas(404), /ya no existe/);
+  assert.ok(!/token|Bearer|psycopg|Traceback/i.test([401, 403, 404, 422, 500].map(mensajeAlertas).join(" ")));
 });

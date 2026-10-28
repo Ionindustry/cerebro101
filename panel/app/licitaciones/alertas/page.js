@@ -1,0 +1,137 @@
+"use client";
+import Link from "next/link";
+import { useCallback, useEffect, useState } from "react";
+import { ambitoTexto, encajeClase, EVENTOS_ALERTA, eventoEtiqueta, fechaTexto, filtroDeAlerta, filtroTexto, importeTexto, mensajeAlertas, sinLeerTexto } from "../../../lib/licitaciones";
+import { pedirCerebro } from "../cliente";
+
+const enviar = (cuerpo) => ({ method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(cuerpo || {}) });
+
+function Avisos({ avisos, onLeer }) {
+  return (
+    <section className="lic" aria-label="Avisos">
+      <div className="lic-fila">
+        <h2>Avisos <span className="meta">· {sinLeerTexto(avisos.sin_leer)}</span></h2>
+        {avisos.sin_leer > 0 && <button className="boton no" onClick={() => onLeer(null)}>Marcar todos como leídos</button>}
+      </div>
+      {avisos.items.length === 0 ? <p className="meta">Todavía no ha saltado ninguna alerta. Cuando una licitación cumpla una de tus alertas aparecerá aquí.</p> : (
+        <ul className="lic-lista">
+          {avisos.items.map((x) => (
+            <li key={x.id} className={`tarjeta lic-item${x.leido ? " lic-leido" : ""}`}>
+              <span className="lic-fila">
+                {x.encaje != null && <span className={`lic-encaje ${encajeClase(x.encaje)}`} title="Encaje con 101.cat (0–100)">{x.encaje}</span>}
+                <Link href={`/licitaciones/expedientes/${x.motor_id}`} className="titulo">{x.titulo}</Link>
+                {!x.leido && <span className="lic-etiqueta abierta">Nuevo</span>}
+              </span>
+              <span className="meta">{[x.organismo, `Alerta «${x.alerta}»`, eventoEtiqueta(x.tipo)].filter(Boolean).join(" · ")}</span>
+              <span className="lic-fila">
+                {x.importe != null && <span className="meta">{importeTexto({ valor: String(x.importe), moneda: "EUR", impuestos: "sin_iva" })}</span>}
+                {x.fecha_limite && <span className="meta">Plazo: {fechaTexto(x.fecha_limite)}</span>}
+                <span className="meta">Aviso: {fechaTexto(x.creado)}</span>
+                {!x.leido && <button className="boton no" onClick={() => onLeer([x.id])}>Marcar como leído</button>}
+              </span>
+            </li>
+          ))}
+        </ul>
+      )}
+    </section>
+  );
+}
+
+const FORMULARIO_VACIO = { nombre: "", q: "", cpv: "", nuts: "", importeMin: "", importeMax: "", eventos: ["licitacion.nueva"], ambito: "personal", departamento: "" };
+
+function Formulario({ onCrear, trabajando }) {
+  const [f, setF] = useState(FORMULARIO_VACIO);
+  const poner = (k) => (ev) => setF((x) => ({ ...x, [k]: ev.target.value }));
+  const alternar = (e) => setF((x) => ({ ...x, eventos: x.eventos.includes(e) ? x.eventos.filter((y) => y !== e) : [...x.eventos, e] }));
+  const enviarForm = async (ev) => {
+    ev.preventDefault();
+    if (await onCrear(f)) setF(FORMULARIO_VACIO);
+  };
+  return (
+    <form className="tarjeta lic-form" onSubmit={enviarForm}>
+      <h2>Nueva alerta</h2>
+      <p className="meta">Avisa cuando llegue un evento de una licitación que cumpla estos criterios. También puedes crearla desde el buscador con «Guardar como alerta».</p>
+      <div className="lic-campos">
+        <label>Nombre<input type="text" value={f.nombre} onChange={poner("nombre")} maxLength={120} required placeholder="Videovigilancia en Girona" /></label>
+        <label>Texto<input type="text" value={f.q} onChange={poner("q")} maxLength={200} placeholder="castellano o catalán" /></label>
+        <label>CPV<input type="text" value={f.cpv} onChange={poner("cpv")} placeholder="32323500 72" /></label>
+        <label>Zona (NUTS)<input type="text" value={f.nuts} onChange={poner("nuts")} placeholder="ES512" /></label>
+        <label>Importe mínimo (€)<input type="text" inputMode="decimal" value={f.importeMin} onChange={poner("importeMin")} /></label>
+        <label>Importe máximo (€)<input type="text" inputMode="decimal" value={f.importeMax} onChange={poner("importeMax")} /></label>
+        <label>De quién es
+          <select value={f.ambito} onChange={poner("ambito")}>
+            <option value="personal">Mía (solo yo la veo)</option>
+            <option value="departamento">De un departamento</option>
+          </select>
+        </label>
+        {f.ambito === "departamento" && <label>Departamento<input type="text" value={f.departamento} onChange={poner("departamento")} placeholder="licitaciones" required /><span className="ayuda">Solo su responsable o Dirección pueden crearla</span></label>}
+      </div>
+      <fieldset className="lic-estados">
+        <legend>Avisar de</legend>
+        {EVENTOS_ALERTA.map(([k, t]) => <label key={k}><input type="checkbox" checked={f.eventos.includes(k)} onChange={() => alternar(k)} />{t}</label>)}
+      </fieldset>
+      <div className="lic-fila"><button className="boton si" type="submit" disabled={trabajando || f.eventos.length === 0}>{trabajando ? "Guardando…" : "Guardar alerta"}</button></div>
+    </form>
+  );
+}
+
+export default function Alertas() {
+  const [alertas, setAlertas] = useState(null);
+  const [avisos, setAvisos] = useState(null);
+  const [error, setError] = useState(null);
+  const [trabajando, setTrabajando] = useState(false);
+
+  const cargar = useCallback(async () => {
+    try {
+      const [a, v] = await Promise.all([pedirCerebro("licitaciones/alertas"), pedirCerebro("licitaciones/avisos?limite=50")]);
+      setAlertas(a); setAvisos(v);
+    } catch (e) { setError(e); }
+  }, []);
+  useEffect(() => { cargar(); }, [cargar]);
+
+  const accion = async (ruta, cuerpo) => {
+    setError(null); setTrabajando(true);
+    try { await pedirCerebro(ruta, enviar(cuerpo)); await cargar(); return true; }
+    catch (e) { setError(e); return false; }
+    finally { setTrabajando(false); }
+  };
+  const crear = async (f) => {
+    const filtro = filtroDeAlerta(f);
+    return accion("licitaciones/alertas", {
+      nombre: f.nombre, ambito: f.ambito, departamento: f.ambito === "departamento" ? f.departamento.trim().toLowerCase() : null, filtro, eventos: f.eventos, canal: "panel",
+    });
+  };
+
+  return (
+    <div className="lic">
+      <p className="lic-vuelve"><Link href="/licitaciones">← Licitaciones</Link></p>
+      <h1>Alertas</h1>
+      {error && <p role="alert" className="lic-error">{mensajeAlertas(error.status)}</p>}
+      {!alertas && !error && <p className="meta" aria-busy="true">Cargando…</p>}
+      {avisos && <Avisos avisos={avisos} onLeer={(ids) => accion("licitaciones/avisos/leer", ids ? { ids } : {})} />}
+      {alertas && (
+        <section className="lic" aria-label="Mis alertas">
+          <h2>Alertas guardadas <span className="meta">· {alertas.items.length}</span></h2>
+          {alertas.items.length === 0 ? <p className="meta">Aún no tienes ninguna.</p> : (
+            <ul className="lic-lista">
+              {alertas.items.map((a) => (
+                <li key={a.id} className="tarjeta lic-item">
+                  <span className="lic-fila"><span className="titulo">{a.nombre}</span>{!a.activa && <span className="lic-etiqueta">En pausa</span>}<span className="lic-etiqueta">{ambitoTexto(a)}</span></span>
+                  <span className="meta">{filtroTexto(a.filtro) || "—"}</span>
+                  <span className="meta">Avisa de: {a.eventos.map(eventoEtiqueta).join(", ")}{a.ultima_entrega ? ` · último aviso ${fechaTexto(a.ultima_entrega)}` : ""}</span>
+                  {a.puede_cambiar && (
+                    <span className="lic-fila">
+                      <button className="boton no" disabled={trabajando} onClick={() => accion(`licitaciones/alertas/${a.id}`, { activa: !a.activa })}>{a.activa ? "Pausar" : "Reactivar"}</button>
+                      <button className="boton no" disabled={trabajando} onClick={() => { if (window.confirm(`¿Borrar la alerta «${a.nombre}» y sus avisos?`)) accion(`licitaciones/alertas/${a.id}/borrar`); }}>Borrar</button>
+                    </span>
+                  )}
+                </li>
+              ))}
+            </ul>
+          )}
+        </section>
+      )}
+      {alertas && <Formulario onCrear={crear} trabajando={trabajando} />}
+    </div>
+  );
+}

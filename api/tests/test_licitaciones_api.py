@@ -118,5 +118,62 @@ class TestRutasDelEmbudo(unittest.TestCase):
             self.assertEqual(c.post("/licitaciones/embudo/estudiar", json={"motor_id": "mal"}).status_code, 422)
 
 
+class TestRutasDeAlertas(unittest.TestCase):
+    ALERTA = {"id": 3, "nombre": "Videovigilancia", "ambito": "personal", "puede_cambiar": True}
+    ENTRADA = {"nombre": "Videovigilancia", "ambito": "personal", "filtro": {"cpv": ["32"]}, "eventos": ["licitacion.nueva"], "canal": "panel"}
+
+    def tearDown(self):
+        main.app.dependency_overrides.clear()
+
+    def test_sin_acceso_a_licitaciones_todo_es_403(self):
+        sin = como(("usuario",), ("finanzas",))
+        for metodo, ruta, cuerpo in (("get", "/licitaciones/alertas", None), ("post", "/licitaciones/alertas", self.ENTRADA), ("post", "/licitaciones/alertas/3", {"activa": False}),
+                                     ("post", "/licitaciones/alertas/3/borrar", None), ("get", "/licitaciones/avisos", None), ("post", "/licitaciones/avisos/leer", {})):
+            r = getattr(sin, metodo)(ruta, json=cuerpo) if cuerpo is not None else getattr(sin, metodo)(ruta)
+            self.assertEqual(r.status_code, 403, ruta)
+
+    def test_listar_crear_cambiar_y_borrar(self):
+        a = main.alertas_licitaciones
+        with mock.patch.object(a, "listar", mock.AsyncMock(return_value=[self.ALERTA])), mock.patch.object(a, "crear", mock.AsyncMock(return_value=self.ALERTA)) as crear, \
+                mock.patch.object(a, "cambiar", mock.AsyncMock(return_value=self.ALERTA)) as cambiar, mock.patch.object(a, "borrar", mock.AsyncMock()) as borrar:
+            c = como(("usuario",), ("licitaciones",))
+            lista = c.get("/licitaciones/alertas").json()
+            self.assertEqual((lista["items"], lista["canales"], "licitacion.nueva" in lista["eventos"]), ([self.ALERTA], ["panel"], True))
+            self.assertEqual(c.post("/licitaciones/alertas", json=self.ENTRADA).json(), self.ALERTA)
+            self.assertEqual(crear.await_args.args[1]["filtro"], {"cpv": ["32"]})
+            self.assertEqual(c.post("/licitaciones/alertas/3", json={"activa": False}).status_code, 200)
+            cambiar.assert_awaited_once()
+            self.assertEqual(cambiar.await_args.args[1:], (3, {"activa": False}))          # solo lo que se manda: no se pisa nada con valores por defecto
+            self.assertEqual(c.post("/licitaciones/alertas/3/borrar").json(), {"borrada": 3})
+            borrar.assert_awaited_once()
+
+    def test_errores_se_traducen_a_codigos_http(self):
+        a = main.alertas_licitaciones
+        c = como(("usuario",), ("licitaciones",))
+        for exc, codigo in ((a.ErrorAlerta("mal"), 422), (a.SinPermiso("no"), 403)):
+            with mock.patch.object(a, "crear", mock.AsyncMock(side_effect=exc)):
+                self.assertEqual(c.post("/licitaciones/alertas", json=self.ENTRADA).status_code, codigo)
+        with mock.patch.object(a, "cambiar", mock.AsyncMock(side_effect=a.NoExiste("no hay"))):
+            self.assertEqual(c.post("/licitaciones/alertas/9", json={"activa": True}).status_code, 404)
+        with mock.patch.object(a, "borrar", mock.AsyncMock(side_effect=a.SinPermiso("no"))):
+            self.assertEqual(c.post("/licitaciones/alertas/9/borrar").status_code, 403)
+        self.assertEqual(c.post("/licitaciones/alertas", json={"nombre": "x"}).status_code, 422)            # faltan campos: lo rechaza la validación de la entrada
+        self.assertEqual(c.post("/licitaciones/alertas/no-es-numero", json={"activa": True}).status_code, 422)
+
+    def test_avisos(self):
+        a = main.alertas_licitaciones
+        with mock.patch.object(a, "listar_avisos", mock.AsyncMock(return_value={"sin_leer": 2, "items": []})) as listar, \
+                mock.patch.object(a, "marcar_leidos", mock.AsyncMock(return_value=2)) as leer:
+            c = como(("usuario",), ("licitaciones",))
+            self.assertEqual(c.get("/licitaciones/avisos?no_leidos=true&limite=10").json(), {"sin_leer": 2, "items": []})
+            self.assertEqual(listar.await_args.args[1:], (True, 10))
+            self.assertEqual(c.post("/licitaciones/avisos/leer", json={}).json(), {"leidos": 2})
+            self.assertIsNone(leer.await_args.args[1])                                                       # sin ids: todos los que ve
+            c.post("/licitaciones/avisos/leer", json={"ids": [1, 2]})
+            self.assertEqual(leer.await_args.args[1], [1, 2])
+        with mock.patch.object(a, "marcar_leidos", mock.AsyncMock(side_effect=a.ErrorAlerta("ids"))):
+            self.assertEqual(c.post("/licitaciones/avisos/leer", json={"ids": [1]}).status_code, 422)
+
+
 if __name__ == "__main__":
     unittest.main()

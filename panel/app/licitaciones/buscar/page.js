@@ -2,8 +2,8 @@
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useRef, useState } from "react";
-import { ESTADOS, ORDENES, filtrosAQuery, queryAFiltros, totalTexto } from "../../../lib/licitaciones";
-import { Fallo, Item, pedir } from "../cliente";
+import { ESTADOS, ORDENES, filtroDeAlerta, filtroTexto, filtrosAQuery, mensajeAlertas, queryAFiltros, totalTexto } from "../../../lib/licitaciones";
+import { Fallo, Item, pedir, pedirCerebro } from "../cliente";
 
 function Buscador() {
   const router = useRouter();
@@ -32,6 +32,16 @@ function Buscador() {
       const d = await pedir(`tenders?${filtrosAQuery(queryAFiltros(new URLSearchParams(clave)))}&limit=20&cursor=${encodeURIComponent(cursor)}`);
       setItems((a) => [...a, ...d.items]); setCursor(d.siguiente_cursor);
     } catch (e) { setError(e); } finally { setCargando(false); }
+  };
+  const [alerta, setAlerta] = useState({ abierta: false, nombre: "", estado: "", error: null });
+  const guardarAlerta = async (ev) => {
+    ev.preventDefault();
+    const filtro = filtroDeAlerta(queryAFiltros(new URLSearchParams(clave)));
+    setAlerta((a) => ({ ...a, estado: "guardando", error: null }));
+    try {
+      await pedirCerebro("licitaciones/alertas", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ nombre: alerta.nombre, ambito: "personal", filtro, eventos: ["licitacion.nueva"], canal: "panel" }) });
+      setAlerta({ abierta: false, nombre: "", estado: "guardada", error: null });
+    } catch (e) { setAlerta((a) => ({ ...a, estado: "", error: e })); }
   };
   const enviar = (ev) => { ev.preventDefault(); const q = filtrosAQuery(f).toString(); router.push(q ? `/licitaciones/buscar?${q}` : "/licitaciones/buscar"); };
   const poner = (k) => (ev) => setF((x) => ({ ...x, [k]: ev.target.value }));
@@ -65,6 +75,26 @@ function Buscador() {
           <button className="boton no" type="button" onClick={() => { setF(queryAFiltros(new URLSearchParams())); router.push("/licitaciones/buscar"); }}>Limpiar</button>
         </div>
       </form>
+
+      {(() => {
+        const filtro = filtroDeAlerta(queryAFiltros(new URLSearchParams(clave)));
+        if (Object.keys(filtro).length === 0) return null;
+        return (
+          <div className="tarjeta lic-alerta-guardar">
+            {alerta.estado === "guardada" ? <p role="status">Alerta guardada. <Link href="/licitaciones/alertas">Ver mis alertas</Link></p> : !alerta.abierta ? (
+              <button className="boton no" onClick={() => setAlerta((a) => ({ ...a, abierta: true, estado: "" }))}>Guardar como alerta</button>
+            ) : (
+              <form className="lic-fila" onSubmit={guardarAlerta}>
+                <input type="text" value={alerta.nombre} onChange={(e) => setAlerta((a) => ({ ...a, nombre: e.target.value }))} maxLength={120} required placeholder="Nombre de la alerta" aria-label="Nombre de la alerta" />
+                <button className="boton si" type="submit" disabled={alerta.estado === "guardando"}>Guardar</button>
+                <button className="boton no" type="button" onClick={() => setAlerta((a) => ({ ...a, abierta: false }))}>Cancelar</button>
+                <span className="meta">Avisará de las nuevas que cumplan: {filtroTexto(filtro)}</span>
+              </form>
+            )}
+            {alerta.error && <p role="alert" className="lic-error">{mensajeAlertas(alerta.error.status)}</p>}
+          </div>
+        );
+      })()}
 
       <p className="meta" aria-live="polite">{cargando && items.length === 0 ? "Buscando…" : totalTexto(total)}</p>
       {error && <Fallo e={error} />}

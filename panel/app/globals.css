@@ -347,3 +347,7 @@ a.kp-fila:hover { background: var(--fondo); }
 .lic-cifra { display: flex; flex-direction: column; gap: 2px; }
 .lic-cifra strong { font-size: 24px; }
 .lic-etiqueta.aviso { background: var(--senal-suave); color: #7a5206; }
+
+/* Alertas */
+.lic-leido { opacity: 0.65; }
+.lic-alerta-guardar { margin-bottom: 8px; }
