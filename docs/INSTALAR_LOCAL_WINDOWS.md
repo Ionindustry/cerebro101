@@ -113,6 +113,31 @@ COPIA_SIN_TRAZAS=1 ./scripts/copia_seguridad.sh
 
 Guarda en `copias/<fecha>/` las bases de datos del Cerebro y de Langfuse, la del motor de licitaciones si está en marcha y las sumas de control (`SHA256SUMS`). `COPIA_SIN_TRAZAS=1` se salta las trazas de Langfuse, que son lo que más pesa. Copia esa carpeta de vez en cuando a otro disco o a la nube: una copia que está en el mismo PC no protege de un fallo del PC. Guarda también tu `.env` en un gestor de contraseñas. Para recuperar una base: `gunzip -c copias/<fecha>/cerebro.sql.gz | docker compose exec -T postgres psql -U cerebro cerebro` (en una base vacía).
 
+## Actualizar sin construir en tu PC
+
+Construir las imágenes en tu PC es lo que más lo castiga (procesador y disco al máximo durante minutos). GitHub puede construirlas por ti: cada vez que se fusiona un cambio en `main`, la pestaña **Actions** del repositorio (flujo «Imágenes») las construye y las publica en `ghcr.io`; tu PC solo las descarga.
+
+**Una vez:**
+
+1. En GitHub → tu foto → *Settings* → *Developer settings* → *Personal access tokens* → *Tokens (classic)* → *Generate new token (classic)*. Dale solo el permiso **`read:packages`**. Cópialo (no lo pegues en ningún chat ni lo guardes en el repositorio).
+2. En Ubuntu: `docker login ghcr.io -u TU_USUARIO_DE_GITHUB`. Cuando pida la contraseña, pega el token (no se ve al pegarlo). Debe decir «Login Succeeded».
+3. En el `.env`, añade (están comentadas en `.env.example`; cambia `ionindustry` si tu propietario en GitHub es otro):
+   ```
+   CEREBRO_IMAGEN_API=ghcr.io/ionindustry/cerebro101-api:main
+   CEREBRO_IMAGEN_PANEL=ghcr.io/ionindustry/cerebro101-panel:main
+   LIC_IMAGEN=ghcr.io/ionindustry/cerebro101-licitaciones:main
+   ```
+
+**Cada actualización:** espera a que el flujo «Imágenes» del último cambio termine en verde (unos minutos; pestaña Actions) y ejecuta
+
+```
+./scripts/actualizar.sh
+```
+
+Trae el código, descarga las imágenes (si falla, reintenta; lo ya descargado no se vuelve a bajar), reinicia el motor y el Cerebro y enseña el estado. Sin las tres líneas del `.env`, el mismo script construye en tu PC como siempre. Si una imagen no se descarga: ¿hiciste el `docker login`?, ¿terminó de construirse en GitHub?
+
+Si GitHub dice que no tiene permiso para el paquete (la primera vez), en *Packages* del repositorio abre cada paquete → *Package settings* → «Manage Actions access» y añade este repositorio con permiso de escritura.
+
 ## Problemas típicos
 
 | Síntoma | Causa y solución |

@@ -61,7 +61,7 @@ services:
     security_opt: ["no-new-privileges:true"]
     networks: [interna, salida]
     build: {context: ., dockerfile: Dockerfile, args: {VERSION: "${LIC_VERSION:-local}"}}
-    image: licitaciones:local
+    image: "${LIC_IMAGEN:-licitaciones:local}"            # con LIC_IMAGEN (ghcr.io/…/cerebro101-licitaciones:main) se descarga de GitHub en vez de construirse aquí
     entrypoint: ["/ingestor"]
     read_only: true
     tmpfs: ["/tmp"]
@@ -91,7 +91,7 @@ services:
     cap_drop: [ALL]
     security_opt: ["no-new-privileges:true"]
     networks: [interna]                                 # sin salida a Internet: solo lee del almacén y del bus y escribe en su base
-    image: licitaciones:local                           # la misma imagen que construye el ingestor
+    image: "${LIC_IMAGEN:-licitaciones:local}"           # la misma imagen que construye el ingestor
     entrypoint: ["/proyector"]
     read_only: true
     tmpfs: ["/tmp"]
@@ -113,7 +113,7 @@ services:
     cap_drop: [ALL]
     security_opt: ["no-new-privileges:true"]
     networks: [interna]                                 # sin salida a Internet y sin puertos publicados (para probar en local: compose.dev.yaml)
-    image: licitaciones:local
+    image: "${LIC_IMAGEN:-licitaciones:local}"
     entrypoint: ["/api"]
     read_only: true
     tmpfs: ["/tmp"]

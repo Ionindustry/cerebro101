@@ -4,6 +4,9 @@ name: cerebro-101
 
 x-api: &api
   build: {context: ., dockerfile: api/Dockerfile}
+  # Sin CEREBRO_IMAGEN_API se construye aquí, como siempre. Con ella (ghcr.io/…/cerebro101-api:main, ver .env.example) se descarga la imagen que construye
+  # GitHub (`./scripts/actualizar.sh`) y este PC no construye nada.
+  image: "${CEREBRO_IMAGEN_API:-cerebro-101-api:local}"
   # Mínimo privilegio también en el entorno: la API y el worker reciben SOLO lo que usa el código (lista cerrada, sin `env_file`).
   # Nunca reciben: la clave del propietario de la base de datos, las de Keycloak, ERPNext (administrador y base de datos),
   # ni las claves internas de Langfuse (cifrado, sal, ClickHouse, MinIO…). Si el Cerebro (o un agente engañado) pudiera leer
@@ -132,6 +135,7 @@ services:
 
   migraciones:              # un solo uso en cada arranque: esquema, tablas del grafo, rol y permisos (único con la clave del propietario)
     build: {context: ., dockerfile: api/Dockerfile}
+    image: "${CEREBRO_IMAGEN_API:-cerebro-101-api:local}"
     command: python -m cerebro.migrar
     environment:
       DATABASE_URL_ADMIN: "postgresql://cerebro:${POSTGRES_PASSWORD}@postgres:5432/cerebro"
@@ -177,6 +181,7 @@ services:
 
   licitaciones-eventos:   # consumidor de eventos del motor de licitaciones (ADR 0007 §3): mete en el embudo las nuevas con buen encaje. No ejecuta agentes
     build: {context: ., dockerfile: api/Dockerfile}
+    image: "${CEREBRO_IMAGEN_API:-cerebro-101-api:local}"
     command: python -m cerebro.licitaciones.consumidor
     profiles: ["licitaciones"]       # no arranca con `up` a secas: se pide por su nombre (`docker compose up -d licitaciones-eventos`) y necesita el motor en marcha
     environment:                      # lista cerrada: solo lo que usa (sin claves de modelos, de ERP ni de correo)
@@ -207,6 +212,7 @@ services:
 
   panel:
     build: {context: ./panel}
+    image: "${CEREBRO_IMAGEN_PANEL:-cerebro-101-panel:local}"          # con CEREBRO_IMAGEN_PANEL se descarga de GitHub en vez de construirse aquí
     environment:
       # Con contraseña definida las sesiones van a redis-panel (cifradas con PANEL_SESION_SECRET) y sobreviven a reinicios;
       # sin ella, en memoria (desarrollo)
