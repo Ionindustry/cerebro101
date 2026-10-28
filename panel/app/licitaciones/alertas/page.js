@@ -1,7 +1,7 @@
 "use client";
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
-import { ambitoTexto, encajeClase, EVENTOS_ALERTA, eventoEtiqueta, fechaTexto, filtroDeAlerta, filtroTexto, importeTexto, mensajeAlertas, sinLeerTexto } from "../../../lib/licitaciones";
+import { admiteResumen, ambitoTexto, CANALES_ALERTA, canalEtiqueta, encajeClase, EVENTOS_ALERTA, eventoEtiqueta, fechaTexto, filtroDeAlerta, filtroTexto, importeTexto, mensajeAlertas, sinLeerTexto } from "../../../lib/licitaciones";
 import { pedirCerebro } from "../cliente";
 
 const enviar = (cuerpo) => ({ method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(cuerpo || {}) });
@@ -37,7 +37,7 @@ function Avisos({ avisos, onLeer }) {
   );
 }
 
-const FORMULARIO_VACIO = { nombre: "", q: "", cpv: "", nuts: "", importeMin: "", importeMax: "", eventos: ["licitacion.nueva"], ambito: "personal", departamento: "" };
+const FORMULARIO_VACIO = { nombre: "", q: "", cpv: "", nuts: "", importeMin: "", importeMax: "", eventos: ["licitacion.nueva"], ambito: "personal", departamento: "", canal: "panel" };
 
 function Formulario({ onCrear, trabajando }) {
   const [f, setF] = useState(FORMULARIO_VACIO);
@@ -65,6 +65,12 @@ function Formulario({ onCrear, trabajando }) {
           </select>
         </label>
         {f.ambito === "departamento" && <label>Departamento<input type="text" value={f.departamento} onChange={poner("departamento")} placeholder="licitaciones" required /><span className="ayuda">Solo su responsable o Dirección pueden crearla</span></label>}
+        {f.ambito === "departamento" && (
+          <label>Dónde avisa
+            <select value={f.canal} onChange={poner("canal")}>{CANALES_ALERTA.map(([k, t]) => <option key={k} value={k}>{t}</option>)}</select>
+            <span className="ayuda">El resumen lo ven Dirección y Licitaciones</span>
+          </label>
+        )}
       </div>
       <fieldset className="lic-estados">
         <legend>Avisar de</legend>
@@ -98,7 +104,8 @@ export default function Alertas() {
   const crear = async (f) => {
     const filtro = filtroDeAlerta(f);
     return accion("licitaciones/alertas", {
-      nombre: f.nombre, ambito: f.ambito, departamento: f.ambito === "departamento" ? f.departamento.trim().toLowerCase() : null, filtro, eventos: f.eventos, canal: "panel",
+      nombre: f.nombre, ambito: f.ambito, departamento: f.ambito === "departamento" ? f.departamento.trim().toLowerCase() : null, filtro, eventos: f.eventos,
+      canal: f.ambito === "departamento" ? f.canal : "panel",
     });
   };
 
@@ -118,10 +125,11 @@ export default function Alertas() {
                 <li key={a.id} className="tarjeta lic-item">
                   <span className="lic-fila"><span className="titulo">{a.nombre}</span>{!a.activa && <span className="lic-etiqueta">En pausa</span>}<span className="lic-etiqueta">{ambitoTexto(a)}</span></span>
                   <span className="meta">{filtroTexto(a.filtro) || "—"}</span>
-                  <span className="meta">Avisa de: {a.eventos.map(eventoEtiqueta).join(", ")}{a.ultima_entrega ? ` · último aviso ${fechaTexto(a.ultima_entrega)}` : ""}</span>
+                  <span className="meta">Avisa de: {a.eventos.map(eventoEtiqueta).join(", ")}{a.ultima_entrega ? ` · último aviso ${fechaTexto(a.ultima_entrega)}` : ""}{admiteResumen(a) ? ` · ${canalEtiqueta(a.canal)}` : ""}</span>
                   {a.puede_cambiar && (
                     <span className="lic-fila">
                       <button className="boton no" disabled={trabajando} onClick={() => accion(`licitaciones/alertas/${a.id}`, { activa: !a.activa })}>{a.activa ? "Pausar" : "Reactivar"}</button>
+                      {admiteResumen(a) && <button className="boton no" disabled={trabajando} onClick={() => accion(`licitaciones/alertas/${a.id}`, { canal: a.canal === "resumen_diario" ? "panel" : "resumen_diario" })}>{a.canal === "resumen_diario" ? "Quitar del resumen" : "Incluir en el resumen"}</button>}
                       <button className="boton no" disabled={trabajando} onClick={() => { if (window.confirm(`¿Borrar la alerta «${a.nombre}» y sus avisos?`)) accion(`licitaciones/alertas/${a.id}/borrar`); }}>Borrar</button>
                     </span>
                   )}

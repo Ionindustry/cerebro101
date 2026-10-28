@@ -353,5 +353,9 @@ Documento de partida: «Plataforma de detección y análisis de concursos públi
   Diferencias con el contrato `/alerts` del motor (`openapi.yaml`): viven en el Cerebro y no en el motor porque la API del motor aún no sabe quién es cada
   usuario (Keycloak en el motor, SEC-031); cambiar y borrar van por `POST` (la pasarela solo deja GET y POST); sin `If-Match` (v1); solo los criterios que el motor
   filtra hoy (texto, CPV, NUTS, comprador, estado, procedimiento, importes; no `area`, `fuente` ni `encaje_min`); sin alertas de competencia.
-- Pendiente: canales `resumen_diario` (que las alertas de departamento salgan en el resumen de las 16:00) y `correo`; competencia; y que el Rastreador (6:00) pida a
-  Viabilidad el informe ir/no ir de las `detectada` (fase 4 del plan).
+- **Alertas en el resumen de las 16:00** (hecho): una alerta de **departamento** puede tener el canal `resumen_diario`; sus avisos del periodo salen en una sección
+  «Alertas de departamento» del resumen (`alertas` en el documento y `totales.alertas`; hasta `resumen.avisos_por_alerta` = 5 por alerta, el resto se cuenta). El aviso
+  se guarda siempre y sigue visible en el panel: el canal solo añade el resumen. Una alerta **personal** no puede usar ese canal (el resumen lo ven Dirección y
+  Licitaciones): lo rechaza el código y también la base de datos (`licitaciones_alertas_resumen_solo_departamento`). La sección sale **aunque el motor no responda** (los
+  avisos ya están guardados) y, si no se pueden leer, el resumen sale igual y lo dice. Se activa por alerta desde `/licitaciones/alertas` («Incluir en el resumen»).
+- Pendiente: canal `correo`; competencia; y que el Rastreador (6:00) pida a Viabilidad el informe ir/no ir de las `detectada` (fase 4 del plan).

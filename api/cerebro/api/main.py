@@ -321,6 +321,7 @@ class AlertaCambio(BaseModel):
     filtro: dict | None = None
     eventos: list[str] | None = None
     activa: bool | None = None
+    canal: str | None = None
 
 
 class AvisosLeidos(BaseModel):

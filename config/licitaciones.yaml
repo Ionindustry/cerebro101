@@ -5,6 +5,7 @@ resumen:
   oportunidades_max: 20       # cuántas oportunidades se detallan (las demás se cuentan)
   otras_max: 10               # adjudicaciones y anulaciones que se detallan
   paginas_max: 5              # páginas de 100 que se leen del motor como máximo (si hay más, el resumen lo dice)
+  avisos_por_alerta: 5        # cuántos avisos de cada alerta de departamento (canal resumen_diario) se detallan en el resumen; los demás se cuentan
 
 # CPV de interés (§12.1). Cada código cubre también sus descendientes («jerarquía», propuesta por validar): 72000000 cubre toda la división 72.
 cpv:

@@ -138,12 +138,14 @@ class TestRutasDeAlertas(unittest.TestCase):
                 mock.patch.object(a, "cambiar", mock.AsyncMock(return_value=self.ALERTA)) as cambiar, mock.patch.object(a, "borrar", mock.AsyncMock()) as borrar:
             c = como(("usuario",), ("licitaciones",))
             lista = c.get("/licitaciones/alertas").json()
-            self.assertEqual((lista["items"], lista["canales"], "licitacion.nueva" in lista["eventos"]), ([self.ALERTA], ["panel"], True))
+            self.assertEqual((lista["items"], lista["canales"], "licitacion.nueva" in lista["eventos"]), ([self.ALERTA], ["panel", "resumen_diario"], True))
             self.assertEqual(c.post("/licitaciones/alertas", json=self.ENTRADA).json(), self.ALERTA)
             self.assertEqual(crear.await_args.args[1]["filtro"], {"cpv": ["32"]})
             self.assertEqual(c.post("/licitaciones/alertas/3", json={"activa": False}).status_code, 200)
             cambiar.assert_awaited_once()
             self.assertEqual(cambiar.await_args.args[1:], (3, {"activa": False}))          # solo lo que se manda: no se pisa nada con valores por defecto
+            c.post("/licitaciones/alertas/3", json={"canal": "resumen_diario"})
+            self.assertEqual(cambiar.await_args.args[1:], (3, {"canal": "resumen_diario"}))
             self.assertEqual(c.post("/licitaciones/alertas/3/borrar").json(), {"borrada": 3})
             borrar.assert_awaited_once()
 
