@@ -44,7 +44,7 @@ var (
 var noSoportados = map[string]bool{"area": true, "publicada_desde": true, "publicada_hasta": true, "encaje_min": true, "facetas": true}
 
 var soportados = map[string]bool{
-	"q": true, "cpv": true, "nuts": true, "comprador": true, "estado": true, "procedimiento": true, "fuente": true, "importe_min": true,
+	"q": true, "cpv": true, "nuts": true, "comprador": true, "estado": true, "procedimiento": true, "fuente": true, "id_origen": true, "importe_min": true,
 	"importe_max": true, "actualizada_desde": true, "plazo_desde": true, "plazo_hasta": true, "orden": true, "limit": true, "cursor": true,
 }
 
@@ -85,6 +85,15 @@ func parseBusqueda(q url.Values) (pg.Filtro, *problem) {
 	}
 	for _, e := range fs {
 		f.Fuentes = append(f.Fuentes, fuentesExternas[e])
+	}
+	if v, ok := one(q, "id_origen"); ok {
+		if len(f.Fuentes) != 1 {
+			return f, invalid("id_origen", "necesita exactamente una fuente (el identificador de origen solo es único dentro de ella)")
+		}
+		if n := len([]rune(v)); n < 1 || n > 500 || strings.IndexFunc(v, unicode.IsControl) >= 0 {
+			return f, invalid("id_origen", "entre 1 y 500 caracteres, sin caracteres de control")
+		}
+		f.IDOrigen = v
 	}
 	cs, p := lista(q, "comprador", 20, func(string) bool { return true }, "")
 	if p != nil {

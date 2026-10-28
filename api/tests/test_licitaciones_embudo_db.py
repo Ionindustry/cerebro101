@@ -138,6 +138,55 @@ class TestEmbudoEnBase(unittest.TestCase):
         with self.assertRaises(embudo.ErrorEmbudo):
             ejecutar(embudo.resumen(0))
 
+    # ---- Lo que escribe el consumidor de eventos ----
+
+    def datos(self, **kw):
+        d = embudo.datos_de_resumen({"id": ID, "version_entidad": 1, "expediente": "2026/045", "titulo": "Videovigilancia", "comprador": {"nombre": "Girona"},
+                                     "estado": "abierta", "procedimiento": "abierto", "cpv": ["32323500"], "nuts": ["ES512"], "plazo_presentacion": "2026-11-20T10:00:00Z",
+                                     "importe": {"valor": "200000.00", "moneda": "EUR"}}, CFG, AHORA)
+        d.pop("fuera_de_importe")
+        d.update(kw)
+        return d
+
+    def test_registrar_detectada_crea_y_una_reentrega_no_duplica(self):
+        self.assertIs(ejecutar(embudo.registrar_detectada(self.datos(), AHORA)), True)
+        self.assertIs(ejecutar(embudo.registrar_detectada(self.datos(motor_version=2, titulo="Corregido"), AHORA)), False)     # versión nueva: refresca
+        self.assertIsNone(ejecutar(embudo.registrar_detectada(self.datos(motor_version=2, titulo="Otra vez"), AHORA)))         # misma versión: nada
+        self.assertIsNone(ejecutar(embudo.registrar_detectada(self.datos(motor_version=1, titulo="Vieja"), AHORA)))            # anterior: nada
+        filas = ejecutar(embudo.listar())
+        self.assertEqual([(f["estado"], f["titulo"], f["motor_version"], f["estado_motor"]) for f in filas], [("detectada", "Corregido", 2, "abierta")])
+
+    def test_registrar_detectada_nunca_pisa_el_estado_que_puso_una_persona(self):
+        r = self.estudiar()                                                                     # una persona la pasa a estudio
+        ejecutar(embudo.cambiar_estado(r["id"], "presentada", ahora=AHORA))
+        ejecutar(embudo.registrar_detectada(self.datos(motor_version=5, titulo="Nueva versión"), AHORA))
+        f = ejecutar(embudo.listar())[0]
+        self.assertEqual((f["estado"], f["titulo"], f["motor_version"]), ("presentada", "Nueva versión", 5))
+
+    def test_estado_del_motor_solo_si_ya_esta_en_el_embudo(self):
+        self.assertIsNone(ejecutar(embudo.actualizar_estado_motor(ID, 2, "adjudicada", AHORA)))
+        self.assertEqual(ejecutar(embudo.listar()), [])
+
+    def test_una_adjudicada_se_anota_pero_no_cambia_el_estado_de_la_gente(self):
+        ejecutar(embudo.registrar_detectada(self.datos(), AHORA))
+        self.assertEqual(ejecutar(embudo.actualizar_estado_motor(ID, 2, "adjudicada", AHORA)), "detectada")
+        f = ejecutar(embudo.listar())[0]
+        self.assertEqual((f["estado"], f["estado_motor"], f["motor_version"]), ("detectada", "adjudicada", 2))
+
+    def test_una_detectada_que_se_anula_pasa_sola_a_descartada_pero_una_en_estudio_no(self):
+        ejecutar(embudo.registrar_detectada(self.datos(), AHORA))
+        self.assertEqual(ejecutar(embudo.actualizar_estado_motor(ID, 2, "anulada", AHORA)), "descartada")
+        otro = "11111111-2222-4333-8444-555555555555"
+        ejecutar(embudo.estudiar(otro, consulta=motor_con(ficha(otro)), ahora=AHORA))
+        self.assertEqual(ejecutar(embudo.actualizar_estado_motor(otro, 2, "anulada", AHORA)), "en_estudio")      # la gente decide qué hacer con ella
+        self.assertEqual(ejecutar(embudo.listar(motor_id=otro))[0]["estado_motor"], "anulada")
+
+    def test_un_evento_viejo_no_pisa_un_estado_mas_reciente(self):
+        ejecutar(embudo.registrar_detectada(self.datos(), AHORA))
+        ejecutar(embudo.actualizar_estado_motor(ID, 4, "formalizada", AHORA))
+        self.assertIsNone(ejecutar(embudo.actualizar_estado_motor(ID, 2, "abierta", AHORA)))
+        self.assertEqual(ejecutar(embudo.listar())[0]["estado_motor"], "formalizada")
+
 
 if __name__ == "__main__":
     unittest.main()

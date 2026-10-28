@@ -234,6 +234,8 @@ ALTER TABLE licitaciones ADD COLUMN IF NOT EXISTS actualizado     timestamptz NO
 ALTER TABLE licitaciones ADD COLUMN IF NOT EXISTS decidida_en     timestamptz;
 ALTER TABLE licitaciones ADD COLUMN IF NOT EXISTS presentada_en   timestamptz;
 ALTER TABLE licitaciones ADD COLUMN IF NOT EXISTS resuelta_en     timestamptz;
+-- Estado del expediente en el motor (abierta, adjudicada, anulada…); lo actualiza el consumidor de eventos (cerebro/licitaciones/consumidor.py).
+ALTER TABLE licitaciones ADD COLUMN IF NOT EXISTS estado_motor    text;
 -- El código de expediente no es único entre organismos: la identidad de una fila es el expediente del motor.
 ALTER TABLE licitaciones DROP CONSTRAINT IF EXISTS licitaciones_expediente_key;
 CREATE UNIQUE INDEX IF NOT EXISTS licitaciones_motor_id ON licitaciones (motor_id);

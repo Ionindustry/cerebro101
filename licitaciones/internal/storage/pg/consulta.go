@@ -28,6 +28,7 @@ type Filtro struct {
 	Estados          []string
 	Procedimientos   []string
 	Fuentes          []string // identificadores internos (placsp-643…)
+	IDOrigen         string   // identificador del expediente en la fuente; solo con una fuente (es único dentro de ella)
 	CompradorNIF     []string
 	CompradorDIR3    []string
 	ImporteMin       string // decimal; vacío = sin límite
@@ -136,6 +137,9 @@ func (f Filtro) aplicar(c *consulta) {
 	}
 	if len(f.Fuentes) > 0 {
 		c.add("e.fuente = ANY (" + c.arg(f.Fuentes) + "::text[])")
+	}
+	if f.IDOrigen != "" {
+		c.add("e.id_origen = " + c.arg(f.IDOrigen))
 	}
 	switch {
 	case len(f.CompradorNIF) > 0 && len(f.CompradorDIR3) > 0:

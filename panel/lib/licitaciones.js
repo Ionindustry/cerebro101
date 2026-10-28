@@ -229,3 +229,9 @@ export function mensajeEmbudo(status) {
   if (status === 503) return "No se ha podido consultar el motor de licitaciones. Inténtalo en unos minutos.";
   return "No se ha podido completar la operación. Inténtalo en unos minutos.";
 }
+
+/** Aviso cuando el expediente ya no está abierto en el motor (adjudicada, anulada…): quien lo lleva decide qué hacer con él. */
+export function avisoEstadoMotor(estado) {
+  if (!estado || estado === "abierta" || estado === "anuncio_previo") return null;
+  return `En el motor: ${estadoEtiqueta(estado)}`;
+}

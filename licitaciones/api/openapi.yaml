@@ -88,6 +88,12 @@ paths:
             maxItems: 10
             items: {$ref: '#/components/schemas/Procedimiento'}
         - $ref: '#/components/parameters/fuente'
+        - name: id_origen
+          in: query
+          description: |
+            Identificador del expediente en la fuente (el `id_origen` de los eventos). Solo es único dentro de su fuente, así que **exige exactamente una `fuente`**
+            (400 si no). Lo usa el consumidor de eventos del Cerebro para pasar de un evento a su expediente. Implementado.
+          schema: {type: string, minLength: 1, maxLength: 500}
         - $ref: '#/components/parameters/importe_min'
         - $ref: '#/components/parameters/importe_max'
         - name: publicada_desde

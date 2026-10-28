@@ -109,3 +109,9 @@ millones de «nuevas».
 ## Imagen
 `docker build -f licitaciones/Dockerfile --build-arg VERSION=$(git rev-parse HEAD) -t licitaciones:local licitaciones`
 (una imagen con los tres binarios; `ENTRYPOINT` es `/api`, el resto se elige con `entrypoint`).
+
+## Consumidor de eventos del Cerebro
+El Cerebro tiene su propio consumidor del flujo `LICITACIONES` (servicio `licitaciones-eventos` de su `docker-compose.yml`, perfil `licitaciones`). Para que lo
+alcance, el bus NATS se une también a la red `cerebro` con `compose.cerebro.yaml` (alias `licitaciones-nats`; sigue pidiendo usuario y clave). Como el evento solo
+trae la fuente y el identificador de origen, el consumidor pide el expediente con `GET /api/v1/tenders?fuente=placsp&id_origen=…` (el filtro `id_origen` exige
+exactamente una fuente).

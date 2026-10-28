@@ -157,7 +157,7 @@ def datos_de_ficha(ficha: dict, cfg: dict, ahora: datetime) -> dict:
 
 # ---- Base de datos ----
 
-COLUMNAS = ("id, motor_id, motor_version, expediente, organismo, titulo, cpv, importe, fecha_limite, enlace, encaje, estado, motivo_perdida, "
+COLUMNAS = ("id, motor_id, motor_version, expediente, organismo, titulo, cpv, importe, fecha_limite, enlace, encaje, estado, estado_motor, motivo_perdida, "
             "decision, creado, actualizado, decidida_en, presentada_en, resuelta_en")
 
 
@@ -236,3 +236,66 @@ async def cambiar_estado(id: int, nuevo: str, motivo: str | None = None, ahora: 
             cur = await conn.execute(f"UPDATE licitaciones SET {', '.join(sets)} WHERE id = %s RETURNING {COLUMNAS}",
                                      [nuevo, motivo, ahora, *fechas.values(), id])
             return _fila(await cur.fetchone())
+
+
+# ---- Lo que hace el consumidor de eventos (cerebro/licitaciones/consumidor.py): solo escribe estas dos cosas, nunca decide por la gente ----
+
+def datos_de_resumen(item: dict, cfg: dict, ahora: datetime) -> dict:
+    """Los campos de una fila del embudo a partir de un expediente de la LISTA del motor (GET /tenders: `importe` y `plazo_presentacion`, a diferencia
+    de la ficha, que trae `importes` y `plazos`). Calcula el encaje con el perfil de config/licitaciones.yaml. Función pura."""
+    comprador = item.get("comprador") or {}
+    puntos = encaje_mod.puntuar(item, cfg, ahora)
+    return {
+        "motor_id": item["id"], "motor_version": item.get("version_entidad"), "expediente": item.get("expediente") or item["id"],
+        "organismo": motor._corto(comprador.get("nombre"), 200) or None, "titulo": motor._corto(item.get("titulo"), 500) or "(sin título)",
+        "cpv": [str(c) for c in (item.get("cpv") or [])][:20], "importe": encaje_mod.importe_en_euros(item.get("importe")),
+        "fecha_limite": item.get("plazo_presentacion"), "enlace": resumen_mod._url(item.get("url_origen")), "encaje": puntos["encaje"],
+        "estado_motor": item.get("estado"), "fuera_de_importe": puntos["fuera_de_importe"],
+    }
+
+
+def cumple_el_umbral(d: dict, encaje_min: int) -> tuple[bool, str]:
+    """¿Entra en el embudo como «detectada»? Debe estar abierta, dentro del importe y con encaje suficiente. Devuelve (sí/no, motivo en una frase)."""
+    if d["estado_motor"] not in encaje_mod.ABIERTAS:
+        return False, f"no está abierta ({d['estado_motor']})"
+    if d["fuera_de_importe"]:
+        return False, "supera el importe máximo"
+    if d["encaje"] is None:
+        return False, "sin encaje calculable"
+    if d["encaje"] < encaje_min:
+        return False, f"encaje {d['encaje']} por debajo de {encaje_min}"
+    return True, f"encaje {d['encaje']}"
+
+
+async def registrar_detectada(d: dict, ahora: datetime | None = None) -> bool | None:
+    """Alta (o refresco de datos) de una licitación detectada. Solo avanza de versión: una reentrega o un evento viejo no pisa nada. NUNCA toca el
+    estado de la gente (si ya se estudia, se presentó…, se conservan). Devuelve True si es nueva, False si se ha refrescado, None si era vieja."""
+    ahora = ahora or datetime.now(timezone.utc)
+    async with await psycopg.AsyncConnection.connect(ajustes.database_url, row_factory=dict_row) as conn:
+        cur = await conn.execute(
+            """INSERT INTO licitaciones (motor_id, motor_version, expediente, organismo, titulo, cpv, importe, fecha_limite, enlace, encaje, estado, estado_motor, actualizado)
+               VALUES (%(motor_id)s, %(motor_version)s, %(expediente)s, %(organismo)s, %(titulo)s, %(cpv)s, %(importe)s, %(fecha_limite)s, %(enlace)s, %(encaje)s,
+                       'detectada', %(estado_motor)s, %(ahora)s)
+               ON CONFLICT (motor_id) DO UPDATE SET
+                   motor_version = EXCLUDED.motor_version, expediente = EXCLUDED.expediente, organismo = EXCLUDED.organismo, titulo = EXCLUDED.titulo,
+                   cpv = EXCLUDED.cpv, importe = EXCLUDED.importe, fecha_limite = EXCLUDED.fecha_limite, enlace = EXCLUDED.enlace, encaje = EXCLUDED.encaje,
+                   estado_motor = EXCLUDED.estado_motor, actualizado = EXCLUDED.actualizado
+               WHERE licitaciones.motor_version IS NULL OR licitaciones.motor_version < EXCLUDED.motor_version
+               RETURNING (xmax = 0) AS nueva""", {**d, "ahora": ahora})
+        fila = await cur.fetchone()
+    return None if fila is None else bool(fila["nueva"])
+
+
+async def actualizar_estado_motor(motor_id: str, version: int, estado_motor: str, ahora: datetime | None = None) -> str | None:
+    """Anota el estado que tiene ahora el expediente en el motor (adjudicada, formalizada, anulada…) si la licitación ya está en el embudo.
+    Si nadie la ha tocado (sigue «detectada») y el motor la ha ANULADO, pasa sola a «descartada»: no hay nada que valorar. Lo demás lo decide la gente;
+    el panel solo avisa. Devuelve el estado del embudo tras el cambio, o None si no está en el embudo o el evento era viejo."""
+    ahora = ahora or datetime.now(timezone.utc)
+    async with await psycopg.AsyncConnection.connect(ajustes.database_url, row_factory=dict_row) as conn:
+        cur = await conn.execute(
+            """UPDATE licitaciones SET estado_motor = %(em)s, motor_version = %(v)s, actualizado = %(ahora)s,
+                      estado = CASE WHEN estado = 'detectada' AND %(em)s = 'anulada' THEN 'descartada' ELSE estado END
+               WHERE motor_id = %(id)s AND (motor_version IS NULL OR motor_version <= %(v)s)
+               RETURNING estado""", {"em": estado_motor, "v": version, "id": str(uuid.UUID(motor_id)), "ahora": ahora})
+        fila = await cur.fetchone()
+    return None if fila is None else fila["estado"]

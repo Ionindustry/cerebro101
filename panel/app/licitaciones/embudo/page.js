@@ -1,7 +1,7 @@
 "use client";
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
-import { accionEmbudo, diasDePeriodo, encajeClase, ESTADOS_EMBUDO, etiquetaEmbudo, fechaTexto, horasTexto, importeTexto, mensajeEmbudo, PERIODOS_EMBUDO, tasaExitoTexto } from "../../../lib/licitaciones";
+import { accionEmbudo, avisoEstadoMotor, diasDePeriodo, encajeClase, ESTADOS_EMBUDO, etiquetaEmbudo, fechaTexto, horasTexto, importeTexto, mensajeEmbudo, PERIODOS_EMBUDO, tasaExitoTexto } from "../../../lib/licitaciones";
 import { pedirCerebro } from "../cliente";
 
 const enviar = (cuerpo) => ({ method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(cuerpo) });
@@ -48,6 +48,7 @@ function Fila({ x, transiciones, motivos, onCambio }) {
         {x.importe != null && <span className="meta">{importeTexto({ valor: String(x.importe), moneda: "EUR", impuestos: "sin_iva" })}</span>}
         {x.fecha_limite && <span className="meta">Plazo: {fechaTexto(x.fecha_limite)}</span>}
         {x.motivo_perdida_texto && <span className="lic-etiqueta">{x.motivo_perdida_texto}</span>}
+        {avisoEstadoMotor(x.estado_motor) && <span className="lic-etiqueta aviso">{avisoEstadoMotor(x.estado_motor)}</span>}
       </span>
       {destinos.length > 0 && (
         <span className="lic-fila">

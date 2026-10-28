@@ -4,7 +4,7 @@ import {
   antiguedadTexto, conAcceso, decidir, estadoEtiqueta, estadoMotor, filtrosAQuery, fechaTexto, importeTexto, limpiarCpv, limpiarNuts, mensajeDeError,
   nombreFuente, queryAFiltros, rutaPermitida, totalTexto, urlSegura,
 } from "../lib/licitaciones.js";
-import { accionEmbudo, diasDePeriodo, ESTADOS_EMBUDO, etiquetaEmbudo, horasTexto, mensajeEmbudo, tasaExitoTexto } from "../lib/licitaciones.js";
+import { accionEmbudo, avisoEstadoMotor, diasDePeriodo, ESTADOS_EMBUDO, etiquetaEmbudo, horasTexto, mensajeEmbudo, tasaExitoTexto } from "../lib/licitaciones.js";
 
 const ID = "0b1f7a3e-1111-4222-8333-444444444444";
 
@@ -199,4 +199,13 @@ test("mensajes del embudo en castellano y sin detalles internos", () => {
   assert.match(mensajeEmbudo(422), /no está permitido/);
   assert.match(mensajeEmbudo(503), /motor/);
   assert.ok(!/token|Bearer|10\.0|psycopg|Traceback/i.test([401, 403, 404, 422, 503, 500].map(mensajeEmbudo).join(" ")));
+});
+
+test("aviso cuando el expediente ya no está abierto en el motor", () => {
+  assert.equal(avisoEstadoMotor("abierta"), null);
+  assert.equal(avisoEstadoMotor("anuncio_previo"), null);
+  assert.equal(avisoEstadoMotor(null), null);
+  assert.equal(avisoEstadoMotor(undefined), null);
+  assert.equal(avisoEstadoMotor("anulada"), "En el motor: Anulada");
+  assert.equal(avisoEstadoMotor("adjudicada"), "En el motor: Adjudicada");
 });
