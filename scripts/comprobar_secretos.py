@@ -24,7 +24,7 @@ PATRONES = [
         r"""(?i)\b[A-Z0-9_]*(?:PASSWORD|PASSWD|SECRET|API_?KEY|TOKEN|CLAVE)[A-Z0-9_]*\s*[:=]\s*['"]?([A-Za-z0-9+/_\-.=!#$%^&*]{16,})['"]?\s*$""")),
 ]
 # valores que son marcadores o de prueba
-FALSOS = re.compile(r"(?i)^(x+|clave[-_a-z0-9]*|changeme.*|password|contrasena|ejemplo.*|test.*|prueba.*|dummy.*|\$\{.*\}|<.*>|\*+|none|null|false|true|sin[-_ ]clave|vacio|secreto|clave-de-prueba|.*cambia.*|.*prueba.*)$")
+FALSOS = re.compile(r"(?i)^(x+|clave[-_a-z0-9]*|changeme.*|password|contrasena|ejemplo.*|test.*|prueba.*|dummy.*|\$\{.*\}|<.*>|\*+|none|null|false|true|sin[-_ ]clave|sin_recomendacion|vacio|secreto|clave-de-prueba|.*cambia.*|.*prueba.*)$")
 # Un valor que es el NOMBRE de una variable de entorno (LIC_NATS_PASSWORD, en mayúsculas y con guiones bajos) no es un secreto: es a qué variable se llama.
 NOMBRE_ENTORNO = re.compile(r"^[A-Z][A-Z0-9]*(?:_[A-Z0-9]+)+$")
 OMITIR = re.compile(r"(^|/)(package-lock\.json|.*\.(png|jpg|jpeg|pdf|onnx|ico|woff2?))$|^api/tests/|^panel/test/")
