@@ -17,7 +17,8 @@ agentes:
 - id: rastreador
   nombre: Rastreador
   subarea: Vigilancia de oportunidades
-  tareas: Revisa a diario las plataformas de contratación y filtra por CPV, importe y zona
+  tareas: Cada día pide a Viabilidad el informe ir/no ir de las licitaciones detectadas con mejor encaje (tarea del calendario
+    «rastreo_embudo»); no decide ni presenta nada
   modelo: rapido
   herramientas:
   - conocimiento
@@ -25,7 +26,7 @@ agentes:
   - licitaciones
   - jev
   aprobacion: libre
-  horario: 0 6 * * *
+  horario: null
   sensibilidad: baja
   departamento: licitaciones
   director: false

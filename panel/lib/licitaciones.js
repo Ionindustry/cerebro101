@@ -303,3 +303,14 @@ export function avisosDeAlertaTexto(g) {
   const t = `${g.total} ${g.total === 1 ? "aviso" : "avisos"}`;
   return g.total > (g.avisos?.length ?? 0) ? `${t} (se detallan ${g.avisos.length})` : t;
 }
+
+// ---- Informe de Viabilidad (rastreo diario del embudo): consultivo, nunca decide ----
+
+const VIABILIDAD = { ir: ["IR", "abierta"], no_ir: ["NO IR", "anulada"], revisar: ["REVISAR", "aviso"], sin_recomendacion: ["Sin recomendación", ""] };
+
+/** La etiqueta del informe de Viabilidad de una licitación: {texto, clase}, o null si aún no hay informe. */
+export function viabilidadEtiqueta(v) {
+  if (!v || typeof v !== "object") return null;
+  const [texto, clase] = VIABILIDAD[v.recomendacion] || VIABILIDAD.sin_recomendacion;
+  return { texto: `Viabilidad: ${texto}`, clase };
+}

@@ -22,6 +22,7 @@ app = Celery("cerebro", broker=ajustes.redis_url, backend=ajustes.redis_url)
 app.conf.timezone = ajustes.zona_horaria
 app.conf.task_routes = {"cerebro.tareas.celery_app.ejecutar_programada": {"queue": "lote"},
                         "cerebro.tareas.celery_app.resumen_licitaciones": {"queue": "lote"},
+                        "cerebro.tareas.celery_app.rastreo_embudo": {"queue": "lote"},
                         "cerebro.tareas.celery_app.volcar_constancia": {"queue": "peticiones"}}
 
 
@@ -49,11 +50,21 @@ def _resumen_licitaciones() -> dict:
     return {"resumen-licitaciones": {"task": "cerebro.tareas.celery_app.resumen_licitaciones", "schedule": crontab(minute=minuto, hour=hora)}}
 
 
-app.conf.beat_schedule = {**_calendario(), **_resumen_licitaciones(),
+def _rastreo_embudo() -> dict:
+    """El rastreo diario del embudo (Viabilidad valora las licitaciones detectadas): a la hora de config/licitaciones.yaml (06:30). Como el resumen, se lee el YAML directamente."""
+    import yaml
+    try:
+        hora, minuto = yaml.safe_load((ajustes.dir_config / "licitaciones.yaml").read_text(encoding="utf-8"))["rastreo"]["hora"].split(":")
+    except (OSError, KeyError, TypeError, ValueError):
+        hora, minuto = "06", "30"
+    return {"rastreo-embudo": {"task": "cerebro.tareas.celery_app.rastreo_embudo", "schedule": crontab(minute=minuto, hour=hora)}}
+
+
+app.conf.beat_schedule = {**_calendario(), **_resumen_licitaciones(), **_rastreo_embudo(),
                           "constancia-pendiente": {"task": "cerebro.tareas.celery_app.volcar_constancia", "schedule": 300.0}}
 
 
-async def _ejecutar(agente_id: str) -> dict:
+async def _ejecutar(agente_id: str, peticion: str | None = None) -> dict:
     from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
 
     from ..grafo import construir
@@ -62,8 +73,8 @@ async def _ejecutar(agente_id: str) -> dict:
     async with AsyncPostgresSaver.from_conn_string(ajustes.database_url) as cp:
         g = construir(cp)
         hilo = f"programada-{agente_id}-{uuid.uuid4()}"
-        return await g.ainvoke({"peticion": f"Tarea programada. Haz tu trabajo periódico: {ficha.tareas}. "
-                                            "Resume lo encontrado y propone acciones si hacen falta.",
+        return await g.ainvoke({"peticion": peticion or f"Tarea programada. Haz tu trabajo periódico: {ficha.tareas}. "
+                                                        "Resume lo encontrado y propone acciones si hacen falta.",
                                 "agente": agente_id, "origen": "programada"},
                                {"configurable": {"thread_id": hilo}, "callbacks": callbacks(),
                                 "metadata": metadatos(hilo, f"agente:{agente_id}")})
@@ -100,3 +111,12 @@ def resumen_licitaciones(self) -> dict:
     if _reintentar_resumen(r, self.request.retries, self.max_retries):
         raise self.retry(countdown=900)
     return r
+
+
+@app.task(name="cerebro.tareas.celery_app.rastreo_embudo",
+          autoretry_for=(ModeloNoDisponible, ModeloOcupado, ModeloTimeout), retry_backoff=60, retry_backoff_max=900, retry_jitter=True, max_retries=4)
+def rastreo_embudo() -> dict:
+    """El Rastreador pide a Viabilidad el informe ir/no ir de las licitaciones detectadas (hasta rastreo.max_por_dia, de más a menos encaje). El informe es consultivo:
+    no cambia el estado de nada. Si el modelo no está disponible se reintenta; lo ya valorado se conserva y no se repite (cerebro/licitaciones/rastreo.py)."""
+    from ..licitaciones.rastreo import revisar
+    return asyncio.run(revisar(_ejecutar))

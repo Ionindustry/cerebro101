@@ -358,4 +358,12 @@ Documento de partida: «Plataforma de detección y análisis de concursos públi
   se guarda siempre y sigue visible en el panel: el canal solo añade el resumen. Una alerta **personal** no puede usar ese canal (el resumen lo ven Dirección y
   Licitaciones): lo rechaza el código y también la base de datos (`licitaciones_alertas_resumen_solo_departamento`). La sección sale **aunque el motor no responda** (los
   avisos ya están guardados) y, si no se pueden leer, el resumen sale igual y lo dice. Se activa por alerta desde `/licitaciones/alertas` («Incluir en el resumen»).
-- Pendiente: canal `correo`; competencia; y que el Rastreador (6:00) pida a Viabilidad el informe ir/no ir de las `detectada` (fase 4 del plan).
+- **Rastreo diario del embudo** (hecho): la tarea `rastreo_embudo` (`api/cerebro/licitaciones/rastreo.py`, cola `lote`, 06:30 según `rastreo.hora`) elige las `detectada`
+  **abiertas en el motor y con plazo** (a más de `rastreo.dias_minimos_hasta_plazo` = 3 días), de más a menos encaje y hasta `rastreo.max_por_dia` = 10 (**POR VALIDAR**:
+  si Viabilidad se satura, bajarlo o subir `embudo.encaje_min`), y pide a **Viabilidad** (agente `viabilidad`, modelo «juez») un informe de cada una. El informe se guarda en
+  `licitaciones.viabilidad` (recomendación IR / NO IR / REVISAR leída de un cierre de formato fijo, motivo, texto, hora) y el panel lo enseña en el embudo como
+  ayuda. **Es consultivo**: no cambia el estado ni `decision` (ir o no ir lo decide una persona; presentarse y firmar, también). Los datos de la licitación (título,
+  organismo…) los escribe un organismo, no 101.cat: van a Viabilidad dentro de un bloque marcado como texto de terceros, recortados y sin poder cerrarlo. Nunca pisa un
+  informe anterior (repetir la tarea es inofensivo), un fallo en una licitación no impide valorar las demás, y si el modelo no está disponible se reintenta (hasta 4
+  veces, con espera creciente) conservando lo ya valorado. El Rastreador deja de lanzar su ejecución genérica de las 6:00 (`horario: null` en su ficha): su trabajo es esta tarea.
+- Pendiente: canal `correo`; competencia; un botón «Pedir informe de viabilidad» para una licitación concreta; y llevar a Viabilidad lo que ya sabe 101.cat de cada organismo.

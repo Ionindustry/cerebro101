@@ -351,3 +351,7 @@ a.kp-fila:hover { background: var(--fondo); }
 /* Alertas */
 .lic-leido { opacity: 0.65; }
 .lic-alerta-guardar { margin-bottom: 8px; }
+
+/* Informe de Viabilidad */
+.lic-informe { margin: 4px 0; }
+.lic-informe-texto { white-space: pre-wrap; word-break: break-word; font-family: inherit; font-size: 14px; margin: 6px 0 0; }

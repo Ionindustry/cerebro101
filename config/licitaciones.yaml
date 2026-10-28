@@ -54,3 +54,11 @@ embudo:
 # primera lectura del flujo no inundan a nadie de avisos de licitaciones de hace meses.
 alertas:
   max_antiguedad_dias: 7
+
+# Rastreo diario del embudo: cada día a esta hora el Rastreador pide a Viabilidad el informe ir/no ir de las licitaciones «detectada» (cerebro/licitaciones/rastreo.py).
+# El informe es consultivo: no cambia el estado ni decide por la gente. El trabajo con modelos queda acotado por max_por_dia (si hay más, siguen al día siguiente, de más a
+# menos encaje); propuesta POR VALIDAR: si Viabilidad se satura, bajar este número o subir embudo.encaje_min.
+rastreo:
+  hora: "06:30"                 # hora local
+  max_por_dia: 10
+  dias_minimos_hasta_plazo: 3   # con menos días de plazo no se pide informe (no da tiempo a preparar una oferta)

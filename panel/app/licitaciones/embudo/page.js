@@ -1,7 +1,7 @@
 "use client";
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
-import { accionEmbudo, avisoEstadoMotor, diasDePeriodo, encajeClase, ESTADOS_EMBUDO, etiquetaEmbudo, fechaTexto, horasTexto, importeTexto, mensajeEmbudo, PERIODOS_EMBUDO, tasaExitoTexto } from "../../../lib/licitaciones";
+import { accionEmbudo, avisoEstadoMotor, viabilidadEtiqueta, diasDePeriodo, encajeClase, ESTADOS_EMBUDO, etiquetaEmbudo, fechaTexto, horasTexto, importeTexto, mensajeEmbudo, PERIODOS_EMBUDO, tasaExitoTexto } from "../../../lib/licitaciones";
 import { pedirCerebro } from "../cliente";
 
 const enviar = (cuerpo) => ({ method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(cuerpo) });
@@ -49,7 +49,15 @@ function Fila({ x, transiciones, motivos, onCambio }) {
         {x.fecha_limite && <span className="meta">Plazo: {fechaTexto(x.fecha_limite)}</span>}
         {x.motivo_perdida_texto && <span className="lic-etiqueta">{x.motivo_perdida_texto}</span>}
         {avisoEstadoMotor(x.estado_motor) && <span className="lic-etiqueta aviso">{avisoEstadoMotor(x.estado_motor)}</span>}
+        {viabilidadEtiqueta(x.viabilidad) && <span className={`lic-etiqueta ${viabilidadEtiqueta(x.viabilidad).clase}`}>{viabilidadEtiqueta(x.viabilidad).texto}</span>}
       </span>
+      {x.viabilidad?.informe && (
+        <details className="lic-informe">
+          <summary>Ver el informe de Viabilidad{x.viabilidad.motivo ? ` · ${x.viabilidad.motivo}` : ""}</summary>
+          <p className="meta">Lo ha escrito un agente de IA el {fechaTexto(x.viabilidad.generado)} como ayuda: puede equivocarse y no decide nada. Ir o no ir lo decide una persona.</p>
+          <pre className="lic-informe-texto">{x.viabilidad.informe}</pre>
+        </details>
+      )}
       {destinos.length > 0 && (
         <span className="lic-fila">
           {pidiendoMotivo ? (

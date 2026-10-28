@@ -100,7 +100,7 @@ para auditoría**: nunca amplían permisos.
   `licitaciones` del Cerebro (estado `detectada`); `.adjudicada`/`.anulada` → actualiza el estado si el expediente está en
   el embudo. **No ejecuta agentes ni encola tareas.** Idempotente por versión (ADR 0003). Migración de la fase 4: columnas
   `motor_id uuid UNIQUE`, `motor_version int`, `encaje numeric`.
-- El **Rastreador** (6:00, ya programado por su ficha) lee el embudo y pide a **Viabilidad** el informe ir/no ir de las
+- *(Hecho: ver «Rastreo diario del embudo» en `docs/PROYECTO_LICITACIONES.md` §Estado. Es una tarea determinista del calendario a las 06:30, no una ejecución libre del agente; el informe es consultivo.)* El **Rastreador** (6:00, ya programado por su ficha) lee el embudo y pide a **Viabilidad** el informe ir/no ir de las
   `detectada` — el trabajo con modelos sigue en la cola `lote`, acotado por el número de expedientes del día.
 - **Resumen de las 16:00**: lo genera la tarea del **Director de Licitaciones** consultando la API
   (`GET /tenders?publicada_desde=<ayer 16:00>&encaje_min=…&orden=encaje&limit=50`); lo recibe Dirección (decidido por

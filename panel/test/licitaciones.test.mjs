@@ -4,7 +4,7 @@ import {
   antiguedadTexto, conAcceso, decidir, estadoEtiqueta, estadoMotor, filtrosAQuery, fechaTexto, importeTexto, limpiarCpv, limpiarNuts, mensajeDeError,
   nombreFuente, queryAFiltros, rutaPermitida, totalTexto, urlSegura,
 } from "../lib/licitaciones.js";
-import { admiteResumen, avisosDeAlertaTexto, canalEtiqueta, CANALES_ALERTA, ambitoTexto, eventoEtiqueta, filtroDeAlerta, filtroTexto, mensajeAlertas, sinLeerTexto } from "../lib/licitaciones.js";
+import { viabilidadEtiqueta, admiteResumen, avisosDeAlertaTexto, canalEtiqueta, CANALES_ALERTA, ambitoTexto, eventoEtiqueta, filtroDeAlerta, filtroTexto, mensajeAlertas, sinLeerTexto } from "../lib/licitaciones.js";
 import { accionEmbudo, avisoEstadoMotor, diasDePeriodo, ESTADOS_EMBUDO, etiquetaEmbudo, horasTexto, mensajeEmbudo, tasaExitoTexto } from "../lib/licitaciones.js";
 
 const ID = "0b1f7a3e-1111-4222-8333-444444444444";
@@ -256,4 +256,13 @@ test("las alertas en el resumen: solo las de departamento, y las cifras lo cuent
   assert.equal(avisosDeAlertaTexto({ total: 1, avisos: [{}] }), "1 aviso");
   assert.equal(avisosDeAlertaTexto({ total: 7, avisos: [{}, {}, {}] }), "7 avisos (se detallan 3)");
   assert.equal(avisosDeAlertaTexto(null), "");
+});
+
+test("el informe de Viabilidad: una etiqueta clara y nunca una decisión", () => {
+  assert.deepEqual(viabilidadEtiqueta({ recomendacion: "ir" }), { texto: "Viabilidad: IR", clase: "abierta" });
+  assert.deepEqual(viabilidadEtiqueta({ recomendacion: "no_ir" }), { texto: "Viabilidad: NO IR", clase: "anulada" });
+  assert.equal(viabilidadEtiqueta({ recomendacion: "revisar" }).texto, "Viabilidad: REVISAR");
+  assert.equal(viabilidadEtiqueta({ recomendacion: "sin_recomendacion" }).texto, "Viabilidad: Sin recomendación");
+  assert.equal(viabilidadEtiqueta({ recomendacion: "lo que sea" }).texto, "Viabilidad: Sin recomendación");   // un valor raro no rompe la pantalla
+  for (const nada of [null, undefined, "", 5]) assert.equal(viabilidadEtiqueta(nada), null);                    // sin informe, sin etiqueta
 });
