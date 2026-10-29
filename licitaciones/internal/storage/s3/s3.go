@@ -130,9 +130,12 @@ func (s *Store) GetRaw(ctx context.Context, key string) ([]byte, error) {
 	return b, nil
 }
 
+// preconditionFailed dice si el servidor rechazó la escritura condicional porque el objeto ya existe. El estándar de S3 responde 412 (PreconditionFailed), pero RustFS responde
+// 304 (Not Modified) a un If-None-Match: * sobre un objeto existente: sin tratarlo igual, un original ya guardado hacía fallar la ingesta de su página en cada vuelta.
 func preconditionFailed(err error) bool {
 	r := minio.ToErrorResponse(err)
-	return r.StatusCode == http.StatusPreconditionFailed || r.Code == "PreconditionFailed"
+	return r.StatusCode == http.StatusPreconditionFailed || r.Code == "PreconditionFailed" ||
+		r.StatusCode == http.StatusNotModified || r.Code == "NotModified"
 }
 
 // userMeta busca un metadato sin distinguir mayúsculas (el servidor devuelve las claves con la inicial en mayúscula).
