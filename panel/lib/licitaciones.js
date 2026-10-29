@@ -266,6 +266,55 @@ export function mensajeCalendario(status) {
   return mensajeEmbudo(status);
 }
 
+// ---- Pliegos de una licitación: documentos, antivirus y requisitos con cita (API del Cerebro: /licitaciones/pliegos) ----
+
+const ESTADO_PLIEGO = {
+  limpio: ["Analizado: limpio", "abierta"], con_macros: ["Limpio, con macros (solo se lee el texto)", "aviso"], cuarentena: ["En cuarentena, sin analizar", "aviso"],
+  no_analizable: ["No analizable (antivirus no disponible, cifrado o demasiado grande)", "aviso"], infectado: ["Infectado: descartado", "anulada"], error: ["Con error", "aviso"],
+};
+/** Lo que se dice del estado de un documento bajado: {texto, clase}; sin bajar, «Sin descargar». */
+export function estadoPliego(d) {
+  if (!d) return { texto: "Sin descargar", clase: "" };
+  const [texto, clase] = ESTADO_PLIEGO[d.estado] || [d.estado, ""];
+  return { texto, clase };
+}
+/** Se ofrece «Descargar y analizar» si aún no se ha bajado o si hay que reintentarlo (sin analizar, no analizable o sin texto leído); nunca con un infectado. */
+export const puedeDescargarPliego = (d) => !d || ["cuarentena", "no_analizable", "error"].includes(d.estado) || (d.disponible && d.paginas == null);
+/** Lo que se sabe de la lectura de un documento: «12 páginas», «3 bloques», o el aviso. */
+export function lecturaPliego(d) {
+  if (!d?.disponible) return "";
+  if (d.paginas == null) return d.aviso ? `No se ha podido leer el texto: ${d.aviso}` : "El texto aún no se ha leído";
+  const n = d.paginas, u = d.unidad || "página";
+  return `${n} ${n === 1 ? u : u === "página" ? "páginas" : u === "bloque" ? "bloques" : "hojas"}${d.aviso ? ` · ${d.aviso}` : ""}`;
+}
+
+export const TIPOS_REQUISITO = {
+  solvencia_economica: "Solvencia económica", solvencia_tecnica: "Solvencia técnica", administrativo: "Administrativo", tecnico: "Técnico", criterio_automatico: "Criterio automático",
+  criterio_juicio_valor: "Criterio de juicio de valor", baja_anormal: "Baja anormal", plazo: "Plazo", garantia: "Garantía", formato_oferta: "Formato de la oferta", otro: "Otro",
+};
+export const tipoRequisito = (t) => TIPOS_REQUISITO[t] || String(t || "").replace(/_/g, " ");
+const ESTADO_REQ = { borrador: ["En borrador: pendiente de revisar", "aviso"], confirmado: ["Confirmado", "abierta"], rechazado: ["Rechazado", "anulada"] };
+export const estadoRequisito = (r) => { const [texto, clase] = ESTADO_REQ[r?.estado] || [r?.estado || "—", ""]; return { texto, clase }; };
+/** «3 requisitos: 1 confirmado, 2 en borrador». */
+export function resumenRequisitos(rs) {
+  const n = (rs || []).length;
+  if (!n) return "Aún no hay requisitos anotados.";
+  const c = (e) => rs.filter((r) => r.estado === e).length;
+  const partes = [[c("confirmado"), "confirmado", "confirmados"], [c("borrador"), "en borrador", "en borrador"], [c("rechazado"), "rechazado", "rechazados"]].filter(([k]) => k > 0).map(([k, uno, varios]) => `${k} ${k === 1 ? uno : varios}`);
+  return `${n} ${n === 1 ? "requisito" : "requisitos"}: ${partes.join(", ")}`;
+}
+/** Dónde está una cita: «Pliego administrativo, página 12» (o «bloque»/«hoja»). */
+export const lugarCita = (r) => `${r.nombre || `Documento ${r.documento}`}, ${r.unidad || "página"} ${r.pagina}`;
+
+export function mensajePliegos(status) {
+  if (status === 401) return "Tu sesión ha caducado.";
+  if (status === 403) return "Los pliegos son para Dirección y el departamento de Licitaciones, y solo de las plataformas de contratación admitidas.";
+  if (status === 404) return "No existe esa licitación o ese requisito.";
+  if (status === 422) return "No se puede hacer eso con este documento (no está bajado y analizado, supera el tamaño o se ha llegado al máximo de descargas del día).";
+  if (status === 503) return "No se ha podido consultar el motor de licitaciones o el antivirus. Inténtalo en unos minutos.";
+  return "No se ha podido completar la operación. Inténtalo en unos minutos.";
+}
+
 /** Horas como «3 h» o «2,5 días»; null es «—». */
 export function horasTexto(h) {
   if (h === null || h === undefined || Number.isNaN(Number(h))) return "—";

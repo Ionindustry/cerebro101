@@ -279,6 +279,24 @@ class TestFlujo(unittest.TestCase):
         self.assertNotIn("n", r["requisitos"][0])
         self.assertEqual(r["requisitos"][1]["valor"], "60 puntos")
 
+    def test_solo_una_persona_confirma_y_queda_anotado_quien_y_cuando(self):
+        self.bajar()
+        ejecutar(P.anotar_requisito(ID, 1, 3, "criterio_automatico", "El precio vale hasta 60 puntos", "Precio: hasta 60 puntos", "60 puntos"))
+        rid = ejecutar(P.requisitos(ID))["requisitos"][0]["id"]
+        self.assertEqual(ejecutar(P.requisitos(ID))["requisitos"][0]["revisado_por"], None)
+        r = ejecutar(P.revisar_requisito(rid, "confirmado", "marta"))
+        self.assertEqual((r["estado"], r["revisado_por"]), ("confirmado", "marta"))
+        self.assertTrue(r["revisado"])
+        v = ejecutar(P.requisitos(ID))["requisitos"][0]
+        self.assertEqual((v["estado"], v["revisado_por"], bool(v["revisado"])), ("confirmado", "marta", True))
+        self.assertEqual(ejecutar(P.revisar_requisito(rid, "rechazado", "ana"))["estado"], "rechazado")          # se puede cambiar de opinión; queda quien lo hizo último
+        self.assertEqual(ejecutar(P.revisar_requisito(rid, "borrador", "ana"))["estado"], "borrador")
+        with self.assertRaises(P.ErrorPliego):
+            ejecutar(P.revisar_requisito(rid, "aprobado", "ana"))
+        with self.assertRaises(P.NoExiste):
+            ejecutar(P.revisar_requisito(9999, "confirmado", "ana"))
+        self.assertNotIn("revisar_requisito", __import__("cerebro.herramientas.base", fromlist=["_REGISTRO"])._REGISTRO["pliegos"].operaciones)         # el agente no tiene esta operación
+
     def test_word_y_excel_tambien_se_leen_y_se_citan(self):
         self.bajar(datos=docx(["Clausula 7. La garantia definitiva sera del 5 por ciento del precio de adjudicacion."]))
         r = ejecutar(P.buscar(ID, "garantia definitiva"))
