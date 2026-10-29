@@ -3,6 +3,7 @@
 import asyncio
 import io
 import os
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -129,6 +130,91 @@ class TestExtractor(unittest.TestCase):
     def test_un_pdf_escaneado_sin_texto_avisa_en_vez_de_inventar(self):
         r = X.extraer(pdf([[""], [""]]), "pdf")
         self.assertTrue(any("escaneo" in a for a in r["avisos"]))
+
+
+def pdf_escaneado(paginas):
+    """Un PDF que es solo imagen (como un escaneo): cada página es una foto con la frase escrita en grande."""
+    from PIL import Image, ImageDraw, ImageFont
+    imagenes = []
+    for texto in paginas:
+        im = Image.new("L", (1240, 1754), 255)
+        d = ImageDraw.Draw(im)
+        fuente = ImageFont.load_default(size=56)
+        for i, linea in enumerate(texto.split("\n")):
+            d.text((80, 120 + i * 90), linea, fill=0, font=fuente)
+        imagenes.append(im)
+    b = io.BytesIO()
+    imagenes[0].save(b, format="PDF", save_all=True, append_images=imagenes[1:], resolution=150)
+    return b.getvalue()
+
+
+def extraer_de_fichero(datos, **cambios):
+    with tempfile.TemporaryDirectory() as d, mock.patch.multiple(X, OCR_HILOS=X.OCR_HILOS, **cambios):
+        ruta = Path(d) / "a.pdf"
+        ruta.write_bytes(datos)
+        cwd = os.getcwd()
+        os.chdir(d)
+        try:
+            return X.extraer(datos, "pdf", str(ruta))
+        finally:
+            os.chdir(cwd)
+
+
+class TestOcr(unittest.TestCase):
+    def test_las_paginas_sin_texto_se_leen_con_ocr_y_se_avisa_de_cuales(self):
+        datos = pdf([["Pagina con texto seleccionable, de sobra para no necesitar OCR."], [""], [""], ["Otra pagina con texto seleccionable normal y corriente."], [""]])
+        with mock.patch.object(X, "_ocr_disponible", return_value=True), mock.patch.object(X, "_ocr_pagina", side_effect=lambda ruta, n, c, e, t: f"texto OCR {n} con muchas letras"):
+            r = extraer_de_fichero(datos)
+        self.assertEqual([p["texto"] for p in r["paginas"]][1:3], ["texto OCR 2 con muchas letras", "texto OCR 3 con muchas letras"])
+        self.assertIn("seleccionable", r["paginas"][0]["texto"])
+        self.assertTrue(any("Leídas con OCR las páginas 2-3, 5" in a and "errores" in a for a in r["avisos"]), r["avisos"])
+
+    def test_si_no_hay_tiempo_o_tope_se_dice_cuantas_paginas_quedan_sin_leer(self):
+        datos = pdf([[""]] * 5)
+        def lee(ruta, n, c, e, t):
+            return None if n > 2 else f"texto OCR {n} con muchas letras"
+        with mock.patch.object(X, "_ocr_disponible", return_value=True), mock.patch.object(X, "_ocr_pagina", side_effect=lee):
+            r = extraer_de_fichero(datos)
+        self.assertTrue(any("Leídas con OCR las páginas 1-2" in a for a in r["avisos"]), r["avisos"])
+        self.assertTrue(any("3 páginas sin texto, desde la 3" in a and "persona" in a for a in r["avisos"]), r["avisos"])
+        with mock.patch.object(X, "_ocr_disponible", return_value=True), mock.patch.object(X, "_ocr_pagina", return_value="texto OCR largo de sobra"):
+            r = extraer_de_fichero(datos, OCR_PAGINAS_MAX=2)
+        self.assertTrue(any("3 páginas sin texto, desde la 3" in a for a in r["avisos"]), r["avisos"])
+
+    def test_sin_ocr_en_el_servidor_se_avisa_y_no_se_inventa_nada(self):
+        with mock.patch.object(X, "_ocr_disponible", return_value=False):
+            r = extraer_de_fichero(pdf([[""], [""]]))
+        self.assertEqual([p["texto"] for p in r["paginas"]], ["", ""])
+        self.assertTrue(any("no tiene OCR" in a and "1-2" in a and "escaneo" in a for a in r["avisos"]), r["avisos"])
+
+    def test_sin_el_fichero_no_hay_ocr(self):
+        r = X.extraer(pdf([[""]]), "pdf")
+        self.assertTrue(any("escaneo" in a for a in r["avisos"]))
+
+    def test_los_rangos_de_paginas(self):
+        self.assertEqual(X._rangos([1, 2, 3, 7, 9, 10]), "1-3, 7, 9-10")
+
+    def test_el_plazo_corta_el_ocr_sin_colgarse(self):
+        import time
+        self.assertIsNone(X._ocr_pagina("/no/existe.pdf", 1, tempfile.gettempdir(), time.monotonic() - 1, time.monotonic() + 100))
+
+    @unittest.skipUnless(shutil.which("tesseract") and shutil.which("pdftoppm"), "sin Tesseract y Poppler")
+    def test_ocr_de_verdad_sobre_un_escaneo(self):
+        datos = pdf_escaneado(["SOLVENCIA ECONOMICA\nVolumen anual 300000 euros", "CLASIFICACION\nGrupo C subgrupo 2"])
+        r = extraer_de_fichero(datos)
+        texto = " ".join(p["texto"] for p in r["paginas"]).upper()
+        self.assertIn("SOLVENCIA", texto)
+        self.assertIn("300000", texto.replace(".", "").replace(" ", ""))
+        self.assertIn("CLASIFICACION", texto)
+        self.assertTrue(any("OCR" in a for a in r["avisos"]), r["avisos"])
+
+    @unittest.skipUnless(shutil.which("tesseract") and shutil.which("pdftoppm"), "sin Tesseract y Poppler")
+    def test_el_proceso_aparte_lee_un_escaneo_con_sus_limites(self):
+        with tempfile.TemporaryDirectory() as d:
+            ruta = Path(d) / "a.pdf"
+            ruta.write_bytes(pdf_escaneado(["PRESUPUESTO BASE\nImporte 120000 euros"]))
+            r = P._lanzar_extractor(ruta, "pdf", 130)
+        self.assertIn("PRESUPUESTO", " ".join(p["texto"] for p in r["paginas"]).upper())
 
 
 class TestProceso(unittest.TestCase):
