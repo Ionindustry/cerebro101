@@ -5,7 +5,7 @@ Criterios: CPV (con jerarquía), zona (Cataluña primero), importe frente al lí
 """
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, timezone
 from decimal import Decimal, InvalidOperation
 
 # Procedimientos (los normalizados del motor) por lo abiertos a concurrencia: más puntos cuanto más abiertos.
@@ -15,6 +15,18 @@ PROCEDIMIENTO = {
     "menor": 0.5, "negociado_sin_publicidad": 0.2,
 }
 ABIERTAS = {"abierta", "anuncio_previo"}
+
+
+def estado_efectivo(estado: str | None, plazo, ahora=None) -> str | None:
+    """El estado que se enseña de una licitación guardada en el Cerebro (embudo, avisos): la plataforma deja una licitación «abierta» mucho después de terminar su plazo, y lo
+    que se guardó al detectarla no se entera. Una «abierta» cuyo plazo ya pasó es «cerrada» (igual que hace el motor al leer). `plazo` es un datetime con zona horaria, o None."""
+    if estado != "abierta" or plazo is None:
+        return estado
+    ahora = ahora or datetime.now(timezone.utc)
+    try:
+        return "cerrada" if plazo < ahora else estado
+    except TypeError:                                   # plazo sin zona horaria: no se puede comparar, se deja como está
+        return estado
 
 
 def prefijo(codigo: str) -> str:

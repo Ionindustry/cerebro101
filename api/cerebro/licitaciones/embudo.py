@@ -211,6 +211,7 @@ COLUMNAS = ("id, motor_id, motor_version, expediente, organismo, titulo, cpv, im
 
 def _fila(f: dict) -> dict:
     out = dict(f)
+    out["estado_motor"] = encaje_mod.estado_efectivo(f.get("estado_motor"), f.get("fecha_limite"))
     out["motor_id"] = str(f["motor_id"]) if f.get("motor_id") else None
     for k in ("importe", "encaje"):
         out[k] = float(f[k]) if isinstance(f.get(k), Decimal) else f.get(k)

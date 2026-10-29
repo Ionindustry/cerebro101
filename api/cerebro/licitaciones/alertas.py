@@ -18,6 +18,7 @@ from psycopg.rows import dict_row
 from psycopg.types.json import Jsonb
 
 from ..ajustes import ajustes
+from . import encaje as encaje_mod
 
 EVENTOS = ("licitacion.nueva", "licitacion.modificada", "licitacion.adjudicada", "licitacion.formalizada", "licitacion.anulada")
 CANALES = ("panel", "resumen_diario", "correo")      # correo: un mensaje a `correo_destino` (avisos_correo.py); no se combina con el resumen
@@ -402,6 +403,7 @@ async def ya_avisada_expediente(alerta_id: int, motor_id: str, tipo: str) -> boo
 
 def _aviso(f: dict) -> dict:
     out = dict(f)
+    out["estado_motor"] = encaje_mod.estado_efectivo(f.get("estado_motor"), f.get("fecha_limite"))
     out["motor_id"] = str(f["motor_id"])
     for k in ("encaje", "importe"):
         out[k] = float(f[k]) if f.get(k) is not None else None
@@ -458,7 +460,8 @@ async def avisos_para_resumen(desde: datetime, hasta: datetime, por_alerta: int 
         g = grupos.setdefault(f["alerta_id"], {"alerta_id": f["alerta_id"], "nombre": f["nombre"], "departamento": f["departamento"], "total": 0, "avisos": []})
         g["total"] += 1
         if len(g["avisos"]) < por_alerta:
-            g["avisos"].append({"motor_id": str(f["motor_id"]), "tipo": f["tipo"], "titulo": f["titulo"], "organismo": f["organismo"], "estado_motor": f["estado_motor"],
+            g["avisos"].append({"motor_id": str(f["motor_id"]), "tipo": f["tipo"], "titulo": f["titulo"], "organismo": f["organismo"],
+                                "estado_motor": encaje_mod.estado_efectivo(f["estado_motor"], f["fecha_limite"]),
                                 "encaje": float(f["encaje"]) if f["encaje"] is not None else None, "importe": float(f["importe"]) if f["importe"] is not None else None,
                                 "fecha_limite": f["fecha_limite"].isoformat() if f["fecha_limite"] else None})
     return {"total": len(filas), "items": list(grupos.values())}
