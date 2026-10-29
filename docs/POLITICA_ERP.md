@@ -1,7 +1,7 @@
 # Política de acceso al ERP y al CRM: qué puede tocar cada departamento
 
 Fuente de verdad: `config/erp_acceso.yaml` (esta página se generó a partir de él). **Es una propuesta inicial para revisar con la empresa.**
-Para cada departamento: **leer** = puede consultar; **borrador** = además puede crear y modificar en borrador (validar, cancelar y borrar no los puede nadie).
+Para cada departamento: **leer** = puede consultar; **borrador** = además puede crear y modificar en borrador (validar, cancelar y borrar no los puede nadie); **maestros** = datos maestros que solo escribe un proceso ya aprobado por una persona.
 
 Cómo revisarla: para cada departamento, mira si le sobra algo (principio de mínimo privilegio) o le falta algo que sus agentes necesiten, y contesta las preguntas. Después se edita el YAML y se aplica con:
 ```
@@ -70,8 +70,10 @@ Después, `docker compose up -d --force-recreate --no-deps api worker beat` (la 
 
 ## operaciones  (13 agentes: jefe-proyectos, entrega, calidad, compras, catalogo-proveedores, inventario…)
 
-- **Leer:** Item, Item Price, Bin, Warehouse, Stock Entry, Material Request, Purchase Order, Purchase Receipt, Delivery Note, Supplier, Project, Task, Timesheet, Work Order, BOM, Sales Order, Customer, Contact, Address
+- **Leer:** Item, Item Price, Price List, Bin, Warehouse, Stock Entry, Material Request, Purchase Order, Purchase Receipt, Delivery Note, Supplier, Project, Task, Timesheet, Work Order, BOM, Sales Order, Customer, Contact, Address
 - **Borrador (crear y modificar):** Material Request, Purchase Order, Stock Entry, Delivery Note, Work Order, Task, Timesheet, Project
+- **Datos maestros (`maestros`):** Supplier, Item, Item Price, Price List. **Solo los escribe un proceso del sistema que ya ha pasado por la aprobación de una persona** (la importación de listas de precios,
+  [IMPORTAR_LISTAS_PRECIOS.md](IMPORTAR_LISTAS_PRECIOS.md)). La operación genérica «crear_borrador» no puede crearlos: ningún agente da de alta un proveedor ni cambia un precio por su cuenta.
 - **Preguntas para decidir:**
   - ¿Es aceptable que creen `Purchase Order` y `Stock Entry` en borrador sin aprobación previa? Hoy sí.
 

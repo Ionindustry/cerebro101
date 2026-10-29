@@ -269,6 +269,15 @@ async def leer(doc_id: str, pagina: int = 1) -> dict:
     return {"documento": did, "nombre": f["nombre"], "unidad": f["unidad"], "pagina": pagina, "de": f["paginas"], "texto": (fila or {}).get("texto", ""), "aviso": f["aviso"], "nota": AVISO_TERCEROS}
 
 
+async def paginas(doc_id: str) -> tuple[dict, list[tuple[int, str]]]:
+    """(ficha, [(n, texto)]) de un documento subido y ya leído: para procesos del sistema que leen la tabla de un documento (no para el modelo)."""
+    did = _id(doc_id)
+    async with await _conectar() as conn:
+        f = await _disponible(conn, did)
+        cur = await conn.execute("SELECT pagina, texto FROM documentos_subidos_paginas WHERE documento_id = %s ORDER BY pagina", [did])
+        return _publica(f), [(r["pagina"], r["texto"]) for r in await cur.fetchall()]
+
+
 async def texto_completo(doc_id: str, max_chars: int = 3_000_000) -> str:
     """Todo el texto del documento (para comprobaciones del sistema, no para el modelo)."""
     did = _id(doc_id)

@@ -136,7 +136,7 @@ def main() -> int:
     for dep in sorted(set(pol_deps) - set(usan)):
         print(f"(política de «{dep}» sin agentes que usen el ERP)")
 
-    probados = sorted(set(SENSIBLES) | {d for v in pol_deps.values() for d in (v.get("leer", []) + v.get("borrador", []))})
+    probados = sorted(set(SENSIBLES) | {d for v in pol_deps.values() for d in (v.get("leer", []) + v.get("borrador", []) + v.get("maestros", []))})
     claves = {dep: env.get(f"ERPNEXT_TOKEN_{dep.upper()}") for dep in sorted(usan) if env.get(f"ERPNEXT_TOKEN_{dep.upper()}")}
     if claves:
         print(f"\n== Lo que puede LEER cada usuario técnico en {a.url} (L = puede; · = no; ? = no se pudo comprobar) ==")

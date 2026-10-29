@@ -10,6 +10,9 @@
 # que aquí no figura, el error se lo dice; se añade al departamento que corresponda y se reinicia la API.
 #   leer     documentos que el departamento puede consultar (listar y leer)
 #   borrador documentos que puede crear en BORRADOR (siempre un subconjunto de «leer»; validar lo hace una persona)
+#   maestros datos maestros (proveedores, artículos, precios) que SOLO escribe un proceso del sistema que ya ha pasado por una aprobación (p. ej. aplicar una lista de precios
+#            importada). NO se pueden crear con la operación genérica «crear_borrador», así que un agente no da de alta un proveedor ni cambia un precio por su cuenta.
+#            Siempre un subconjunto de «leer».
 #   modo     bloquear (por defecto) | avisar (solo deja constancia en el registro; útil para ver qué se bloquearía)
 # Un departamento que no figura aquí no puede usar el ERP. `User`, `Role`, `Company` y `Bank Account` no están pensados para nadie salvo
 # donde se indica: son de lo primero que se leería para atacar.
@@ -38,9 +41,10 @@ departamentos:
            Lead, Project, Task, Campaign, Territory, Customer Group, Bin, CRM Lead, CRM Deal, CRM Organization]
     borrador: []
   operaciones:
-    leer: [Item, Item Price, Bin, Warehouse, Stock Entry, Material Request, Purchase Order, Purchase Receipt, Delivery Note, Supplier,
+    leer: [Item, Item Price, Price List, Bin, Warehouse, Stock Entry, Material Request, Purchase Order, Purchase Receipt, Delivery Note, Supplier,
            Project, Task, Timesheet, Work Order, BOM, Sales Order, Customer, Contact, Address]
     borrador: [Material Request, Purchase Order, Stock Entry, Delivery Note, Work Order, Task, Timesheet, Project]
+    maestros: [Supplier, Item, Item Price, Price List]       # listas de precios de proveedores: las aplica el proceso aprobado (cerebro/listas_precios.py)
   telecom:
     leer: [Customer, Contact, Address, Item, Item Price, Sales Order, Quotation, Project, Task, Supplier, Purchase Order,
            Subscription, Subscription Plan]

@@ -488,3 +488,23 @@ CREATE TABLE IF NOT EXISTS documentos_subidos_paginas (
   PRIMARY KEY (documento_id, pagina)
 );
 CREATE INDEX IF NOT EXISTS documentos_subidos_paginas_tsv ON documentos_subidos_paginas USING gin (tsv);
+
+-- Importaciones de listas de precios de proveedores (api/cerebro/listas_precios.py): un agente PROPONE (la tabla la lee el sistema del documento subido, no el modelo) y una persona APRUEBA en la bandeja
+-- de aprobaciones; solo entonces se da de alta el proveedor y se cargan artículos y precios en el ERP. Se puede repetir sin duplicar nada.
+CREATE TABLE IF NOT EXISTS importaciones_precios (
+  id           bigserial PRIMARY KEY,
+  documento_id uuid,
+  agente       text NOT NULL,
+  departamento text NOT NULL,
+  estado       text NOT NULL DEFAULT 'propuesta' CHECK (estado IN ('propuesta', 'aplicando', 'aplicada', 'error', 'descartada')),
+  proveedor    jsonb NOT NULL,
+  moneda       text NOT NULL DEFAULT 'EUR',
+  lista        text NOT NULL,                       -- nombre de la lista de precios en el ERP
+  lineas       jsonb NOT NULL,                      -- [{fila, ref, codigo, desc, precio, unidad}]
+  rechazadas   jsonb NOT NULL DEFAULT '[]',         -- [{fila, motivo}] (las primeras)
+  avisos       jsonb NOT NULL DEFAULT '[]',
+  resumen      jsonb NOT NULL DEFAULT '{}',
+  resultado    jsonb NOT NULL DEFAULT '{}',
+  creado       timestamptz NOT NULL DEFAULT now(),
+  aplicada_en  timestamptz
+);

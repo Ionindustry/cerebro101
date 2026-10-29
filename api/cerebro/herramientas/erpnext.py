@@ -48,7 +48,7 @@ def comprobar_acceso(departamento: str, doctype: str, accion: str, nombre: str |
     permitidos = ((pol.get("departamentos") or {}).get(departamento) or {}).get(accion) or []
     if doctype in permitidos:
         return
-    verbo = "consultar" if accion == "leer" else "crear en borrador"
+    verbo = {"leer": "consultar", "maestros": "dar de alta o cambiar (datos maestros, solo con un proceso aprobado)"}.get(accion, "crear en borrador")
     ejemplos = ", ".join(permitidos[:12]) + ("…" if len(permitidos) > 12 else "")
     mensaje = (f"El departamento «{departamento}» no tiene permitido {verbo} «{doctype}» en el ERP/CRM (config/erp_acceso.yaml). "
                + (f"Puede: {ejemplos}." if permitidos else "No tiene ningún documento permitido para esta acción."))
@@ -68,6 +68,15 @@ def _cabeceras(departamento: str) -> dict:
             f"Se crea con: python3 scripts/erpnext_usuario_tecnico.py --departamento {departamento} --roles \"Sales User\" "
             "(los roles según lo que deba leer ese departamento) y después docker compose up -d --force-recreate --no-deps api worker beat")
     return {"Authorization": f"token {token}", "Accept": "application/json"}
+
+
+async def crear_maestro(doctype: str, datos: dict[str, Any], departamento: str) -> dict:
+    """Da de alta UN dato maestro (p. ej. un proveedor). Como `insertar_varios`, no es una operación de los agentes: solo la usan procesos ya aprobados."""
+    comprobar_acceso(departamento, doctype, "maestros")
+    async with httpx.AsyncClient(base_url=ajustes.erpnext_url, timeout=30) as c:
+        r = await c.post(f"/api/resource/{quote(doctype, safe='')}", json={**datos, "docstatus": 0}, headers=_cabeceras(departamento))
+    r.raise_for_status()
+    return r.json()["data"]
 
 
 async def listar(doctype: str, departamento: str, filtros: list | None = None,
@@ -113,6 +122,30 @@ async def crear_borrador(doctype: str, datos: dict[str, Any], departamento: str)
         datos[campo] = await _usuario_tecnico(departamento)
     async with httpx.AsyncClient(base_url=ajustes.erpnext_url, timeout=30) as c:
         r = await c.post(f"/api/resource/{quote(doctype, safe='')}", json=datos, headers=_cabeceras(departamento))
+    r.raise_for_status()
+    return r.json()["data"]
+
+
+async def insertar_varios(doctype: str, docs: list[dict], departamento: str, tamano: int = 100) -> list[str]:
+    """Crea varios documentos del mismo tipo de una vez (`frappe.client.insert_many`), en tandas. No es una operación de los agentes: la usan procesos del sistema que ya han pasado por
+    una aprobación (p. ej. aplicar una lista de precios). Misma política que `crear_borrador`: el departamento necesita el permiso de «borrador» sobre el tipo. POR VERIFICAR con el ERP real."""
+    comprobar_acceso(departamento, doctype, "maestros")
+    nombres: list[str] = []
+    for i in range(0, len(docs), max(1, tamano)):
+        lote = [{**d, "doctype": doctype, "docstatus": 0} for d in docs[i:i + tamano]]
+        async with httpx.AsyncClient(base_url=ajustes.erpnext_url, timeout=120) as c:
+            r = await c.post("/api/method/frappe.client.insert_many", json={"docs": lote}, headers=_cabeceras(departamento))
+        r.raise_for_status()
+        nombres += [str(n) for n in (r.json().get("message") or [])]
+    return nombres
+
+
+async def modificar(doctype: str, nombre: str, datos: dict[str, Any], departamento: str) -> dict:
+    """Cambia campos de un documento que ya existe (nunca su estado de validación). Tampoco es una operación de los agentes; exige el tipo en «maestros»."""
+    comprobar_acceso(departamento, doctype, "maestros", nombre)
+    datos = {k: v for k, v in datos.items() if k not in ("docstatus", "name", "doctype")}
+    async with httpx.AsyncClient(base_url=ajustes.erpnext_url, timeout=30) as c:
+        r = await c.put(f"/api/resource/{quote(doctype, safe='')}/{quote(nombre, safe='')}", json=datos, headers=_cabeceras(departamento))
     r.raise_for_status()
     return r.json()["data"]
 

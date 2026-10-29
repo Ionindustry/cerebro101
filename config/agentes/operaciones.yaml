@@ -67,6 +67,7 @@ agentes:
   - ficheros
   - jev
   - documentos_subidos
+  - listas_precios
   aprobacion: libre
   horario: 0 1 * * *
   sensibilidad: media

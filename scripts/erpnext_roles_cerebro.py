@@ -53,7 +53,7 @@ def permisos_deseados(politica: dict, dep: str) -> dict[str, dict[str, int]]:
     d: dict[str, dict[str, int]] = {}
     for doc in p.get("leer", []):
         d.setdefault(doc, {})["read"] = 1
-    for doc in p.get("borrador", []):
+    for doc in list(p.get("borrador", [])) + list(p.get("maestros", [])):          # «maestros»: el ERP los deja escribir; el código solo a procesos aprobados
         d.setdefault(doc, {}).update({"read": 1, "write": 1, "create": 1})
     for doc in politica.get("referencias", []) or []:
         if doc not in d:                       # si ya puede leerlo, no hace falta la selección

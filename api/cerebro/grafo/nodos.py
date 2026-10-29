@@ -25,7 +25,7 @@ MAX_PASOS = 5
 # Los agentes que trabajan sobre un documento largo necesitan más vueltas: el Analista de Pliegos busca la licitación, lista y baja los documentos, busca y lee páginas
 # y anota cada requisito con una llamada. Con 5 pasos no pasaba de buscar. Lo que anota queda guardado aunque la tarea se corte.
 MAX_PASOS_AGENTE = {"analista-pliegos": 25}
-INYECTAR_DEPARTAMENTO = {"erpnext", "conocimiento", "correo", "calendario", "cuaderno"}
+INYECTAR_DEPARTAMENTO = {"erpnext", "conocimiento", "correo", "calendario", "cuaderno", "listas_precios"}
 PIDE_CUADERNO = re.compile(r"\bcuadern|\bquadern|notebook\s*lm", re.I)
 
 
