@@ -80,6 +80,7 @@ agentes:
   modelo: vision
   herramientas:
   - conocimiento
+  - licitaciones
   - pliegos
   - ficheros
   - scrapegraph
