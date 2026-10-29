@@ -91,4 +91,4 @@ simulador:
 vigilante:
   horas_sin_ingesta: 6        # una fuente sin ingesta correcta durante más de estas horas se da por atascada
   repetir_cada_horas: 24      # mientras siga atascado, recordarlo cada tanto
-  destinatarios: []           # direcciones de la empresa (dominios de config/buzones.yaml → avisos), p. ej. [tecnologia@101.cat]; vacío = sin correo
+  destinatarios: [soporte@101.cat]   # direcciones de la empresa (dominios de config/buzones.yaml → avisos); vacío = sin correo
