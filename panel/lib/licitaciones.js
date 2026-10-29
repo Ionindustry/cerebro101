@@ -346,6 +346,48 @@ export function mensajePliegos(status) {
   return "No se ha podido completar la operación. Inténtalo en unos minutos.";
 }
 
+// ---- Simulador de ofertas (API del Cerebro: POST /licitaciones/simulador) ----
+
+/** Una probabilidad 0-1 como «45 %». */
+export const porcentaje = (p) => (p === null || p === undefined || Number.isNaN(Number(p)) ? "—" : `${Math.round(Number(p) * 100)} %`);
+/** «45 % (30–61 %)»: la probabilidad con su rango de incertidumbre. */
+export const probabilidadConRango = (f) => `${porcentaje(f.p_ganar)} (${Math.round(f.p_ganar_min * 100)}–${porcentaje(f.p_ganar_max)})`;
+/** Hasta `max` filas de la curva, repartidas, sin perder la primera, la última ni la recomendada. */
+export function filasDeCurva(r, max = 12) {
+  const c = r?.curva || [];
+  if (c.length <= max) return c;
+  const paso = (c.length - 1) / (max - 1);
+  const idx = new Set(Array.from({ length: max }, (_, i) => Math.round(i * paso)));
+  const reco = r?.recomendacion ? c.findIndex((f) => f.baja_pct === r.recomendacion.baja_pct) : -1;
+  if (reco >= 0) idx.add(reco);
+  return [...idx].sort((a, b) => a - b).map((i) => c[i]);
+}
+/** Si el resultado sirve para decidir o solo orienta, y por qué. */
+export function aptitudSimulacion(r) {
+  if (!r) return { apto: false, texto: "" };
+  if (r.apto_para_decidir) return { apto: true, texto: "Apto para decidir: muestra suficiente, comprobado con el pasado y el precio decide solo." };
+  const motivos = [];
+  if (!r.muestra?.suficiente) motivos.push(`pocos concursos parecidos (${r.muestra?.n ?? 0})`);
+  if (r.backtest && !r.backtest.apto) motivos.push(r.backtest.motivo || "no supera la comprobación con el pasado");
+  if (r.licitacion?.peso_juicio_de_valor > 0) motivos.push(`el juicio de valor pesa un ${r.licitacion.peso_juicio_de_valor} %`);
+  return { apto: false, texto: `Solo orientativo, no decide por sí solo: ${motivos.join("; ") || "no cumple lo acordado"}.` };
+}
+export function mensajeSimulador(status) {
+  if (status === 401) return "Tu sesión ha caducado.";
+  if (status === 403) return "El simulador es para Dirección y el departamento de Licitaciones.";
+  if (status === 404) return "No existe esa licitación.";
+  if (status === 422) return "No se puede simular esta licitación (sin presupuesto o CPV, o sin concursos parecidos en el histórico) o el coste no es válido.";
+  if (status === 503) return "No se ha podido consultar el motor de licitaciones. Inténtalo en unos minutos.";
+  return "No se ha podido simular. Inténtalo en unos minutos.";
+}
+/** El coste escrito («150.000», «150000,50») como número, o null si está vacío o no vale. */
+export function costeDeTexto(t) {
+  const x = String(t ?? "").trim().replace(/\s|€/g, "");
+  if (!x) return null;
+  const n = Number(/,\d{1,2}$/.test(x) ? x.replace(/\./g, "").replace(",", ".") : x.replace(/[.,](?=\d{3}(\D|$))/g, ""));
+  return Number.isFinite(n) && n > 0 ? n : null;
+}
+
 /** Horas como «3 h» o «2,5 días»; null es «—». */
 export function horasTexto(h) {
   if (h === null || h === undefined || Number.isNaN(Number(h))) return "—";

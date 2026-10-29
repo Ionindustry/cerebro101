@@ -156,6 +156,23 @@ con qué bajas, cómo puntuará la mesa y con qué probabilidad gana 101.cat seg
 - Siempre se muestra la **incertidumbre** (rangos, no un único número) y cuántos datos hay detrás de cada competidor.
 - La decisión del precio y la presentación siguen siendo humanas (aprobación «doble» del agente Precio, como hoy).
 
+### Primera versión (hecha) y lo que falta
+La primera versión es **deliberadamente más sencilla** que el modelo de arriba y dice cuál es su modelo en cada resultado (`cerebro/licitaciones/simulador.py`, `POST /licitaciones/simulador`, operación `licitaciones.simular` para los
+agentes y la tarjeta «Simulador de ofertas» en la ficha de la licitación; solo Dirección y Licitaciones):
+- **Concursos parecidos** (adjudicaciones de los últimos 5 años en `/awards`): mismo grupo de CPV (5 cifras), zona (región, luego país, luego cualquiera) y presupuesto entre 0,5× y 2×; si hay menos de 30, se amplía y se dice cómo
+  (`muestra.mercado`, avisos). De cada uno se toma la **baja del ganador** (1 − adjudicado / presupuesto base, sin IVA; solo con dato fiable y por debajo del 90 %).
+- **Probabilidad de ganar con una baja b** = fracción de esos concursos en los que b habría superado la baja del ganador, **suponiendo que gana la mejor oferta económica**; con su intervalo de Wilson al 95 % (la incertidumbre). Si la
+  licitación puntúa juicio de valor (criterios `SUBJ` de la ficha), se avisa de que es optimista.
+- **Riesgo de baja anormal**: de los concursos cuyo ganador bajó entre b − 5 y b + 5 puntos, cuántos fueron marcados como anormales (sin dato con menos de 5). **Margen esperado** = probabilidad × (precio − coste) con el coste
+  que escribe la persona; sin coste no se recomienda precio. Se recomienda el de mejor margen esperado dentro de `simulador.riesgo_anormal_max` (20 %), y pasado el primer punto con riesgo excesivo no se recomienda ninguno más agresivo.
+- ***Backtesting***: cada concurso pasado se simula «a ciegas» con los demás y se mide si las probabilidades predichas coinciden con lo ocurrido (error medio de calibración). **Solo es «apto para decidir»** con al menos
+  `simulador.muestra_min` (30) concursos, error ≤ `simulador.error_max` (0,10) y sin juicio de valor; si no, el resultado dice «solo orientativo». Los umbrales están en `config/licitaciones.yaml`: los fija Dirección.
+- Es código determinista (la IA no calcula importes) y siempre muestra el número de datos, los rangos y los supuestos. **No decide**: el precio y presentarse son humanos.
+
+**Todavía no hecho** (sigue en el plan de arriba): las reglas de puntuación del pliego (fórmula económica y baja anormal reglamentaria, validadas por una persona), los competidores probables uno a uno, la puntuación técnica del Evaluador,
+la simulación Monte Carlo y el coste real del agente Costes (ERP). Con las adjudicaciones actuales no se puede conocer la distribución de **todas** las ofertas, solo la del ganador: por eso el modelo es «supera al ganador».
+Con el histórico sin cargar, la muestra será corta y el simulador lo dirá (orientativo).
+
 ### Dónde se usa
 - **Agentes**: Precio (precio recomendado y riesgo), Evaluador (puntuación de la mesa), Viabilidad (probabilidad de ganar en
   el informe ir/no ir) y Director de Licitaciones.

@@ -74,3 +74,14 @@ rastreo:
 # casi cualquier adjudicatario parecería nuevo. Docs: docs/PROYECTO_LICITACIONES.md.
 nuevo_competidor:
   cobertura_meses: 12
+
+# Simulador de ofertas (docs/PROYECTO_LICITACIONES.md §6): umbrales para decir si el resultado es apto para decidir. Los fija Dirección; el simulador no se usa para decidir
+# mientras no los cumpla (muestra mínima de concursos parecidos y error máximo de calibración con el pasado).
+simulador:
+  muestra_min: 30             # concursos parecidos como mínimo
+  error_max: 0.10             # error medio de calibración (backtesting) como máximo
+  riesgo_anormal_max: 0.20    # riesgo de baja anormal que se acepta al recomendar un precio
+  paso_baja_pct: 1            # de cuánto en cuánto se recorre la baja (puntos porcentuales)
+  baja_max_pct: 40            # baja máxima que se explora
+  paginas_max: 5              # páginas de 100 adjudicaciones que se leen del motor por búsqueda
+  anios: 5                    # antigüedad máxima de los concursos parecidos

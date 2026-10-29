@@ -21,6 +21,7 @@ from ..herramientas.licitaciones import MotorNoDisponible
 from ..licitaciones import alertas as alertas_licitaciones
 from ..licitaciones import calendario_plazos
 from ..licitaciones import pliegos as pliegos_licitaciones
+from ..licitaciones import simulador as simulador_licitaciones
 from ..licitaciones import embudo as embudo_licitaciones
 from ..licitaciones import resumen as resumen_licitaciones
 from ..cotizador import Solicitud, calcular
@@ -441,6 +442,27 @@ async def marcar_cumplimiento_de_requisito(rid: int, entrada: CumplimientoRequis
         raise _error_pliegos(e) from None
     log.info("pliegos: %s anota el cumplimiento del requisito %s: %s", usuario.id, rid, f["cumplimiento"])
     return f
+
+
+class SimulacionEntrada(BaseModel):
+    motor_id: str
+    coste: float | None = None          # coste estimado sin IVA, en euros (opcional)
+
+
+@app.post("/licitaciones/simulador")
+async def simular_oferta(entrada: SimulacionEntrada, usuario: Usuario = Depends(usuario_actual)):
+    """Simulador de ofertas: con qué baja se ha ganado en concursos parecidos y qué probabilidad y margen daría cada precio. Orientativo: el precio lo decide una persona."""
+    _exige_licitaciones(usuario)
+    try:
+        r = await simulador_licitaciones.simular(entrada.motor_id, entrada.coste, cfg=resumen_licitaciones.config())
+    except simulador_licitaciones.ErrorSimulador as e:
+        raise HTTPException(422, str(e)) from None
+    except MotorNoDisponible as e:
+        raise HTTPException(503, f"No se ha podido consultar el motor de licitaciones: {e}") from None
+    except LookupError as e:
+        raise HTTPException(404, str(e) or "No existe esa licitación") from None
+    log.info("simulador: %s simula %s (muestra %s, apto %s)", usuario.id, entrada.motor_id, r["muestra"]["n"], r["apto_para_decidir"])
+    return r
 
 
 @app.post("/licitaciones/embudo/{lid}/estado")

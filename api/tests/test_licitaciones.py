@@ -381,7 +381,7 @@ class TestOrganizacion(unittest.TestCase):
 class TestRegistro(unittest.TestCase):
     def test_esta_registrada_y_es_de_solo_lectura(self):
         h = base._REGISTRO["licitaciones"]
-        self.assertEqual(set(h.operaciones), {"buscar", "ficha", "novedades_desde", "adjudicaciones", "competidores", "contratos_que_vencen", "organizacion", "estado_motor"})
+        self.assertEqual(set(h.operaciones), {"buscar", "ficha", "novedades_desde", "adjudicaciones", "competidores", "contratos_que_vencen", "organizacion", "simular", "estado_motor"})
         self.assertEqual(h.externas, frozenset())             # ninguna operación tiene impacto fuera: no necesita aprobación
         self.assertEqual(set(h.ayuda), set(h.operaciones))
 

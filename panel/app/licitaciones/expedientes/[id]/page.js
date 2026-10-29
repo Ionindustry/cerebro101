@@ -2,7 +2,7 @@
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useEffect, useState } from "react";
-import { CUMPLIMIENTOS, cumplimientoEtiqueta, cumplimientoNecesitaNota, estadoEtiqueta, estadoPliego, estadoRequisito, etiquetaEmbudo, fechaTexto, fichaOrgHref, importeTexto, lecturaPliego, lugarCita, matrizCsv, matrizDe, mensajeEmbudo, mensajePliegos, resumenMatriz, nombreFuente, puedeDescargarPliego, resumenRequisitos, tipoRequisito, urlSegura } from "../../../../lib/licitaciones";
+import { aptitudSimulacion, costeDeTexto, filasDeCurva, mensajeSimulador, probabilidadConRango, porcentaje, CUMPLIMIENTOS, cumplimientoEtiqueta, cumplimientoNecesitaNota, estadoEtiqueta, estadoPliego, estadoRequisito, etiquetaEmbudo, fechaTexto, fichaOrgHref, importeTexto, lecturaPliego, lugarCita, matrizCsv, matrizDe, mensajeEmbudo, mensajePliegos, resumenMatriz, nombreFuente, puedeDescargarPliego, resumenRequisitos, tipoRequisito, urlSegura } from "../../../../lib/licitaciones";
 import { Fallo, pedir, pedirCerebro } from "../../cliente";
 
 const Dato = ({ t, children }) => <div><dt>{t}</dt><dd>{children ?? "—"}</dd></div>;
@@ -177,6 +177,66 @@ function Pliegos({ id }) {
   );
 }
 
+function Simulador({ id }) {
+  const [coste, setCoste] = useState("");
+  const [r, setR] = useState(null);
+  const [error, setError] = useState(null);
+  const [trabajando, setTrabajando] = useState(false);
+  const costeNum = costeDeTexto(coste);
+  const simular = async (ev) => {
+    ev.preventDefault();
+    setTrabajando(true); setError(null);
+    try { setR(await pedirCerebro("licitaciones/simulador", enviar({ motor_id: id, coste: costeNum }))); }
+    catch (e) { if (e.status === 403 || e.status === 401) setR(null); setError(e); }
+    finally { setTrabajando(false); }
+  };
+  if (error && (error.status === 403 || error.status === 401)) return null;      // para los demás grupos, la tarjeta no aparece
+  const apt = aptitudSimulacion(r);
+  return (
+    <section className="tarjeta" aria-label="Simulador de ofertas">
+      <h2>Simulador de ofertas</h2>
+      <p className="meta">Con las adjudicaciones de concursos parecidos: con qué baja se ha ganado y qué probabilidad daría cada precio, <strong>suponiendo que gana la mejor oferta económica</strong>. Es una estimación orientativa de cálculo fijo (no de IA): el precio lo decide una persona.</p>
+      <form className="lic-fila" onSubmit={simular}>
+        <label>Tu coste estimado, sin IVA (€, opcional)
+          <input type="text" inputMode="decimal" value={coste} onChange={(x) => setCoste(x.target.value)} placeholder="150.000" />
+        </label>
+        <button className="boton si" type="submit" disabled={trabajando || (coste.trim() !== "" && costeNum === null)}>{trabajando ? "Simulando…" : "Simular"}</button>
+        {coste.trim() !== "" && costeNum === null && <span className="ayuda">Escribe un importe positivo, p. ej. 150.000</span>}
+      </form>
+      {error && <p role="alert" className="lic-error">{mensajeSimulador(error.status)}</p>}
+      {r && (
+        <>
+          <p className={`lic-etiqueta ${apt.apto ? "abierta" : "aviso"}`}>{apt.texto}</p>
+          <p className="meta">{r.muestra.n} concursos parecidos ({r.muestra.mercado}{r.muestra.desde ? `, de ${r.muestra.desde} a ${r.muestra.hasta}` : ""}). Presupuesto base: {importeTexto({ valor: String(r.licitacion.presupuesto), moneda: "EUR" })}.
+            {r.muestra.ofertas_medias != null ? ` Ofertas por concurso: ${r.muestra.ofertas_medias} de media.` : ""}</p>
+          <p>Baja del ganador en esos concursos: mitad por debajo de <strong>{r.bajas.p50} %</strong>; el 25 % más ajustado, por debajo de {r.bajas.p25} %; el 25 % más agresivo, por encima de {r.bajas.p75} %.{r.bajas.con_baja_anormal_pct != null ? ` Fueron baja anormal el ${r.bajas.con_baja_anormal_pct} %.` : ""}</p>
+          {r.avisos.map((a, i) => <p key={i} className="lic-error" role="note">{a}</p>)}
+          {r.recomendacion
+            ? <p><strong>Mejor margen esperado:</strong> baja del {r.recomendacion.baja_pct} % (precio {importeTexto({ valor: String(r.recomendacion.precio), moneda: "EUR" })}): probabilidad de ganar {probabilidadConRango(r.recomendacion)}, margen esperado {importeTexto({ valor: String(r.recomendacion.margen_esperado), moneda: "EUR" })}. <span className="meta">{r.motivo_recomendacion}</span></p>
+            : <p className="meta">{r.motivo_recomendacion}</p>}
+          <table className="lic-tabla">
+            <thead><tr><th>Baja</th><th>Precio</th><th>Prob. de ganar (rango)</th><th>Riesgo baja anormal</th>{r.coste != null && <th>Margen esperado</th>}</tr></thead>
+            <tbody>
+              {filasDeCurva(r).map((f) => (
+                <tr key={f.baja_pct} className={r.recomendacion && f.baja_pct === r.recomendacion.baja_pct ? "lic-destacada" : ""}>
+                  <td>{f.baja_pct} %</td><td>{importeTexto({ valor: String(f.precio), moneda: "EUR" })}</td><td>{probabilidadConRango(f)}</td><td>{f.p_anormal == null ? "sin datos" : porcentaje(f.p_anormal)}</td>
+                  {r.coste != null && <td>{importeTexto({ valor: String(f.margen_esperado), moneda: "EUR" })}</td>}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          <details className="lic-informe">
+            <summary>Cómo se ha calculado y cuánto fiarse</summary>
+            <ul>{r.supuestos.map((t, i) => <li key={i}>{t}</li>)}</ul>
+            <p className="meta">Comprobación con el pasado: {r.backtest.error_calibracion == null ? r.backtest.motivo : `error medio de calibración ${porcentaje(r.backtest.error_calibracion)} con ${r.backtest.n} concursos${r.backtest.apto ? " (dentro de lo acordado)" : ` (${r.backtest.motivo})`}`}.</p>
+            <p className="meta">{r.nota}</p>
+          </details>
+        </>
+      )}
+    </section>
+  );
+}
+
 export default function Ficha() {
   const { id } = useParams();
   const [x, setX] = useState(null);
@@ -259,6 +319,7 @@ export default function Ficha() {
           )}
 
           <Pliegos id={id} />
+          <Simulador id={id} />
 
           {x.evidencia && (
             <section className="tarjeta" aria-label="Evidencia">
