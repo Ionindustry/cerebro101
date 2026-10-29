@@ -16,6 +16,13 @@ import (
 	"github.com/ionindustry/cerebro101/licitaciones/internal/storage/s3"
 )
 
+// Eventos que cada consumidor procesa a la vez. Es seguro: cada proyección es una escritura condicionada a que avance la versión (el mismo expediente en dos
+// a la vez se serializa en la fila). El tope lo pone el grupo de conexiones a la base (8, pg.Connect): la carga del histórico usa casi todas.
+const (
+	workersEnVivo    = 2
+	workersHistorico = 6
+)
+
 // Durable es el nombre del consumidor del proyector de lectura en el flujo en vivo; DurableHistorico, el del flujo de la carga histórica (no lo consume el Cerebro).
 const (
 	Durable          = "proyector-lectura"
@@ -78,9 +85,11 @@ func Run(ctx context.Context, c ingestor.Config, log *slog.Logger) error {
 	errs := make(chan error, 2)
 	ctx2, stop := context.WithCancel(ctx)
 	defer stop()
-	go func() { errs <- bus.Consume(ctx2, nc, handler, bus.ConsumerOptions{Durable: Durable, Log: log}) }()
 	go func() {
-		errs <- bus.Consume(ctx2, nc, handler, bus.ConsumerOptions{Durable: DurableHistorico, Stream: bus.StreamHistorico, Log: log})
+		errs <- bus.Consume(ctx2, nc, handler, bus.ConsumerOptions{Durable: Durable, Workers: workersEnVivo, Log: log})
+	}()
+	go func() {
+		errs <- bus.Consume(ctx2, nc, handler, bus.ConsumerOptions{Durable: DurableHistorico, Stream: bus.StreamHistorico, Workers: workersHistorico, Log: log})
 	}()
 	err = <-errs
 	stop()

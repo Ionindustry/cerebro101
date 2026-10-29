@@ -10,6 +10,7 @@ import (
 	"path"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/ionindustry/cerebro101/licitaciones/internal/connectors/fetch"
 )
@@ -98,13 +99,15 @@ func RunZip(ctx context.Context, d Deps, source, label, zipURL, zipPath string, 
 		if read += int64(len(body)); read > lim.MaxTotalBytes {
 			return total, fmt.Errorf("%w: más de %d bytes descomprimidos", ErrZipTooLarge, lim.MaxTotalBytes)
 		}
+		t0 := time.Now()
 		_, st, err := ingestPage(ctx, d, source, fetch.Result{URL: zipURL + "#" + f.Name, Body: body, FetchedAt: d.now()})
 		total.add(st)
 		if err != nil {
 			return total, fmt.Errorf("ingest: %s del ZIP %s: %w", f.Name, label, err)
 		}
 		d.log().Info("página del histórico ingerida", "fuente", source, "zip", label, "fichero", f.Name, "entradas", st.Entries, "bajas", st.Removed,
-			"nuevas", st.New, "modificadas", st.Modified, "sin_cambios", st.Unchanged, "superadas", st.Stale)
+			"nuevas", st.New, "modificadas", st.Modified, "sin_cambios", st.Unchanged, "superadas", st.Stale,
+			"ms_total", time.Since(t0).Milliseconds(), "ms_almacen", st.TiempoAlmacen.Milliseconds(), "ms_estado", st.TiempoEstado.Milliseconds())
 		if err := d.State.MarkPageDone(ctx, source, key, ""); err != nil {
 			return total, fmt.Errorf("ingest: anotar la página del histórico: %w", err)
 		}

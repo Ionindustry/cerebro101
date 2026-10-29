@@ -57,6 +57,10 @@ type Stats struct {
 	NotModified bool
 	Skipped     int  // páginas de archivo ya ingeridas que no hizo falta descargar
 	Pending     bool // quedan páginas por ingerir (se alcanzó el tope de la ejecución): seguir pronto
+	// Dónde se va el tiempo de una página: guardar los originales en el almacén y anotar cada observación en el estado (el resto es leer y normalizar el XML).
+	// Solo sirve para diagnosticar una ingesta lenta; sale en el registro de cada página.
+	TiempoAlmacen time.Duration
+	TiempoEstado  time.Duration
 }
 
 func (s *Stats) add(o Stats) {
@@ -70,6 +74,8 @@ func (s *Stats) add(o Stats) {
 	s.RawCreated += o.RawCreated
 	s.RawExisting += o.RawExisting
 	s.Warnings += o.Warnings
+	s.TiempoAlmacen += o.TiempoAlmacen
+	s.TiempoEstado += o.TiempoEstado
 }
 
 // NormalizedHash es el SHA-256 del registro normalizado sin metadatos de captura ni de versión de origen: dos publicaciones con el mismo
@@ -143,7 +149,9 @@ func ingestPage(ctx context.Context, d Deps, source string, page fetch.Result) (
 		}
 		o.ObservedAt = page.FetchedAt
 		// Primero la evidencia, después el estado (ADR 0003): si se cae entre medias queda un original sin evento, que es inofensivo.
+		t0 := time.Now()
 		created, err := d.Raw.PutRaw(ctx, RawObject{Key: o.RawKey, Data: r.Raw, SHA256: r.RawSHA256, Meta: meta(o.SourceID, r.RawSHA256)})
+		st.TiempoAlmacen += time.Since(t0)
 		if err != nil {
 			return err
 		}
@@ -152,7 +160,9 @@ func ingestPage(ctx context.Context, d Deps, source string, page fetch.Result) (
 		} else {
 			st.RawExisting++
 		}
+		t1 := time.Now()
 		out, err := d.State.Observe(ctx, o)
+		st.TiempoEstado += time.Since(t1)
 		if err != nil {
 			return err
 		}

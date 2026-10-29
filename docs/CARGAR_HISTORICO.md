@@ -9,7 +9,7 @@ Se hace **poco a poco**: del mes más reciente hacia atrás, midiendo en cada pa
 - El ingestor baja **un ZIP por vuelta** (el más reciente primero), lo abre sin descomprimirlo en disco y guarda cada página y cada licitación en el almacén de originales.
 - Los eventos de lo que carga van a su **propio flujo** (`LIC_HISTORICO`), que solo lee el proyector. **El Cerebro no los recibe**: no se llenan el embudo ni las alertas de
   «nuevas» antiguas. Lo que llega en vivo tiene prioridad y sale siempre antes.
-- El proyector convierte esos eventos en expedientes del modelo de lectura. Es lo que más tarda. Si el flujo del histórico se llena (2 GiB), el ingestor espera: no se pierde nada.
+- El proyector convierte esos eventos en expedientes del modelo de lectura. Es lo que más tarda: procesa 6 eventos del histórico a la vez (y 2 de lo en vivo); antes iba de uno en uno, a unos 3 o 4 expedientes por segundo. Si el flujo del histórico se llena (2 GiB), el ingestor espera: no se pierde nada.
 - Un ZIP que aún no existe se salta y se reintenta. Un fallo a mitad de un ZIP se retoma en el siguiente fichero.
 
 ## Antes de empezar (una vez)
