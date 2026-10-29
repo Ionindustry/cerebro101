@@ -84,17 +84,6 @@ async def novedades(cpv: list[str] | None = None, importe_min: float | None = No
     return filtrar(resultado, cpv or c["cpv_interes"], importe_min, importe_max)
 
 
-async def descargar_documento(expediente: str, url: str, nombre: str) -> str:
-    destino = _ruta_segura(f"{config()['contratacion']['carpeta_paquetes']}/{expediente}/pliegos/{nombre}")
-    destino.parent.mkdir(parents=True, exist_ok=True)
-    import httpx
-    async with httpx.AsyncClient(timeout=300, follow_redirects=True) as cliente:
-        r = await cliente.get(url)
-        r.raise_for_status()
-    destino.write_bytes(r.content)
-    return str(destino)
-
-
 async def preparar_paquete(expediente: str, sobres: dict[str, list[str]], comprobaciones: list[str]) -> dict:
     """Ordena los documentos ya generados por sobre y deja la lista de comprobación
     para la persona que firmará y presentará la oferta."""
@@ -110,10 +99,8 @@ async def preparar_paquete(expediente: str, sobres: dict[str, list[str]], compro
 registrar(Herramienta(
     nombre="plataformas_contratacion",
     descripcion="Contratación pública. La presentación de ofertas la firma y hace siempre una persona.",
-    operaciones={"novedades": novedades, "descargar_documento": descargar_documento,
-                 "preparar_paquete": preparar_paquete},
+    operaciones={"novedades": novedades, "preparar_paquete": preparar_paquete},
     ayuda={"novedades": "licitaciones nuevas filtradas por CPV (códigos de 8 cifras, como texto) e importe",
-           "descargar_documento": "descarga un pliego u otro documento del expediente",
            "preparar_paquete": "ordena los documentos ya generados por sobre y deja la lista de comprobación"},
     ejemplos={"novedades": {"cpv": ["35125000"], "importe_min": 10000}},
 ))

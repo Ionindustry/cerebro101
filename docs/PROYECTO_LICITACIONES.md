@@ -202,7 +202,7 @@ módulos con pruebas, y si un pliego trae una fórmula nueva, se añade como mó
 
 - **Herramienta `licitaciones`** (cliente de la API Go; local, sensibilidad baja): `buscar`, `ficha`, `historial`, `adjudicaciones`,
   `organismo`, `competidores`, `contratos_que_vencen`, `novedades_desde` y `simular` (devuelve la curva probabilidad-precio-margen;
-  no decide). `plataformas_contratacion` conserva `descargar_documento` y `preparar_paquete`.
+  no decide). `plataformas_contratacion` conserva `preparar_paquete` (ya no baja documentos: ver «Pliegos» más abajo).
 - **Eventos → Cerebro**: un consumidor en el Cerebro recibe `licitacion.nueva` con encaje alto y la registra en el embudo; el
   **Rastreador** (6:00) pide a **Viabilidad** el informe ir/no ir; el **Director de Licitaciones** prepara el resumen que Dirección recibe a las 16:00 en el panel.
 - **Panel**: pantalla «Licitaciones» (buscador con facetas, ficha, alertas guardadas, panel operativo), a través de la pasarela del panel.
@@ -376,6 +376,15 @@ Documento de partida: «Plataforma de detección y análisis de concursos públi
   ya había. El canal es único: «correo» incluye el panel pero no el resumen de las 16:00. Desde `/licitaciones/alertas`.
 - **Carga del histórico segura** (hecho): los eventos de lo que se carga desde los ZIP van a su propio flujo `LIC_HISTORICO` (solo el proyector lo consume; el Cerebro no recibe millones de
   «nuevas», ADR 0002) y el relay publica antes lo en vivo. Guía para cargarlo poco a poco en un PC delicado: `docs/CARGAR_HISTORICO.md`, con `scripts/estado_historico.sh` para ver el avance.
+- **Pliegos, fase 1: descarga segura y antivirus** (hecho; faltan la extracción de texto con citas, la matriz de cumplimiento y la pantalla): la herramienta `pliegos`
+  (`documentos` y `descargar`, `api/cerebro/licitaciones/pliegos.py`) baja un documento de una licitación **por su número en la ficha, nunca por dirección** (SEC-140): la URL sale del motor y
+  se revalida (solo https, solo las plataformas de `contratacion.pliegos.hosts` en `config/integraciones.yaml` y sus subdominios, solo IP públicas, redirecciones comprobadas una a una y sin salir
+  de la lista). El tipo se decide por el **contenido** (PDF, DOCX, XLSX, ODT/ODS o ZIP; un HTML, un SVG o un ejecutable se rechazan), hasta 100 MB y 40 descargas al día. Todo entra en
+  **cuarentena** y solo pasa a `limpio/` si ClamAV (`clamd`, servicio `clamav` del compose, perfil `licitaciones`) lo analiza y está limpio; **falla cerrado**: sin antivirus, con firmas de más
+  de 48 h, demasiado grande o cifrado, queda «no analizable» y no se ofrece; con macros de Office queda «con_macros» (solo se leerá su texto); un infectado se borra y se guarda su huella y la firma.
+  **Ningún agente ni el panel recibe el fichero**, solo su estado, tamaño y SHA-256. Esto cierra la SSRF que tenía el antiguo `plataformas_contratacion.descargar_documento` (aceptaba cualquier URL
+  que propusiera el modelo): esa operación se ha **quitado**. Los metadatos van en `pliegos_documentos`; los ficheros, en `/datos/licitaciones/pliegos/<licitación>/`. El Analista de Pliegos ya
+  tiene la herramienta.
 - **Plazos en el calendario** (hecho): en el embudo, el botón «Añadir el plazo al calendario» (`POST /licitaciones/embudo/{id}/calendario`) crea en el calendario CalDAV de la empresa un evento
   que **termina a la hora del plazo de presentación** (dura `calendario_plazos.duracion_min` = 30 minutos), con recordatorios `recordatorios_dias` = 3 y 1 días antes y el plazo en hora local en la
   descripción. Lo crea una persona al pulsar y **sin invitados**: no sale nada de la empresa, por eso no pasa por la bandeja de aprobaciones (la que sí pasa es `calendario.crear_cita` de los agentes,

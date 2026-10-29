@@ -80,6 +80,7 @@ agentes:
   modelo: vision
   herramientas:
   - conocimiento
+  - pliegos
   - ficheros
   - scrapegraph
   - jev

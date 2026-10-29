@@ -14,3 +14,10 @@ contratacion:
   # Prefijos CPV que interesan a las 10 áreas de servicio; los define Licitaciones.
   cpv_interes: []
   carpeta_paquetes: "licitaciones"     # dentro de /datos
+  # Pliegos (herramienta «pliegos», docs/SEGURIDAD.md §3.10): se bajan por id, a cuarentena, y solo se ofrecen si el antivirus (ClamAV) los da por limpios.
+  pliegos:
+    hosts: [contrataciondelestado.es, contrataciondelsectorpublico.gob.es, contractaciopublica.cat]   # únicas plataformas de las que se baja (y sus subdominios)
+    max_mb: 100                      # tamaño máximo de un documento
+    max_diarios: 40                  # descargas de documentos al día (en total)
+    timeout_s: 120                   # plazo de una descarga y de un análisis
+    firmas_max_horas: 48             # si las firmas del antivirus son más viejas, no se fía del análisis
