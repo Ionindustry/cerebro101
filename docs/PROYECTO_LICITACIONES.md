@@ -188,8 +188,16 @@ agentes y la tarjeta «Simulador de ofertas» en la ficha de la licitación; sol
   `simulador.muestra_min` (30) concursos, error ≤ `simulador.error_max` (0,10) y sin juicio de valor; si no, el resultado dice «solo orientativo». Los umbrales están en `config/licitaciones.yaml`: los fija Dirección.
 - Es código determinista (la IA no calcula importes) y siempre muestra el número de datos, los rangos y los supuestos. **No decide**: el precio y presentarse son humanos.
 
-**Todavía no hecho** (sigue en el plan de arriba): las reglas de puntuación del pliego (fórmula económica y baja anormal reglamentaria, validadas por una persona), los competidores probables uno a uno, la puntuación técnica del Evaluador,
-la simulación Monte Carlo y el coste real del agente Costes (ERP). Con las adjudicaciones actuales no se puede conocer la distribución de **todas** las ofertas, solo la del ganador: por eso el modelo es «supera al ganador».
+**Reglas de puntuación del pliego (hecho)**: una persona anota en la tarjeta del simulador («Reglas de puntuación del pliego», tabla `licitaciones_reglas_precio`, `cerebro/licitaciones/reglas.py`) cómo puntúa el pliego el precio:
+fórmula (proporcionalidad inversa, proporcional a la baja o lineal hasta una baja tope), puntos del precio sobre el total y, si lo fija, el umbral de baja anormal, con la nota de dónde lo dice. El agente no puede anotarlas (como el
+cumplimiento de la matriz). Con ellas la curva añade los **puntos de precio** de cada oferta (frente a una rival con la baja mediana de los ganadores parecidos, que se dice) y el **riesgo de baja anormal es el umbral del pliego**
+(0 por debajo, 1 desde él) en vez del estimado con el pasado; la recomendación no pasa nunca de ese umbral. Se avisa de cuánto pesa el precio (p. ej. 51 de 100).
+**Coste del ERP (hecho)**: en vez de escribir el coste, se puede dar el código de un presupuesto (`Quotation`) del ERP (`cerebro/licitaciones/coste_erp.py`, solo lectura y con la política de acceso de Licitaciones). Coste = Σ cantidad × coste de
+la línea (`valuation_rate`), o del artículo, o su último precio de compra; las líneas sin coste **no se inventan**: se listan, el coste se marca incompleto y el resultado nunca es «apto para decidir». POR VERIFICAR con el ERPNext real que los
+artículos tengan esos campos informados.
+
+**Todavía no hecho** (sigue en el plan de arriba): que el Analista de Pliegos *proponga* las reglas con cita para que la persona las confirme (hoy las copia ella), los competidores probables uno a uno, la puntuación técnica del Evaluador
+y la simulación Monte Carlo. Con las adjudicaciones actuales no se puede conocer la distribución de **todas** las ofertas, solo la del ganador: por eso el modelo es «supera al ganador».
 Con el histórico sin cargar, la muestra será corta y el simulador lo dirá (orientativo).
 
 ### Dónde se usa

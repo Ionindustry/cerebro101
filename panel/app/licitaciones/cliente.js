@@ -43,14 +43,18 @@ export function Item({ x }) {
   );
 }
 
-/** Petición a la API del Cerebro (pasarela /cerebro). Lanza {status} si falla; una sesión caducada lleva al inicio de sesión. */
+/** Petición a la API del Cerebro (pasarela /cerebro). Lanza {status, detalle} si falla (el detalle es el mensaje de la API cuando es texto); una sesión caducada lleva al inicio de sesión. */
 export async function pedirCerebro(ruta, opciones = {}) {
   const r = await fetch(`/cerebro/${ruta}`, { cache: "no-store", ...opciones });
   if (r.status === 401) {
     window.location.href = "/auth/login";
     throw { status: 401 };
   }
-  if (!r.ok) throw { status: r.status };
+  if (!r.ok) {
+    let detalle = "";
+    try { const j = await r.json(); if (typeof j?.detail === "string") detalle = j.detail.slice(0, 300); } catch { /* sin cuerpo legible */ }
+    throw { status: r.status, detalle };
+  }
   return r.json();
 }
 

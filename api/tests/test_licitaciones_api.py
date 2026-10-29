@@ -156,18 +156,49 @@ class TestRutasDelEmbudo(unittest.TestCase):
     def test_simulador_permisos_y_errores(self):
         sm = main.simulador_licitaciones
         c = como(("usuario", "responsable"), ("finanzas", "comercial"))
-        with mock.patch.object(sm, "simular", mock.AsyncMock(return_value={})) as espia:
+        with mock.patch.object(sm, "simular_completo", mock.AsyncMock(return_value={})) as espia:
             self.assertEqual(c.post("/licitaciones/simulador", json={"motor_id": "x"}).status_code, 403)
             espia.assert_not_called()
         c = como(("direccion",))
         ok = {"muestra": {"n": 40}, "apto_para_decidir": True}
-        with mock.patch.object(sm, "simular", mock.AsyncMock(return_value=ok)) as espia:
+        with mock.patch.object(sm, "simular_completo", mock.AsyncMock(return_value=ok)) as espia:
             self.assertEqual(c.post("/licitaciones/simulador", json={"motor_id": "x", "coste": 1000}).json(), ok)
             self.assertEqual(espia.await_args.args[:2], ("x", 1000.0))
         for fallo, codigo in ((sm.ErrorSimulador("sin presupuesto"), 422), (main.MotorNoDisponible("x"), 503), (LookupError("No existe"), 404)):
-            with mock.patch.object(sm, "simular", mock.AsyncMock(side_effect=fallo)):
+            with mock.patch.object(sm, "simular_completo", mock.AsyncMock(side_effect=fallo)):
                 self.assertEqual(c.post("/licitaciones/simulador", json={"motor_id": "x"}).status_code, codigo, repr(fallo))
         self.assertEqual(c.post("/licitaciones/simulador", json={"coste": 5}).status_code, 422)                # falta la licitación
+
+    def test_simulador_pasa_el_presupuesto_del_erp(self):
+        sm = main.simulador_licitaciones
+        c = como(("direccion",))
+        with mock.patch.object(sm, "simular_completo", mock.AsyncMock(return_value={"muestra": {"n": 1}, "apto_para_decidir": False})) as espia:
+            self.assertEqual(c.post("/licitaciones/simulador", json={"motor_id": "x", "presupuesto_erp": "QTN-1"}).status_code, 200)
+            self.assertEqual(espia.await_args.args[:3], ("x", None, "QTN-1"))
+
+    def test_reglas_de_precio_permisos_rutas_y_errores(self):
+        rg = main.reglas_licitaciones
+        espias = {n: mock.AsyncMock(return_value={"ok": 1}) for n in ("leer", "guardar", "borrar")}
+        cuerpo = {"motor_id": "0b1f7a3e-1111-4222-8333-444444444444", "formula": "inversa", "puntos_precio": 51}
+        with mock.patch.multiple(rg, **espias):
+            c = como(("usuario", "responsable"), ("finanzas",))
+            self.assertEqual(c.get("/licitaciones/reglas-precio/x").status_code, 403)
+            self.assertEqual(c.post("/licitaciones/reglas-precio", json=cuerpo).status_code, 403)
+            self.assertEqual(c.post("/licitaciones/reglas-precio/x/borrar").status_code, 403)
+            for e in espias.values():
+                e.assert_not_called()
+            c = como(("direccion",))
+            self.assertEqual(c.get("/licitaciones/reglas-precio/x").json(), {"ok": 1})
+            self.assertEqual(c.post("/licitaciones/reglas-precio", json=cuerpo).status_code, 200)
+            self.assertEqual(espias["guardar"].await_args.args[0], cuerpo["motor_id"])
+            self.assertEqual(espias["guardar"].await_args.args[1]["formula"], "inversa")
+            self.assertEqual(espias["guardar"].await_args.args[2], "albert")
+            self.assertEqual(c.post("/licitaciones/reglas-precio/x/borrar").json(), {"borrada": {"ok": 1}})
+        with mock.patch.object(rg, "guardar", mock.AsyncMock(side_effect=rg.ErrorReglas("mal"))):
+            self.assertEqual(como(("direccion",)).post("/licitaciones/reglas-precio", json=cuerpo).status_code, 422)
+        with mock.patch.object(rg, "leer", mock.AsyncMock(return_value=None)):
+            self.assertEqual(como(("direccion",)).get("/licitaciones/reglas-precio/x").json(), {})
+        self.assertEqual(como(("direccion",)).post("/licitaciones/reglas-precio", json={"formula": "inversa"}).status_code, 422)
 
     def test_matriz_de_cumplimiento_permisos_rutas_y_errores(self):
         pl = main.pliegos_licitaciones

@@ -163,3 +163,25 @@ class TestDatosDeLaFicha(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestEstadoEfectivo(unittest.TestCase):
+    """Lo guardado en el Cerebro no se entera de que el plazo pasó: «abierta» con el plazo vencido se enseña como «cerrada» (como hace el motor al leer)."""
+    def test_helper(self):
+        from cerebro.licitaciones import encaje
+        ayer, manana = AHORA - timedelta(days=1), AHORA + timedelta(days=1)
+        self.assertEqual(encaje.estado_efectivo("abierta", ayer, AHORA), "cerrada")
+        self.assertEqual(encaje.estado_efectivo("abierta", manana, AHORA), "abierta")
+        self.assertEqual(encaje.estado_efectivo("abierta", None, AHORA), "abierta")                 # sin plazo no se sabe
+        for e in ("anuncio_previo", "adjudicada", "formalizada", "anulada", "desierta", "cerrada", None):
+            self.assertEqual(encaje.estado_efectivo(e, ayer, AHORA), e)
+        self.assertEqual(encaje.estado_efectivo("abierta", datetime(2020, 1, 1), AHORA), "abierta")  # plazo sin zona horaria: no se compara
+
+    def test_la_fila_del_embudo_y_los_avisos_lo_aplican(self):
+        from cerebro.licitaciones import alertas
+        vencida = datetime.now(timezone.utc) - timedelta(days=2)
+        base = {"id": 1, "motor_id": "0b1f7a3e-1111-4222-8333-444444444444", "estado_motor": "abierta", "fecha_limite": vencida, "importe": None, "encaje": None, "motivo_perdida": None}
+        self.assertEqual(embudo._fila(base)["estado_motor"], "cerrada")
+        self.assertEqual(embudo._fila({**base, "fecha_limite": None})["estado_motor"], "abierta")
+        aviso = alertas._aviso({"motor_id": base["motor_id"], "estado_motor": "abierta", "fecha_limite": vencida, "encaje": None, "importe": None, "creado": vencida})
+        self.assertEqual(aviso["estado_motor"], "cerrada")

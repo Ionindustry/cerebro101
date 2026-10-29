@@ -21,6 +21,8 @@ import math
 from datetime import date, timedelta
 
 from ..herramientas import licitaciones as motor
+from . import coste_erp
+from . import reglas as reglas_mod
 
 log = logging.getLogger("cerebro.licitaciones.simulador")
 DEFECTO = {"muestra_min": 30, "error_max": 0.10, "riesgo_anormal_max": 0.20, "paso_baja_pct": 1, "baja_max_pct": 40, "paginas_max": 5, "anios": 5, "baja_sospechosa": 0.9}
@@ -84,8 +86,11 @@ def p_anormal(muestra: list[dict], b: float, ventana: float = 0.05, minimo: int 
     return sum(1 for m in xs if m["baja_anormal"]) / len(xs)
 
 
-def curva(muestra: list[dict], presupuesto: float, coste: float | None, c: dict) -> list[dict]:
+def curva(muestra: list[dict], presupuesto: float, coste: float | None, c: dict, regla: dict | None = None, r_tipica: float | None = None) -> list[dict]:
+    """La curva de bajas. Con las reglas del pliego (`regla`): cada fila lleva los puntos de precio de esa oferta (frente a una rival con baja `r_tipica`) y, si el pliego fija un umbral de baja
+    anormal, el riesgo es 1 a partir de ese umbral y 0 por debajo (lo que dice el pliego manda sobre lo que se estima con el pasado)."""
     bajas = [m["baja"] for m in muestra]
+    umbral = (regla or {}).get("baja_anormal_pct")
     tope = min(c["baja_max_pct"], math.ceil(((percentil(bajas, 0.95) or 0) * 100) + 5)) if bajas else c["baja_max_pct"]
     paso, b_pct, filas = c["paso_baja_pct"], 0.0, []
     while b_pct <= tope + 1e-9:
@@ -93,8 +98,12 @@ def curva(muestra: list[dict], presupuesto: float, coste: float | None, c: dict)
         p, lo, hi = p_ganar(bajas, b)
         precio = round(presupuesto * (1 - b), 2)
         fila = {"baja_pct": round(b_pct, 2), "precio": precio, "p_ganar": round(p, 3), "p_ganar_min": round(lo, 3), "p_ganar_max": round(hi, 3), "p_anormal": None}
-        pa = p_anormal(muestra, b)
+        pa = (1.0 if b_pct >= umbral - 1e-9 else 0.0) if umbral is not None else p_anormal(muestra, b)
         fila["p_anormal"] = None if pa is None else round(pa, 3)
+        if regla:
+            pts = reglas_mod.puntos_precio(regla, b, r_tipica)
+            if pts is not None:
+                fila["puntos_precio"] = round(pts, 2)
         if coste is not None:
             fila["margen_esperado"] = round(p * (precio - coste), 2)
             fila["margen_si_gana"] = round(precio - coste, 2)
@@ -200,8 +209,9 @@ async def _leer_muestra(consulta, params: dict, excluir: str, hoy: date, c: dict
     return salida
 
 
-async def simular(motor_id: str, coste=None, consulta=None, cfg: dict | None = None, hoy: date | None = None) -> dict:
-    """La simulación de una licitación. `coste` es el coste estimado sin IVA (opcional). Devuelve muestra, curva, recomendación (si hay coste) y la comprobación con el pasado."""
+async def simular(motor_id: str, coste=None, consulta=None, cfg: dict | None = None, hoy: date | None = None, reglas: dict | None = None) -> dict:
+    """La simulación de una licitación. `coste` es el coste estimado sin IVA (opcional); `reglas` son las reglas de puntuación del precio anotadas por una persona (opcional).
+    Devuelve muestra, curva, recomendación (si hay coste) y la comprobación con el pasado."""
     c = configuracion(cfg)
     hoy = hoy or date.today()
     consulta = consulta or motor._get
@@ -239,9 +249,18 @@ async def simular(motor_id: str, coste=None, consulta=None, cfg: dict | None = N
     if pv > 0:
         avisos.append(f"Esta licitación puntúa un {pv:g} % por juicio de valor: el precio no decide solo, así que la probabilidad de ganar es optimista")
     bajas = [m["baja"] for m in muestra]
-    filas = curva(muestra, presupuesto, coste, c)
+    r_tipica = percentil(bajas, 0.5)
+    filas = curva(muestra, presupuesto, coste, c, reglas, r_tipica)
+    if reglas:
+        peso = reglas["puntos_precio"] / reglas["puntos_total"] * 100
+        if peso < 100 and pv == 0:
+            avisos.append(f"Según las reglas anotadas, el precio puntúa {peso:g} de 100: aunque se gane en precio, la oferta debe puntuar bien el resto de criterios")
+        if reglas["formula"] != "lineal_umbral":
+            avisos.append("Los puntos de precio se calculan frente a una oferta rival con la baja habitual de los ganadores de concursos parecidos (mediana); la rival real puede ser distinta")
     reco, motivo = recomendar(filas, coste, c["riesgo_anormal_max"])
     bt = backtest(muestra, c)
+    if reglas and reglas.get("baja_anormal_pct") is not None:
+        avisos.append(f"El riesgo de baja anormal sale del umbral que anotaste del pliego ({reglas['baja_anormal_pct']:g} %), no de lo ocurrido en otros concursos: comprueba que está bien copiado")
     if reco and reco["p_anormal"] is None:
         avisos.append("Sin datos suficientes del riesgo de baja anormal a ese precio: compruébalo en el pliego antes de ofertar")
     apto = suficiente and bt["apto"] and pv == 0
@@ -254,8 +273,41 @@ async def simular(motor_id: str, coste=None, consulta=None, cfg: dict | None = N
                     "ofertas_medias": round(sum(ofertas) / len(ofertas), 1) if ofertas else None},
         "bajas": {k: None if (v := percentil(bajas, q)) is None else round(v * 100, 2) for k, q in (("p10", .1), ("p25", .25), ("p50", .5), ("p75", .75), ("p90", .9))}
                  | {"media": round(sum(bajas) / len(bajas) * 100, 2), "con_baja_anormal_pct": round(sum(1 for a in anormales if a) / len(anormales) * 100, 1) if anormales else None},
+        "reglas": reglas, "baja_rival_tipica_pct": None if r_tipica is None else round(r_tipica * 100, 2),
         "curva": filas, "coste": coste, "recomendacion": reco, "motivo_recomendacion": motivo, "backtest": bt, "apto_para_decidir": apto, "avisos": avisos,
-        "supuestos": ["Gana la mejor oferta económica (el precio decide solo).", "Los concursos parecidos de los últimos años se repiten: baja de su ganador = lo que habría que superar.",
+        "supuestos": ["Gana la mejor oferta económica (el precio decide solo)." + (" Las reglas de puntuación anotadas solo se usan para calcular puntos de precio y el umbral de baja anormal." if reglas else ""), "Los concursos parecidos de los últimos años se repiten: baja de su ganador = lo que habría que superar.",
                       "La baja es 1 − adjudicado / presupuesto base, sin IVA; solo cuentan concursos con ese dato fiable."],
         "nota": "Estimación orientativa de código determinista: el precio y la decisión de presentarse son siempre de una persona." + ("" if apto else " NO es apta para decidir por sí sola."),
     }
+
+
+async def simular_completo(motor_id: str, coste=None, presupuesto_erp: str | None = None, cfg: dict | None = None) -> dict:
+    """`simular` con lo que hay guardado para la licitación: las reglas de puntuación que anotó una persona y, si se indica un presupuesto del ERP, su coste.
+    O se da el coste a mano o el presupuesto del ERP, no los dos."""
+    if not isinstance(motor_id, str) or not motor._UUID.match(motor_id):
+        raise ErrorSimulador("licitacion debe ser el identificador (UUID) de la licitación")
+    extra = []
+    detalle_erp = None
+    if presupuesto_erp and str(presupuesto_erp).strip():
+        if coste is not None:
+            raise ErrorSimulador("Indica o el coste a mano o el presupuesto del ERP, no los dos")
+        try:
+            detalle_erp = await coste_erp.coste_de_presupuesto(presupuesto_erp)
+        except coste_erp.ErrorCoste as e:
+            raise ErrorSimulador(str(e)) from None
+        coste = detalle_erp["coste"]
+        if not detalle_erp["completo"]:
+            extra.append(f"El coste del ERP es INCOMPLETO: {len(detalle_erp['sin_coste'])} línea(s) del presupuesto no tienen coste en el ERP y no se han contado; el margen real será menor")
+    reglas = None
+    try:
+        reglas = await reglas_mod.leer(motor_id)
+    except Exception:  # noqa: BLE001 - sin las reglas se simula igual, avisando
+        log.exception("simulador: no se pudieron leer las reglas de precio de %s", motor_id)
+        extra.append("No se han podido leer las reglas de puntuación anotadas: se simula suponiendo que gana la mejor oferta económica")
+    r = await simular(motor_id, coste, cfg=cfg, reglas=reglas)
+    if detalle_erp:
+        r["coste_erp"] = {k: detalle_erp[k] for k in ("presupuesto", "coste", "completo", "lineas", "sin_coste")}
+    r["avisos"] = list(r.get("avisos") or []) + extra
+    if detalle_erp and not detalle_erp["completo"]:
+        r["apto_para_decidir"] = False
+    return r

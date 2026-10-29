@@ -2,7 +2,7 @@
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useEffect, useState } from "react";
-import { cercaniaTexto, mensajeParecidas, motivosTexto, aptitudSimulacion, costeDeTexto, filasDeCurva, mensajeSimulador, probabilidadConRango, porcentaje, CUMPLIMIENTOS, cumplimientoEtiqueta, cumplimientoNecesitaNota, estadoEtiqueta, estadoPliego, estadoRequisito, etiquetaEmbudo, fechaTexto, fichaOrgHref, importeTexto, lecturaPliego, lugarCita, matrizCsv, matrizDe, mensajeEmbudo, mensajePliegos, resumenMatriz, nombreFuente, puedeDescargarPliego, resumenRequisitos, tipoRequisito, urlSegura } from "../../../../lib/licitaciones";
+import { FORMULAS_PRECIO, costeErpTexto, mensajeReglas, reglasAEnvio, reglasAFormulario, cercaniaTexto, mensajeParecidas, motivosTexto, aptitudSimulacion, costeDeTexto, filasDeCurva, mensajeSimulador, probabilidadConRango, porcentaje, CUMPLIMIENTOS, cumplimientoEtiqueta, cumplimientoNecesitaNota, estadoEtiqueta, estadoPliego, estadoRequisito, etiquetaEmbudo, fechaTexto, fichaOrgHref, importeTexto, lecturaPliego, lugarCita, matrizCsv, matrizDe, mensajeEmbudo, mensajePliegos, resumenMatriz, nombreFuente, puedeDescargarPliego, resumenRequisitos, tipoRequisito, urlSegura } from "../../../../lib/licitaciones";
 import { Fallo, Item, pedir, pedirCerebro } from "../../cliente";
 
 const Dato = ({ t, children }) => <div><dt>{t}</dt><dd>{children ?? "—"}</dd></div>;
@@ -198,7 +198,61 @@ function Parecidas({ id }) {
   );
 }
 
+// Las reglas con las que el pliego puntúa el precio: las anota una persona leyendo el pliego (el agente no). Con ellas el simulador calcula los puntos de precio de cada oferta y usa el umbral de baja anormal del pliego.
+function ReglasPrecio({ id, alGuardar }) {
+  const [f, setF] = useState(reglasAFormulario(null));
+  const [hay, setHay] = useState(false);
+  const [msg, setMsg] = useState(null);
+  const [trabajando, setTrabajando] = useState(false);
+  useEffect(() => {
+    let vivo = true;
+    pedirCerebro(`licitaciones/reglas-precio/${id}`).then((r) => { if (vivo && r?.formula) { setF(reglasAFormulario(r)); setHay(true); } }).catch(() => {});
+    return () => { vivo = false; };
+  }, [id]);
+  const poner = (k) => (e) => setF((x) => ({ ...x, [k]: e.target.value }));
+  const guardar = async (ev) => {
+    ev.preventDefault();
+    const { cuerpo, error } = reglasAEnvio(id, f);
+    if (error) { setMsg({ error }); return; }
+    setTrabajando(true); setMsg(null);
+    try { await pedirCerebro("licitaciones/reglas-precio", enviar(cuerpo)); setHay(true); setMsg({ ok: "Reglas guardadas. Vuelve a simular para usarlas." }); alGuardar?.(); }
+    catch (e) { setMsg({ error: mensajeReglas(e.status) }); }
+    finally { setTrabajando(false); }
+  };
+  const quitar = async () => {
+    setTrabajando(true); setMsg(null);
+    try { await pedirCerebro(`licitaciones/reglas-precio/${id}/borrar`, { method: "POST" }); setF(reglasAFormulario(null)); setHay(false); setMsg({ ok: "Reglas quitadas." }); alGuardar?.(); }
+    catch (e) { setMsg({ error: mensajeReglas(e.status) }); }
+    finally { setTrabajando(false); }
+  };
+  return (
+    <details className="lic-informe">
+      <summary>Reglas de puntuación del pliego {hay ? "(anotadas)" : "(opcional)"}</summary>
+      <p className="meta">Mira en el pliego el apartado de criterios de adjudicación y copia aquí cómo puntúa el precio. Con eso el simulador calcula los puntos de precio de cada oferta y usa el umbral de baja anormal del pliego en vez de estimarlo. Las anotas tú: la IA no las toca.</p>
+      <form className="lic-form" onSubmit={guardar}>
+        <div className="lic-campos">
+          <label>Fórmula del precio
+            <select value={f.formula} onChange={poner("formula")}>{FORMULAS_PRECIO.map(([k, t]) => <option key={k} value={k}>{t}</option>)}</select>
+          </label>
+          <label>Puntos del precio<input type="text" inputMode="decimal" value={f.puntos} onChange={poner("puntos")} placeholder="51" /></label>
+          <label>Puntos totales<input type="text" inputMode="decimal" value={f.total} onChange={poner("total")} placeholder="100" /></label>
+          {f.formula === "lineal_umbral" && <label>Baja tope (%)<input type="text" inputMode="decimal" value={f.tope} onChange={poner("tope")} placeholder="20" /></label>}
+          <label>Baja anormal desde (%)<input type="text" inputMode="decimal" value={f.anormal} onChange={poner("anormal")} placeholder="si el pliego lo fija" /></label>
+          <label>Nota (dónde lo dice el pliego)<input type="text" value={f.nota} onChange={poner("nota")} maxLength={500} placeholder="Cláusula 12, p. 18" /></label>
+        </div>
+        <div className="lic-fila">
+          <button className="boton si" type="submit" disabled={trabajando}>Guardar reglas</button>
+          {hay && <button className="boton no" type="button" onClick={quitar} disabled={trabajando}>Quitar</button>}
+        </div>
+        {msg?.error && <p role="alert" className="lic-error">{msg.error}</p>}
+        {msg?.ok && <p role="status" className="meta">{msg.ok}</p>}
+      </form>
+    </details>
+  );
+}
+
 function Simulador({ id }) {
+  const [erp, setErp] = useState("");
   const [coste, setCoste] = useState("");
   const [r, setR] = useState(null);
   const [error, setError] = useState(null);
@@ -207,7 +261,7 @@ function Simulador({ id }) {
   const simular = async (ev) => {
     ev.preventDefault();
     setTrabajando(true); setError(null);
-    try { setR(await pedirCerebro("licitaciones/simulador", enviar({ motor_id: id, coste: costeNum }))); }
+    try { setR(await pedirCerebro("licitaciones/simulador", enviar({ motor_id: id, ...(erp.trim() ? { presupuesto_erp: erp.trim() } : { coste: costeNum }) }))); }
     catch (e) { if (e.status === 403 || e.status === 401) setR(null); setError(e); }
     finally { setTrabajando(false); }
   };
@@ -221,26 +275,33 @@ function Simulador({ id }) {
         <label>Tu coste estimado, sin IVA (€, opcional)
           <input type="text" inputMode="decimal" value={coste} onChange={(x) => setCoste(x.target.value)} placeholder="150.000" />
         </label>
-        <button className="boton si" type="submit" disabled={trabajando || (coste.trim() !== "" && costeNum === null)}>{trabajando ? "Simulando…" : "Simular"}</button>
+        <label>…o el código de un presupuesto del ERP
+          <input type="text" value={erp} onChange={(x) => setErp(x.target.value)} placeholder="SAL-QTN-2026-00012" maxLength={140} />
+        </label>
+        <button className="boton si" type="submit" disabled={trabajando || (coste.trim() !== "" && costeNum === null) || (erp.trim() !== "" && coste.trim() !== "")}>{trabajando ? "Simulando…" : "Simular"}</button>
+        {erp.trim() !== "" && coste.trim() !== "" && <span className="ayuda">Indica el coste o el presupuesto del ERP, no los dos</span>}
         {coste.trim() !== "" && costeNum === null && <span className="ayuda">Escribe un importe positivo, p. ej. 150.000</span>}
       </form>
-      {error && <p role="alert" className="lic-error">{mensajeSimulador(error.status)}</p>}
+      {error && <p role="alert" className="lic-error">{mensajeSimulador(error.status, error.detalle)}</p>}
+      <ReglasPrecio id={id} alGuardar={() => setR(null)} />
       {r && (
         <>
           <p className={`lic-etiqueta ${apt.apto ? "abierta" : "aviso"}`}>{apt.texto}</p>
           <p className="meta">{r.muestra.n} concursos parecidos ({r.muestra.mercado}{r.muestra.desde ? `, de ${r.muestra.desde} a ${r.muestra.hasta}` : ""}). Presupuesto base: {importeTexto({ valor: String(r.licitacion.presupuesto), moneda: "EUR" })}.
             {r.muestra.ofertas_medias != null ? ` Ofertas por concurso: ${r.muestra.ofertas_medias} de media.` : ""}</p>
           <p>Baja del ganador en esos concursos: mitad por debajo de <strong>{r.bajas.p50} %</strong>; el 25 % más ajustado, por debajo de {r.bajas.p25} %; el 25 % más agresivo, por encima de {r.bajas.p75} %.{r.bajas.con_baja_anormal_pct != null ? ` Fueron baja anormal el ${r.bajas.con_baja_anormal_pct} %.` : ""}</p>
+          {r.coste_erp && <p className="meta">{costeErpTexto(r.coste_erp)}</p>}
           {r.avisos.map((a, i) => <p key={i} className="lic-error" role="note">{a}</p>)}
           {r.recomendacion
             ? <p><strong>Mejor margen esperado:</strong> baja del {r.recomendacion.baja_pct} % (precio {importeTexto({ valor: String(r.recomendacion.precio), moneda: "EUR" })}): probabilidad de ganar {probabilidadConRango(r.recomendacion)}, margen esperado {importeTexto({ valor: String(r.recomendacion.margen_esperado), moneda: "EUR" })}. <span className="meta">{r.motivo_recomendacion}</span></p>
             : <p className="meta">{r.motivo_recomendacion}</p>}
           <table className="lic-tabla">
-            <thead><tr><th>Baja</th><th>Precio</th><th>Prob. de ganar (rango)</th><th>Riesgo baja anormal</th>{r.coste != null && <th>Margen esperado</th>}</tr></thead>
+            <thead><tr><th>Baja</th><th>Precio</th><th>Prob. de ganar (rango)</th><th>Riesgo baja anormal</th>{r.reglas && <th>Puntos de precio</th>}{r.coste != null && <th>Margen esperado</th>}</tr></thead>
             <tbody>
               {filasDeCurva(r).map((f) => (
                 <tr key={f.baja_pct} className={r.recomendacion && f.baja_pct === r.recomendacion.baja_pct ? "lic-destacada" : ""}>
                   <td>{f.baja_pct} %</td><td>{importeTexto({ valor: String(f.precio), moneda: "EUR" })}</td><td>{probabilidadConRango(f)}</td><td>{f.p_anormal == null ? "sin datos" : porcentaje(f.p_anormal)}</td>
+                  {r.reglas && <td>{f.puntos_precio == null ? "—" : `${String(f.puntos_precio).replace(".", ",")} de ${String(r.reglas.puntos_precio).replace(".", ",")}`}</td>}
                   {r.coste != null && <td>{importeTexto({ valor: String(f.margen_esperado), moneda: "EUR" })}</td>}
                 </tr>
               ))}

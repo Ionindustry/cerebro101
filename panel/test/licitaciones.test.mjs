@@ -5,7 +5,7 @@ import {
   nombreFuente, queryAFiltros, rutaPermitida, totalTexto, urlSegura,
 } from "../lib/licitaciones.js";
 import { viabilidadEtiqueta, admiteResumen, avisosDeAlertaTexto, canalEtiqueta, CANALES_ALERTA, ambitoTexto, eventoEtiqueta, filtroDeAlerta, filtroTexto, mensajeAlertas, sinLeerTexto } from "../lib/licitaciones.js";
-import { FILTROS_VACIOS, cercaniaTexto, mensajeParecidas, motivosTexto } from "../lib/licitaciones.js";
+import { FILTROS_VACIOS, cercaniaTexto, costeErpTexto, mensajeParecidas, mensajeReglas, motivosTexto, reglasAEnvio, reglasAFormulario } from "../lib/licitaciones.js";
 import { rutaNoExiste } from "../lib/licitaciones.js";
 import {
   alturasTrimestres, competenciaDeCpv, fichaOrgHref, identificadoresTexto, orgAQuery, queryAOrg, repeticionTexto, trimestreTexto,
@@ -756,4 +756,31 @@ test("cercanía y motivos se leen en castellano", () => {
   assert.equal(motivosTexto(["mismo_comprador", "cpv_comun", "raro"]), "Mismo comprador · CPV en común");
   assert.equal(motivosTexto(undefined), "");
   assert.match(mensajeParecidas(503), /Todavía no/);
+});
+
+test("reglas del pliego: del formulario al envío, con coma decimal y comprobaciones", () => {
+  const ok = reglasAEnvio(ID, { formula: "inversa", puntos: "51,5", total: "", tope: "", anormal: "25", nota: " Cláusula 12 " });
+  assert.deepEqual(ok.cuerpo, { motor_id: ID, formula: "inversa", puntos_precio: 51.5, puntos_total: 100, nota: "Cláusula 12", baja_anormal_pct: 25 });
+  const lineal = reglasAEnvio(ID, { formula: "lineal_umbral", puntos: "40", total: "100", tope: "20", anormal: "" });
+  assert.equal(lineal.cuerpo.baja_tope_pct, 20);
+  assert.equal(lineal.cuerpo.baja_anormal_pct, undefined);
+  for (const f of [{ formula: "rara", puntos: "5" }, { formula: "inversa", puntos: "" }, { formula: "inversa", puntos: "60", total: "50" }, { formula: "lineal_umbral", puntos: "40" },
+    { formula: "lineal_umbral", puntos: "40", tope: "200" }, { formula: "inversa", puntos: "40", anormal: "abc" }]) {
+    assert.ok(reglasAEnvio(ID, f).error, JSON.stringify(f));
+  }
+});
+
+test("reglas guardadas → formulario, y mensajes", () => {
+  assert.deepEqual(reglasAFormulario({ formula: "lineal_umbral", puntos_precio: 40.5, puntos_total: 100, baja_tope_pct: 20, baja_anormal_pct: null, nota: "x" }),
+    { formula: "lineal_umbral", puntos: "40,5", total: "", tope: "20", anormal: "", nota: "x" });
+  assert.equal(reglasAFormulario(null).formula, "inversa");
+  assert.match(mensajeReglas(403), /Dirección/);
+  assert.equal(mensajeSimulador(422, "No existe el presupuesto «X» en el ERP"), "No existe el presupuesto «X» en el ERP");
+  assert.match(mensajeSimulador(422), /No se puede simular/);
+});
+
+test("coste del ERP en una frase", () => {
+  assert.equal(costeErpTexto(null), "");
+  assert.match(costeErpTexto({ presupuesto: "Q1", lineas: [1, 2], sin_coste: [] }), /2 líneas con coste\.$/);
+  assert.match(costeErpTexto({ presupuesto: "Q1", lineas: [1], sin_sin: 0, sin_coste: [1] }), /1 línea con coste; 1 sin coste/);
 });

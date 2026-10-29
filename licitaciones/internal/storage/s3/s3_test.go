@@ -4,7 +4,9 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"errors"
 	"fmt"
+	"net/http"
 	"os"
 	"strings"
 	"testing"
@@ -25,6 +27,27 @@ func TestAsciiMeta(t *testing.T) {
 		if got := asciiMeta(in); got != want {
 			t.Errorf("asciiMeta(%q) = %q, quería %q", in, got, want)
 		}
+	}
+}
+
+// RustFS contesta 304 (y no 412) a una escritura condicional sobre un objeto que ya existe: las dos respuestas significan «ya estaba».
+func TestPreconditionFailedReconoceLas412YLas304DeRustFS(t *testing.T) {
+	for _, e := range []minio.ErrorResponse{
+		{StatusCode: http.StatusPreconditionFailed, Code: "PreconditionFailed"},
+		{StatusCode: http.StatusNotModified, Code: "NotModified", Message: "304 Not Modified"},
+		{Code: "NotModified"},
+	} {
+		if !preconditionFailed(e) {
+			t.Errorf("%+v debería contar como «ya existe»", e)
+		}
+	}
+	for _, e := range []minio.ErrorResponse{{StatusCode: http.StatusInternalServerError, Code: "InternalError"}, {StatusCode: http.StatusForbidden, Code: "AccessDenied"}, {}} {
+		if preconditionFailed(e) {
+			t.Errorf("%+v no es «ya existe»", e)
+		}
+	}
+	if preconditionFailed(errors.New("otro error")) {
+		t.Error("un error cualquiera no es «ya existe»")
 	}
 }
 
