@@ -137,6 +137,12 @@ de los datos. Si algún día hay decenas de millones de documentos o hace falta 
   (del orden de 1 hora por cada ~50.000 expedientes en CPU; se ve en los registros `licitaciones-vectorizador-1`). Mientras tanto, la búsqueda por
   significado va devolviendo lo que ya está vectorizado.
 
+### Vigilante de la ingesta (hecho)
+Un fallo repetido en cada vuelta de la ingesta (p. ej. el 304 de RustFS de octubre de 2026) puede dejar el feed parado más de un día sin que nada «falle» a la vista. Una tarea del Cerebro
+(`vigilar_motor`, cada 15 minutos; `cerebro/licitaciones/vigilante.py`) mira `/ops/status` y avisa por **correo interno** (buzón de notificaciones, solo a direcciones de la empresa): **una vez** cuando una
+fuente lleva más de `vigilante.horas_sin_ingesta` (6) sin ingesta correcta, no ha completado ninguna o el motor no responde; un **recordatorio** cada `vigilante.repetir_cada_horas` (24) mientras siga; y otro aviso
+**al arreglarse**. Si el correo falla, reintenta en la pasada siguiente. Se configura en `config/licitaciones.yaml` (`vigilante.destinatarios`, vacío = solo registro). El estado se guarda en `licitaciones_vigilante`.
+
 ### Histórico
 Para que estos análisis sirvan hace falta más historia que para buscar licitaciones abiertas. Propuesta: **5 años** de
 adjudicaciones desde los ZIP mensuales de PLACSP y los anuncios de TED, cargados en paralelo una vez en la fase 1.
