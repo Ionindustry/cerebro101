@@ -333,3 +333,23 @@ CREATE TABLE IF NOT EXISTS licitaciones_resumenes (
 );
 CREATE UNIQUE INDEX IF NOT EXISTS licitaciones_resumenes_programado ON licitaciones_resumenes (fecha) WHERE origen = 'programada';
 CREATE INDEX IF NOT EXISTS licitaciones_resumenes_fecha ON licitaciones_resumenes (fecha DESC, generado DESC);
+
+-- Pliegos y otros documentos de una licitación (api/cerebro/licitaciones/pliegos.py, docs/SEGURIDAD.md §3.10): se bajan POR ID (nunca por URL), pasan por cuarentena y antivirus
+-- y solo se ofrecen si están «limpio» (o «con_macros»: solo se leerá el texto). Aquí solo van los metadatos; los ficheros están en /datos/licitaciones/pliegos/<licitación>/.
+CREATE TABLE IF NOT EXISTS pliegos_documentos (
+  id        bigserial PRIMARY KEY,
+  motor_id  uuid NOT NULL,                              -- la licitación en el motor
+  n         integer NOT NULL,                           -- número del documento en la ficha (desde 1) cuando se pidió
+  nombre    text NOT NULL,
+  formato   text NOT NULL,                              -- pdf, docx, xlsx, odt, ods, zip (según el contenido real)
+  bytes     bigint NOT NULL,
+  sha256    text NOT NULL,
+  estado    text NOT NULL DEFAULT 'cuarentena',
+  motivo    text NOT NULL DEFAULT '',
+  creado    timestamptz NOT NULL DEFAULT now(),
+  analizado timestamptz,
+  UNIQUE (motor_id, sha256)
+);
+ALTER TABLE pliegos_documentos DROP CONSTRAINT IF EXISTS pliegos_documentos_estado_check;
+ALTER TABLE pliegos_documentos ADD CONSTRAINT pliegos_documentos_estado_check CHECK (estado IN ('cuarentena','limpio','con_macros','infectado','no_analizable','error'));
+CREATE INDEX IF NOT EXISTS pliegos_documentos_creado ON pliegos_documentos (creado);

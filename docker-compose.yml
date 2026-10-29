@@ -65,6 +65,9 @@ x-api: &api
     # El motor se une a la red «cerebro» con licitaciones/compose.cerebro.yaml; si no corre, la herramienta responde que no está disponible.
     LICITACIONES_API_URL: "${LICITACIONES_API_URL:-http://licitaciones-api:8080}"
     LICITACIONES_API_TOKEN: "${LICITACIONES_API_TOKEN:-${LIC_API_TOKEN:-}}"
+    CLAMD_HOST: "${CLAMD_HOST:-clamav}"                  # antivirus de los pliegos (servicio «clamav», perfil licitaciones); sin él los documentos quedan en cuarentena
+    CLAMD_PORT: "${CLAMD_PORT:-3310}"
+    PLIEGOS_DIR: "${PLIEGOS_DIR:-/datos/licitaciones/pliegos}"      # dónde se guardan (volumen datos)
     # Calendarios (los buzones de correo van por secretos/buzones.env, no por el .env)
     CALENDARIO_USUARIO: "${CALENDARIO_USUARIO:-}"
     CALENDARIO_CLAVE: "${CALENDARIO_CLAVE:-}"
@@ -195,6 +198,25 @@ services:
     networks: [cerebro]
     mem_limit: 256m
     cpus: 0.5
+    restart: unless-stopped
+
+  clamav:                 # antivirus de los pliegos que se bajan de las plataformas (api/cerebro/licitaciones/pliegos.py, docs/SEGURIDAD.md §3.10): cuarentena → clamd → limpio, falla cerrado
+    image: "${CLAMAV_IMAGEN:-clamav/clamav:1.4}"     # POR VERIFICAR: fijar la etiqueta exacta o su @sha256 al desplegar (SEC-102)
+    profiles: ["licitaciones"]       # no arranca con `up` a secas: se pide por su nombre (`docker compose up -d clamav`); sin él, los documentos quedan en cuarentena («no analizable»)
+    environment:                      # las opciones de clamd.conf se pasan como CLAMD_CONF_<opción> (POR VERIFICAR con la imagen elegida)
+      CLAMD_CONF_StreamMaxLength: "110M"      # más que el máximo de un pliego (pliegos.max_mb = 100): uno mayor se rechaza, no se analiza a medias
+      CLAMD_CONF_MaxFileSize: "110M"
+      CLAMD_CONF_MaxScanSize: "400M"
+      CLAMD_CONF_AlertEncrypted: "yes"        # un PDF/ZIP cifrado no se puede analizar: se marca, no se da por limpio
+      CLAMD_CONF_AlertOLE2Macros: "yes"       # documentos de Office con macros: solo se leerá su texto
+    volumes: ["clamav-firmas:/var/lib/clamav"]         # las firmas (se actualizan solas con freshclam)
+    healthcheck: {test: ["CMD", "clamdcheck.sh"], interval: 60s, timeout: 10s, retries: 5, start_period: 180s}
+    cap_drop: [ALL]
+    cap_add: [CHOWN, DAC_OVERRIDE, FOWNER, SETGID, SETUID]      # lo que necesita el arranque de la imagen (prepara las carpetas y baja a su usuario); el resto sigue quitado
+    security_opt: ["no-new-privileges:true"]
+    mem_limit: 3g
+    cpus: 2.0
+    networks: [cerebro]              # necesita salida a internet solo para bajar las firmas (database.clamav.net)
     restart: unless-stopped
 
   redis-panel:            # sesiones del panel: Redis propio con contraseña y persistencia (la API y el worker no la tienen)
@@ -370,7 +392,7 @@ services:
     restart: unless-stopped
 
 volumes: {pgdata: {}, ollama: {}, datos: {}, whisper: {}, agent-reach: {}, langfuse-db: {}, langfuse-clickhouse: {},
-  langfuse-clickhouse-logs: {}, langfuse-minio: {}, langfuse-redis: {}, redis-panel: {}}
+  langfuse-clickhouse-logs: {}, langfuse-minio: {}, langfuse-redis: {}, redis-panel: {}, clamav-firmas: {}}
 
 networks:
   cerebro: {name: cerebro}
