@@ -688,3 +688,42 @@ test("alerta de nuevo competidor: se dice qué vigila y que la empresa es nueva"
   assert.ok(!ganadoresTextoNuevos({ ganadores: g })[0].includes("nueva"));
   assert.match(ganadoresTextoNuevos({ ganadores: g, nuevos: true })[0], /empresa nueva en este mercado$/);
 });
+
+import { aptitudSimulacion, costeDeTexto, filasDeCurva, mensajeSimulador, porcentaje, probabilidadConRango } from "../lib/licitaciones.js";
+
+test("simulador: porcentajes, rangos y coste escrito", () => {
+  assert.equal(porcentaje(0.456), "46 %");
+  assert.equal(porcentaje(null), "—");
+  assert.equal(probabilidadConRango({ p_ganar: 0.45, p_ganar_min: 0.3, p_ganar_max: 0.61 }), "45 % (30–61 %)");
+  assert.equal(costeDeTexto("150.000"), 150000);
+  assert.equal(costeDeTexto("150000,50"), 150000.5);
+  assert.equal(costeDeTexto(" 1.234.567 € "), 1234567);
+  assert.equal(costeDeTexto("12,5"), 12.5);
+  assert.equal(costeDeTexto(""), null);
+  assert.equal(costeDeTexto("mucho"), null);
+  assert.equal(costeDeTexto("-5"), null);
+  assert.equal(costeDeTexto("0"), null);
+});
+
+test("simulador: filas de la curva con la primera, la última y la recomendada", () => {
+  const curva = Array.from({ length: 41 }, (_, i) => ({ baja_pct: i }));
+  const f = filasDeCurva({ curva, recomendacion: { baja_pct: 17 } }, 10);
+  assert.ok(f.length <= 11);
+  assert.equal(f[0].baja_pct, 0);
+  assert.equal(f.at(-1).baja_pct, 40);
+  assert.ok(f.some((x) => x.baja_pct === 17));
+  assert.deepEqual(filasDeCurva({ curva: curva.slice(0, 5) }), curva.slice(0, 5));
+  assert.deepEqual(filasDeCurva(null), []);
+});
+
+test("simulador: cuándo es apto para decidir y cuándo solo orienta", () => {
+  assert.equal(aptitudSimulacion({ apto_para_decidir: true }).apto, true);
+  const a = aptitudSimulacion({ apto_para_decidir: false, muestra: { suficiente: false, n: 12 }, backtest: { apto: false, motivo: "muestra por debajo del mínimo" }, licitacion: { peso_juicio_de_valor: 40 } });
+  assert.equal(a.apto, false);
+  assert.match(a.texto, /orientativo/);
+  assert.match(a.texto, /pocos concursos parecidos \(12\)/);
+  assert.match(a.texto, /juicio de valor pesa un 40 %/);
+  assert.equal(aptitudSimulacion(null).texto, "");
+  assert.match(mensajeSimulador(403), /Dirección/);
+  assert.match(mensajeSimulador(422), /sin concursos parecidos/);
+});

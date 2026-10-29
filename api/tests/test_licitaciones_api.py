@@ -153,6 +153,22 @@ class TestRutasDelEmbudo(unittest.TestCase):
         with mock.patch.object(cp, "quitar", mock.AsyncMock(side_effect=cp.ErrorCalendario("x"))):
             self.assertEqual(c.post("/licitaciones/embudo/7/calendario/quitar").status_code, 503)
 
+    def test_simulador_permisos_y_errores(self):
+        sm = main.simulador_licitaciones
+        c = como(("usuario", "responsable"), ("finanzas", "comercial"))
+        with mock.patch.object(sm, "simular", mock.AsyncMock(return_value={})) as espia:
+            self.assertEqual(c.post("/licitaciones/simulador", json={"motor_id": "x"}).status_code, 403)
+            espia.assert_not_called()
+        c = como(("direccion",))
+        ok = {"muestra": {"n": 40}, "apto_para_decidir": True}
+        with mock.patch.object(sm, "simular", mock.AsyncMock(return_value=ok)) as espia:
+            self.assertEqual(c.post("/licitaciones/simulador", json={"motor_id": "x", "coste": 1000}).json(), ok)
+            self.assertEqual(espia.await_args.args[:2], ("x", 1000.0))
+        for fallo, codigo in ((sm.ErrorSimulador("sin presupuesto"), 422), (main.MotorNoDisponible("x"), 503), (LookupError("No existe"), 404)):
+            with mock.patch.object(sm, "simular", mock.AsyncMock(side_effect=fallo)):
+                self.assertEqual(c.post("/licitaciones/simulador", json={"motor_id": "x"}).status_code, codigo, repr(fallo))
+        self.assertEqual(c.post("/licitaciones/simulador", json={"coste": 5}).status_code, 422)                # falta la licitación
+
     def test_matriz_de_cumplimiento_permisos_rutas_y_errores(self):
         pl = main.pliegos_licitaciones
         espias = {n: mock.AsyncMock(return_value={}) for n in ("matriz", "marcar_cumplimiento")}
