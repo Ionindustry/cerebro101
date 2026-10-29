@@ -353,3 +353,35 @@ CREATE TABLE IF NOT EXISTS pliegos_documentos (
 ALTER TABLE pliegos_documentos DROP CONSTRAINT IF EXISTS pliegos_documentos_estado_check;
 ALTER TABLE pliegos_documentos ADD CONSTRAINT pliegos_documentos_estado_check CHECK (estado IN ('cuarentena','limpio','con_macros','infectado','no_analizable','error'));
 CREATE INDEX IF NOT EXISTS pliegos_documentos_creado ON pliegos_documentos (creado);
+
+-- Texto de los pliegos (api/cerebro/licitaciones/extractor.py): una fila por página (o bloque u hoja, según el formato) de los documentos limpios, con búsqueda de texto en castellano.
+ALTER TABLE pliegos_documentos ADD COLUMN IF NOT EXISTS unidad text;                  -- página | bloque | hoja
+ALTER TABLE pliegos_documentos ADD COLUMN IF NOT EXISTS paginas integer;              -- cuántas se han extraído; NULL = aún no se ha leído
+ALTER TABLE pliegos_documentos ADD COLUMN IF NOT EXISTS aviso text NOT NULL DEFAULT '';   -- lo que la extracción tiene que decir (escaneo, páginas de más…)
+CREATE TABLE IF NOT EXISTS pliegos_paginas (
+  documento_id bigint NOT NULL REFERENCES pliegos_documentos (id) ON DELETE CASCADE,
+  pagina       integer NOT NULL,
+  texto        text NOT NULL,
+  tsv          tsvector GENERATED ALWAYS AS (to_tsvector('spanish', texto)) STORED,
+  PRIMARY KEY (documento_id, pagina)
+);
+CREATE INDEX IF NOT EXISTS pliegos_paginas_tsv ON pliegos_paginas USING gin (tsv);
+
+-- Requisitos que el Analista de Pliegos extrae de un documento. Cada uno lleva su CITA LITERAL y la página, y el sistema comprueba que esa frase está de verdad en esa página antes de
+-- guardarlo. Nacen en «borrador»: una persona los confirma o los rechaza (nunca el agente).
+CREATE TABLE IF NOT EXISTS pliegos_requisitos (
+  id           bigserial PRIMARY KEY,
+  documento_id bigint NOT NULL REFERENCES pliegos_documentos (id) ON DELETE CASCADE,
+  pagina       integer NOT NULL,
+  tipo         text NOT NULL,
+  resumen      text NOT NULL,                  -- lo que dice el requisito, con las palabras del agente
+  cita         text NOT NULL,                  -- la frase tal cual del documento
+  valor        text NOT NULL DEFAULT '',       -- puntos, importe, plazo… si procede
+  estado       text NOT NULL DEFAULT 'borrador',
+  creado       timestamptz NOT NULL DEFAULT now(),
+  por          text NOT NULL DEFAULT '',       -- el agente que lo anotó
+  revisado_por text,
+  revisado     timestamptz,
+  CHECK (estado IN ('borrador', 'confirmado', 'rechazado'))
+);
+CREATE UNIQUE INDEX IF NOT EXISTS pliegos_requisitos_unico ON pliegos_requisitos (documento_id, pagina, md5(cita));
