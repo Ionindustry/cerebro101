@@ -2,8 +2,11 @@
 # ERPNext se instala aparte con frappe_docker (ver docs/INSTALACION.md) en la misma red «cerebro».
 name: cerebro-101
 
+# Las imágenes del Cerebro se construyen en GitHub (.github/workflows/imagenes.yml) y se publican en ghcr.io: `scripts/actualizar.sh` las descarga. La API, el worker, beat,
+# las migraciones y licitaciones-eventos son UNA misma imagen (la de `api`, la única con `build:`: `docker compose build api` la construye en el propio equipo con este mismo nombre).
+# CEREBRO_IMAGENES = registro y propietario; CEREBRO_VERSION = etiqueta.
 x-api: &api
-  build: {context: ., dockerfile: api/Dockerfile}
+  image: "${CEREBRO_IMAGENES:-ghcr.io/ionindustry}/cerebro101-api:${CEREBRO_VERSION:-latest}"
   # Mínimo privilegio también en el entorno: la API y el worker reciben SOLO lo que usa el código (lista cerrada, sin `env_file`).
   # Nunca reciben: la clave del propietario de la base de datos, las de Keycloak, ERPNext (administrador y base de datos),
   # ni las claves internas de Langfuse (cifrado, sal, ClickHouse, MinIO…). Si el Cerebro (o un agente engañado) pudiera leer
@@ -134,7 +137,7 @@ services:
     restart: unless-stopped
 
   migraciones:              # un solo uso en cada arranque: esquema, tablas del grafo, rol y permisos (único con la clave del propietario)
-    build: {context: ., dockerfile: api/Dockerfile}
+    image: "${CEREBRO_IMAGENES:-ghcr.io/ionindustry}/cerebro101-api:${CEREBRO_VERSION:-latest}"
     command: python -m cerebro.migrar
     environment:
       DATABASE_URL_ADMIN: "postgresql://cerebro:${POSTGRES_PASSWORD}@postgres:5432/cerebro"
@@ -164,6 +167,7 @@ services:
 
   api:
     <<: *api
+    build: {context: ., dockerfile: api/Dockerfile}
     ports: ["127.0.0.1:8000:8000"]
 
   worker:                 # tareas pedidas y programadas; Jarvis lo atiende la API directamente
@@ -179,7 +183,7 @@ services:
     command: celery -A cerebro.tareas.celery_app beat
 
   licitaciones-eventos:   # consumidor de eventos del motor de licitaciones (ADR 0007 §3): mete en el embudo las nuevas con buen encaje. No ejecuta agentes
-    build: {context: ., dockerfile: api/Dockerfile}
+    image: "${CEREBRO_IMAGENES:-ghcr.io/ionindustry}/cerebro101-api:${CEREBRO_VERSION:-latest}"
     command: python -m cerebro.licitaciones.consumidor
     profiles: ["licitaciones"]       # no arranca con `up` a secas: se pide por su nombre (`docker compose up -d licitaciones-eventos`) y necesita el motor en marcha
     environment:                      # lista cerrada: solo lo que usa (sin claves de modelos, de ERP ni de correo)
@@ -228,6 +232,7 @@ services:
     restart: unless-stopped
 
   panel:
+    image: "${CEREBRO_IMAGENES:-ghcr.io/ionindustry}/cerebro101-panel:${CEREBRO_VERSION:-latest}"
     build: {context: ./panel}
     environment:
       # Con contraseña definida las sesiones van a redis-panel (cifradas con PANEL_SESION_SECRET) y sobreviven a reinicios;

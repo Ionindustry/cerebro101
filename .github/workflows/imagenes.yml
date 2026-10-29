@@ -1,0 +1,73 @@
+name: Imágenes
+
+# Construye las imágenes del Cerebro (API/worker/beat y panel) en GitHub y, al fusionar en main, las publica en el registro de GitHub (ghcr.io) para que el PC
+# del servidor las DESCARGUE (`scripts/actualizar.sh`) en vez de construirlas: construir allí es lento y, en ese PC, ha dado capas corruptas.
+# En un PR solo se construyen, sin publicar: así se ve antes de fusionar que siguen construyéndose. No es una comprobación obligatoria de main.
+on:
+  pull_request:
+    paths:
+      - "api/**"
+      - "panel/**"
+      - "config/**"
+      - "db/**"
+      - "scripts/**"
+      - ".github/workflows/imagenes.yml"
+  push:
+    branches: [main]
+    paths:
+      - "api/**"
+      - "panel/**"
+      - "config/**"
+      - "db/**"
+      - "scripts/**"
+      - ".github/workflows/imagenes.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: imagenes-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  imagen:
+    name: Imagen · ${{ matrix.nombre }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    permissions:
+      contents: read
+      packages: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - {nombre: api,   contexto: ".",     dockerfile: api/Dockerfile}
+          - {nombre: panel, contexto: ./panel, dockerfile: panel/Dockerfile}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Nombre de la imagen (ghcr.io exige minúsculas)
+        run: echo "IMAGEN=ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/cerebro101-${{ matrix.nombre }}" >> "$GITHUB_ENV"
+      - uses: docker/setup-buildx-action@v3
+      - name: Entrar en ghcr.io (solo al publicar)
+        if: github.event_name != 'pull_request'
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Construir${{ github.event_name != 'pull_request' && ' y publicar' || ' (sin publicar)' }}
+        uses: docker/build-push-action@v6
+        with:
+          context: ${{ matrix.contexto }}
+          file: ${{ matrix.dockerfile }}
+          platforms: linux/amd64
+          push: ${{ github.event_name != 'pull_request' }}
+          tags: |
+            ${{ env.IMAGEN }}:latest
+            ${{ env.IMAGEN }}:${{ github.sha }}
+          labels: |
+            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+            org.opencontainers.image.revision=${{ github.sha }}
+          cache-from: type=gha,scope=${{ matrix.nombre }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.nombre }}
