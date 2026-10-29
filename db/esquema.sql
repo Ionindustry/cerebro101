@@ -286,6 +286,10 @@ ALTER TABLE licitaciones_alertas ADD CONSTRAINT licitaciones_alertas_tipo_check 
 ALTER TABLE licitaciones_alertas DROP CONSTRAINT IF EXISTS licitaciones_alertas_competencia;
 ALTER TABLE licitaciones_alertas ADD CONSTRAINT licitaciones_alertas_competencia CHECK (
   (tipo = 'competencia' AND eventos = ARRAY['licitacion.adjudicada']::text[]) OR (tipo = 'licitacion' AND cardinality(competidores) = 0));
+-- «Solo empresas nuevas»: la alerta de competencia (sin lista de competidores) avisa solo si el adjudicatario no había ganado antes nada en ese mercado.
+ALTER TABLE licitaciones_alertas ADD COLUMN IF NOT EXISTS solo_nuevos boolean NOT NULL DEFAULT false;
+ALTER TABLE licitaciones_alertas DROP CONSTRAINT IF EXISTS licitaciones_alertas_solo_nuevos;
+ALTER TABLE licitaciones_alertas ADD CONSTRAINT licitaciones_alertas_solo_nuevos CHECK (NOT solo_nuevos OR (tipo = 'competencia' AND cardinality(competidores) = 0));
 -- Con canal «correo» hay dirección de destino, y solo entonces.
 ALTER TABLE licitaciones_alertas DROP CONSTRAINT IF EXISTS licitaciones_alertas_correo_destino;
 ALTER TABLE licitaciones_alertas ADD CONSTRAINT licitaciones_alertas_correo_destino CHECK ((canal = 'correo') = (correo_destino IS NOT NULL));

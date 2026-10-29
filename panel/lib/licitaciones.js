@@ -428,10 +428,10 @@ export const competidoresDeTexto = (t) => limpiarNifs(t).map((c) => c.replace(/^
 export const competenciaGuardable = (f) => competidoresDeTexto(f.competidores).length > 0 || Object.keys(filtroDeAlerta(f)).length > 0;
 export const esCompetencia = (a) => a?.tipo === "competencia";
 /** Quién tiene que ganar para que salte la alerta: «B12345678, A08000143» o «cualquier adjudicatario». */
-export const vigilaTexto = (a) => (a?.competidores?.length ? a.competidores.join(", ") : "cualquier adjudicatario");
+export const vigilaTexto = (a) => (a?.competidores?.length ? a.competidores.join(", ") : a?.solo_nuevos ? "empresas nuevas en el mercado" : "cualquier adjudicatario");
 /** Las líneas «Ganó X (NIF) · 90.000 € sin IVA» de un aviso de competencia. */
 export const ganadoresTexto = (detalle) =>
-  (detalle?.ganadores || []).map((g) => ["Ganó " + (g.nombre || "(sin nombre)"), g.nif, g.importe != null ? `${euros(g.importe)} sin IVA` : "", g.lote && g.lote !== "1" ? `lote ${g.lote}` : ""].filter(Boolean).join(" · "));
+  (detalle?.ganadores || []).map((g) => ["Ganó " + (g.nombre || "(sin nombre)"), g.nif, g.importe != null ? `${euros(g.importe)} sin IVA` : "", g.lote && g.lote !== "1" ? `lote ${g.lote}` : "", detalle?.nuevos ? "empresa nueva en este mercado" : ""].filter(Boolean).join(" · "));
 
 export const ambitoTexto = (a) => (a.ambito === "departamento" ? `Departamento ${a.departamento}` : "Personal");
 

@@ -38,7 +38,7 @@ function Avisos({ avisos, onLeer }) {
   );
 }
 
-const FORMULARIO_VACIO = { nombre: "", q: "", cpv: "", nuts: "", importeMin: "", importeMax: "", tipo: "licitacion", competidores: "", comprador: "", eventos: ["licitacion.nueva"], ambito: "personal", departamento: "", canal: "panel", correo: "" };
+const FORMULARIO_VACIO = { nombre: "", q: "", cpv: "", nuts: "", importeMin: "", importeMax: "", tipo: "licitacion", competidores: "", soloNuevos: false, comprador: "", eventos: ["licitacion.nueva"], ambito: "personal", departamento: "", canal: "panel", correo: "" };
 
 function Formulario({ onCrear, trabajando }) {
   const [f, setF] = useState(FORMULARIO_VACIO);
@@ -64,6 +64,12 @@ function Formulario({ onCrear, trabajando }) {
           <label>Competidores (NIF)
             <input type="text" value={f.competidores} onChange={poner("competidores")} placeholder="B12345678 A08000143 (vacío = cualquiera)" />
             <span className="ayuda">{f.competidores.trim() && competidoresDeTexto(f.competidores).length === 0 ? "No reconozco ningún NIF (9 letras o cifras)" : "Sin NIF, avisa de cualquier adjudicación del mercado que elijas abajo"}</span>
+          </label>
+        )}
+        {competencia && competidoresDeTexto(f.competidores).length === 0 && (
+          <label className="lic-check">
+            <input type="checkbox" checked={f.soloNuevos} onChange={(ev) => setF((x) => ({ ...x, soloNuevos: ev.target.checked }))} /> Solo empresas nuevas en el mercado
+            <span className="ayuda">Avisa solo si quien gana no había ganado antes nada en ese mercado (los CPV y la zona de abajo). Solo funciona cuando el motor tiene al menos un año de histórico; si no, no avisa.</span>
           </label>
         )}
         <label>Nombre<input type="text" value={f.nombre} onChange={poner("nombre")} maxLength={120} required placeholder="Videovigilancia en Girona" /></label>
@@ -125,7 +131,7 @@ export default function Alertas() {
     const filtro = filtroDeAlerta(f);
     return accion("licitaciones/alertas", {
       nombre: f.nombre, ambito: f.ambito, departamento: f.ambito === "departamento" ? f.departamento.trim().toLowerCase() : null, filtro,
-      ...(f.tipo === "competencia" ? { tipo: "competencia", competidores: competidoresDeTexto(f.competidores) } : { eventos: f.eventos }),
+      ...(f.tipo === "competencia" ? { tipo: "competencia", competidores: competidoresDeTexto(f.competidores), solo_nuevos: Boolean(f.soloNuevos) && competidoresDeTexto(f.competidores).length === 0 } : { eventos: f.eventos }),
       canal: f.canal,
       ...(f.canal === "correo" ? { correo_destino: f.correo.trim().toLowerCase() } : {}),
     });

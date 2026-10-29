@@ -69,3 +69,8 @@ rastreo:
   hora: "06:30"                 # hora local
   max_por_dia: 10
   dias_minimos_hasta_plazo: 3   # con menos días de plazo no se pide informe (no da tiempo a preparar una oferta)
+
+# «Nuevo competidor» (alertas de competencia con «solo empresas nuevas»): solo se avisa si el motor tiene adjudicaciones de hace al menos estos meses; con menos historia
+# casi cualquier adjudicatario parecería nuevo. Docs: docs/PROYECTO_LICITACIONES.md.
+nuevo_competidor:
+  cobertura_meses: 12

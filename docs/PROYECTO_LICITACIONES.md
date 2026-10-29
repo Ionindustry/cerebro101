@@ -359,12 +359,18 @@ Documento de partida: «Plataforma de detección y análisis de concursos públi
   Licitaciones): lo rechaza el código y también la base de datos (`licitaciones_alertas_resumen_solo_departamento`). La sección sale **aunque el motor no responda** (los
   avisos ya están guardados) y, si no se pueden leer, el resumen sale igual y lo dice. Se activa por alerta desde `/licitaciones/alertas` («Incluir en el resumen»).
 - **Alertas de competencia** (hecho): una alerta de `tipo = competencia` avisa cuando una licitación que cumple su filtro (CPV, zona, comprador…) **se adjudica** a uno de
-  los competidores de su lista (NIF) o, con la lista vacía, a cualquiera («nuevo competidor» queda fuera: sin el histórico cargado todo adjudicatario parecería nuevo). Solo
+  los competidores de su lista (NIF) o, con la lista vacía, a cualquiera; con **«solo empresas nuevas»** (`solo_nuevos`, solo sin lista de competidores) avisa únicamente si quien gana no había ganado antes nada en ese mercado (ver «Nuevo competidor» abajo). Solo
   avisa del evento `adjudicada` (la base lo exige: `licitaciones_alertas_competencia`), **una sola vez por expediente y alerta**, y con el mismo límite de antigüedad que las
   demás (7 días: la carga del histórico no inunda). El consumidor comprueba el filtro con el motor como siempre y luego lee la ficha (`GET /tenders/{id}`) para ver los
   adjudicatarios; el aviso (`tipo = competencia.adjudicada`) guarda en `detalle` quién ganó, por qué importe sin IVA y en qué lote. Un adjudicatario **sin NIF** no se puede comparar
   con la lista (el motor no une empresas por nombre) y solo salta si la lista está vacía; el NIF de una **persona física** no se guarda en el aviso. Los permisos, el canal
   (`panel`, `correo`, `resumen_diario` para departamentos) y la pantalla son los de las demás alertas: `/licitaciones/alertas` → «Qué vigila: Competencia».
+- **Nuevo competidor** (hecho): una alerta de competencia con `solo_nuevos` avisa de una adjudicación solo si el adjudicatario (por NIF) **no tenía ninguna adjudicación anterior en el mercado de la alerta** (sus CPV y su zona; si no los
+  fija, el grupo de 4 cifras de los CPV del expediente), en otra licitación y antes de esa fecha: se pregunta al motor (`/awards?adjudicatario=nif:…&adjudicada_hasta=…`). **Solo con historia suficiente:** si el motor no tiene
+  adjudicaciones de hace al menos `nuevo_competidor.cobertura_meses` (12, en `config/licitaciones.yaml`), no avisa de nada —con unas semanas de datos casi cualquier empresa parecería nueva— y lo anota en el registro. Un
+  adjudicatario sin NIF no se puede comparar y no cuenta; el NIF de una persona física se usa para comparar pero nunca se guarda en el aviso. El aviso lleva `nuevos: true` («empresa nueva en este mercado», en el panel y en el correo).
+  **Límite conocido:** que el motor no conozca una victoria anterior (otra plataforma, antes de su histórico) no significa que no exista; por eso es una pista, no un hecho. Columna `licitaciones_alertas.solo_nuevos` (con restricción:
+  solo competencia y sin competidores). Panel: casilla «Solo empresas nuevas en el mercado» al crear la alerta.
 - **Alertas por correo** (hecho): el canal `correo` de una alerta (personal o de departamento) envía los avisos a una dirección `correo_destino` **de la empresa**
   (`avisos.dominios` en `config/buzones.yaml`, por ahora `101.cat`): es correo interno y automático, así que no pasa por la bandeja de aprobaciones (que es para lo que
   sale de la empresa) y una dirección de fuera se rechaza al crear la alerta, otra vez justo antes de enviar y también en la base de datos (`licitaciones_alertas_correo_destino`:

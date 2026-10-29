@@ -339,5 +339,71 @@ class TestAlertasDeCompetencia(unittest.IsolatedAsyncioTestCase):
         self.assertEqual([(a, t) for a, t, _ in self.registrados], [(2, "licitacion.adjudicada"), (1, "competencia.adjudicada")])
 
 
+class TestSoloNuevos(TestAlertasDeCompetencia):
+    """«Solo empresas nuevas en el mercado»: avisa si quien gana no había ganado antes nada en ese mercado, y solo con historia suficiente en el motor."""
+    test_avisa_si_gana_un_competidor_de_la_lista_con_quien_y_cuanto = test_si_gana_otro_no_avisa_ni_pide_la_ficha_de_mas = None
+    test_sin_lista_avisa_de_cualquier_adjudicado_pero_no_enseña_el_nif_de_una_persona = test_una_sola_vez_por_expediente_y_la_ficha_solo_se_lee_si_hace_falta = None
+    test_una_alerta_normal_y_una_de_competencia_conviven = None
+
+    def con_awards(self, c0, cobertura=True, previos=(), propia_licitacion=False):
+        self.awards = []
+
+        async def consulta(ruta, params=None):
+            if ruta == "/awards":
+                self.awards.append(params)
+                if "adjudicatario" not in params:
+                    return {"items": [{"licitacion_id": "antigua"}] if cobertura else []}
+                nif = params["adjudicatario"].split(":")[1]
+                if propia_licitacion:
+                    return {"items": [{"licitacion_id": ID}]}                      # otro lote de ESTA misma licitación: no cuenta como haber ganado antes
+                return {"items": [{"licitacion_id": "otra"}] if nif in previos else []}
+            return await c0(ruta, params)
+        return consulta
+
+    def nueva(self, id=1, **filtro):
+        return {**self.alerta(id, [], **filtro), "solo_nuevos": True}
+
+    async def test_avisa_solo_de_los_nuevos_y_no_guarda_nifs_de_personas(self):
+        c = self.con_awards(self.preparar([self.nueva(cpv=["32"])]), previos=("12345678Z",))          # la persona ya había ganado; la empresa no
+        self.assertEqual(await self.lanzar(c), "1 aviso(s) de 1 alerta(s)")
+        (a, tipo, detalle), = self.registrados
+        self.assertEqual([g["nombre"] for g in detalle["ganadores"]], ["Seguridad SL"])
+        self.assertTrue(detalle["nuevos"])
+        self.assertTrue(all("_nif" not in g for g in detalle["ganadores"]))                              # el NIF entero solo servía para comparar
+
+    async def test_la_consulta_al_motor_acota_por_mercado_nif_y_fecha(self):
+        c = self.con_awards(self.preparar([self.nueva(cpv=["32"], nuts=["ES512"])]))
+        await self.lanzar(c)
+        por_nif = [p for p in self.awards if "adjudicatario" in p]
+        self.assertEqual(sorted(p["adjudicatario"] for p in por_nif), ["nif:12345678Z", "nif:B12345678"])
+        for p in por_nif:
+            self.assertEqual((p["cpv"], p["nuts"], p["resultado"]), (["32"], ["ES512"], "adjudicado"))
+            self.assertRegex(p["adjudicada_hasta"], r"^\d{4}-\d{2}-\d{2}$")
+        cobertura = [p for p in self.awards if "adjudicatario" not in p]
+        self.assertEqual(len(cobertura), 1)
+        self.assertLess(cobertura[0]["adjudicada_hasta"], "2025-11-01")                                    # hace unos 12 meses
+
+    async def test_sin_historia_suficiente_no_se_avisa_de_nadie(self):
+        c = self.con_awards(self.preparar([self.nueva(cpv=["32"])]), cobertura=False)
+        self.assertEqual(await self.lanzar(c), "0 aviso(s) de 1 alerta(s)")
+        self.assertEqual(self.registrados, [])
+        self.assertEqual([p for p in self.awards if "adjudicatario" in p], [])                           # ni siquiera se pregunta por cada empresa
+
+    async def test_si_todos_ya_habian_ganado_no_se_avisa(self):
+        c = self.con_awards(self.preparar([self.nueva(cpv=["32"])]), previos=("B12345678", "12345678Z"))
+        self.assertEqual(await self.lanzar(c), "0 aviso(s) de 1 alerta(s)")
+
+    async def test_otro_lote_de_la_misma_licitacion_no_cuenta_como_haber_ganado_antes(self):
+        c = self.con_awards(self.preparar([self.nueva(cpv=["32"])]), propia_licitacion=True)
+        self.assertEqual(await self.lanzar(c), "1 aviso(s) de 1 alerta(s)")
+        self.assertEqual(len(self.registrados[0][2]["ganadores"]), 2)
+
+    async def test_una_alerta_sin_solo_nuevos_no_toca_el_motor_de_adjudicaciones(self):
+        c = self.con_awards(self.preparar([self.alerta(1, [], cpv=["32"])]))
+        await self.lanzar(c)
+        self.assertEqual(self.awards, [])
+        self.assertNotIn("nuevos", self.registrados[0][2])
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -27,6 +27,7 @@ from datetime import datetime, timezone
 from ..herramientas import licitaciones as motor
 from . import alertas as alertas_mod
 from . import embudo
+from . import novedad
 from . import resumen as resumen_mod
 
 log = logging.getLogger("cerebro.licitaciones.consumidor")
@@ -152,7 +153,7 @@ async def procesar_alertas(ev: Evento, *, consulta=None, cfg: dict | None = None
         if not r.get("items"):
             continue
         if a.get("tipo") == "competencia":
-            if await _avisar_competencia(a, ev, item, d, ahora, consulta):
+            if await _avisar_competencia(a, ev, item, d, ahora, consulta, cfg):
                 avisos += 1
         elif await alertas_mod.registrar_aviso(a["id"], ev.id, f"licitacion.{ev.tipo}", d, ahora):
             avisos += 1
@@ -162,16 +163,25 @@ async def procesar_alertas(ev: Evento, *, consulta=None, cfg: dict | None = None
 TIPO_COMPETENCIA = "competencia.adjudicada"
 
 
-async def _avisar_competencia(a: dict, ev: Evento, item: dict, d: dict, ahora: datetime, consulta=None) -> bool:
+async def _avisar_competencia(a: dict, ev: Evento, item: dict, d: dict, ahora: datetime, consulta=None, cfg: dict | None = None) -> bool:
     """Alerta de competencia: el expediente ya cumple el filtro de la alerta; avisa si lo han ganado los competidores de la lista (o cualquiera, con la lista vacía).
     Lee los adjudicatarios de la ficha del motor. Una sola vez por expediente y alerta."""
     if await alertas_mod.ya_avisada_expediente(a["id"], str(d["motor_id"]), TIPO_COMPETENCIA):
         return False
     ficha = await (consulta or motor._get)(f"/tenders/{item['id']}")
-    ganadores = alertas_mod.ganadores(ficha, list(a.get("competidores") or []))
+    solo_nuevos = bool(a.get("solo_nuevos"))
+    ganadores = alertas_mod.ganadores(ficha, list(a.get("competidores") or []), con_nif_completo=solo_nuevos)
     if not ganadores:
         return False
-    return await alertas_mod.registrar_aviso(a["id"], ev.id, TIPO_COMPETENCIA, d, ahora, {"ganadores": ganadores})
+    detalle: dict = {}
+    if solo_nuevos:
+        ganadores, motivo = await novedad.solo_los_nuevos(consulta or motor._get, ganadores, a.get("filtro") or {}, item, ficha, ahora.date(), cfg)
+        if not ganadores:
+            log.info("alerta %s (solo nuevos): sin aviso de %s: %s", a["id"], item.get("id"), motivo)
+            return False
+        ganadores = [{k: v for k, v in g.items() if k != "_nif"} for g in ganadores]          # el NIF entero solo servía para comparar
+        detalle["nuevos"] = True
+    return await alertas_mod.registrar_aviso(a["id"], ev.id, TIPO_COMPETENCIA, d, ahora, {"ganadores": ganadores, **detalle})
 
 
 def espera(entregas: int) -> int:

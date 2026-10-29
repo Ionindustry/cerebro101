@@ -333,6 +333,25 @@ class TestEnBase(unittest.TestCase):
         with psycopg.connect(self.url_directa(), autocommit=True) as cn, self.assertRaises(psycopg.errors.CheckViolation):
             cn.execute("UPDATE licitaciones_alertas SET competidores = ARRAY['B12345678'] WHERE id = %s", [normal["id"]])
 
+    def test_solo_empresas_nuevas_en_la_alerta_de_competencia(self):
+        n = ejecutar(alertas.crear(ALBERT, entrada(tipo="competencia", filtro={"cpv": ["32323500"]}, solo_nuevos=True)))
+        self.assertTrue(n["solo_nuevos"])
+        self.assertFalse(ejecutar(alertas.crear(ALBERT, entrada(tipo="competencia", filtro={"cpv": ["32323500"]})))["solo_nuevos"])
+        for mal in (entrada(tipo="competencia", competidores=["B12345678"], solo_nuevos=True), entrada(solo_nuevos=True), entrada(tipo="competencia", filtro={"cpv": ["32"]}, solo_nuevos="si")):
+            with self.assertRaises(ErrorAlerta, msg=mal):
+                ejecutar(alertas.crear(ALBERT, mal))
+        self.assertFalse(ejecutar(alertas.cambiar(ALBERT, n["id"], {"solo_nuevos": False}))["solo_nuevos"])
+        self.assertTrue(ejecutar(alertas.cambiar(ALBERT, n["id"], {"solo_nuevos": True}))["solo_nuevos"])
+        # pasar a vigilar a unos competidores concretos apaga «solo nuevos» (ya se sabe a quién se vigila)
+        self.assertFalse(ejecutar(alertas.cambiar(ALBERT, n["id"], {"competidores": ["B12345678"]}))["solo_nuevos"])
+        with self.assertRaises(ErrorAlerta):
+            ejecutar(alertas.cambiar(ALBERT, n["id"], {"solo_nuevos": True}))
+        normal = ejecutar(alertas.crear(ALBERT, entrada()))
+        with self.assertRaises(ErrorAlerta):
+            ejecutar(alertas.cambiar(ALBERT, normal["id"], {"solo_nuevos": True}))
+        with psycopg.connect(self.url_directa(), autocommit=True) as cn, self.assertRaises(psycopg.errors.CheckViolation):             # y la base de datos lo impide también
+            cn.execute("UPDATE licitaciones_alertas SET solo_nuevos = true WHERE id = %s", [normal["id"]])
+
     def test_el_aviso_de_competencia_guarda_el_detalle_y_se_lista(self):
         a = ejecutar(alertas.crear(ALBERT, entrada(tipo="competencia", competidores=["B12345678"])))
         detalle = {"ganadores": [{"nombre": "Seguridad SL", "nif": "B12345678", "lote": "1", "importe": "90000.00", "moneda": "EUR"}]}
