@@ -22,6 +22,9 @@ from .prompts import sistema_agente, sistema_director_departamento, sistema_dire
 
 log = logging.getLogger("cerebro.grafo")
 MAX_PASOS = 5
+# Los agentes que trabajan sobre un documento largo necesitan más vueltas: el Analista de Pliegos busca la licitación, lista y baja los documentos, busca y lee páginas
+# y anota cada requisito con una llamada. Con 5 pasos no pasaba de buscar. Lo que anota queda guardado aunque la tarea se corte.
+MAX_PASOS_AGENTE = {"analista-pliegos": 25}
 INYECTAR_DEPARTAMENTO = {"erpnext", "conocimiento", "correo", "calendario", "cuaderno"}
 PIDE_CUADERNO = re.compile(r"\bcuadern|\bquadern|notebook\s*lm", re.I)
 
@@ -161,7 +164,7 @@ async def _ejecutar_agente(estado: Estado, ficha) -> Estado:
     mensajes = [{"role": "system", "content": sistema_agente(ficha, disponibles)},
                 {"role": "user", "content": estado["peticion"]}]
     pasos: list[dict] = []
-    for _ in range(MAX_PASOS):
+    for _ in range(MAX_PASOS_AGENTE.get(ficha.id, MAX_PASOS)):
         await actividad.marcar(ficha.id, "Pensando")
         d = await _paso_del_agente(ficha, estado, mensajes)
         if d["tipo"] == "respuesta":
