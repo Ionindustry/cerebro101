@@ -1,7 +1,7 @@
 "use client";
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
-import { accionEmbudo, avisoEstadoMotor, hayPeticionEnCurso, peticionViabilidad, puedePedirViabilidad, textoPedirViabilidad, viabilidadEtiqueta, diasDePeriodo, encajeClase, ESTADOS_EMBUDO, etiquetaEmbudo, fechaTexto, horasTexto, importeTexto, mensajeEmbudo, PERIODOS_EMBUDO, tasaExitoTexto, viabilidadFilas, viabilidadPocosDatos } from "../../../lib/licitaciones";
+import { accionEmbudo, avisoEstadoMotor, hayPeticionEnCurso, peticionViabilidad, puedePedirViabilidad, textoPedirViabilidad, viabilidadEtiqueta, diasDePeriodo, encajeClase, ESTADOS_EMBUDO, etiquetaEmbudo, fechaTexto, horasTexto, importeTexto, mensajeEmbudo, PERIODOS_EMBUDO, tasaExitoTexto, viabilidadFilas, viabilidadPocosDatos, calendarioEstado, mensajeCalendario, puedeAnadirAlCalendario, textoAnadirCalendario, textoEnCalendario } from "../../../lib/licitaciones";
 import { pedirCerebro } from "../cliente";
 
 const enviar = (cuerpo) => ({ method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(cuerpo) });
@@ -46,7 +46,7 @@ function Viabilidad({ v }) {
   );
 }
 
-function Fila({ x, transiciones, motivos, onCambio, onViabilidad }) {
+function Fila({ x, transiciones, motivos, onCambio, onViabilidad, onCalendario }) {
   const [motivo, setMotivo] = useState("");
   const [pidiendoMotivo, setPidiendoMotivo] = useState(false);
   const [trabajando, setTrabajando] = useState(false);
@@ -62,6 +62,11 @@ function Fila({ x, transiciones, motivos, onCambio, onViabilidad }) {
     if (x.viabilidad && !window.confirm("Ya hay un informe de viabilidad. ¿Pedir otro y sustituir el anterior?")) return;
     setTrabajando(true);
     try { await onViabilidad(x.id, Boolean(x.viabilidad)); }
+    finally { setTrabajando(false); }
+  };
+  const calendario = async (quitar) => {
+    setTrabajando(true);
+    try { await onCalendario(x.id, quitar); }
     finally { setTrabajando(false); }
   };
   return (
@@ -90,6 +95,13 @@ function Fila({ x, transiciones, motivos, onCambio, onViabilidad }) {
           {peticion?.estado === "en_curso" && <span className="meta" role="status" aria-busy="true">Viabilidad está preparando el informe… puede tardar unos minutos.</span>}
           {peticion?.estado === "error" && <span className="lic-etiqueta aviso" role="alert">{peticion.error}</span>}
           {puedePedirViabilidad(x) && <button className="boton no" disabled={trabajando} onClick={pedir}>{textoPedirViabilidad(x)}</button>}
+        </span>
+      )}
+      {(puedeAnadirAlCalendario(x) || calendarioEstado(x) !== "no") && (
+        <span className="lic-fila">
+          {textoEnCalendario(x) && <span className={`lic-etiqueta ${calendarioEstado(x) === "ok" ? "abierta" : "aviso"}`}>{textoEnCalendario(x)}</span>}
+          {puedeAnadirAlCalendario(x) && calendarioEstado(x) !== "ok" && <button className="boton no" disabled={trabajando} onClick={() => calendario(false)}>{textoAnadirCalendario(x)}</button>}
+          {calendarioEstado(x) !== "no" && <button className="boton no" disabled={trabajando} onClick={() => calendario(true)}>Quitar del calendario</button>}
         </span>
       )}
       {destinos.length > 0 && (
@@ -137,6 +149,12 @@ export default function Embudo() {
     catch (e) { setError(e); }
   };
 
+  const calendario = async (id, quitar) => {
+    setError(null);
+    try { await pedirCerebro(`licitaciones/embudo/${id}/calendario${quitar ? "/quitar" : ""}`, enviar({})); await cargar(); }
+    catch (e) { setError({ ...e, calendario: true }); }
+  };
+
   // Mientras Viabilidad prepara un informe, la lista se refresca sola hasta que aparece (o falla).
   const esperando = hayPeticionEnCurso(lista?.items);
   useEffect(() => {
@@ -155,7 +173,7 @@ export default function Embudo() {
         </select>
       </div>
       <p className="meta">Lo que 101.cat estudia, presenta, gana o pierde. Las cifras las calcula el panel, no la IA; presentarse y firmar siguen siendo decisiones de una persona.</p>
-      {error && <p role="alert" className="lic-error">{mensajeEmbudo(error.status)}</p>}
+      {error && <p role="alert" className="lic-error">{error.calendario ? mensajeCalendario(error.status) : mensajeEmbudo(error.status)}</p>}
       {!resumen && !error && <p className="meta" aria-busy="true">Cargando…</p>}
       {resumen && <Resumen r={resumen} />}
       {lista && ESTADOS_EMBUDO.map(([k]) => {
@@ -163,7 +181,7 @@ export default function Embudo() {
         return (
           <section key={k} className="lic" aria-label={etiquetaEmbudo(k)}>
             <h2>{etiquetaEmbudo(k)} <span className="meta">· {items.length}</span></h2>
-            {items.length === 0 ? <p className="meta">Ninguna.</p> : <ul className="lic-lista">{items.map((x) => <Fila key={x.id} x={x} transiciones={lista.transiciones} motivos={lista.motivos_perdida} onCambio={cambiar} onViabilidad={pedirViabilidad} />)}</ul>}
+            {items.length === 0 ? <p className="meta">Ninguna.</p> : <ul className="lic-lista">{items.map((x) => <Fila key={x.id} x={x} transiciones={lista.transiciones} motivos={lista.motivos_perdida} onCambio={cambiar} onViabilidad={pedirViabilidad} onCalendario={calendario} />)}</ul>}
           </section>
         );
       })}

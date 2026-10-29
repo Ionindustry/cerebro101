@@ -19,6 +19,7 @@ from ..aprobaciones.logica import DecisionNoValida
 from .. import actividad, constancia, kpis, modelos_externos, oficina
 from ..herramientas.licitaciones import MotorNoDisponible
 from ..licitaciones import alertas as alertas_licitaciones
+from ..licitaciones import calendario_plazos
 from ..licitaciones import embudo as embudo_licitaciones
 from ..licitaciones import resumen as resumen_licitaciones
 from ..cotizador import Solicitud, calcular
@@ -318,6 +319,36 @@ async def pedir_viabilidad_licitacion(lid: int, entrada: ViabilidadEntrada | Non
         raise HTTPException(503, "No se ha podido encolar la petición") from None
     log.info("embudo: %s pide el informe de viabilidad de la licitación %s", usuario.id, lid)
     return {"id": lid, "viabilidad_peticion": peticion}
+
+
+@app.post("/licitaciones/embudo/{lid}/calendario")
+async def poner_plazo_en_el_calendario(lid: int, usuario: Usuario = Depends(usuario_actual)):
+    """«Añadir el plazo al calendario»: crea (o actualiza) un evento con el plazo de presentación en el calendario de la empresa, sin invitados. Lo hace una persona al pulsar."""
+    _exige_licitaciones(usuario)
+    try:
+        fila = await calendario_plazos.poner(lid)
+    except embudo_licitaciones.NoExiste as e:
+        raise HTTPException(404, str(e)) from None
+    except embudo_licitaciones.ErrorEmbudo as e:
+        raise HTTPException(422, str(e)) from None
+    except calendario_plazos.ErrorCalendario as e:
+        raise HTTPException(503, str(e)) from None
+    log.info("embudo: %s pone en el calendario el plazo de la licitación %s", usuario.id, lid)
+    return fila
+
+
+@app.post("/licitaciones/embudo/{lid}/calendario/quitar")
+async def quitar_plazo_del_calendario(lid: int, usuario: Usuario = Depends(usuario_actual)):
+    """«Quitar del calendario»: borra el evento del plazo (si estaba)."""
+    _exige_licitaciones(usuario)
+    try:
+        fila = await calendario_plazos.quitar(lid)
+    except embudo_licitaciones.NoExiste as e:
+        raise HTTPException(404, str(e)) from None
+    except calendario_plazos.ErrorCalendario as e:
+        raise HTTPException(503, str(e)) from None
+    log.info("embudo: %s quita del calendario el plazo de la licitación %s", usuario.id, lid)
+    return fila
 
 
 @app.post("/licitaciones/embudo/{lid}/estado")

@@ -239,6 +239,8 @@ ALTER TABLE licitaciones ADD COLUMN IF NOT EXISTS estado_motor    text;
 -- Petición de un informe de viabilidad por una persona («Pedir informe de viabilidad»): {"estado": "en_curso"|"error", "por": usuario, "en": hora, "error": texto}.
 -- Evita pedirlo dos veces a la vez; se borra al guardarse el informe.
 ALTER TABLE licitaciones ADD COLUMN IF NOT EXISTS viabilidad_peticion jsonb;
+-- Plazo que se puso en el calendario de la empresa (botón «Añadir el plazo al calendario»); NULL = no está. El evento se identifica por un UID fijo sacado del motor_id.
+ALTER TABLE licitaciones ADD COLUMN IF NOT EXISTS calendario_plazo timestamptz;
 -- El código de expediente no es único entre organismos: la identidad de una fila es el expediente del motor.
 ALTER TABLE licitaciones DROP CONSTRAINT IF EXISTS licitaciones_expediente_key;
 CREATE UNIQUE INDEX IF NOT EXISTS licitaciones_motor_id ON licitaciones (motor_id);

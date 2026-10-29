@@ -206,7 +206,7 @@ def datos_de_ficha(ficha: dict, cfg: dict, ahora: datetime) -> dict:
 # ---- Base de datos ----
 
 COLUMNAS = ("id, motor_id, motor_version, expediente, organismo, titulo, cpv, importe, fecha_limite, enlace, encaje, estado, estado_motor, motivo_perdida, "
-            "decision, viabilidad, viabilidad_peticion, creado, actualizado, decidida_en, presentada_en, resuelta_en")
+            "decision, viabilidad, viabilidad_peticion, calendario_plazo, creado, actualizado, decidida_en, presentada_en, resuelta_en")
 
 
 def _fila(f: dict) -> dict:
@@ -214,7 +214,7 @@ def _fila(f: dict) -> dict:
     out["motor_id"] = str(f["motor_id"]) if f.get("motor_id") else None
     for k in ("importe", "encaje"):
         out[k] = float(f[k]) if isinstance(f.get(k), Decimal) else f.get(k)
-    for k in ("fecha_limite", "creado", "actualizado", "decidida_en", "presentada_en", "resuelta_en"):
+    for k in ("fecha_limite", "calendario_plazo", "creado", "actualizado", "decidida_en", "presentada_en", "resuelta_en"):
         out[k] = f[k].isoformat() if f.get(k) else None
     out["motivo_perdida_texto"] = MOTIVOS_PERDIDA.get(f.get("motivo_perdida") or "")
     return out
@@ -387,6 +387,16 @@ async def guardar_viabilidad(lid: int, informe: dict, reemplazar: bool = False) 
 
 ESTADOS_RESUELTOS = ("ganada", "perdida", "descartada")
 VENTANA_PETICION = timedelta(minutes=20)      # una petición «en curso» más antigua se da por perdida (el trabajador se cayó) y se puede volver a pedir
+
+
+async def marcar_calendario(lid: int, plazo: datetime | None) -> dict:
+    """Anota qué plazo se puso en el calendario (None = ya no está). Devuelve la fila."""
+    async with await psycopg.AsyncConnection.connect(ajustes.database_url, row_factory=dict_row) as conn:
+        cur = await conn.execute(f"UPDATE licitaciones SET calendario_plazo = %s WHERE id = %s RETURNING {COLUMNAS}", [plazo, lid])
+        f = await cur.fetchone()
+        if not f:
+            raise NoExiste("No existe esa licitación en el embudo")
+        return _fila(f)
 
 
 async def obtener(lid: int) -> dict | None:

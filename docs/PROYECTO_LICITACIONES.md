@@ -376,6 +376,14 @@ Documento de partida: «Plataforma de detección y análisis de concursos públi
   ya había. El canal es único: «correo» incluye el panel pero no el resumen de las 16:00. Desde `/licitaciones/alertas`.
 - **Carga del histórico segura** (hecho): los eventos de lo que se carga desde los ZIP van a su propio flujo `LIC_HISTORICO` (solo el proyector lo consume; el Cerebro no recibe millones de
   «nuevas», ADR 0002) y el relay publica antes lo en vivo. Guía para cargarlo poco a poco en un PC delicado: `docs/CARGAR_HISTORICO.md`, con `scripts/estado_historico.sh` para ver el avance.
+- **Plazos en el calendario** (hecho): en el embudo, el botón «Añadir el plazo al calendario» (`POST /licitaciones/embudo/{id}/calendario`) crea en el calendario CalDAV de la empresa un evento
+  que **termina a la hora del plazo de presentación** (dura `calendario_plazos.duracion_min` = 30 minutos), con recordatorios `recordatorios_dias` = 3 y 1 días antes y el plazo en hora local en la
+  descripción. Lo crea una persona al pulsar y **sin invitados**: no sale nada de la empresa, por eso no pasa por la bandeja de aprobaciones (la que sí pasa es `calendario.crear_cita` de los agentes,
+  que puede invitar a gente de fuera). Usa la cuenta `CALENDARIO_LICITACIONES_USUARIO`/`_CLAVE` o, si no, `CALENDARIO_USUARIO`/`_CLAVE`, y el calendario `calendario_plazos.calendario` (vacío = el primero
+  de la cuenta; en `config/licitaciones.yaml`). El evento lleva un UID fijo sacado del expediente del motor: volver a pulsar lo **actualiza** en vez de duplicarlo. La columna
+  `licitaciones.calendario_plazo` guarda qué plazo se puso: si el plazo cambia en el motor, la tarjeta avisa de que está «desfasado» y el botón pasa a «Actualizar el plazo en el calendario» (no se
+  actualiza solo). «Quitar del calendario» lo borra. Al descartar, ganar o perder la licitación el evento **no se borra solo**: se quita a mano. Si el calendario no está configurado o no responde, el panel
+  lo dice (503) y no se anota nada. Los textos de la licitación (títulos de terceros) se escapan como texto de iCalendar.
 - **Viabilidad frente a lo que hizo la gente** (hecho): el resumen del embudo (`GET /licitaciones/embudo/resumen`) lleva un bloque `viabilidad` y el embudo del panel un cuadro
   desplegable. Cuenta, por recomendación (IR, NO IR, REVISAR), los informes **generados en el periodo** y lo que pasó después: **seguidos** (IR con la licitación presentada, o NO IR con la
   licitación descartada), **en contra** (al revés), **pendientes** (aún detectada o en estudio) y cómo han acabado (ganadas y perdidas). No dice quién «acierta»: la gente decide por motivos
