@@ -101,7 +101,7 @@ jobs:
         working-directory: licitaciones
     services:
       postgres:                       # base efímera para las pruebas de internal/storage/pg
-        image: postgres:16
+        image: pgvector/pgvector:pg16      # Postgres 16 con pgvector: las pruebas de la búsqueda por significado
         env:
           POSTGRES_PASSWORD: postgres
           POSTGRES_DB: lic_test

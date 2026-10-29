@@ -2,7 +2,7 @@
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useRef, useState } from "react";
-import { ESTADOS, ORDENES, filtroDeAlerta, filtroTexto, filtrosAQuery, mensajeAlertas, queryAFiltros, totalTexto } from "../../../lib/licitaciones";
+import { ESTADOS, MODOS, ORDENES, filtroDeAlerta, filtroTexto, filtrosAQuery, mensajeAlertas, queryAFiltros, totalTexto } from "../../../lib/licitaciones";
 import { Fallo, Item, pedir, pedirCerebro } from "../cliente";
 
 function Buscador() {
@@ -12,6 +12,7 @@ function Buscador() {
   const [f, setF] = useState(() => queryAFiltros(sp));
   const [items, setItems] = useState([]);
   const [total, setTotal] = useState(null);
+  const [aviso, setAviso] = useState("");
   const [cursor, setCursor] = useState(null);
   const [cargando, setCargando] = useState(true);
   const [error, setError] = useState(null);
@@ -21,7 +22,7 @@ function Buscador() {
     const n = ++ultima.current;
     setCargando(true); setError(null);
     pedir(`tenders?${filtrosAQuery(queryAFiltros(new URLSearchParams(clave)))}&limit=20`)
-      .then((d) => { if (n === ultima.current) { setItems(d.items); setTotal(d.total); setCursor(d.siguiente_cursor); } })
+      .then((d) => { if (n === ultima.current) { setItems(d.items); setTotal(d.total); setCursor(d.siguiente_cursor); setAviso(d.aviso || ""); } })
       .catch((e) => { if (n === ultima.current) { setError(e); setItems([]); setTotal(null); setCursor(null); } })
       .finally(() => { if (n === ultima.current) setCargando(false); });
   }, [clave]);
@@ -54,6 +55,12 @@ function Buscador() {
       <form className="tarjeta lic-form" onSubmit={enviar} role="search">
         <div className="lic-campos">
           <label>Texto<input type="text" value={f.q} onChange={poner("q")} maxLength={200} placeholder="castellano o catalán" /></label>
+          <label>Cómo buscar
+            <select value={f.modo} onChange={poner("modo")}>
+              {MODOS.map(([k, t]) => <option key={k} value={k}>{t}</option>)}
+            </select>
+            <span className="ayuda">«Por significado» encuentra licitaciones de lo mismo aunque no usen tus palabras (p. ej. «cámaras de seguridad» → «videovigilancia»)</span>
+          </label>
           <label>CPV<input type="text" value={f.cpv} onChange={poner("cpv")} placeholder="72 35125300" /><span className="ayuda">Códigos o prefijos de 2 a 8 cifras</span></label>
           <label>Zona (NUTS)<input type="text" value={f.nuts} onChange={poner("nuts")} placeholder="ES512" /><span className="ayuda">ES51 = Cataluña, ES512 = Girona</span></label>
           <label>Importe mínimo (€, sin IVA)<input type="text" inputMode="decimal" value={f.importeMin} onChange={poner("importeMin")} /></label>
@@ -97,7 +104,8 @@ function Buscador() {
       })()}
 
       <p className="meta" aria-live="polite">{cargando && items.length === 0 ? "Buscando…" : totalTexto(total)}</p>
-      {error && <Fallo e={error} />}
+      {aviso && <p className="meta" role="note">{aviso}</p>}
+      {error && (error.status === 503 && f.modo ? <p role="alert" className="lic-error">La búsqueda por significado no está disponible ahora. Prueba «Por palabras».</p> : <Fallo e={error} />)}
       {!error && !cargando && items.length === 0 && <p className="meta">No hay licitaciones con esos filtros.</p>}
       <ul className="lic-lista">{items.map((x) => <Item key={x.id} x={x} />)}</ul>
       {cursor && <div><button className="boton no" onClick={mas} disabled={cargando}>{cargando ? "Cargando…" : "Cargar más"}</button></div>}

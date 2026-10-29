@@ -5,6 +5,7 @@ import {
   nombreFuente, queryAFiltros, rutaPermitida, totalTexto, urlSegura,
 } from "../lib/licitaciones.js";
 import { viabilidadEtiqueta, admiteResumen, avisosDeAlertaTexto, canalEtiqueta, CANALES_ALERTA, ambitoTexto, eventoEtiqueta, filtroDeAlerta, filtroTexto, mensajeAlertas, sinLeerTexto } from "../lib/licitaciones.js";
+import { FILTROS_VACIOS, cercaniaTexto, mensajeParecidas, motivosTexto } from "../lib/licitaciones.js";
 import { rutaNoExiste } from "../lib/licitaciones.js";
 import {
   alturasTrimestres, competenciaDeCpv, fichaOrgHref, identificadoresTexto, orgAQuery, queryAOrg, repeticionTexto, trimestreTexto,
@@ -102,7 +103,7 @@ test("lo que no es válido se omite en lugar de provocar un 400", () => {
 });
 
 test("ida y vuelta entre los filtros y la dirección de la página", () => {
-  const f = { q: "software", cpv: "72 35", nuts: "ES512", estados: ["abierta", "cerrada"], importeMin: "100", importeMax: "", orden: "importe", plazoHasta: "2026-12-01" };
+  const f = { q: "software", cpv: "72 35", nuts: "ES512", estados: ["abierta", "cerrada"], importeMin: "100", importeMax: "", orden: "importe", plazoHasta: "2026-12-01", modo: "" };
   const sp = new URLSearchParams(filtrosAQuery(f));
   assert.deepEqual(queryAFiltros(sp), f);
 });
@@ -726,4 +727,33 @@ test("simulador: cuándo es apto para decidir y cuándo solo orienta", () => {
   assert.equal(aptitudSimulacion(null).texto, "");
   assert.match(mensajeSimulador(403), /Dirección/);
   assert.match(mensajeSimulador(422), /sin concursos parecidos/);
+});
+
+test("la pasarela deja pasar «parecidas» solo de un expediente y solo con GET", () => {
+  assert.ok(rutaPermitida(["tenders", ID, "parecidas"], "GET"));
+  assert.ok(!rutaPermitida(["tenders", ID, "parecidas"], "POST"));
+  assert.ok(!rutaPermitida(["tenders", "no-uuid", "parecidas"], "GET"));
+  assert.ok(!rutaPermitida(["tenders", ID, "otra"], "GET"));
+  assert.ok(!rutaPermitida(["tenders", ID, "parecidas", "x"], "GET"));
+  assert.ok(!rutaPermitida(["organizations", ID, "parecidas"], "GET"));
+});
+
+test("modo de búsqueda: va a la dirección, exige texto y ignora el orden", () => {
+  const p = filtrosAQuery({ ...FILTROS_VACIOS, q: "cámaras de seguridad", modo: "significado", orden: "plazo" });
+  assert.equal(p.get("modo"), "significado");
+  assert.equal(p.get("orden"), null);
+  assert.equal(filtrosAQuery({ ...FILTROS_VACIOS, modo: "significado" }).get("modo"), null);      // sin texto no hay búsqueda por significado
+  assert.equal(filtrosAQuery({ ...FILTROS_VACIOS, q: "obras", modo: "raro" }).get("modo"), null);
+  assert.equal(filtrosAQuery({ ...FILTROS_VACIOS, q: "obras", orden: "plazo" }).get("orden"), "plazo");
+  assert.equal(queryAFiltros(new URLSearchParams("q=obras&modo=hibrido")).modo, "hibrido");
+  assert.equal(queryAFiltros(new URLSearchParams("q=obras&modo=raro")).modo, "");
+});
+
+test("cercanía y motivos se leen en castellano", () => {
+  assert.equal(cercaniaTexto(0.834), "83 % de parecido");
+  assert.equal(cercaniaTexto(undefined), "");
+  assert.equal(cercaniaTexto(2), "");
+  assert.equal(motivosTexto(["mismo_comprador", "cpv_comun", "raro"]), "Mismo comprador · CPV en común");
+  assert.equal(motivosTexto(undefined), "");
+  assert.match(mensajeParecidas(503), /Todavía no/);
 });

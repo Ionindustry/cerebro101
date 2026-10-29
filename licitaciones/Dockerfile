@@ -1,4 +1,4 @@
-# Imagen única del motor de licitaciones (ADR 0008): tres binarios, cada servicio elige el suyo con `command`.
+# Imagen única del motor de licitaciones (ADR 0008): cuatro binarios, cada servicio elige el suyo con `command`.
 # Contexto de construcción: la carpeta licitaciones/   (docker build -f licitaciones/Dockerfile licitaciones)
 # POR VERIFICAR (fase 1): fijar la imagen base por digest (`golang:1.27.3-bookworm@sha256:…`) cuando se consulte el registro.
 FROM golang:1.27.3-bookworm AS build
@@ -13,7 +13,7 @@ RUN go build -trimpath -ldflags="-s -w -X github.com/ionindustry/cerebro101/lici
 RUN mkdir -p /out/scratch
 
 FROM gcr.io/distroless/static-debian12:nonroot
-COPY --from=build /out/api /out/ingestor /out/proyector /
+COPY --from=build /out/api /out/ingestor /out/proyector /out/vectorizador /
 COPY --from=build --chown=65532:65532 /out/scratch /scratch
 USER 65532:65532
 ENTRYPOINT ["/api"]

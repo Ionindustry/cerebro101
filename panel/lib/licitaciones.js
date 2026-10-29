@@ -14,6 +14,7 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 export function rutaPermitida(segmentos, metodo) {
   if (metodo !== "GET" || !Array.isArray(segmentos)) return false;
   const [a, b, ...resto] = segmentos;
+  if (a === "tenders" && UUID.test(b || "") && resto.length === 1) return resto[0] === "parecidas";     // licitaciones parecidas a una
   if (resto.length > 0) return false;
   if (a === "tenders") return b === undefined || UUID.test(b);
   if (a === "awards" || a === "competitors" || a === "expiring-contracts") return b === undefined;
@@ -34,6 +35,7 @@ export const ESTADOS = [
   ["abierta", "Abierta"], ["anuncio_previo", "Anuncio previo"], ["cerrada", "Cerrada (sin adjudicar)"],
   ["adjudicada", "Adjudicada"], ["formalizada", "Formalizada"], ["desierta", "Desierta"], ["anulada", "Anulada"],
 ];
+export const MODOS = [["", "Por palabras"], ["significado", "Por significado"], ["hibrido", "Palabras y significado"]];
 export const ORDENES = [["actualizacion", "Más recientes"], ["relevancia", "Relevancia"], ["plazo", "Plazo más próximo"], ["importe", "Mayor importe"]];
 
 export const estadoEtiqueta = (e) => (ESTADOS.find(([k]) => k === e) || [, e || "—"])[1];
@@ -78,7 +80,7 @@ export const limpiarCpv = (t) => [...new Set(String(t || "").split(LISTA).filter
 export const limpiarNuts = (t) => [...new Set(String(t || "").toUpperCase().split(LISTA).filter((c) => /^[A-Z]{2}[0-9A-Z]{0,3}$/.test(c)))].slice(0, 20);
 const importeValido = (t) => (/^\d{1,12}([.,]\d{1,2})?$/.test(String(t || "").trim()) ? String(t).trim().replace(",", ".") : "");
 
-export const FILTROS_VACIOS = { q: "", cpv: "", nuts: "", estados: [], importeMin: "", importeMax: "", orden: "", plazoHasta: "" };
+export const FILTROS_VACIOS = { q: "", cpv: "", nuts: "", estados: [], importeMin: "", importeMax: "", orden: "", plazoHasta: "", modo: "" };
 
 /** Filtros del formulario → parámetros de GET /tenders (lo que no es válido se omite en vez de mandar un 400). */
 export function filtrosAQuery(f) {
@@ -92,8 +94,12 @@ export function filtrosAQuery(f) {
   if (min) p.set("importe_min", min);
   if (max) p.set("importe_max", max);
   if (/^\d{4}-\d{2}-\d{2}$/.test(f.plazoHasta || "")) p.set("plazo_hasta", `${f.plazoHasta}T23:59:59Z`);
+  // Buscar por significado necesita texto y ordena siempre por cercanía: el orden elegido se ignora para no provocar un error.
+  const modo = MODOS.find(([k]) => k && k === f.modo);
+  const porSignificado = !!modo && q.length >= 2;
+  if (porSignificado) p.set("modo", modo[0]);
   const orden = ORDENES.find(([k]) => k === f.orden);
-  if (orden && !(orden[0] === "relevancia" && q.length < 2)) p.set("orden", orden[0]);
+  if (!porSignificado && orden && !(orden[0] === "relevancia" && q.length < 2)) p.set("orden", orden[0]);
   return p;
 }
 
@@ -105,7 +111,22 @@ export function queryAFiltros(sp) {
     q: sp.get("q") || "", cpv: todos("cpv").join(" "), nuts: todos("nuts").join(" "), estados: todos("estado"),
     importeMin: sp.get("importe_min") || "", importeMax: sp.get("importe_max") || "", orden: sp.get("orden") || "",
     plazoHasta: /^\d{4}-\d{2}-\d{2}/.test(plazo) ? plazo.slice(0, 10) : "",
+    modo: MODOS.some(([k]) => k && k === sp.get("modo")) ? sp.get("modo") : "",
   };
+}
+
+/** «83 % de parecido» a partir de la cercanía (0 a 1) que da la API; vacío si no hay. */
+export function cercaniaTexto(c) {
+  return typeof c === "number" && c >= 0 && c <= 1 ? `${Math.round(c * 100)} % de parecido` : "";
+}
+
+const MOTIVOS = { mismo_comprador: "Mismo comprador", cpv_comun: "CPV en común" };
+export const motivosTexto = (m) => (Array.isArray(m) ? m.map((x) => MOTIVOS[x]).filter(Boolean).join(" · ") : "");
+
+export function mensajeParecidas(status) {
+  if (status === 503) return "Todavía no se puede buscar parecidos: la búsqueda por significado no está activada o este expediente aún no se ha analizado. Vuelve a intentarlo en unos minutos.";
+  if (status === 404) return "No se encuentra este expediente.";
+  return "No se han podido cargar las licitaciones parecidas. Inténtalo de nuevo más tarde.";
 }
 
 export function totalTexto(total) {

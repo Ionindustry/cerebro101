@@ -2,8 +2,8 @@
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useEffect, useState } from "react";
-import { aptitudSimulacion, costeDeTexto, filasDeCurva, mensajeSimulador, probabilidadConRango, porcentaje, CUMPLIMIENTOS, cumplimientoEtiqueta, cumplimientoNecesitaNota, estadoEtiqueta, estadoPliego, estadoRequisito, etiquetaEmbudo, fechaTexto, fichaOrgHref, importeTexto, lecturaPliego, lugarCita, matrizCsv, matrizDe, mensajeEmbudo, mensajePliegos, resumenMatriz, nombreFuente, puedeDescargarPliego, resumenRequisitos, tipoRequisito, urlSegura } from "../../../../lib/licitaciones";
-import { Fallo, pedir, pedirCerebro } from "../../cliente";
+import { cercaniaTexto, mensajeParecidas, motivosTexto, aptitudSimulacion, costeDeTexto, filasDeCurva, mensajeSimulador, probabilidadConRango, porcentaje, CUMPLIMIENTOS, cumplimientoEtiqueta, cumplimientoNecesitaNota, estadoEtiqueta, estadoPliego, estadoRequisito, etiquetaEmbudo, fechaTexto, fichaOrgHref, importeTexto, lecturaPliego, lugarCita, matrizCsv, matrizDe, mensajeEmbudo, mensajePliegos, resumenMatriz, nombreFuente, puedeDescargarPliego, resumenRequisitos, tipoRequisito, urlSegura } from "../../../../lib/licitaciones";
+import { Fallo, Item, pedir, pedirCerebro } from "../../cliente";
 
 const Dato = ({ t, children }) => <div><dt>{t}</dt><dd>{children ?? "—"}</dd></div>;
 const Enlace = ({ url, children }) => {
@@ -177,6 +177,27 @@ function Pliegos({ id }) {
   );
 }
 
+function Parecidas({ id }) {
+  const [items, setItems] = useState(null);
+  const [error, setError] = useState(null);
+  useEffect(() => {
+    let vivo = true;
+    setItems(null); setError(null);
+    pedir(`tenders/${id}/parecidas?limit=8`).then((d) => { if (vivo) setItems(d.items); }).catch((e) => { if (vivo) setError(e); });
+    return () => { vivo = false; };
+  }, [id]);
+  return (
+    <section className="tarjeta" aria-label="Licitaciones parecidas">
+      <h2>Licitaciones parecidas</h2>
+      <p className="meta">Las más cercanas en significado, aunque no usen las mismas palabras. Que se parezcan no quiere decir que sean el mismo contrato.</p>
+      {error && <p role="alert" className="lic-error">{mensajeParecidas(error.status)}</p>}
+      {!error && items === null && <p className="meta">Buscando…</p>}
+      {items && items.length === 0 && <p className="meta">No se han encontrado licitaciones parecidas.</p>}
+      {items && items.length > 0 && <ul className="lic-lista">{items.map((x) => <Item key={x.id} x={x} />)}</ul>}
+    </section>
+  );
+}
+
 function Simulador({ id }) {
   const [coste, setCoste] = useState("");
   const [r, setR] = useState(null);
@@ -320,6 +341,7 @@ export default function Ficha() {
 
           <Pliegos id={id} />
           <Simulador id={id} />
+          <Parecidas id={id} />
 
           {x.evidencia && (
             <section className="tarjeta" aria-label="Evidencia">

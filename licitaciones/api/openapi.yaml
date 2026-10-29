@@ -133,6 +133,14 @@ paths:
             type: string
             enum: [relevancia, encaje, plazo, publicacion, actualizacion, importe]
             default: relevancia
+        - name: modo
+          in: query
+          description: |
+            Cómo se busca `q`. `texto` (por defecto): palabras exactas en castellano y catalán. `significado`: por parecido de sentido (vectores bge-m3 en pgvector),
+            aunque no compartan palabras; cada resultado trae `cercania` (0–1). `hibrido`: mezcla de las dos (fusión por rangos recíprocos). `significado` e `hibrido`
+            necesitan `q`, no se paginan (sin `cursor`) y ordenan por cercanía. Si la búsqueda por significado no está disponible, `significado` responde 503 e `hibrido`
+            devuelve la búsqueda de texto con `modo: texto` y un `aviso`. Implementado.
+          schema: {type: string, enum: [texto, significado, hibrido], default: texto}
         - name: facetas
           in: query
           description: Facetas a devolver (solo en la primera página).
@@ -168,6 +176,40 @@ paths:
         '400': {$ref: '#/components/responses/Invalida'}
         '401': {$ref: '#/components/responses/NoAutenticado'}
         '403': {$ref: '#/components/responses/Prohibido'}
+        '429': {$ref: '#/components/responses/DemasiadasPeticiones'}
+        '503': {$ref: '#/components/responses/NoDisponible'}
+
+  /tenders/{id}/parecidas:
+    get:
+      tags: [licitaciones]
+      operationId: licitacionesParecidas
+      summary: Licitaciones parecidas a un expediente (por significado, con el porqué)
+      description: |
+        Los expedientes más cercanos en significado al dado (sin incluirlo), de más a menos parecido. Cada uno trae `cercania` (0–1) y `motivos`:
+        `mismo_comprador` (mismo NIF de comprador) y/o `cpv_comun` (comparten algún código CPV). Responde 503 si la búsqueda por significado no está activada o
+        el expediente aún no se ha vectorizado. Implementado.
+      x-permisos: grupos licitaciones, direccion, comercial, telecom, areas; cuenta servicio
+      parameters:
+        - $ref: '#/components/parameters/tenderId'
+        - name: limit
+          in: query
+          schema: {type: integer, minimum: 1, maximum: 50, default: 10}
+      responses:
+        '200':
+          description: Parecidas
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items: {$ref: '#/components/schemas/LicitacionResumen'}
+        '400': {$ref: '#/components/responses/Invalida'}
+        '401': {$ref: '#/components/responses/NoAutenticado'}
+        '403': {$ref: '#/components/responses/Prohibido'}
+        '404': {$ref: '#/components/responses/NoEncontrado'}
         '429': {$ref: '#/components/responses/DemasiadasPeticiones'}
         '503': {$ref: '#/components/responses/NoDisponible'}
 
@@ -1028,6 +1070,11 @@ components:
         fuentes: {type: array, items: {$ref: '#/components/schemas/Fuente'}}
         url_origen: {type: string, format: uri}
         version_entidad: {type: integer, minimum: 1}
+        cercania: {type: number, minimum: 0, maximum: 1, description: "Cuánto se parece a lo buscado; solo con modo=significado y en /parecidas."}
+        motivos:
+          type: array
+          description: Solo en /parecidas.
+          items: {type: string, enum: [mismo_comprador, cpv_comun]}
         resaltado:
           type: object
           description: Fragmentos con coincidencias (texto plano; las marcas se indican con desplazamientos, no con HTML).

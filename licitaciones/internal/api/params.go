@@ -45,7 +45,7 @@ var noSoportados = map[string]bool{"area": true, "publicada_desde": true, "publi
 
 var soportados = map[string]bool{
 	"q": true, "cpv": true, "nuts": true, "comprador": true, "estado": true, "procedimiento": true, "fuente": true, "id_origen": true, "importe_min": true,
-	"importe_max": true, "actualizada_desde": true, "plazo_desde": true, "plazo_hasta": true, "orden": true, "limit": true, "cursor": true,
+	"importe_max": true, "actualizada_desde": true, "plazo_desde": true, "plazo_hasta": true, "orden": true, "limit": true, "cursor": true, "modo": true,
 }
 
 // parseBusqueda valida los parámetros de /tenders y construye el filtro. Cualquier problema es un 400 con el campo señalado.

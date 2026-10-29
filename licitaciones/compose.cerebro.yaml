@@ -8,6 +8,14 @@ services:
     networks:
       interna: {}
       cerebro: {aliases: [licitaciones-api]}
+    environment:
+      LIC_OLLAMA_URL: "${LIC_OLLAMA_URL:-http://ollama:11434}"    # la API vectoriza la consulta (búsqueda por significado)
+  vectorizador:                          # necesita Ollama (modelo bge-m3) para calcular los vectores de los expedientes
+    networks:
+      interna: {}
+      cerebro: {}
+    environment:
+      LIC_OLLAMA_URL: "${LIC_OLLAMA_URL:-http://ollama:11434}"
   nats:                                  # el consumidor de eventos del Cerebro (licitaciones-eventos) se conecta aquí; sigue pidiendo usuario y clave
     networks:
       interna: {}

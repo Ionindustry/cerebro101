@@ -100,6 +100,56 @@ class TestBuscar(unittest.TestCase):
 
 
 @unittest.skipUnless(HTTPX_REAL, "requiere httpx real (se ejecuta en el contenedor)")
+class TestBusquedaPorSignificado(unittest.TestCase):
+    def llamar(self, coro_fn, respuesta, codigo=200):
+        vistas = []
+
+        def manejar(req):
+            vistas.append(req)
+            return httpx.Response(codigo, json=respuesta)
+        with entorno(), con_motor(manejar):
+            return ejecutar(coro_fn()), vistas
+
+    def test_modo_significado_pasa_el_modo_y_devuelve_la_cercania(self):
+        cuerpo = {"items": [{**PAGINA["items"][0], "cercania": 0.83}], "siguiente_cursor": None, "total": {"valor": 1, "relacion": "gte"}, "modo": "significado"}
+        r, vistas = self.llamar(lambda: licitaciones.buscar(texto="cámaras para vigilar la ciudad", modo="significado"), cuerpo)
+        self.assertEqual(vistas[0].url.params["modo"], "significado")
+        self.assertEqual(r["resultados"][0]["cercania"], 0.83)
+        self.assertEqual(r["modo"], "significado")
+
+    def test_sin_modo_no_manda_el_parametro(self):
+        _, vistas = self.llamar(lambda: licitaciones.buscar(texto="obras"), PAGINA)
+        self.assertNotIn("modo", vistas[0].url.params)
+
+    def test_el_aviso_de_degradacion_llega_al_agente(self):
+        cuerpo = {**PAGINA, "siguiente_cursor": None, "modo": "texto", "aviso": "No se pudo calcular el significado; se ha buscado solo por texto."}
+        r, _ = self.llamar(lambda: licitaciones.buscar(texto="obras", modo="hibrido"), cuerpo)
+        self.assertIn("solo por texto", r["aviso"])
+
+    def test_rechaza_modos_incoherentes_antes_de_llamar(self):
+        for kw in ({"modo": "raro", "texto": "x"}, {"modo": "significado"}, {"modo": "hibrido", "texto": "x", "cursor": "abc"}):
+            vistas = []
+            with entorno(), con_motor(lambda r: vistas.append(r) or httpx.Response(200, json=PAGINA)):
+                with self.assertRaises(ValueError, msg=str(kw)):
+                    ejecutar(licitaciones.buscar(**kw))
+            self.assertEqual(vistas, [])
+
+    def test_parecidas(self):
+        cuerpo = {"items": [{**PAGINA["items"][0], "cercania": 0.9, "motivos": ["mismo_comprador", "cpv_comun"]}]}
+        r, vistas = self.llamar(lambda: licitaciones.parecidas(ID, 5), cuerpo)
+        self.assertEqual(vistas[0].url.path, f"/api/v1/tenders/{ID}/parecidas")
+        self.assertEqual(vistas[0].url.params["limit"], "5")
+        self.assertEqual(r["resultados"][0]["motivos"], ["mismo_comprador", "cpv_comun"])
+        with entorno(), self.assertRaises(ValueError):
+            ejecutar(licitaciones.parecidas("no-es-un-uuid"))
+
+    def test_motor_sin_vectores_es_motor_no_disponible(self):
+        with entorno(), con_motor(lambda r: httpx.Response(503, json={"detail": "x"})):
+            with self.assertRaises(licitaciones.MotorNoDisponible):
+                ejecutar(licitaciones.parecidas(ID))
+
+
+@unittest.skipUnless(HTTPX_REAL, "requiere httpx real (se ejecuta en el contenedor)")
 class TestErrores(unittest.TestCase):
     def llamar(self, estado, cuerpo=None, **extra):
         with entorno(**extra), con_motor(lambda r: httpx.Response(estado, json=cuerpo or {})):
@@ -381,7 +431,7 @@ class TestOrganizacion(unittest.TestCase):
 class TestRegistro(unittest.TestCase):
     def test_esta_registrada_y_es_de_solo_lectura(self):
         h = base._REGISTRO["licitaciones"]
-        self.assertEqual(set(h.operaciones), {"buscar", "ficha", "novedades_desde", "adjudicaciones", "competidores", "contratos_que_vencen", "organizacion", "simular", "estado_motor"})
+        self.assertEqual(set(h.operaciones), {"buscar", "parecidas", "ficha", "novedades_desde", "adjudicaciones", "competidores", "contratos_que_vencen", "organizacion", "simular", "estado_motor"})
         self.assertEqual(h.externas, frozenset())             # ninguna operación tiene impacto fuera: no necesita aprobación
         self.assertEqual(set(h.ayuda), set(h.operaciones))
 

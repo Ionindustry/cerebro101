@@ -8,7 +8,7 @@ import { decidir } from "../../../lib/licitaciones";
 
 const API = (process.env.LICITACIONES_API_URL || "http://licitaciones-api:8080").replace(/\/$/, "") + "/api/v1";
 const TOKEN = process.env.LICITACIONES_API_TOKEN || "";
-const PLAZO_MS = 5000;
+const PLAZO_MS = 20000;                  // la búsqueda por significado puede esperar a que Ollama cargue el modelo
 
 async function identidad() {
   if (process.env.PANEL_USUARIO_DESARROLLO) {
