@@ -311,7 +311,7 @@ class TestFlujo(unittest.TestCase):
 class TestHerramienta(unittest.TestCase):
     def test_la_herramienta_existe_y_la_que_aceptaba_cualquier_url_ya_no(self):
         self.assertIn("pliegos", herramientas_base._REGISTRO)
-        self.assertEqual(set(herramientas_base._REGISTRO["pliegos"].operaciones), {"documentos", "descargar"})
+        self.assertEqual(set(herramientas_base._REGISTRO["pliegos"].operaciones), {"documentos", "descargar", "leer", "buscar", "anotar_requisito", "requisitos"})
         self.assertNotIn("descargar_documento", herramientas_base._REGISTRO["plataformas_contratacion"].operaciones)
 
     def test_la_configuracion_real_trae_las_plataformas_y_los_limites(self):

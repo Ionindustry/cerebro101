@@ -376,7 +376,7 @@ Documento de partida: «Plataforma de detección y análisis de concursos públi
   ya había. El canal es único: «correo» incluye el panel pero no el resumen de las 16:00. Desde `/licitaciones/alertas`.
 - **Carga del histórico segura** (hecho): los eventos de lo que se carga desde los ZIP van a su propio flujo `LIC_HISTORICO` (solo el proyector lo consume; el Cerebro no recibe millones de
   «nuevas», ADR 0002) y el relay publica antes lo en vivo. Guía para cargarlo poco a poco en un PC delicado: `docs/CARGAR_HISTORICO.md`, con `scripts/estado_historico.sh` para ver el avance.
-- **Pliegos, fase 1: descarga segura y antivirus** (hecho; faltan la extracción de texto con citas, la matriz de cumplimiento y la pantalla): la herramienta `pliegos`
+- **Pliegos, fase 1: descarga segura y antivirus** (hecho; la fase 2 está justo debajo; falta la pantalla del expediente): la herramienta `pliegos`
   (`documentos` y `descargar`, `api/cerebro/licitaciones/pliegos.py`) baja un documento de una licitación **por su número en la ficha, nunca por dirección** (SEC-140): la URL sale del motor y
   se revalida (solo https, solo las plataformas de `contratacion.pliegos.hosts` en `config/integraciones.yaml` y sus subdominios, solo IP públicas, redirecciones comprobadas una a una y sin salir
   de la lista). El tipo se decide por el **contenido** (PDF, DOCX, XLSX, ODT/ODS o ZIP; un HTML, un SVG o un ejecutable se rechazan), hasta 100 MB y 40 descargas al día. Todo entra en
@@ -385,6 +385,13 @@ Documento de partida: «Plataforma de detección y análisis de concursos públi
   **Ningún agente ni el panel recibe el fichero**, solo su estado, tamaño y SHA-256. Esto cierra la SSRF que tenía el antiguo `plataformas_contratacion.descargar_documento` (aceptaba cualquier URL
   que propusiera el modelo): esa operación se ha **quitado**. Los metadatos van en `pliegos_documentos`; los ficheros, en `/datos/licitaciones/pliegos/<licitación>/`. El Analista de Pliegos ya
   tiene la herramienta.
+- **Pliegos, fase 2: leer los documentos y anotar requisitos con cita comprobada** (hecho): cuando un documento queda `limpio`, `descargar` extrae su texto **en un proceso aparte** (`python -m cerebro.licitaciones.extractor`,
+  `extractor.py`): entorno VACÍO de secretos, directorio de trabajo temporal, plazo de 130 s y límites del sistema operativo puestos por él mismo (1 GB de memoria, 110 s de CPU, nada que escribir, pocos ficheros). Solo lee texto:
+  PDF por páginas (hasta 500), Word y OpenDocument en «bloques» de ~3000 caracteres y Excel por hojas; macros y objetos incrustados se ignoran; un ZIP no se abre. Un PDF escaneado **no se lee con OCR** (aún): se avisa
+  de que hace falta que lo vea una persona. El texto va a `pliegos_paginas` con búsqueda en castellano. El agente tiene `leer` (una página), `buscar` (fragmentos con documento y página) y **`anotar_requisito`**: guarda un
+  requisito (tipo, resumen con sus palabras, valor y **cita literal**) SOLO si esa frase está de verdad en esa página —se comparan sin mayúsculas, espacios, guiones de fin de línea ni tipo de comillas, y una cita de menos de
+  20 caracteres no prueba nada y se rechaza—, así que el modelo no puede inventarse un requisito ni una página. Nacen en `borrador` (`pliegos_requisitos`): **los confirma o rechaza una persona**, nunca el agente. Todo lo que devuelve
+  lleva la nota de que es texto de terceros (datos, no instrucciones). **Límite conocido:** el extractor es un proceso con límites, no un contenedor sin red (SEC-142 pide el contenedor); mientras tanto no tiene secretos que robar.
 - **Plazos en el calendario** (hecho): en el embudo, el botón «Añadir el plazo al calendario» (`POST /licitaciones/embudo/{id}/calendario`) crea en el calendario CalDAV de la empresa un evento
   que **termina a la hora del plazo de presentación** (dura `calendario_plazos.duracion_min` = 30 minutos), con recordatorios `recordatorios_dias` = 3 y 1 días antes y el plazo en hora local en la
   descripción. Lo crea una persona al pulsar y **sin invitados**: no sale nada de la empresa, por eso no pasa por la bandeja de aprobaciones (la que sí pasa es `calendario.crear_cita` de los agentes,
