@@ -117,9 +117,10 @@ def limpiar_competidores(c) -> list[str]:
     return list(dict.fromkeys(out))
 
 
-def ganadores(ficha: dict, competidores: list[str]) -> list[dict]:
+def ganadores(ficha: dict, competidores: list[str], con_nif_completo: bool = False) -> list[dict]:
     """Los adjudicatarios de la ficha de un expediente que cumplen una alerta de competencia: los de la lista (por NIF) o, con la lista vacía, todos los adjudicados.
-    Un adjudicatario sin NIF no se puede comparar con la lista. El NIF de una persona física no se guarda en el aviso."""
+    Un adjudicatario sin NIF no se puede comparar con la lista. El NIF de una persona física no se guarda en el aviso.
+    Con `con_nif_completo`, cada uno lleva además `_nif` (el NIF entero, también el de una persona) SOLO para comparar con el motor: hay que quitarlo antes de guardar nada."""
     salida = []
     for a in ficha.get("adjudicaciones") or []:
         if a.get("resultado") != "adjudicado":
@@ -132,8 +133,17 @@ def ganadores(ficha: dict, competidores: list[str]) -> list[dict]:
             continue
         imp = next((i for i in (a.get("importes") or []) if i.get("impuestos") == "sin_iva"), None) or next(iter(a.get("importes") or []), None) or {}
         salida.append({"nombre": str(w.get("nombre") or "")[:200], "nif": nif if nif and not RE_NIF_PERSONA.match(nif) else None, "lote": a.get("lote"),
-                       "importe": imp.get("valor"), "moneda": imp.get("moneda")})
+                       "importe": imp.get("valor"), "moneda": imp.get("moneda"), **({"_nif": nif or None} if con_nif_completo else {})})
     return salida[:20]
+
+
+def limpiar_solo_nuevos(v, competencia: bool, competidores: list[str]) -> bool:
+    """«Solo empresas nuevas en el mercado»: solo en una alerta de competencia y sin lista de competidores (con una lista ya se sabe a quién se vigila)."""
+    if not isinstance(v, bool):
+        raise ErrorAlerta("solo_nuevos: verdadero o falso")
+    if v and (not competencia or competidores):
+        raise ErrorAlerta("solo_nuevos: solo en una alerta de competencia sin lista de competidores")
+    return v
 
 
 def limpiar_nombre(n) -> str:
@@ -223,7 +233,7 @@ def limpiar_destino(canal: str, destino, dominios=None) -> str | None:
     return limpiar_correo(destino, dominios)
 
 
-COLUMNAS = "id, nombre, propietario, ambito, departamento, filtro, eventos, canal, correo_destino, tipo, competidores, activa, creada, cambiada, ultima_entrega"
+COLUMNAS = "id, nombre, propietario, ambito, departamento, filtro, eventos, canal, correo_destino, tipo, competidores, solo_nuevos, activa, creada, cambiada, ultima_entrega"
 
 
 def _alerta(f: dict, usuario=None) -> dict:
@@ -264,16 +274,17 @@ async def crear(usuario, datos: dict) -> dict:
     if tipo == "licitacion" and competidores:
         raise ErrorAlerta("competidores: solo en las alertas de competencia")
     eventos = EVENTOS_COMPETENCIA if tipo == "competencia" else limpiar_eventos(datos.get("eventos"))          # la de competencia solo avisa de adjudicaciones
+    solo_nuevos = limpiar_solo_nuevos(datos.get("solo_nuevos", False), tipo == "competencia", competidores)
     valores = (limpiar_nombre(datos.get("nombre")), usuario.id, ambito, departamento, Jsonb(limpiar_filtro(datos.get("filtro"), tipo == "competencia" and bool(competidores))),
-               eventos, canal, limpiar_destino(canal, datos.get("correo_destino")), tipo, competidores, bool(datos.get("activa", True)))
+               eventos, canal, limpiar_destino(canal, datos.get("correo_destino")), tipo, competidores, solo_nuevos, bool(datos.get("activa", True)))
     async with await _conectar() as conn:
         async with conn.transaction():
             cur = await conn.execute("SELECT count(*) AS n FROM licitaciones_alertas WHERE propietario = %s", [usuario.id])
             if (await cur.fetchone())["n"] >= MAX_ALERTAS_POR_PERSONA:
                 raise ErrorAlerta(f"Has llegado al máximo de {MAX_ALERTAS_POR_PERSONA} alertas: borra alguna")
             cur = await conn.execute(
-                f"""INSERT INTO licitaciones_alertas (nombre, propietario, ambito, departamento, filtro, eventos, canal, correo_destino, tipo, competidores, activa)
-                    VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s) RETURNING {COLUMNAS}""", valores)
+                f"""INSERT INTO licitaciones_alertas (nombre, propietario, ambito, departamento, filtro, eventos, canal, correo_destino, tipo, competidores, solo_nuevos, activa)
+                    VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s) RETURNING {COLUMNAS}""", valores)
             return _alerta(await cur.fetchone(), usuario)
 
 
@@ -293,7 +304,7 @@ async def cambiar(usuario, aid: int, datos: dict) -> dict:
         raise SinPermiso("Tu usuario no tiene acceso a Licitaciones")
     if not isinstance(datos, dict) or not datos:
         raise ErrorAlerta("Indica qué cambiar")
-    permitido = {"nombre", "filtro", "eventos", "activa", "canal", "correo_destino", "competidores"}
+    permitido = {"nombre", "filtro", "eventos", "activa", "canal", "correo_destino", "competidores", "solo_nuevos"}
     if set(datos) - permitido:
         raise ErrorAlerta("Solo se puede cambiar: " + ", ".join(sorted(permitido)))
     nuevo: dict = {}
@@ -320,6 +331,8 @@ async def cambiar(usuario, aid: int, datos: dict) -> dict:
                     raise ErrorAlerta("Una alerta de competencia solo avisa de adjudicaciones")
                 nuevo["eventos"] = limpiar_eventos(datos["eventos"])
             competidores = nuevo.get("competidores", actual["competidores"])
+            if "solo_nuevos" in datos or ("competidores" in datos and competidores):
+                nuevo["solo_nuevos"] = limpiar_solo_nuevos(datos["solo_nuevos"] if "solo_nuevos" in datos else False, competencia, competidores)
             if "filtro" in datos or "competidores" in datos:
                 filtro = limpiar_filtro(datos["filtro"] if "filtro" in datos else actual["filtro"], competencia and bool(competidores))
                 if "filtro" in datos or not filtro:

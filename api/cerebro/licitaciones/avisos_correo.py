@@ -64,7 +64,8 @@ def redactar(alerta: dict, avisos: list[dict], zona: str = "Europe/Madrid") -> t
             lineas.append(f"  {detalle}")
         for g in ((a.get("detalle") or {}).get("ganadores") or [])[:5]:
             lineas.append("  Ganó: " + " · ".join(x for x in (_una_linea(g.get("nombre"), 120), g.get("nif") or "", f"{_importe(g['importe'])} sin IVA" if g.get("importe") else "",
-                                                           f"lote {_una_linea(g['lote'], 20)}" if g.get("lote") not in (None, "", "1") else "") if x))
+                                                           f"lote {_una_linea(g['lote'], 20)}" if g.get("lote") not in (None, "", "1") else "",
+                                                           "empresa nueva en este mercado" if (a.get("detalle") or {}).get("nuevos") else "") if x))
         if a.get("enlace"):
             lineas.append(f"  {_una_linea(a['enlace'], 300)}")
         lineas.append("")

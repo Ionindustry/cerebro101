@@ -677,3 +677,14 @@ test("CSV de la matriz: comillas dobladas, sin fórmulas y con los acentos intac
   assert.equal(lineas.length, 2);
   assert.equal(lineas[1], '"Solvencia económica";"Volumen ≥ 300.000 €";"300.000 €";"igual o superior";"PCAP, página 4";"Cumple en parte";"Faltan 50.000 €";"ana"');
 });
+
+import { ganadoresTexto as ganadoresTextoNuevos, vigilaTexto as vigilaTextoNuevos } from "../lib/licitaciones.js";
+
+test("alerta de nuevo competidor: se dice qué vigila y que la empresa es nueva", () => {
+  assert.equal(vigilaTextoNuevos({ competidores: [], solo_nuevos: true }), "empresas nuevas en el mercado");
+  assert.equal(vigilaTextoNuevos({ competidores: [], solo_nuevos: false }), "cualquier adjudicatario");
+  assert.equal(vigilaTextoNuevos({ competidores: ["B12345678"], solo_nuevos: false }), "B12345678");
+  const g = [{ nombre: "Seguridad SL", nif: "B12345678", importe: "90000.00", lote: "1" }];
+  assert.ok(!ganadoresTextoNuevos({ ganadores: g })[0].includes("nueva"));
+  assert.match(ganadoresTextoNuevos({ ganadores: g, nuevos: true })[0], /empresa nueva en este mercado$/);
+});
