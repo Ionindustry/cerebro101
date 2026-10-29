@@ -50,6 +50,13 @@ pesos:
 embudo:
   encaje_min: 60
 
+# Plazos en el calendario: el botón «Añadir el plazo al calendario» del embudo crea (o actualiza) un evento corto que TERMINA a la hora del plazo, con recordatorios
+# unos días antes, en el calendario de la empresa (CalDAV, cuenta CALENDARIO_LICITACIONES_* o, si no, CALENDARIO_*). Lo hace una persona al pulsar: sin invitados.
+calendario_plazos:
+  duracion_min: 30              # el evento ocupa los últimos 30 minutos antes del plazo
+  recordatorios_dias: [3, 1]    # avisos del calendario antes del plazo
+  calendario: ""                # nombre del calendario donde se crea; vacío = el primero de la cuenta
+
 # Alertas guardadas: un evento (nueva, adjudicada…) solo genera aviso si el expediente se ha actualizado en los últimos días. Así la carga del histórico y la
 # primera lectura del flujo no inundan a nadie de avisos de licitaciones de hace meses.
 alertas:

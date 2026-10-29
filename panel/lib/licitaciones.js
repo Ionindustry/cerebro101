@@ -240,6 +240,32 @@ export const viabilidadPocosDatos = (v) => {
   return resueltas < (v?.minimo ?? 5);
 };
 
+// ---- Plazo en el calendario de la empresa (botón «Añadir el plazo al calendario» del embudo) ----
+
+/** Estado del plazo en el calendario: "no" (no está), "ok" (está y coincide con el plazo actual) o "desfasado" (está, pero el plazo ha cambiado desde entonces). */
+export function calendarioEstado(x) {
+  if (!x?.calendario_plazo) return "no";
+  const a = Date.parse(x.calendario_plazo), b = Date.parse(x.fecha_limite);
+  return Number.isFinite(a) && Number.isFinite(b) && a === b ? "ok" : "desfasado";
+}
+
+/** Se puede poner en el calendario si está viva en el embudo, vinculada al motor y con un plazo que aún no ha pasado. */
+export const puedeAnadirAlCalendario = (x, ahora = Date.now()) =>
+  Boolean(x?.motor_id) && !["ganada", "perdida", "descartada"].includes(x.estado) && Number.isFinite(Date.parse(x.fecha_limite)) && Date.parse(x.fecha_limite) > ahora;
+
+/** Texto del botón de ponerlo: añadir, o actualizar si el plazo cambió. */
+export const textoAnadirCalendario = (x) => (calendarioEstado(x) === "desfasado" ? "Actualizar el plazo en el calendario" : "Añadir el plazo al calendario");
+
+/** Lo que dice la tarjeta cuando el plazo está en el calendario. */
+export const textoEnCalendario = (x) =>
+  calendarioEstado(x) === "ok" ? "Plazo en el calendario" : calendarioEstado(x) === "desfasado" ? "El plazo en el calendario está desfasado" : "";
+
+export function mensajeCalendario(status) {
+  if (status === 422) return "No se puede poner esa licitación en el calendario: ya está resuelta o su plazo ha pasado.";
+  if (status === 503) return "No se ha podido escribir en el calendario. Puede que no esté configurado o que no responda; inténtalo en unos minutos.";
+  return mensajeEmbudo(status);
+}
+
 /** Horas como «3 h» o «2,5 días»; null es «—». */
 export function horasTexto(h) {
   if (h === null || h === undefined || Number.isNaN(Number(h))) return "—";

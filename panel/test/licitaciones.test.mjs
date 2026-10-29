@@ -554,3 +554,37 @@ test("viabilidadPocosDatos: con menos resueltas que el mínimo no se concluye na
   assert.equal(viabilidadPocosDatos({ minimo: 5, por_recomendacion: { ir: { ganadas: 3, perdidas: 2 } } }), false);
   assert.equal(viabilidadPocosDatos(null), true);
 });
+
+// ---- Plazo en el calendario ----
+import { calendarioEstado, mensajeCalendario, puedeAnadirAlCalendario, textoAnadirCalendario, textoEnCalendario } from "../lib/licitaciones.js";
+
+test("calendarioEstado: no está, está al día o el plazo ha cambiado", () => {
+  assert.equal(calendarioEstado({ fecha_limite: "2026-11-20T09:00:00+00:00" }), "no");
+  assert.equal(calendarioEstado({ calendario_plazo: "2026-11-20T09:00:00+00:00", fecha_limite: "2026-11-20T10:00:00+01:00" }), "ok");        // la misma hora en otra zona
+  assert.equal(calendarioEstado({ calendario_plazo: "2026-11-20T09:00:00+00:00", fecha_limite: "2026-11-25T09:00:00+00:00" }), "desfasado");
+  assert.equal(calendarioEstado({ calendario_plazo: "2026-11-20T09:00:00+00:00", fecha_limite: null }), "desfasado");
+  assert.equal(calendarioEstado(null), "no");
+});
+
+test("puedeAnadirAlCalendario: viva, vinculada y con plazo futuro", () => {
+  const ahora = Date.parse("2026-10-28T12:00:00Z");
+  const base = { motor_id: "u", estado: "en_estudio", fecha_limite: "2026-11-20T09:00:00+00:00" };
+  assert.equal(puedeAnadirAlCalendario(base, ahora), true);
+  assert.equal(puedeAnadirAlCalendario({ ...base, motor_id: null }, ahora), false);
+  assert.equal(puedeAnadirAlCalendario({ ...base, fecha_limite: "2026-10-01T09:00:00+00:00" }, ahora), false);
+  assert.equal(puedeAnadirAlCalendario({ ...base, fecha_limite: null }, ahora), false);
+  for (const estado of ["ganada", "perdida", "descartada"]) assert.equal(puedeAnadirAlCalendario({ ...base, estado }, ahora), false, estado);
+});
+
+test("textos del plazo en el calendario", () => {
+  const ok = { calendario_plazo: "2026-11-20T09:00:00+00:00", fecha_limite: "2026-11-20T09:00:00+00:00" };
+  const viejo = { calendario_plazo: "2026-11-20T09:00:00+00:00", fecha_limite: "2026-11-25T09:00:00+00:00" };
+  assert.equal(textoAnadirCalendario({}), "Añadir el plazo al calendario");
+  assert.equal(textoAnadirCalendario(viejo), "Actualizar el plazo en el calendario");
+  assert.equal(textoEnCalendario(ok), "Plazo en el calendario");
+  assert.match(textoEnCalendario(viejo), /desfasado/);
+  assert.equal(textoEnCalendario({}), "");
+  assert.match(mensajeCalendario(503), /calendario/);
+  assert.match(mensajeCalendario(422), /ya está resuelta o su plazo ha pasado/);
+  assert.match(mensajeCalendario(403), /Dirección/);
+});

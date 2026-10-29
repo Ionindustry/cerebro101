@@ -134,6 +134,25 @@ class TestRutasDelEmbudo(unittest.TestCase):
             self.assertEqual(c.post("/licitaciones/embudo/7/viabilidad").status_code, 503)
             cerrar.assert_awaited_once()
 
+    def test_calendario_de_plazos_permisos_y_errores(self):
+        cp = main.calendario_plazos
+        e = main.embudo_licitaciones
+        c = como(("usuario", "responsable"), ("finanzas", "comercial"))
+        with mock.patch.object(cp, "poner", mock.AsyncMock()) as poner, mock.patch.object(cp, "quitar", mock.AsyncMock()) as quitar:
+            self.assertEqual(c.post("/licitaciones/embudo/7/calendario").status_code, 403)
+            self.assertEqual(c.post("/licitaciones/embudo/7/calendario/quitar").status_code, 403)
+            poner.assert_not_called()
+            quitar.assert_not_called()
+        c = como(("direccion",))
+        with mock.patch.object(cp, "poner", mock.AsyncMock(return_value=self.FILA)), mock.patch.object(cp, "quitar", mock.AsyncMock(return_value=self.FILA)):
+            self.assertEqual(c.post("/licitaciones/embudo/7/calendario").json(), self.FILA)
+            self.assertEqual(c.post("/licitaciones/embudo/7/calendario/quitar").json(), self.FILA)
+        for fallo, codigo in ((e.NoExiste("x"), 404), (e.ErrorEmbudo("x"), 422), (cp.ErrorCalendario("x"), 503)):
+            with mock.patch.object(cp, "poner", mock.AsyncMock(side_effect=fallo)):
+                self.assertEqual(c.post("/licitaciones/embudo/7/calendario").status_code, codigo)
+        with mock.patch.object(cp, "quitar", mock.AsyncMock(side_effect=cp.ErrorCalendario("x"))):
+            self.assertEqual(c.post("/licitaciones/embudo/7/calendario/quitar").status_code, 503)
+
     def test_estudiar_sin_motor_o_con_un_expediente_que_no_existe(self):
         e = main.embudo_licitaciones
         c = como(("direccion",))
