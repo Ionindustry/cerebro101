@@ -397,3 +397,20 @@ ALTER TABLE pliegos_requisitos ADD COLUMN IF NOT EXISTS cumplimiento_por  text;
 ALTER TABLE pliegos_requisitos ADD COLUMN IF NOT EXISTS cumplimiento_en   timestamptz;
 ALTER TABLE pliegos_requisitos DROP CONSTRAINT IF EXISTS pliegos_requisitos_cumplimiento;
 ALTER TABLE pliegos_requisitos ADD CONSTRAINT pliegos_requisitos_cumplimiento CHECK (cumplimiento IN ('pendiente', 'cumple', 'parcial', 'no_cumple', 'no_aplica'));
+
+-- Reglas de puntuación del precio de una licitación (api/cerebro/licitaciones/reglas.py): las anota una PERSONA leyendo el pliego (el agente no). El simulador las usa para
+-- calcular los puntos de precio de cada oferta y, si el pliego fija un umbral de baja anormal, para marcar ese umbral en vez de estimarlo.
+CREATE TABLE IF NOT EXISTS licitaciones_reglas_precio (
+  motor_id         uuid PRIMARY KEY,
+  formula          text NOT NULL,                  -- inversa | proporcional_baja | lineal_umbral
+  puntos_precio    numeric NOT NULL,               -- puntos máximos del criterio precio
+  puntos_total     numeric NOT NULL DEFAULT 100,   -- suma de puntos de todos los criterios
+  baja_tope_pct    numeric,                        -- lineal_umbral: baja a partir de la cual no se puntúa más
+  baja_anormal_pct numeric,                        -- umbral de baja anormal que fija el pliego, si lo fija
+  nota             text NOT NULL DEFAULT '',
+  por              text NOT NULL,
+  actualizado      timestamptz NOT NULL DEFAULT now(),
+  CHECK (formula IN ('inversa', 'proporcional_baja', 'lineal_umbral')),
+  CHECK (puntos_precio > 0 AND puntos_total >= puntos_precio),
+  CHECK (formula <> 'lineal_umbral' OR baja_tope_pct > 0)
+);

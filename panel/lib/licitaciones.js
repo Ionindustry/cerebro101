@@ -393,10 +393,11 @@ export function aptitudSimulacion(r) {
   if (r.licitacion?.peso_juicio_de_valor > 0) motivos.push(`el juicio de valor pesa un ${r.licitacion.peso_juicio_de_valor} %`);
   return { apto: false, texto: `Solo orientativo, no decide por sí solo: ${motivos.join("; ") || "no cumple lo acordado"}.` };
 }
-export function mensajeSimulador(status) {
+export function mensajeSimulador(status, detalle = "") {
   if (status === 401) return "Tu sesión ha caducado.";
   if (status === 403) return "El simulador es para Dirección y el departamento de Licitaciones.";
   if (status === 404) return "No existe esa licitación.";
+  if (status === 422 && detalle) return detalle;           // son mensajes pensados para la persona (sin presupuesto, presupuesto del ERP que no existe…)
   if (status === 422) return "No se puede simular esta licitación (sin presupuesto o CPV, o sin concursos parecidos en el histórico) o el coste no es válido.";
   if (status === 503) return "No se ha podido consultar el motor de licitaciones. Inténtalo en unos minutos.";
   return "No se ha podido simular. Inténtalo en unos minutos.";
@@ -407,6 +408,51 @@ export function costeDeTexto(t) {
   if (!x) return null;
   const n = Number(/,\d{1,2}$/.test(x) ? x.replace(/\./g, "").replace(",", ".") : x.replace(/[.,](?=\d{3}(\D|$))/g, ""));
   return Number.isFinite(n) && n > 0 ? n : null;
+}
+
+export const FORMULAS_PRECIO = [
+  ["inversa", "Proporcionalidad inversa (la oferta más barata se lleva todos los puntos)"],
+  ["proporcional_baja", "Proporcional a la baja (la mayor baja se lleva todos los puntos)"],
+  ["lineal_umbral", "Lineal hasta una baja tope"],
+];
+
+/** El formulario de reglas del pliego → cuerpo del POST, o {error} con lo que falta. Los números admiten coma decimal. */
+export function reglasAEnvio(id, f) {
+  if (!FORMULAS_PRECIO.some(([k]) => k === f.formula)) return { error: "Elige cómo puntúa el pliego el precio" };
+  const puntos = costeDeTexto(f.puntos), total = costeDeTexto(f.total) ?? 100;
+  if (puntos === null) return { error: "Escribe los puntos que da el precio (p. ej. 51)" };
+  if (puntos > total) return { error: "Los puntos del precio no pueden superar los puntos totales" };
+  const cuerpo = { motor_id: id, formula: f.formula, puntos_precio: puntos, puntos_total: total, nota: String(f.nota || "").trim().slice(0, 500) };
+  if (f.formula === "lineal_umbral") {
+    const tope = costeDeTexto(f.tope);
+    if (tope === null || tope > 100) return { error: "Escribe la baja tope (%), la que ya no puntúa más" };
+    cuerpo.baja_tope_pct = tope;
+  }
+  if (String(f.anormal ?? "").trim()) {
+    const a = costeDeTexto(f.anormal);
+    if (a === null || a > 100) return { error: "El umbral de baja anormal debe ser un porcentaje, p. ej. 25" };
+    cuerpo.baja_anormal_pct = a;
+  }
+  return { cuerpo };
+}
+
+/** Las reglas guardadas → el estado del formulario (todo texto). */
+export function reglasAFormulario(r) {
+  const t = (x) => (x == null ? "" : String(x).replace(".", ","));
+  return { formula: r?.formula || "inversa", puntos: t(r?.puntos_precio), total: r?.puntos_total && r.puntos_total !== 100 ? t(r.puntos_total) : "", tope: t(r?.baja_tope_pct), anormal: t(r?.baja_anormal_pct), nota: r?.nota || "" };
+}
+
+export function mensajeReglas(status) {
+  if (status === 403) return "Solo Dirección y el departamento de Licitaciones pueden anotar las reglas.";
+  if (status === 422) return "Alguno de los datos no es válido. Revisa los números.";
+  return "No se han podido guardar las reglas. Inténtalo de nuevo más tarde.";
+}
+
+/** Cómo salió el coste traído del ERP, en una frase. */
+export function costeErpTexto(c) {
+  if (!c) return "";
+  const n = (c.lineas || []).length, f = (c.sin_coste || []).length;
+  return `Coste del presupuesto ${c.presupuesto} en el ERP: ${n} línea${n === 1 ? "" : "s"} con coste${f ? `; ${f} sin coste (no contadas: el coste real será mayor)` : ""}.`;
 }
 
 /** Horas como «3 h» o «2,5 días»; null es «—». */

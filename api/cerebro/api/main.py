@@ -21,6 +21,7 @@ from ..herramientas.licitaciones import MotorNoDisponible
 from ..licitaciones import alertas as alertas_licitaciones
 from ..licitaciones import calendario_plazos
 from ..licitaciones import pliegos as pliegos_licitaciones
+from ..licitaciones import reglas as reglas_licitaciones
 from ..licitaciones import simulador as simulador_licitaciones
 from ..licitaciones import embudo as embudo_licitaciones
 from ..licitaciones import resumen as resumen_licitaciones
@@ -447,6 +448,7 @@ async def marcar_cumplimiento_de_requisito(rid: int, entrada: CumplimientoRequis
 class SimulacionEntrada(BaseModel):
     motor_id: str
     coste: float | None = None          # coste estimado sin IVA, en euros (opcional)
+    presupuesto_erp: str | None = None  # o el código de un presupuesto (Quotation) del ERP, del que se saca el coste (opcional)
 
 
 @app.post("/licitaciones/simulador")
@@ -454,7 +456,7 @@ async def simular_oferta(entrada: SimulacionEntrada, usuario: Usuario = Depends(
     """Simulador de ofertas: con qué baja se ha ganado en concursos parecidos y qué probabilidad y margen daría cada precio. Orientativo: el precio lo decide una persona."""
     _exige_licitaciones(usuario)
     try:
-        r = await simulador_licitaciones.simular(entrada.motor_id, entrada.coste, cfg=resumen_licitaciones.config())
+        r = await simulador_licitaciones.simular_completo(entrada.motor_id, entrada.coste, entrada.presupuesto_erp, cfg=resumen_licitaciones.config())
     except simulador_licitaciones.ErrorSimulador as e:
         raise HTTPException(422, str(e)) from None
     except MotorNoDisponible as e:
@@ -463,6 +465,45 @@ async def simular_oferta(entrada: SimulacionEntrada, usuario: Usuario = Depends(
         raise HTTPException(404, str(e) or "No existe esa licitación") from None
     log.info("simulador: %s simula %s (muestra %s, apto %s)", usuario.id, entrada.motor_id, r["muestra"]["n"], r["apto_para_decidir"])
     return r
+
+
+class ReglasPrecioEntrada(BaseModel):
+    motor_id: str
+    formula: str
+    puntos_precio: float
+    puntos_total: float | None = None
+    baja_tope_pct: float | None = None
+    baja_anormal_pct: float | None = None
+    nota: str = ""
+
+
+@app.get("/licitaciones/reglas-precio/{motor_id}")
+async def leer_reglas_precio(motor_id: str, usuario: Usuario = Depends(usuario_actual)):
+    """Las reglas de puntuación del precio que una persona anotó del pliego (para el simulador); {} si no hay."""
+    _exige_licitaciones(usuario)
+    try:
+        return await reglas_licitaciones.leer(motor_id) or {}
+    except reglas_licitaciones.ErrorReglas as e:
+        raise HTTPException(422, str(e)) from None
+
+
+@app.post("/licitaciones/reglas-precio")
+async def guardar_reglas_precio(entrada: ReglasPrecioEntrada, usuario: Usuario = Depends(usuario_actual)):
+    """Una PERSONA anota cómo puntúa el pliego el precio (fórmula, puntos, umbral de baja anormal). El agente no tiene esta operación."""
+    _exige_licitaciones(usuario)
+    try:
+        return await reglas_licitaciones.guardar(entrada.motor_id, entrada.model_dump(exclude={"motor_id"}), usuario.id)
+    except reglas_licitaciones.ErrorReglas as e:
+        raise HTTPException(422, str(e)) from None
+
+
+@app.post("/licitaciones/reglas-precio/{motor_id}/borrar")
+async def borrar_reglas_precio(motor_id: str, usuario: Usuario = Depends(usuario_actual)):
+    _exige_licitaciones(usuario)
+    try:
+        return {"borrada": await reglas_licitaciones.borrar(motor_id)}
+    except reglas_licitaciones.ErrorReglas as e:
+        raise HTTPException(422, str(e)) from None
 
 
 @app.post("/licitaciones/embudo/{lid}/estado")

@@ -439,11 +439,11 @@ async def competidores(cpv: list[str] | None = None, nuts: list[str] | None = No
     return out
 
 
-async def simular(licitacion: str, coste: float | None = None) -> dict:
+async def simular(licitacion: str, coste: float | None = None, presupuesto_erp: str | None = None) -> dict:
     """Simulador de ofertas (solo lectura): con qué baja se ha ganado en concursos parecidos y qué probabilidad y margen daría cada precio."""
     from ..licitaciones import resumen, simulador          # import diferido: el simulador usa esta misma herramienta para hablar con el motor
     try:
-        return await simulador.simular(licitacion, coste, cfg=resumen.config())
+        return await simulador.simular_completo(licitacion, coste, presupuesto_erp, cfg=resumen.config())
     except simulador.ErrorSimulador as e:
         raise ValueError(str(e)) from None
 
@@ -485,7 +485,7 @@ registrar(Herramienta(
                            "como comprador (a quién adjudica, con qué baja) y como adjudicataria (a quién vende, en qué CPV, por trimestres); desde y hasta «AAAA-MM-DD» y cpv acotan las cifras. "
                            "Nunca se busca por nombre",
            "simular": "simulador de ofertas de UNA licitación (id): en concursos parecidos, con qué baja se ha ganado, qué probabilidad de ganar da cada precio (con su incertidumbre), "
-                      "el riesgo de baja anormal y, si das tu coste estimado sin IVA en euros, el margen esperado y el precio que mejor lo da. Orientativo: dice si es apto para decidir y "
+                      "el riesgo de baja anormal y, si das tu coste estimado sin IVA en euros (coste) o el código de un presupuesto del ERP (presupuesto_erp; uno u otro), el margen esperado y el precio que mejor lo da. Usa las reglas de puntuación del precio si una persona las anotó. Orientativo: dice si es apto para decidir y "
                       "nunca decide el precio; el precio lo decide una persona",
            "estado_motor": "si el motor está al día: estado y antigüedad de la última ingesta de cada fuente; consúltalo antes de afirmar que «no hay novedades»"},
     ejemplos={"buscar": {"texto": "videovigilancia", "cpv": ["35125"], "estado": ["abierta"], "limite": 5},
