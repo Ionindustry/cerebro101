@@ -44,6 +44,8 @@ type Resumen struct {
 	Fuentes           []string         `json:"fuentes"`
 	URLOrigen         string           `json:"url_origen,omitempty"`
 	VersionEntidad    int              `json:"version_entidad"`
+	Cercania          *float64         `json:"cercania,omitempty"` // 0 a 1: cuánto se parece a lo buscado (solo búsqueda por significado y «parecidas»)
+	Motivos           []string         `json:"motivos,omitempty"`  // solo «parecidas»: mismo_comprador, cpv_comun
 }
 
 // uuid8 deriva un UUID v8 (RFC 9562, uso propio) estable del nombre con SHA-256: el mismo nombre da siempre el mismo identificador.

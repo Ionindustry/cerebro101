@@ -22,8 +22,8 @@ MOTOR=(-f licitaciones/compose.yaml -f licitaciones/compose.cerebro.yaml --env-f
 echo "→ Código (git pull)"
 git pull --ff-only
 
-echo "→ Motor de licitaciones (ingestor, proyector y API; una imagen pequeña que se construye aquí)"
-docker compose "${MOTOR[@]}" up -d --build ingestor proyector api
+echo "→ Motor de licitaciones (ingestor, proyector, vectorizador y API; una imagen pequeña que se construye aquí)"
+docker compose "${MOTOR[@]}" up -d --build ingestor proyector vectorizador api
 
 echo "→ Cerebro: imágenes de la API y del panel"
 if [ "$CONSTRUIR" = 1 ]; then

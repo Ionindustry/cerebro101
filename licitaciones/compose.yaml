@@ -44,7 +44,7 @@ services:
 
   lic-db:
     <<: *endurecido
-    image: "${LIC_PG_IMAGEN:-postgres:16}"
+    image: "${LIC_PG_IMAGEN:-pgvector/pgvector:pg16}"   # Postgres 16 con la extensión pgvector (búsqueda por significado); mismo formato de datos que postgres:16
     cap_add: [CHOWN, DAC_OVERRIDE, FOWNER, SETGID, SETUID]      # lo que necesita el arranque de la imagen oficial; el resto sigue quitado
     environment:
       POSTGRES_USER: lic
@@ -108,6 +108,23 @@ services:
     mem_limit: 256m
     cpus: 0.5
 
+  vectorizador:
+    restart: unless-stopped
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    networks: [interna]                                 # sin salida a Internet; para llegar a Ollama se une a la red del Cerebro (compose.cerebro.yaml)
+    image: licitaciones:local
+    entrypoint: ["/vectorizador"]
+    read_only: true
+    tmpfs: ["/tmp"]
+    depends_on: {lic-db: {condition: service_healthy}}
+    environment:
+      LICITACIONES_ADDR: "0.0.0.0:8081"
+      LIC_PG_URL: "postgres://lic:${LIC_PG_PASSWORD}@lic-db:5432/licitaciones?sslmode=disable"
+      LIC_OLLAMA_URL: "${LIC_OLLAMA_URL:-}"              # vacío = sin búsqueda por significado
+    mem_limit: 128m
+    cpus: 0.25
+
   api:
     restart: unless-stopped
     cap_drop: [ALL]
@@ -122,6 +139,7 @@ services:
       LICITACIONES_ADDR: "0.0.0.0:8080"
       LIC_PG_URL: "postgres://lic:${LIC_PG_PASSWORD}@lic-db:5432/licitaciones?sslmode=disable"
       LIC_API_TOKEN: "${LIC_API_TOKEN:?define LIC_API_TOKEN (mínimo 32 caracteres: openssl rand -hex 32)}"
+      LIC_OLLAMA_URL: "${LIC_OLLAMA_URL:-}"              # para vectorizar la consulta del usuario; vacío = solo búsqueda de texto
     mem_limit: 256m
     cpus: 0.5
 

@@ -1,6 +1,6 @@
 "use client";
 import Link from "next/link";
-import { diasTexto, encajeClase, estadoEtiqueta, fechaTexto, importeTexto, mensajeDeError } from "../../lib/licitaciones";
+import { cercaniaTexto, diasTexto, encajeClase, estadoEtiqueta, fechaTexto, importeTexto, mensajeDeError, motivosTexto } from "../../lib/licitaciones";
 
 /** GET a la pasarela del motor. Lanza {status, detalle} si falla (el detalle es el texto del problema, solo para distinguir un 404 de otro); una sesión caducada lleva al inicio de sesión como el resto del panel. */
 export async function pedir(ruta) {
@@ -35,6 +35,8 @@ export function Item({ x }) {
           {x.importe && <span className="meta">{importeTexto(x.importe)}</span>}
           {x.plazo_presentacion && (x.estado === "abierta" || x.estado === "anuncio_previo") && <span className="meta">Plazo: {fechaTexto(x.plazo_presentacion)}</span>}
           {x.actualizada_en && <span className="meta">Actualizada: {fechaTexto(x.actualizada_en)}</span>}
+          {cercaniaTexto(x.cercania) && <span className="meta">{cercaniaTexto(x.cercania)}</span>}
+          {motivosTexto(x.motivos) && <span className="meta">{motivosTexto(x.motivos)}</span>}
         </span>
       </Link>
     </li>

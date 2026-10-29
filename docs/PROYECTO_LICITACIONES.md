@@ -118,6 +118,25 @@ CPV en una zona, a quién adjudica cada organismo, contra quién se compite y qu
 6. **Alertas de competencia**: «el competidor X ha ganado en un organismo que nos interesa», «nuevo competidor en CCTV en Girona».
 7. **Tasa de éxito propia** (101.cat como licitador) y motivos de pérdida, cruzando con el embudo del Cerebro.
 
+### Búsqueda por significado y por cercanía (hecha)
+Además de la búsqueda de texto (palabras exactas), el motor busca **por sentido**: «cámaras de seguridad» encuentra «videovigilancia» aunque no compartan
+palabras. Decisión: **pgvector dentro del mismo Postgres del motor** (imagen `pgvector/pgvector:pg16`, misma versión 16 que antes) en vez de una base
+vectorial o de grafos aparte (OpenSearch, Neo4j): con ~65.000 expedientes (cientos de miles con el histórico) un índice HNSW en Postgres responde en
+milisegundos, se puede **combinar con los filtros** (CPV, zona, estado, importe) en la misma consulta, no añade otro servicio que cuidar ni otra copia
+de los datos. Si algún día hay decenas de millones de documentos o hace falta recorrer relaciones de varios saltos, se revisa (§5, grafo).
+- **Vectorizador** (`cmd/vectorizador`): servicio pequeño que, con el modelo `bge-m3` de Ollama (1024 dimensiones, el mismo del Cerebro), calcula el vector de
+  cada expediente a partir de su título, comprador, tipo de contrato y CPV; los más recientes primero, por lotes, y revectoriza lo que cambia. Tabla
+  `expedientes_vectores` (la crea él, no una migración: si la base no tiene pgvector, el motor sigue igual y solo esta búsqueda queda desactivada).
+- **API**: `GET /tenders?q=…&modo=significado|hibrido` (por defecto `texto`, como siempre; con `cercania` 0–1 en cada resultado; sin paginación) y
+  `GET /tenders/{id}/parecidas` (los más cercanos, con el porqué: `mismo_comprador`, `cpv_comun`). El modo `hibrido` mezcla texto y significado
+  (fusión por rangos recíprocos) y, si Ollama no responde, devuelve la búsqueda de texto con un `aviso`.
+- **«Grafo» sin base de grafos**: la cercanía «por relaciones» (mismo comprador, mismo CPV) se resuelve con las relaciones que ya están en Postgres y se
+  muestra junto a la cercanía de significado.
+- **Panel**: selector «Cómo buscar» en el buscador y tarjeta «Licitaciones parecidas» en la ficha. **Agentes**: `licitaciones.buscar(modo=…)` y `licitaciones.parecidas`.
+- **Primera vez**: la base cambia a la imagen con pgvector (haz antes una copia, `scripts/copia_seguridad.sh`) y el vectorizador tarda en recorrer todo
+  (del orden de 1 hora por cada ~50.000 expedientes en CPU; se ve en los registros `licitaciones-vectorizador-1`). Mientras tanto, la búsqueda por
+  significado va devolviendo lo que ya está vectorizado.
+
 ### Histórico
 Para que estos análisis sirvan hace falta más historia que para buscar licitaciones abiertas. Propuesta: **5 años** de
 adjudicaciones desde los ZIP mensuales de PLACSP y los anuncios de TED, cargados en paralelo una vez en la fase 1.

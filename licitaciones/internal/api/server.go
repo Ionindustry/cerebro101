@@ -34,11 +34,13 @@ type Repo interface {
 
 // Server es la API.
 type Server struct {
-	Repo   Repo
-	Token  string // token compartido que debe llegar en «Authorization: Bearer …»
-	Log    *slog.Logger
-	Now    func() time.Time
-	cursor []byte
+	Repo  Repo
+	Token string // token compartido que debe llegar en «Authorization: Bearer …»
+	Log   *slog.Logger
+	Now   func() time.Time
+	// Embedder vectoriza el texto de la búsqueda por significado; nil = solo búsqueda de texto.
+	Embedder Embedder
+	cursor   []byte
 }
 
 // MinTokenLen es la longitud mínima del token: uno corto se adivina.
@@ -61,6 +63,7 @@ func New(repo Repo, token string, log *slog.Logger) (*Server, error) {
 func (s *Server) Register(mux *http.ServeMux) {
 	mux.Handle("GET /api/v1/tenders", s.wrap(s.buscar))
 	mux.Handle("GET /api/v1/tenders/{id}", s.wrap(s.ficha))
+	mux.Handle("GET /api/v1/tenders/{id}/parecidas", s.wrap(s.parecidas))
 	mux.Handle("GET /api/v1/awards", s.wrap(s.adjudicaciones))
 	mux.Handle("GET /api/v1/competitors", s.wrap(s.competidores))
 	mux.Handle("GET /api/v1/expiring-contracts", s.wrap(s.contratosQueVencen))
@@ -119,6 +122,15 @@ func (s *Server) buscar(w http.ResponseWriter, r *http.Request) {
 		writeProblem(w, r, p)
 		return
 	}
+	modo, p := parseModo(q, f)
+	if p != nil {
+		writeProblem(w, r, p)
+		return
+	}
+	if modo != modoTexto {
+		s.buscarPorSignificado(w, r, f, modo)
+		return
+	}
 	huella := huellaFiltros(q)
 	if c, ok := one(q, "cursor"); ok {
 		cd, err := decodeCursor(s.cursor, c, huella, s.Now())
@@ -149,7 +161,7 @@ func (s *Server) buscar(w http.ResponseWriter, r *http.Request) {
 		rel = "gte"
 	}
 	writeJSON(w, http.StatusOK, map[string]any{
-		"items": items, "siguiente_cursor": siguiente, "total": map[string]any{"valor": total, "relacion": rel},
+		"items": items, "siguiente_cursor": siguiente, "total": map[string]any{"valor": total, "relacion": rel}, "modo": modoTexto,
 	})
 }
 
