@@ -94,6 +94,9 @@ async def usar(ficha: Ficha, nombre: str, operacion: str, sensibilidad: str | No
             raise OperacionRequiereAprobacion(f"{efectiva}.{operacion} tiene impacto externo y necesita aprobación: "
                                               "no la llames, propónla en «acciones» para que una persona la apruebe")
         validar(h, operacion, argumentos)
+        if "agente" in inspect.signature(h.operaciones[operacion]).parameters:
+            # quién escribe lo pone el sistema: el modelo no puede hacerse pasar por otro agente (ni por una persona)
+            argumentos = {**argumentos, "agente": ficha.id}
         if "sensibilidad" in inspect.signature(h.operaciones[operacion]).parameters:
             # el modelo no puede pedir documentos más sensibles de los que le corresponden
             argumentos = {**argumentos, "sensibilidad": sensibilidad or ficha.sensibilidad}

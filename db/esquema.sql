@@ -423,3 +423,42 @@ CREATE TABLE IF NOT EXISTS licitaciones_vigilante (
   avisado_en  timestamptz,                          -- último aviso enviado de este estado
   detalle     text NOT NULL DEFAULT ''
 );
+
+-- Ofertas de licitación (api/cerebro/licitaciones/ofertas.py): el borrador de la oferta de cada licitación, en sus tres sobres (administrativo, técnico, económico), dividido en secciones.
+-- Los agentes (Redactor de Memoria, Arquitecto de Solución, Administrativo, Costes, Precio…) solo escriben BORRADORES de las secciones; revisar, aprobar y fijar el precio lo hace una PERSONA.
+CREATE TABLE IF NOT EXISTS ofertas (
+  motor_id       uuid PRIMARY KEY,
+  precio_sin_iva numeric CHECK (precio_sin_iva IS NULL OR precio_sin_iva > 0),   -- el precio que ofrece 101.cat: lo fija una persona (nunca un agente)
+  iva_pct        numeric NOT NULL DEFAULT 21 CHECK (iva_pct >= 0 AND iva_pct <= 100),
+  precio_por     text,
+  precio_en      timestamptz,
+  creado         timestamptz NOT NULL DEFAULT now(),
+  creado_por     text NOT NULL,
+  actualizado    timestamptz NOT NULL DEFAULT now()
+);
+CREATE TABLE IF NOT EXISTS ofertas_secciones (
+  id           bigserial PRIMARY KEY,
+  motor_id     uuid NOT NULL REFERENCES ofertas (motor_id) ON DELETE CASCADE,
+  sobre        text NOT NULL CHECK (sobre IN ('administrativo', 'tecnico', 'economico')),
+  clave        text NOT NULL,                                -- identificador corto dentro del sobre (p. ej. crit-2)
+  titulo       text NOT NULL,
+  orden        integer NOT NULL DEFAULT 0,
+  guia         text NOT NULL DEFAULT '',                     -- lo que pide el pliego para esta sección (criterio, puntos, requisitos)
+  contenido    text NOT NULL DEFAULT '',
+  estado       text NOT NULL DEFAULT 'vacia' CHECK (estado IN ('vacia', 'borrador', 'revisada', 'aprobada')),
+  version      integer NOT NULL DEFAULT 0,
+  por          text NOT NULL DEFAULT '',                     -- quién escribió la versión actual: «agente:redactor-memoria» o el usuario
+  actualizado  timestamptz,
+  revisado_por text,
+  revisado     timestamptz,
+  citas        jsonb NOT NULL DEFAULT '[]',                  -- ids de requisitos del pliego (pliegos_requisitos) en los que se apoya
+  UNIQUE (motor_id, sobre, clave)
+);
+CREATE TABLE IF NOT EXISTS ofertas_secciones_historial (
+  seccion_id bigint NOT NULL REFERENCES ofertas_secciones (id) ON DELETE CASCADE,
+  version    integer NOT NULL,
+  contenido  text NOT NULL,
+  por        text NOT NULL,
+  creado     timestamptz NOT NULL DEFAULT now(),
+  PRIMARY KEY (seccion_id, version)
+);

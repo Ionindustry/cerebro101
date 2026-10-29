@@ -1,8 +1,10 @@
 """API del Cerebro: la usan el panel, Jarvis (voz) y las tareas programadas."""
 from __future__ import annotations
 
+import base64
 import logging
 import os
+import re
 import uuid
 from contextlib import asynccontextmanager
 
@@ -17,10 +19,12 @@ from ..ajustes import ajustes
 from ..aprobaciones import bandeja, objetivos
 from ..aprobaciones.logica import DecisionNoValida
 from .. import actividad, constancia, kpis, modelos_externos, oficina
+from ..herramientas import licitaciones as motor_lic
 from ..herramientas.licitaciones import MotorNoDisponible
 from ..licitaciones import alertas as alertas_licitaciones
 from ..licitaciones import calendario_plazos
 from ..licitaciones import pliegos as pliegos_licitaciones
+from ..licitaciones import ofertas as ofertas_licitaciones
 from ..licitaciones import reglas as reglas_licitaciones
 from ..licitaciones import simulador as simulador_licitaciones
 from ..licitaciones import embudo as embudo_licitaciones
@@ -504,6 +508,107 @@ async def borrar_reglas_precio(motor_id: str, usuario: Usuario = Depends(usuario
         return {"borrada": await reglas_licitaciones.borrar(motor_id)}
     except reglas_licitaciones.ErrorReglas as e:
         raise HTTPException(422, str(e)) from None
+
+
+# ---- Ofertas de licitación (cerebro/licitaciones/ofertas.py): el borrador por secciones que redactan los agentes; revisar, aprobar y fijar el precio lo hace una PERSONA ----
+
+class SeccionOfertaEntrada(BaseModel):
+    motor_id: str
+    sobre: str
+    clave: str
+    contenido: str
+    citas: list[int] | None = None
+    titulo: str | None = None
+
+
+class EstadoSeccionEntrada(BaseModel):
+    estado: str
+
+
+class PrecioOfertaEntrada(BaseModel):
+    precio: float
+    iva_pct: float | None = None
+
+
+def _oferta_error(e: Exception):
+    if isinstance(e, ofertas_licitaciones.NoExiste):
+        return HTTPException(404, str(e))
+    if isinstance(e, MotorNoDisponible):
+        return HTTPException(503, f"No se ha podido consultar el motor de licitaciones: {e}")
+    if isinstance(e, LookupError):
+        return HTTPException(404, str(e) or "No existe esa licitación")
+    return HTTPException(422, str(e))
+
+
+@app.get("/licitaciones/ofertas/{motor_id}")
+async def leer_oferta(motor_id: str, usuario: Usuario = Depends(usuario_actual)):
+    """La oferta de la licitación con todas sus secciones; {"existe": false} si aún no se ha preparado."""
+    _exige_licitaciones(usuario)
+    try:
+        return await ofertas_licitaciones.leer(motor_id)
+    except ofertas_licitaciones.ErrorOferta as e:
+        raise _oferta_error(e) from None
+
+
+@app.post("/licitaciones/ofertas/{motor_id}/preparar")
+async def preparar_oferta(motor_id: str, usuario: Usuario = Depends(usuario_actual)):
+    """Crea las secciones de la oferta a partir del pliego (criterios de la ficha y requisitos confirmados). Idempotente: no toca lo ya escrito."""
+    _exige_licitaciones(usuario)
+    try:
+        ficha = await motor_lic._get(f"/tenders/{motor_id.strip().lower()}") if motor_lic._UUID.match(motor_id.strip()) else {}
+        return await ofertas_licitaciones.plan(motor_id, ficha, usuario.id)
+    except (ofertas_licitaciones.ErrorOferta, MotorNoDisponible, LookupError) as e:
+        raise _oferta_error(e) from None
+
+
+@app.post("/licitaciones/ofertas/seccion")
+async def escribir_seccion_oferta(entrada: SeccionOfertaEntrada, usuario: Usuario = Depends(usuario_actual)):
+    """Una persona escribe (o corrige) una sección: queda en borrador hasta que se revise."""
+    _exige_licitaciones(usuario)
+    try:
+        return await ofertas_licitaciones.escribir_seccion(entrada.motor_id, entrada.sobre, entrada.clave, entrada.contenido, entrada.citas, entrada.titulo, usuario=usuario.id)
+    except (ofertas_licitaciones.ErrorOferta, LookupError) as e:
+        raise _oferta_error(e) from None
+
+
+@app.post("/licitaciones/ofertas/seccion/{seccion_id}/estado")
+async def estado_seccion_oferta(seccion_id: int, entrada: EstadoSeccionEntrada, usuario: Usuario = Depends(usuario_actual)):
+    """Una persona marca la sección como revisada o aprobada (o la devuelve a borrador). El agente no tiene esta operación."""
+    _exige_licitaciones(usuario)
+    try:
+        return await ofertas_licitaciones.revisar_seccion(seccion_id, entrada.estado, usuario.id)
+    except (ofertas_licitaciones.ErrorOferta, LookupError) as e:
+        raise _oferta_error(e) from None
+
+
+@app.get("/licitaciones/ofertas/seccion/{seccion_id}/historial")
+async def historial_seccion_oferta(seccion_id: int, usuario: Usuario = Depends(usuario_actual)):
+    _exige_licitaciones(usuario)
+    return {"versiones": await ofertas_licitaciones.historial(seccion_id)}
+
+
+@app.post("/licitaciones/ofertas/{motor_id}/precio")
+async def fijar_precio_oferta(motor_id: str, entrada: PrecioOfertaEntrada, usuario: Usuario = Depends(usuario_actual)):
+    """Una PERSONA fija el precio de la oferta (sin IVA). Con él se genera la proposición económica. Los agentes no pueden."""
+    _exige_licitaciones(usuario)
+    try:
+        return await ofertas_licitaciones.fijar_precio(motor_id, entrada.precio, entrada.iva_pct, usuario.id)
+    except (ofertas_licitaciones.ErrorOferta, LookupError) as e:
+        raise _oferta_error(e) from None
+
+
+@app.get("/licitaciones/ofertas/{motor_id}/documento")
+async def documento_oferta(motor_id: str, usuario: Usuario = Depends(usuario_actual)):
+    """El borrador de la oferta en Word, en base64 dentro del JSON (la pasarela del panel solo lleva JSON). Lo no aprobado sale marcado como borrador."""
+    _exige_licitaciones(usuario)
+    try:
+        ficha = await motor_lic._get(f"/tenders/{motor_id.strip().lower()}") if motor_lic._UUID.match(motor_id.strip()) else {}
+        datos = await ofertas_licitaciones.exportar_docx(motor_id, str(ficha.get("titulo") or ""))
+    except (ofertas_licitaciones.ErrorOferta, MotorNoDisponible, LookupError) as e:
+        raise _oferta_error(e) from None
+    exp = re.sub(r"[^A-Za-z0-9._-]+", "-", str(ficha.get("expediente") or motor_id))[:60].strip("-") or "licitacion"
+    log.info("ofertas: %s exporta la oferta de %s (%d bytes)", usuario.id, motor_id, len(datos))
+    return {"nombre": f"oferta-{exp}.docx", "tipo": "application/vnd.openxmlformats-officedocument.wordprocessingml.document", "base64": base64.b64encode(datos).decode("ascii")}
 
 
 @app.post("/licitaciones/embudo/{lid}/estado")

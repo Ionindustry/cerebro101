@@ -47,7 +47,7 @@ def corregir_por_cuaderno(peticion: str, departamento: str, agente: str | None =
 
 def inyectar(ficha, estado: dict, herramienta: str, args: dict) -> dict:
     """Lo que decide el sistema (no el modelo): el departamento y la sensibilidad. Si el modelo los pasa, se pisan."""
-    args = {k: v for k, v in args.items() if k != "sensibilidad"}    # la sensibilidad la fija `usar()`
+    args = {k: v for k, v in args.items() if k not in ("sensibilidad", "agente")}    # la sensibilidad y el agente que llama los fija `usar()`
     if herramienta in INYECTAR_DEPARTAMENTO:
         args["departamento"] = ficha.departamento
     return args
