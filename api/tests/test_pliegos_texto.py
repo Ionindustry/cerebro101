@@ -228,6 +228,27 @@ class TestProceso(unittest.TestCase):
             with self.assertRaises(P.ErrorPliego):
                 P._lanzar_extractor(ruta, "pdf", 60)
 
+    def test_si_el_lector_muere_sin_explicarse_el_motivo_sale_en_el_mensaje_y_el_registro(self):
+        casos = ((-9, b"Killed", "señal 9", "sin memoria"), (-24, b"", "señal 24", "tiempo de CPU"), (1, b"Traceback: ModuleNotFoundError: openpyxl", "código 1", ""))
+        for codigo, err, texto, extra in casos:
+            falso = subprocess.CompletedProcess([], codigo, stdout=b"", stderr=err)
+            with tempfile.TemporaryDirectory() as d, mock.patch.object(P.subprocess, "run", return_value=falso), self.assertLogs("cerebro.licitaciones.pliegos", "WARNING") as log:
+                ruta = Path(d) / "a.xlsx"
+                ruta.write_bytes(b"x")
+                with self.assertRaises(P.ErrorPliego) as e:
+                    P._lanzar_extractor(ruta, "xlsx", 60)
+            self.assertIn(texto, str(e.exception))
+            self.assertIn(extra, str(e.exception))
+            self.assertIn(err.decode(), "\n".join(log.output))
+
+    def test_un_error_que_explica_el_lector_se_conserva(self):
+        falso = subprocess.CompletedProcess([], 1, stdout=b'{"error": "El PDF esta cifrado"}', stderr=b"")
+        with tempfile.TemporaryDirectory() as d, mock.patch.object(P.subprocess, "run", return_value=falso):
+            ruta = Path(d) / "a.pdf"
+            ruta.write_bytes(b"x")
+            with self.assertRaisesRegex(P.ErrorPliego, "cifrado"):
+                P._lanzar_extractor(ruta, "pdf", 60)
+
     def test_el_entorno_del_extractor_no_lleva_secretos(self):
         with mock.patch.dict(os.environ, {"DATABASE_URL": "postgresql://secreto", "LICITACIONES_API_TOKEN": "t", "CEREBRO_APP_PASSWORD": "p"}):
             e = P._entorno_hijo()

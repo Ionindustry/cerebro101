@@ -351,7 +351,12 @@ def _lanzar_extractor(ruta: Path, formato: str, timeout: float) -> dict:
     except ValueError:
         res = {}
     if r.returncode != 0 or "error" in res or "paginas" not in res:
-        raise ErrorPliego(res.get("error") or "No se ha podido leer el documento (el lector se ha cerrado antes de acabar)")
+        if not res.get("error"):
+            # El lector murió sin explicarse (se pasó de memoria o de tiempo, o falló al arrancar): se deja el motivo real en el registro y en el mensaje
+            señal = f"señal {-r.returncode}" if r.returncode < 0 else f"código {r.returncode}"
+            log.warning("el lector de documentos terminó con %s (%s): %s", señal, formato, r.stderr[-600:].decode("utf-8", "replace").strip())
+            raise ErrorPliego(f"No se ha podido leer el documento (el lector terminó con {señal}" + {-9: ": se quedó sin memoria o lo cortó el sistema", -24: ": superó el tiempo de CPU", -11: ": falló al leerlo"}.get(r.returncode, "") + ")")
+        raise ErrorPliego(res["error"])
     return res
 
 
