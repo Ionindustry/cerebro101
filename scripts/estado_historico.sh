@@ -20,6 +20,13 @@ echo "carga (1/5/15 min): $(cut -d' ' -f1-3 /proc/loadavg) · hilos: $(nproc)"
 df -h / | awk 'NR==2 {print "disco: " $4 " libres de " $2 " (" $5 " usado)"}'
 echo
 
+echo "== Almacén de originales (RustFS) =="
+RUSTFS="${LIC_CONTENEDOR_RUSTFS:-licitaciones-rustfs-1}"
+docker stats --no-stream --format "memoria: {{.MemUsage}} ({{.MemPerc}}) · CPU {{.CPUPerc}}" "$RUSTFS" 2>/dev/null || echo "(no encuentro $RUSTFS)"
+# El entrypoint relanza el proceso si se cae: cada «Starting» extra en el registro es una caída (casi siempre, falta de memoria).
+echo "arranques del proceso en el registro: $(docker logs "$RUSTFS" 2>&1 | grep -c '^Starting:' || true) (1 = nunca se ha caído; muchos = se está cayendo)"
+echo
+
 echo "== ZIP del histórico cargados =="
 sql "SELECT url FROM paginas_ingeridas WHERE url ~ '^zip:[0-9]{4,6}\$' ORDER BY url DESC" | sed 's/^zip://' | sed 's/^/  /'
 echo "  (ficheros .atom ya ingeridos de todos los ZIP: $(sql "SELECT count(*) FROM paginas_ingeridas WHERE url LIKE 'zip:%/%'"))"
