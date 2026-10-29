@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"time"
 
 	"github.com/ionindustry/cerebro101/licitaciones/internal/connectors/fetch"
 )
@@ -79,13 +80,15 @@ func Run(ctx context.Context, d Deps, source, startURL string, opt RunOptions) (
 			continue
 		}
 		downloads++
+		t0 := time.Now()
 		feed, st, err := ingestPage(ctx, d, source, res)
 		total.add(st)
 		if err != nil {
 			return total, fmt.Errorf("ingest: página %s: %w", url, err)
 		}
 		d.log().Info("página ingerida", "fuente", source, "url", res.URL, "entradas", st.Entries, "bajas", st.Removed,
-			"nuevas", st.New, "modificadas", st.Modified, "sin_cambios", st.Unchanged)
+			"nuevas", st.New, "modificadas", st.Modified, "sin_cambios", st.Unchanged,
+			"ms_total", time.Since(t0).Milliseconds(), "ms_almacen", st.TiempoAlmacen.Milliseconds(), "ms_estado", st.TiempoEstado.Milliseconds())
 		if head {
 			if err := d.State.SaveCheckpoint(ctx, source, Checkpoint{LastRun: d.now(), Validators: res.Validators, Next: feed.Next}); err != nil {
 				return total, fmt.Errorf("ingest: guardar el punto de control: %w", err)
