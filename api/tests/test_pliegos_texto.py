@@ -383,6 +383,41 @@ class TestFlujo(unittest.TestCase):
             ejecutar(P.revisar_requisito(9999, "confirmado", "ana"))
         self.assertNotIn("revisar_requisito", __import__("cerebro.herramientas.base", fromlist=["_REGISTRO"])._REGISTRO["pliegos"].operaciones)         # el agente no tiene esta operación
 
+    def test_la_matriz_de_cumplimiento_solo_la_rellena_una_persona_y_solo_con_requisitos_confirmados(self):
+        self.bajar()
+        ejecutar(P.anotar_requisito(ID, 1, 3, "criterio_automatico", "El precio vale hasta 60 puntos", "Precio: hasta 60 puntos", "60 puntos"))
+        ejecutar(P.anotar_requisito(ID, 1, 2, "solvencia_economica", "Volumen de negocios mínimo", "volumen anual de negocios en el ambito al que se refiere el contrato"))
+        a, b = [x["id"] for x in ejecutar(P.requisitos(ID))["requisitos"]]
+        m = ejecutar(P.matriz(ID))
+        self.assertEqual((m["total"], m["borradores_sin_revisar"], m["listo"]), (0, 2, False))                  # nada confirmado: la matriz está vacía
+        with self.assertRaisesRegex(P.ErrorPliego, "confirma primero"):
+            ejecutar(P.marcar_cumplimiento(a, "cumple", "", "marta"))                                           # un borrador no se valora
+        ejecutar(P.revisar_requisito(a, "confirmado", "marta"))
+        ejecutar(P.revisar_requisito(b, "confirmado", "marta"))
+        m = ejecutar(P.matriz(ID))
+        self.assertEqual((m["total"], m["resumen"]["pendiente"], m["listo"]), (2, 2, False))
+        r = ejecutar(P.marcar_cumplimiento(a, "cumple", "", "ana"))
+        self.assertEqual((r["cumplimiento"], r["cumplimiento_por"]), ("cumple", "ana"))
+        for estado in ("parcial", "no_cumple"):
+            with self.assertRaisesRegex(P.ErrorPliego, "por qué"):
+                ejecutar(P.marcar_cumplimiento(b, estado, " ", "ana"))                                          # parcial o no: hay que decir por qué
+        with self.assertRaises(P.ErrorPliego):
+            ejecutar(P.marcar_cumplimiento(b, "quizas", "", "ana"))
+        with self.assertRaises(P.NoExiste):
+            ejecutar(P.marcar_cumplimiento(9999, "cumple", "", "ana"))
+        ejecutar(P.marcar_cumplimiento(b, "no_cumple", "Facturamos 250.000 € de media: nos faltan 50.000 €", "ana"))
+        m = ejecutar(P.matriz(ID))
+        self.assertEqual((m["resumen"]["cumple"], m["resumen"]["no_cumple"], m["listo"]), (1, 1, False))       # un «no cumple» impide dar la matriz por lista
+        fila = [f for f in m["filas"] if f["id"] == b][0]
+        self.assertEqual((fila["cumplimiento_nota"].startswith("Facturamos"), fila["pagina"], fila["documento"]), (True, 3, 1))
+        ejecutar(P.marcar_cumplimiento(b, "no_aplica", "Lo cubre una UTE con otra empresa", "ana"))
+        self.assertTrue(ejecutar(P.matriz(ID))["listo"])
+        ejecutar(P.revisar_requisito(b, "rechazado", "ana"))                                                    # lo rechazado sale de la matriz
+        self.assertEqual(ejecutar(P.matriz(ID))["total"], 1)
+        op = __import__("cerebro.herramientas.base", fromlist=["_REGISTRO"])._REGISTRO["pliegos"].operaciones
+        self.assertIn("matriz", op)
+        self.assertNotIn("marcar_cumplimiento", op)                                                             # el agente la lee, no la rellena
+
     def test_word_y_excel_tambien_se_leen_y_se_citan(self):
         self.bajar(datos=docx(["Clausula 7. La garantia definitiva sera del 5 por ciento del precio de adjudicacion."]))
         r = ejecutar(P.buscar(ID, "garantia definitiva"))

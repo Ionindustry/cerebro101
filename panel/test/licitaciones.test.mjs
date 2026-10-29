@@ -639,3 +639,41 @@ test("mensajePliegos: el motivo según el código", () => {
   assert.match(mensajePliegos(503), /antivirus/);
   assert.match(mensajePliegos(500), /No se ha podido completar/);
 });
+
+import { celdaCsv, cumplimientoEtiqueta, cumplimientoNecesitaNota, matrizCsv, matrizDe, resumenMatriz } from "../lib/licitaciones.js";
+
+test("matriz de cumplimiento: solo los confirmados, con su resumen", () => {
+  const rs = [
+    { id: 1, estado: "confirmado", cumplimiento: "cumple" }, { id: 2, estado: "confirmado", cumplimiento: "parcial" }, { id: 3, estado: "confirmado" },
+    { id: 4, estado: "borrador" }, { id: 5, estado: "rechazado", cumplimiento: "cumple" },
+  ];
+  const m = matrizDe(rs);
+  assert.equal(m.total, 3);
+  assert.deepEqual(m.resumen, { pendiente: 1, cumple: 1, parcial: 1, no_cumple: 0, no_aplica: 0 });   // sin valor = pendiente; lo rechazado no cuenta
+  assert.equal(m.borradores, 1);
+  assert.equal(resumenMatriz(m), "3 requisitos: 1 cumple, 1 en parte, 1 pendiente");
+  assert.match(resumenMatriz(matrizDe([])), /Aún no hay requisitos confirmados/);
+  assert.equal(resumenMatriz(matrizDe([{ estado: "confirmado", cumplimiento: "no_cumple" }])), "1 requisito: 1 no cumple");
+});
+
+test("cumplimiento: etiquetas y cuándo hace falta el motivo", () => {
+  assert.equal(cumplimientoEtiqueta("cumple").clase, "abierta");
+  assert.equal(cumplimientoEtiqueta("no_cumple").clase, "anulada");
+  assert.equal(cumplimientoEtiqueta("pendiente").texto, "Pendiente de valorar");
+  assert.equal(cumplimientoNecesitaNota("parcial"), true);
+  assert.equal(cumplimientoNecesitaNota("no_cumple"), true);
+  assert.equal(cumplimientoNecesitaNota("cumple"), false);
+});
+
+test("CSV de la matriz: comillas dobladas, sin fórmulas y con los acentos intactos", () => {
+  assert.equal(celdaCsv('dice "hola"'), '"dice ""hola"""');
+  assert.equal(celdaCsv("=HYPERLINK(\"http://x\")"), "\"'=HYPERLINK(\"\"http://x\"\")\"");     // una hoja de cálculo no lo toma por fórmula
+  assert.equal(celdaCsv("+34 600"), "\"'+34 600\"");
+  assert.equal(celdaCsv("uno\ndos"), '"uno dos"');
+  assert.equal(celdaCsv(null), '""');
+  const csv = matrizCsv({ filas: [{ tipo: "solvencia_economica", resumen: "Volumen ≥ 300.000 €", valor: "300.000 €", cita: "igual o superior", nombre: "PCAP", unidad: "página", pagina: 4, documento: 1, cumplimiento: "parcial", cumplimiento_nota: "Faltan 50.000 €", cumplimiento_por: "ana" }] });
+  assert.ok(csv.startsWith("﻿"));
+  const lineas = csv.slice(1).split("\r\n");
+  assert.equal(lineas.length, 2);
+  assert.equal(lineas[1], '"Solvencia económica";"Volumen ≥ 300.000 €";"300.000 €";"igual o superior";"PCAP, página 4";"Cumple en parte";"Faltan 50.000 €";"ana"');
+});

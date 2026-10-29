@@ -303,6 +303,37 @@ export function resumenRequisitos(rs) {
   const partes = [[c("confirmado"), "confirmado", "confirmados"], [c("borrador"), "en borrador", "en borrador"], [c("rechazado"), "rechazado", "rechazados"]].filter(([k]) => k > 0).map(([k, uno, varios]) => `${k} ${k === 1 ? uno : varios}`);
   return `${n} ${n === 1 ? "requisito" : "requisitos"}: ${partes.join(", ")}`;
 }
+export const CUMPLIMIENTOS = { pendiente: "Pendiente de valorar", cumple: "Cumple", parcial: "Cumple en parte", no_cumple: "No cumple", no_aplica: "No aplica" };
+const CLASE_CUMPLIMIENTO = { pendiente: "aviso", cumple: "abierta", parcial: "aviso", no_cumple: "anulada", no_aplica: "" };
+export const cumplimientoEtiqueta = (c) => ({ texto: CUMPLIMIENTOS[c] || c || "—", clase: CLASE_CUMPLIMIENTO[c] ?? "" });
+/** «Parcial» y «no cumple» exigen decir por qué (el servidor también lo comprueba). */
+export const cumplimientoNecesitaNota = (c) => c === "parcial" || c === "no_cumple";
+/** Resumen de la matriz: «5 requisitos: 3 cumplen, 1 en parte, 1 pendiente». */
+export function resumenMatriz(m) {
+  if (!m || !m.total) return "Aún no hay requisitos confirmados: confirma los requisitos para formar la matriz.";
+  const r = m.resumen || {};
+  const partes = [[r.cumple, "cumple", "cumplen"], [r.parcial, "en parte", "en parte"], [r.no_cumple, "no cumple", "no cumplen"], [r.no_aplica, "no aplica", "no aplican"], [r.pendiente, "pendiente", "pendientes"]]
+    .filter(([k]) => k > 0).map(([k, uno, varios]) => `${k} ${k === 1 ? uno : varios}`);
+  return `${m.total} ${m.total === 1 ? "requisito" : "requisitos"}: ${partes.join(", ")}`;
+}
+/** La matriz a partir de los requisitos de la ficha: solo los confirmados, con el resumen por cumplimiento (como la del servidor). */
+export function matrizDe(requisitos) {
+  const filas = (requisitos || []).filter((r) => r.estado === "confirmado");
+  const resumen = Object.fromEntries(Object.keys(CUMPLIMIENTOS).map((c) => [c, filas.filter((r) => (r.cumplimiento || "pendiente") === c).length]));
+  return { total: filas.length, resumen, filas, borradores: (requisitos || []).filter((r) => r.estado === "borrador").length };
+}
+/** Una celda de CSV: entre comillas, con las comillas dobladas, y sin que una hoja de cálculo la tome por una fórmula (= + - @ al principio). */
+export function celdaCsv(v) {
+  let t = String(v ?? "").replace(/\r?\n/g, " ");
+  if (/^[=+\-@\t]/.test(t)) t = `'${t}`;
+  return `"${t.replace(/"/g, '""')}"`;
+}
+/** La matriz como CSV (separado por «;», lo que espera Excel en español) con BOM para los acentos. */
+export function matrizCsv(m) {
+  const cab = ["Tipo", "Requisito", "Valor", "Cita literal", "Dónde", "Cumplimiento", "Motivo", "Valorado por"];
+  const filas = (m?.filas || []).map((f) => [tipoRequisito(f.tipo), f.resumen, f.valor, f.cita, lugarCita(f), CUMPLIMIENTOS[f.cumplimiento] || f.cumplimiento, f.cumplimiento_nota, f.cumplimiento_por || ""]);
+  return "\uFEFF" + [cab, ...filas].map((fila) => fila.map(celdaCsv).join(";")).join("\r\n");
+}
 /** Dónde está una cita: «Pliego administrativo, página 12» (o «bloque»/«hoja»). */
 export const lugarCita = (r) => `${r.nombre || `Documento ${r.documento}`}, ${r.unidad || "página"} ${r.pagina}`;
 

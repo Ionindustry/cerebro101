@@ -153,6 +153,25 @@ class TestRutasDelEmbudo(unittest.TestCase):
         with mock.patch.object(cp, "quitar", mock.AsyncMock(side_effect=cp.ErrorCalendario("x"))):
             self.assertEqual(c.post("/licitaciones/embudo/7/calendario/quitar").status_code, 503)
 
+    def test_matriz_de_cumplimiento_permisos_rutas_y_errores(self):
+        pl = main.pliegos_licitaciones
+        espias = {n: mock.AsyncMock(return_value={}) for n in ("matriz", "marcar_cumplimiento")}
+        with mock.patch.multiple(pl, **espias):
+            c = como(("usuario", "responsable"), ("finanzas", "comercial"))
+            self.assertEqual(c.get("/licitaciones/pliegos/x/matriz").status_code, 403)
+            self.assertEqual(c.post("/licitaciones/pliegos/requisitos/3/cumplimiento", json={"estado": "cumple"}).status_code, 403)
+        for espia in espias.values():
+            espia.assert_not_called()
+        c = como(("direccion",))
+        with mock.patch.multiple(pl, matriz=mock.AsyncMock(return_value={"total": 2, "filas": []}),
+                                 marcar_cumplimiento=mock.AsyncMock(return_value={"id": 3, "cumplimiento": "parcial"})):
+            self.assertEqual(c.get("/licitaciones/pliegos/x/matriz").json(), {"total": 2, "filas": []})
+            self.assertEqual(c.post("/licitaciones/pliegos/requisitos/3/cumplimiento", json={"estado": "parcial", "nota": "falta un año"}).json()["cumplimiento"], "parcial")
+            pl.marcar_cumplimiento.assert_awaited_with(3, "parcial", "falta un año", "albert")
+        for fallo, codigo in ((pl.ErrorPliego("confirma primero"), 422), (pl.NoExiste("No existe ese requisito"), 404)):
+            with mock.patch.object(pl, "marcar_cumplimiento", mock.AsyncMock(side_effect=fallo)):
+                self.assertEqual(c.post("/licitaciones/pliegos/requisitos/9/cumplimiento", json={"estado": "cumple"}).status_code, codigo)
+
     def test_pliegos_permisos_rutas_y_errores(self):
         pl = main.pliegos_licitaciones
         espias = {n: mock.AsyncMock(return_value={"requisitos": [], "documentos": []}) for n in ("documentos", "requisitos", "obtener", "leer", "revisar_requisito")}
