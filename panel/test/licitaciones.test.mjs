@@ -588,3 +588,54 @@ test("textos del plazo en el calendario", () => {
   assert.match(mensajeCalendario(422), /ya está resuelta o su plazo ha pasado/);
   assert.match(mensajeCalendario(403), /Dirección/);
 });
+
+// ---- Pliegos: documentos, antivirus y requisitos con cita ----
+import { estadoPliego, estadoRequisito, lecturaPliego, lugarCita, mensajePliegos, puedeDescargarPliego, resumenRequisitos, tipoRequisito } from "../lib/licitaciones.js";
+
+test("estadoPliego: lo que se dice de cada documento", () => {
+  assert.deepEqual(estadoPliego(null), { texto: "Sin descargar", clase: "" });
+  assert.equal(estadoPliego({ estado: "limpio" }).clase, "abierta");
+  assert.equal(estadoPliego({ estado: "infectado" }).clase, "anulada");
+  assert.match(estadoPliego({ estado: "no_analizable" }).texto, /No analizable/);
+  assert.match(estadoPliego({ estado: "con_macros" }).texto, /solo se lee el texto/);
+});
+
+test("puedeDescargarPliego: bajar o reintentar, nunca con un infectado ni uno ya leído", () => {
+  assert.equal(puedeDescargarPliego(null), true);
+  assert.equal(puedeDescargarPliego({ estado: "no_analizable" }), true);
+  assert.equal(puedeDescargarPliego({ estado: "cuarentena" }), true);
+  assert.equal(puedeDescargarPliego({ estado: "limpio", disponible: true, paginas: null }), true);       // limpio pero sin texto: reintentar la lectura
+  assert.equal(puedeDescargarPliego({ estado: "limpio", disponible: true, paginas: 12 }), false);
+  assert.equal(puedeDescargarPliego({ estado: "infectado", disponible: false, paginas: null }), false);
+});
+
+test("lecturaPliego: páginas, bloques u hojas, con singular, y el aviso", () => {
+  assert.equal(lecturaPliego({ disponible: true, paginas: 12, unidad: "página", aviso: "" }), "12 páginas");
+  assert.equal(lecturaPliego({ disponible: true, paginas: 1, unidad: "página", aviso: "" }), "1 página");
+  assert.equal(lecturaPliego({ disponible: true, paginas: 3, unidad: "bloque", aviso: "" }), "3 bloques");
+  assert.equal(lecturaPliego({ disponible: true, paginas: 2, unidad: "hoja", aviso: "" }), "2 hojas");
+  assert.match(lecturaPliego({ disponible: true, paginas: 4, unidad: "página", aviso: "parece un escaneo" }), /4 páginas · parece un escaneo/);
+  assert.match(lecturaPliego({ disponible: true, paginas: null, aviso: "PDF roto" }), /No se ha podido leer el texto: PDF roto/);
+  assert.equal(lecturaPliego({ disponible: false }), "");
+  assert.equal(lecturaPliego(null), "");
+});
+
+test("requisitos: tipo, estado, resumen y lugar de la cita", () => {
+  assert.equal(tipoRequisito("solvencia_economica"), "Solvencia económica");
+  assert.equal(tipoRequisito("raro_x"), "raro x");
+  assert.equal(estadoRequisito({ estado: "confirmado" }).clase, "abierta");
+  assert.equal(estadoRequisito({ estado: "rechazado" }).clase, "anulada");
+  assert.match(estadoRequisito({ estado: "borrador" }).texto, /pendiente de revisar/);
+  assert.equal(resumenRequisitos([]), "Aún no hay requisitos anotados.");
+  assert.equal(resumenRequisitos([{ estado: "borrador" }, { estado: "borrador" }, { estado: "confirmado" }]), "3 requisitos: 1 confirmado, 2 en borrador");
+  assert.equal(resumenRequisitos([{ estado: "rechazado" }]), "1 requisito: 1 rechazado");
+  assert.equal(lugarCita({ nombre: "Pliego administrativo", unidad: "página", pagina: 12, documento: 1 }), "Pliego administrativo, página 12");
+  assert.equal(lugarCita({ documento: 2, pagina: 3 }), "Documento 2, página 3");
+});
+
+test("mensajePliegos: el motivo según el código", () => {
+  assert.match(mensajePliegos(403), /Dirección y el departamento de Licitaciones/);
+  assert.match(mensajePliegos(422), /no está bajado y analizado/);
+  assert.match(mensajePliegos(503), /antivirus/);
+  assert.match(mensajePliegos(500), /No se ha podido completar/);
+});

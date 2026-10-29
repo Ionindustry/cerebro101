@@ -62,6 +62,10 @@ class SinPermisoDescarga(PermissionError):
     pass
 
 
+class NoExiste(LookupError):
+    pass
+
+
 def _mb(n: int) -> str:
     return f"{n / 1_000_000:.1f}".rstrip("0").rstrip(".") + " MB"
 
@@ -474,7 +478,26 @@ async def requisitos(motor_id: str) -> dict:
     motor_id = _id_valido(motor_id)
     async with await _conectar() as conn:
         cur = await conn.execute(
-            """SELECT r.id, d.n, d.nombre, d.unidad, r.pagina, r.tipo, r.resumen, r.cita, r.valor, r.estado
+            """SELECT r.id, d.n, d.nombre, d.unidad, r.pagina, r.tipo, r.resumen, r.cita, r.valor, r.estado, r.revisado_por, r.revisado
                  FROM pliegos_requisitos r JOIN pliegos_documentos d ON d.id = r.documento_id WHERE d.motor_id = %s ORDER BY d.n, r.pagina, r.id""", [motor_id])
         filas = await cur.fetchall()
-    return {"licitacion": motor_id, "total": len(filas), "requisitos": [{**{k: v for k, v in f.items() if k != "n"}, "documento": f["n"]} for f in filas], "nota": AVISO_TERCEROS}
+    return {"licitacion": motor_id, "total": len(filas), "nota": AVISO_TERCEROS,
+            "requisitos": [{**{k: v for k, v in f.items() if k not in ("n", "revisado")}, "documento": f["n"], "revisado": f["revisado"].isoformat() if f["revisado"] else None} for f in filas]}
+
+
+ESTADOS_REVISION = ("borrador", "confirmado", "rechazado")
+
+
+async def revisar_requisito(rid: int, estado: str, usuario: str) -> dict:
+    """Una PERSONA confirma o rechaza un requisito (o lo devuelve a borrador). Queda anotado quién y cuándo. El agente no tiene esta operación."""
+    if estado not in ESTADOS_REVISION:
+        raise ErrorPliego("estado debe ser uno de: " + ", ".join(ESTADOS_REVISION))
+    async with await _conectar() as conn:
+        cur = await conn.execute(
+            """UPDATE pliegos_requisitos SET estado = %s, revisado_por = %s, revisado = now() WHERE id = %s
+               RETURNING id, documento_id, pagina, tipo, resumen, cita, valor, estado, revisado_por, revisado""", [estado, str(usuario)[:200], rid])
+        f = await cur.fetchone()
+    if not f:
+        raise NoExiste("No existe ese requisito")
+    f["revisado"] = f["revisado"].isoformat()
+    return f

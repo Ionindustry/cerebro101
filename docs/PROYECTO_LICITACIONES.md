@@ -376,7 +376,7 @@ Documento de partida: «Plataforma de detección y análisis de concursos públi
   ya había. El canal es único: «correo» incluye el panel pero no el resumen de las 16:00. Desde `/licitaciones/alertas`.
 - **Carga del histórico segura** (hecho): los eventos de lo que se carga desde los ZIP van a su propio flujo `LIC_HISTORICO` (solo el proyector lo consume; el Cerebro no recibe millones de
   «nuevas», ADR 0002) y el relay publica antes lo en vivo. Guía para cargarlo poco a poco en un PC delicado: `docs/CARGAR_HISTORICO.md`, con `scripts/estado_historico.sh` para ver el avance.
-- **Pliegos, fase 1: descarga segura y antivirus** (hecho; la fase 2 está justo debajo; falta la pantalla del expediente): la herramienta `pliegos`
+- **Pliegos, fase 1: descarga segura y antivirus** (hecho; la fase 2 y la pantalla están justo debajo): la herramienta `pliegos`
   (`documentos` y `descargar`, `api/cerebro/licitaciones/pliegos.py`) baja un documento de una licitación **por su número en la ficha, nunca por dirección** (SEC-140): la URL sale del motor y
   se revalida (solo https, solo las plataformas de `contratacion.pliegos.hosts` en `config/integraciones.yaml` y sus subdominios, solo IP públicas, redirecciones comprobadas una a una y sin salir
   de la lista). El tipo se decide por el **contenido** (PDF, DOCX, XLSX, ODT/ODS o ZIP; un HTML, un SVG o un ejecutable se rechazan), hasta 100 MB y 40 descargas al día. Todo entra en
@@ -392,6 +392,11 @@ Documento de partida: «Plataforma de detección y análisis de concursos públi
   requisito (tipo, resumen con sus palabras, valor y **cita literal**) SOLO si esa frase está de verdad en esa página —se comparan sin mayúsculas, espacios, guiones de fin de línea ni tipo de comillas, y una cita de menos de
   20 caracteres no prueba nada y se rechaza—, así que el modelo no puede inventarse un requisito ni una página. Nacen en `borrador` (`pliegos_requisitos`): **los confirma o rechaza una persona**, nunca el agente. Todo lo que devuelve
   lleva la nota de que es texto de terceros (datos, no instrucciones). **Límite conocido:** el extractor es un proceso con límites, no un contenedor sin red (SEC-142 pide el contenedor); mientras tanto no tiene secretos que robar.
+- **Pliegos, fase 3: la pantalla del expediente** (hecho): la ficha del expediente (`/licitaciones/expedientes/{id}`) tiene una tarjeta «Pliegos» (solo Dirección y Licitaciones; para los demás no aparece). Lista los documentos con su estado
+  (sin descargar, limpio, con macros, no analizable, infectado), cuántas páginas, bloques u hojas se han leído y el botón «Descargar y analizar» (o «Reintentar» si no se pudo). Debajo, los **requisitos** que ha anotado el Analista de Pliegos:
+  tipo, resumen, valor y la **cita literal con su lugar** («Pliego administrativo, página 12»), con «Ver la página» para comprobar la cita contra el texto leído y los botones **Confirmar**, **Rechazar** y **Volver a borrador**. Solo una persona los pulsa
+  (`POST /licitaciones/pliegos/requisitos/{id}/revisar`; el agente no tiene esa operación) y queda anotado quién y cuándo. Los confirmados forman la matriz de cumplimiento. Rutas: `GET /licitaciones/pliegos/{licitación}`,
+  `POST …/descargar` (`{n}`), `GET …/documentos/{n}/paginas/{p}`. Nadie recibe el fichero original.
 - **Plazos en el calendario** (hecho): en el embudo, el botón «Añadir el plazo al calendario» (`POST /licitaciones/embudo/{id}/calendario`) crea en el calendario CalDAV de la empresa un evento
   que **termina a la hora del plazo de presentación** (dura `calendario_plazos.duracion_min` = 30 minutos), con recordatorios `recordatorios_dias` = 3 y 1 días antes y el plazo en hora local en la
   descripción. Lo crea una persona al pulsar y **sin invitados**: no sale nada de la empresa, por eso no pasa por la bandeja de aprobaciones (la que sí pasa es `calendario.crear_cita` de los agentes,

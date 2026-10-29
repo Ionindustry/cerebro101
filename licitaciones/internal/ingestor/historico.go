@@ -15,9 +15,10 @@ import (
 	"github.com/ionindustry/cerebro101/licitaciones/internal/ingest"
 )
 
-// Servidores que publican los ZIP del histórico. POR VERIFICAR con una descarga real: la documentación oficial los sitúa en
-// contrataciondelsectorpublico.gob.es, la sindicación en vivo está en contrataciondelestado.es; se prueba cada uno hasta que uno responde.
-var zipHosts = []string{"contrataciondelsectorpublico.gob.es", sourceHost}
+// Servidores que publican los ZIP del histórico, por orden de prueba. contrataciondelestado.es es el de la sindicación en vivo y resuelve;
+// contrataciondelsectorpublico.gob.es es el que cita la documentación oficial, pero en la práctica su DNS ha fallado. POR VERIFICAR con una descarga real.
+// Se prueba cada uno hasta que uno responde: un 404 o un fallo de red/DNS en uno pasa al siguiente.
+var zipHosts = []string{sourceHost, "contrataciondelsectorpublico.gob.es"}
 
 // histSource describe dónde están los ZIP de una fuente.
 type histSource struct{ dir, prefix string }
@@ -121,6 +122,7 @@ func (h *Historico) load(ctx context.Context, src histSource, it Item) (bool, er
 	zipURL := ""
 	if _, err := os.Stat(zipPath); err != nil { // sin ZIP completo (de un intento anterior): descargarlo o continuar la descarga
 		found := false
+		var lastErr error
 		for _, host := range zipHosts {
 			zipURL = "https://" + host + "/sindicacion/" + src.dir + "/" + file
 			start := time.Now()
@@ -129,15 +131,17 @@ func (h *Historico) load(ctx context.Context, src histSource, it Item) (bool, er
 				h.log().Info("el ZIP del histórico aún no existe en este servidor", "zip", it.Label, "servidor", host)
 				continue
 			}
-			if err != nil {
-				return false, fmt.Errorf("histórico: descargar %s: %w", zipURL, err) // se conserva lo bajado: la próxima vez continúa
+			if err != nil { // DNS, conexión cortada…: se prueba el siguiente servidor; lo bajado a medias se conserva para continuarlo
+				h.log().Warn("no se ha podido descargar el ZIP del histórico de este servidor", "zip", it.Label, "servidor", host, "error", err.Error())
+				lastErr = fmt.Errorf("histórico: descargar %s: %w", zipURL, err)
+				continue
 			}
 			h.log().Info("ZIP del histórico descargado", "zip", it.Label, "servidor", host, "bytes", n, "duracion", time.Since(start).Round(time.Second).String())
 			found = true
 			break
 		}
 		if !found {
-			return false, nil
+			return false, lastErr // nil si en todos era un 404: aún no está publicado
 		}
 		if err := checkZipMagic(part); err != nil {
 			_ = os.Remove(part)
