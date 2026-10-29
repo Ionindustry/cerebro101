@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log/slog"
 	"math"
+	"sync"
 	"time"
 
 	"github.com/nats-io/nats.go"
@@ -27,6 +28,7 @@ type ConsumerOptions struct {
 	AckWait       time.Duration // tiempo para confirmar antes de reentregar; 0 = 2 min
 	MaxDeliver    int           // intentos antes de descartar; 0 = 8
 	MaxAckPending int           // mensajes en vuelo; 0 = 32
+	Workers       int           // eventos que se procesan a la vez; 0 o 1 = uno detrás de otro (como siempre). Nunca más que MaxAckPending
 	Stream        string        // flujo del que se consume; vacío = el de la sindicación en vivo (StreamName)
 	Filter        string        // asuntos del flujo; vacío = el del flujo en vivo (SubjectFilter) o, con StreamHistorico, el suyo
 	Log           *slog.Logger
@@ -60,6 +62,8 @@ func Consume(ctx context.Context, nc *nats.Conn, h Handler, o ConsumerOptions) e
 			o.Filter = SubjectHistoricoFilter
 		}
 	}
+	workers := min(max(o.Workers, 1), o.MaxAckPending)
+	sem := make(chan struct{}, workers)
 	js, err := jetstream.New(nc)
 	if err != nil {
 		return fmt.Errorf("bus: JetStream: %w", err)
@@ -72,12 +76,27 @@ func Consume(ctx context.Context, nc *nats.Conn, h Handler, o ConsumerOptions) e
 	if err != nil {
 		return fmt.Errorf("bus: crear el consumidor %s: %w", o.Durable, err)
 	}
-	cc, err := cons.Consume(func(m jetstream.Msg) { handle(ctx, m, h, o) })
+	var wg sync.WaitGroup
+	cc, err := cons.Consume(func(m jetstream.Msg) {
+		if workers == 1 {
+			handle(ctx, m, h, o)
+			return
+		}
+		// Varios a la vez: este callback espera a que haya un hueco (así el consumidor no se adelanta a lo que se puede procesar) y cada evento va por su cuenta.
+		sem <- struct{}{}
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			defer func() { <-sem }()
+			handle(ctx, m, h, o)
+		}()
+	})
 	if err != nil {
 		return fmt.Errorf("bus: consumir: %w", err)
 	}
-	defer cc.Stop()
 	<-ctx.Done()
+	cc.Stop()
+	wg.Wait() // los que están en marcha terminan antes de salir: no se cierra la conexión con eventos a medias
 	return nil
 }
 
