@@ -478,11 +478,13 @@ async def requisitos(motor_id: str) -> dict:
     motor_id = _id_valido(motor_id)
     async with await _conectar() as conn:
         cur = await conn.execute(
-            """SELECT r.id, d.n, d.nombre, d.unidad, r.pagina, r.tipo, r.resumen, r.cita, r.valor, r.estado, r.revisado_por, r.revisado
+            """SELECT r.id, d.n, d.nombre, d.unidad, r.pagina, r.tipo, r.resumen, r.cita, r.valor, r.estado, r.revisado_por, r.revisado,
+                      r.cumplimiento, r.cumplimiento_nota, r.cumplimiento_por, r.cumplimiento_en
                  FROM pliegos_requisitos r JOIN pliegos_documentos d ON d.id = r.documento_id WHERE d.motor_id = %s ORDER BY d.n, r.pagina, r.id""", [motor_id])
         filas = await cur.fetchall()
     return {"licitacion": motor_id, "total": len(filas), "nota": AVISO_TERCEROS,
-            "requisitos": [{**{k: v for k, v in f.items() if k not in ("n", "revisado")}, "documento": f["n"], "revisado": f["revisado"].isoformat() if f["revisado"] else None} for f in filas]}
+            "requisitos": [{**{k: v for k, v in f.items() if k not in ("n", "revisado", "cumplimiento_en")}, "documento": f["n"], "revisado": f["revisado"].isoformat() if f["revisado"] else None,
+                            "cumplimiento_en": f["cumplimiento_en"].isoformat() if f["cumplimiento_en"] else None} for f in filas]}
 
 
 ESTADOS_REVISION = ("borrador", "confirmado", "rechazado")
@@ -501,3 +503,43 @@ async def revisar_requisito(rid: int, estado: str, usuario: str) -> dict:
         raise NoExiste("No existe ese requisito")
     f["revisado"] = f["revisado"].isoformat()
     return f
+
+
+# ---- Matriz de cumplimiento: los requisitos CONFIRMADOS y, de cada uno, si 101.cat lo cumple (lo anota una persona) ----
+
+CUMPLIMIENTOS = ("pendiente", "cumple", "parcial", "no_cumple", "no_aplica")
+NOTA_MAX = 500
+
+
+async def marcar_cumplimiento(rid: int, estado: str, nota: str, usuario: str) -> dict:
+    """Una PERSONA anota si 101.cat cumple un requisito confirmado. «Parcial» y «no cumple» exigen decir por qué. El agente no tiene esta operación."""
+    if estado not in CUMPLIMIENTOS:
+        raise ErrorPliego("estado debe ser uno de: " + ", ".join(CUMPLIMIENTOS))
+    nota = " ".join(str(nota or "").split())[:NOTA_MAX]
+    if estado in ("parcial", "no_cumple") and len(nota) < 5:
+        raise ErrorPliego("Si se cumple solo en parte o no se cumple, escribe brevemente por qué (queda en la matriz)")
+    async with await _conectar() as conn:
+        cur = await conn.execute(
+            """UPDATE pliegos_requisitos SET cumplimiento = %s, cumplimiento_nota = %s, cumplimiento_por = %s, cumplimiento_en = now()
+               WHERE id = %s AND estado = 'confirmado'
+               RETURNING id, tipo, resumen, estado, cumplimiento, cumplimiento_nota, cumplimiento_por, cumplimiento_en""", [estado, nota if estado != "pendiente" else "", str(usuario)[:200], rid])
+        f = await cur.fetchone()
+        if not f:
+            cur = await conn.execute("SELECT 1 FROM pliegos_requisitos WHERE id = %s", [rid])
+            if not await cur.fetchone():
+                raise NoExiste("No existe ese requisito")
+            raise ErrorPliego("Solo se valora el cumplimiento de los requisitos confirmados: confirma primero el requisito")
+    f["cumplimiento_en"] = f["cumplimiento_en"].isoformat()
+    return f
+
+
+async def matriz(motor_id: str) -> dict:
+    """La matriz de cumplimiento de la licitación: los requisitos confirmados con su cita y su cumplimiento, y un resumen. `listo` solo si no queda ninguno pendiente ni sin cumplir
+    y no hay requisitos por revisar (borradores): una matriz con borradores sin revisar está incompleta."""
+    todos = (await requisitos(motor_id))["requisitos"]
+    filas = [r for r in todos if r["estado"] == "confirmado"]
+    cuenta = {c: sum(1 for r in filas if r["cumplimiento"] == c) for c in CUMPLIMIENTOS}
+    borradores = sum(1 for r in todos if r["estado"] == "borrador")
+    listo = bool(filas) and cuenta["pendiente"] == 0 and cuenta["no_cumple"] == 0 and cuenta["parcial"] == 0 and borradores == 0
+    return {"licitacion": motor_id, "total": len(filas), "resumen": cuenta, "borradores_sin_revisar": borradores, "listo": listo, "nota": AVISO_TERCEROS,
+            "filas": [{k: r[k] for k in ("id", "tipo", "resumen", "valor", "cita", "documento", "nombre", "unidad", "pagina", "cumplimiento", "cumplimiento_nota", "cumplimiento_por", "cumplimiento_en")} for r in filas]}

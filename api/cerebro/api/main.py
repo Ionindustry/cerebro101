@@ -372,6 +372,11 @@ class RevisionRequisito(BaseModel):
     estado: str                         # confirmado | rechazado | borrador
 
 
+class CumplimientoRequisito(BaseModel):
+    estado: str                         # pendiente | cumple | parcial | no_cumple | no_aplica
+    nota: str = ""
+
+
 @app.get("/licitaciones/pliegos/{motor_id}")
 async def pliegos_de_la_licitacion(motor_id: str, usuario: Usuario = Depends(usuario_actual)):
     """Los documentos de la licitación (con su estado de descarga y antivirus) y los requisitos anotados."""
@@ -413,6 +418,28 @@ async def revisar_requisito_de_pliego(rid: int, entrada: RevisionRequisito, usua
     except (pliegos_licitaciones.ErrorPliego, pliegos_licitaciones.NoExiste) as e:
         raise _error_pliegos(e) from None
     log.info("pliegos: %s marca el requisito %s como %s", usuario.id, rid, f["estado"])
+    return f
+
+
+@app.get("/licitaciones/pliegos/{motor_id}/matriz")
+async def matriz_de_cumplimiento(motor_id: str, usuario: Usuario = Depends(usuario_actual)):
+    """La matriz de cumplimiento: los requisitos confirmados con su cita y si 101.cat los cumple, con un resumen."""
+    _exige_licitaciones(usuario)
+    try:
+        return await pliegos_licitaciones.matriz(motor_id)
+    except (pliegos_licitaciones.ErrorPliego, LookupError) as e:
+        raise _error_pliegos(e) from None
+
+
+@app.post("/licitaciones/pliegos/requisitos/{rid}/cumplimiento")
+async def marcar_cumplimiento_de_requisito(rid: int, entrada: CumplimientoRequisito, usuario: Usuario = Depends(usuario_actual)):
+    """Una persona anota si 101.cat cumple un requisito confirmado (con el porqué si es parcial o no). Queda registrado quién y cuándo."""
+    _exige_licitaciones(usuario)
+    try:
+        f = await pliegos_licitaciones.marcar_cumplimiento(rid, entrada.estado, entrada.nota, usuario.id)
+    except (pliegos_licitaciones.ErrorPliego, pliegos_licitaciones.NoExiste) as e:
+        raise _error_pliegos(e) from None
+    log.info("pliegos: %s anota el cumplimiento del requisito %s: %s", usuario.id, rid, f["cumplimiento"])
     return f
 
 

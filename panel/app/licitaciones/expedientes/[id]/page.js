@@ -2,7 +2,7 @@
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useEffect, useState } from "react";
-import { estadoEtiqueta, estadoPliego, estadoRequisito, etiquetaEmbudo, fechaTexto, fichaOrgHref, importeTexto, lecturaPliego, lugarCita, mensajeEmbudo, mensajePliegos, nombreFuente, puedeDescargarPliego, resumenRequisitos, tipoRequisito, urlSegura } from "../../../../lib/licitaciones";
+import { CUMPLIMIENTOS, cumplimientoEtiqueta, cumplimientoNecesitaNota, estadoEtiqueta, estadoPliego, estadoRequisito, etiquetaEmbudo, fechaTexto, fichaOrgHref, importeTexto, lecturaPliego, lugarCita, matrizCsv, matrizDe, mensajeEmbudo, mensajePliegos, resumenMatriz, nombreFuente, puedeDescargarPliego, resumenRequisitos, tipoRequisito, urlSegura } from "../../../../lib/licitaciones";
 import { Fallo, pedir, pedirCerebro } from "../../cliente";
 
 const Dato = ({ t, children }) => <div><dt>{t}</dt><dd>{children ?? "—"}</dd></div>;
@@ -47,7 +47,26 @@ const enviar = (cuerpo) => ({ method: "POST", headers: { "Content-Type": "applic
 
 // Pliegos: los documentos de la licitación (se bajan a cuarentena y pasan por el antivirus, nadie recibe el fichero) y los requisitos que ha anotado el Analista de Pliegos con su cita.
 // Los confirma o rechaza una persona. Solo Dirección y Licitaciones (para los demás la consulta da 403 y la tarjeta no aparece).
-function Requisito({ r, onRevisar, trabajando }) {
+function Cumplimiento({ r, onCumplir, trabajando }) {
+  const [estado, setEstado] = useState(r.cumplimiento || "pendiente");
+  const [nota, setNota] = useState(r.cumplimiento_nota || "");
+  const necesita = cumplimientoNecesitaNota(estado);
+  const e = cumplimientoEtiqueta(r.cumplimiento || "pendiente");
+  const sinCambios = estado === (r.cumplimiento || "pendiente") && nota === (r.cumplimiento_nota || "");
+  return (
+    <span className="lic-fila" role="group" aria-label="Cumplimiento">
+      <span className={`lic-etiqueta ${e.clase}`}>{e.texto}</span>
+      <select value={estado} onChange={(x) => setEstado(x.target.value)} aria-label="¿Cumple 101.cat este requisito?">
+        {Object.entries(CUMPLIMIENTOS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+      </select>
+      {(necesita || nota) && <input type="text" value={nota} maxLength={500} onChange={(x) => setNota(x.target.value)} placeholder={necesita ? "¿Por qué? (obligatorio)" : "Nota (opcional)"} aria-label="Motivo o nota" />}
+      <button className="boton si" disabled={trabajando || sinCambios || (necesita && nota.trim().length < 5)} onClick={() => onCumplir(r.id, estado, nota)}>Guardar cumplimiento</button>
+      {r.cumplimiento_por && <span className="meta">Valorado por {r.cumplimiento_por} el {fechaTexto(r.cumplimiento_en)}</span>}
+    </span>
+  );
+}
+
+function Requisito({ r, onRevisar, onCumplir, trabajando }) {
   const [pagina, setPagina] = useState(null);       // texto de la página citada, si se ha abierto
   const [errorPagina, setErrorPagina] = useState(null);
   const e = estadoRequisito(r);
@@ -73,6 +92,7 @@ function Requisito({ r, onRevisar, trabajando }) {
         {r.estado !== "borrador" && <button className="boton no" disabled={trabajando} onClick={() => onRevisar(r.id, "borrador")}>Volver a borrador</button>}
         {r.revisado_por && <span className="meta">Revisado por {r.revisado_por} el {fechaTexto(r.revisado)}</span>}
       </span>
+      {r.estado === "confirmado" && <Cumplimiento key={`${r.cumplimiento}|${r.cumplimiento_nota}`} r={r} onCumplir={onCumplir} trabajando={trabajando} />}
       {errorPagina && <p role="alert" className="lic-error">{mensajePliegos(errorPagina.status)}</p>}
       {pagina && (
         <details open className="lic-informe">
@@ -107,6 +127,18 @@ function Pliegos({ id }) {
     catch (e) { setError(e); }
     finally { setTrabajando(null); }
   };
+  const cumplir = async (rid, estado, nota) => {
+    setTrabajando("revisando"); setError(null);
+    try { await pedirCerebro(`licitaciones/pliegos/requisitos/${rid}/cumplimiento`, enviar({ estado, nota })); await cargar(); }
+    catch (e) { setError(e); }
+    finally { setTrabajando(null); }
+  };
+  const descargarMatriz = () => {
+    const url = URL.createObjectURL(new Blob([matrizCsv(matrizDe(d?.requisitos))], { type: "text/csv;charset=utf-8" }));
+    const a = document.createElement("a");
+    a.href = url; a.download = "matriz-de-cumplimiento.csv"; a.click();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  };
   const docs = d?.documentos || [], reqs = (d?.requisitos || []).map((r) => ({ ...r, motor_id: id }));
   return (
     <section className="tarjeta" aria-label="Pliegos">
@@ -128,7 +160,19 @@ function Pliegos({ id }) {
         })}
       </ul>
       <h3>Requisitos <span className="meta">· {resumenRequisitos(reqs)}</span></h3>
-      {reqs.length > 0 && <ul className="lic-lista">{reqs.map((r) => <Requisito key={r.id} r={r} onRevisar={revisar} trabajando={trabajando !== null} />)}</ul>}
+      {reqs.length > 0 && <ul className="lic-lista">{reqs.map((r) => <Requisito key={r.id} r={r} onRevisar={revisar} onCumplir={cumplir} trabajando={trabajando !== null} />)}</ul>}
+      {(() => {
+        const m = matrizDe(reqs);
+        if (!m.total) return null;
+        return (
+          <>
+            <h3>Matriz de cumplimiento <span className="meta">· {resumenMatriz(m)}</span></h3>
+            {m.borradores > 0 && <p className="meta">Quedan {m.borradores} {m.borradores === 1 ? "requisito" : "requisitos"} en borrador sin revisar: la matriz está incompleta.</p>}
+            <p className="meta">La matriz son los requisitos confirmados, cada uno con su cita. Quien prepare la oferta valora aquí si 101.cat los cumple; «parcial» y «no cumple» llevan su motivo.</p>
+            <span className="lic-fila"><button className="boton no" onClick={descargarMatriz}>Descargar la matriz (CSV)</button></span>
+          </>
+        );
+      })()}
     </section>
   );
 }

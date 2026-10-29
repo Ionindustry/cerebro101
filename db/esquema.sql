@@ -385,3 +385,11 @@ CREATE TABLE IF NOT EXISTS pliegos_requisitos (
   CHECK (estado IN ('borrador', 'confirmado', 'rechazado'))
 );
 CREATE UNIQUE INDEX IF NOT EXISTS pliegos_requisitos_unico ON pliegos_requisitos (documento_id, pagina, md5(cita));
+
+-- Matriz de cumplimiento: de cada requisito CONFIRMADO, una persona anota si 101.cat lo cumple (y por qué si es parcial o no). Nunca el agente.
+ALTER TABLE pliegos_requisitos ADD COLUMN IF NOT EXISTS cumplimiento      text NOT NULL DEFAULT 'pendiente';
+ALTER TABLE pliegos_requisitos ADD COLUMN IF NOT EXISTS cumplimiento_nota text NOT NULL DEFAULT '';
+ALTER TABLE pliegos_requisitos ADD COLUMN IF NOT EXISTS cumplimiento_por  text;
+ALTER TABLE pliegos_requisitos ADD COLUMN IF NOT EXISTS cumplimiento_en   timestamptz;
+ALTER TABLE pliegos_requisitos DROP CONSTRAINT IF EXISTS pliegos_requisitos_cumplimiento;
+ALTER TABLE pliegos_requisitos ADD CONSTRAINT pliegos_requisitos_cumplimiento CHECK (cumplimiento IN ('pendiente', 'cumple', 'parcial', 'no_cumple', 'no_aplica'));

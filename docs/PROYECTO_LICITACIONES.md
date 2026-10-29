@@ -398,6 +398,11 @@ Documento de partida: «Plataforma de detección y análisis de concursos públi
   tipo, resumen, valor y la **cita literal con su lugar** («Pliego administrativo, página 12»), con «Ver la página» para comprobar la cita contra el texto leído y los botones **Confirmar**, **Rechazar** y **Volver a borrador**. Solo una persona los pulsa
   (`POST /licitaciones/pliegos/requisitos/{id}/revisar`; el agente no tiene esa operación) y queda anotado quién y cuándo. Los confirmados forman la matriz de cumplimiento. Rutas: `GET /licitaciones/pliegos/{licitación}`,
   `POST …/descargar` (`{n}`), `GET …/documentos/{n}/paginas/{p}`. Nadie recibe el fichero original.
+- **Matriz de cumplimiento** (hecho): los requisitos **confirmados** forman la matriz. De cada uno, **una persona** anota si 101.cat lo cumple —`cumple`, `parcial`, `no_cumple`, `no_aplica` o `pendiente`— y,
+  si es parcial o no se cumple, **por qué** (obligatorio); queda quién y cuándo (`POST /licitaciones/pliegos/requisitos/{id}/cumplimiento`; un borrador o un rechazado no se valora, y el agente no tiene
+  esa operación). `GET /licitaciones/pliegos/{licitación}/matriz` da las filas con su cita y página y un resumen; `listo` solo si no queda nada pendiente, parcial ni sin cumplir y no hay requisitos en borrador sin
+  revisar. Los agentes (Evaluador, Redactor…) la leen con la operación `pliegos.matriz` (solo lectura). En la ficha de la licitación, cada requisito confirmado lleva su selector y la tarjeta ofrece
+  «Descargar la matriz (CSV)» (`;` como separador y sin que una celda pueda tomarse por fórmula). Columnas nuevas en `pliegos_requisitos`: `cumplimiento`, `cumplimiento_nota`, `cumplimiento_por`, `cumplimiento_en`.
 - **Plazos en el calendario** (hecho): en el embudo, el botón «Añadir el plazo al calendario» (`POST /licitaciones/embudo/{id}/calendario`) crea en el calendario CalDAV de la empresa un evento
   que **termina a la hora del plazo de presentación** (dura `calendario_plazos.duracion_min` = 30 minutos), con recordatorios `recordatorios_dias` = 3 y 1 días antes y el plazo en hora local en la
   descripción. Lo crea una persona al pulsar y **sin invitados**: no sale nada de la empresa, por eso no pasa por la bandeja de aprobaciones (la que sí pasa es `calendario.crear_cita` de los agentes,
