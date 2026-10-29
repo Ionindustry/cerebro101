@@ -455,6 +455,58 @@ export function costeErpTexto(c) {
   return `Coste del presupuesto ${c.presupuesto} en el ERP: ${n} línea${n === 1 ? "" : "s"} con coste${f ? `; ${f} sin coste (no contadas: el coste real será mayor)` : ""}.`;
 }
 
+// ---- Oferta de la licitación (API del Cerebro: /licitaciones/ofertas) ----
+
+export const SOBRES_OFERTA = [["administrativo", "Sobre administrativo"], ["tecnico", "Sobre técnico"], ["economico", "Sobre económico"]];
+const ESTADOS_SECCION = { vacia: "Sin redactar", borrador: "Borrador", revisada: "Revisada", aprobada: "Aprobada" };
+export const estadoSeccionEtiqueta = (e) => ESTADOS_SECCION[e] || e || "—";
+export const claseSeccion = (e) => (e === "aprobada" ? "abierta" : e === "revisada" ? "" : "aviso");
+
+/** Quién escribió la versión actual de una sección, en una frase. */
+export function autorSeccionTexto(s) {
+  const por = String(s?.por || "");
+  if (!por || !s?.version) return "";
+  return por.startsWith("agente:") ? `Redactada por el agente ${por.slice(7)}` : `Escrita por ${por}`;
+}
+
+/** «3 sin redactar · 2 borradores · 1 aprobada», o vacío. */
+export function resumenOfertaTexto(o) {
+  const r = o?.resumen;
+  if (!r) return "";
+  const t = [[r.vacia, "sin redactar", "sin redactar"], [r.borrador, "borrador", "borradores"], [r.revisada, "revisada", "revisadas"], [r.aprobada, "aprobada", "aprobadas"]];
+  return t.filter(([n]) => n > 0).map(([n, uno, varios]) => `${n} ${n === 1 ? uno : varios}`).join(" · ");
+}
+
+/** El formulario del precio → cuerpo del POST, o {error}. El IVA vacío es 21 %. */
+export function precioAEnvio(f) {
+  const precio = costeDeTexto(f.precio);
+  if (precio === null) return { error: "Escribe el precio de la oferta sin IVA, p. ej. 125.000,50" };
+  const iva = String(f.iva ?? "").trim() === "" ? 21 : Number(String(f.iva).replace(",", "."));
+  if (!Number.isFinite(iva) || iva < 0 || iva > 100) return { error: "El IVA debe ser un porcentaje entre 0 y 100" };
+  return { cuerpo: { precio, iva_pct: iva } };
+}
+
+export function mensajeOferta(status, detalle = "") {
+  if (status === 403) return "Solo Dirección y el departamento de Licitaciones pueden trabajar con la oferta.";
+  if ((status === 422 || status === 404) && detalle) return detalle;
+  if (status === 503) return "No se ha podido consultar el motor de licitaciones. Inténtalo en unos minutos.";
+  return "No se ha podido completar la operación. Inténtalo de nuevo más tarde.";
+}
+
+/** Qué falta antes de presentar la oferta: lista de frases (vacía si está todo). */
+export function pendientesOferta(o) {
+  if (!o?.existe) return [];
+  const p = [];
+  const sin = (o.secciones || []).filter((s) => s.estado === "vacia").length;
+  const noAprob = (o.secciones || []).filter((s) => s.estado !== "aprobada" && s.estado !== "vacia").length;
+  if (sin) p.push(`${sin} sección${sin === 1 ? "" : "es"} sin redactar`);
+  if (noAprob) p.push(`${noAprob} sección${noAprob === 1 ? "" : "es"} sin aprobar`);
+  if (o.precio_sin_iva == null) p.push("falta fijar el precio");
+  const c = o.cobertura?.sin_cubrir?.length || 0;
+  if (c) p.push(`${c} requisito${c === 1 ? "" : "s"} técnico${c === 1 ? "" : "s"} del pliego sin cubrir`);
+  return p;
+}
+
 /** Horas como «3 h» o «2,5 días»; null es «—». */
 export function horasTexto(h) {
   if (h === null || h === undefined || Number.isNaN(Number(h))) return "—";

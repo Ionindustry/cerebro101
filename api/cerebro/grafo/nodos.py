@@ -25,7 +25,7 @@ MAX_PASOS = 5
 # Los agentes que trabajan sobre un documento largo necesitan más vueltas: el Analista de Pliegos busca la licitación, lista y baja los documentos, busca y lee páginas
 # y anota cada requisito con una llamada. Con 5 pasos no pasaba de buscar. Lo que anota queda guardado aunque la tarea se corte.
 MAX_PASOS_AGENTE = {"analista-pliegos": 25}
-INYECTAR_DEPARTAMENTO = {"erpnext", "conocimiento", "correo", "calendario", "cuaderno"}
+INYECTAR_DEPARTAMENTO = {"erpnext", "conocimiento", "correo", "calendario", "cuaderno", "listas_precios"}
 PIDE_CUADERNO = re.compile(r"\bcuadern|\bquadern|notebook\s*lm", re.I)
 
 
@@ -47,7 +47,7 @@ def corregir_por_cuaderno(peticion: str, departamento: str, agente: str | None =
 
 def inyectar(ficha, estado: dict, herramienta: str, args: dict) -> dict:
     """Lo que decide el sistema (no el modelo): el departamento y la sensibilidad. Si el modelo los pasa, se pisan."""
-    args = {k: v for k, v in args.items() if k != "sensibilidad"}    # la sensibilidad la fija `usar()`
+    args = {k: v for k, v in args.items() if k not in ("sensibilidad", "agente")}    # la sensibilidad y el agente que llama los fija `usar()`
     if herramienta in INYECTAR_DEPARTAMENTO:
         args["departamento"] = ficha.departamento
     return args

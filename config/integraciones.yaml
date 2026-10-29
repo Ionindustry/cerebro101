@@ -21,3 +21,23 @@ contratacion:
     max_diarios: 40                  # descargas de documentos al día (en total)
     timeout_s: 120                   # plazo de una descarga y de un análisis
     firmas_max_horas: 48             # si las firmas del antivirus son más viejas, no se fía del análisis
+
+# Documentos que una persona sube al chat de Jarvis (cerebro/subidas.py): cuarentena, antivirus (ClamAV) y solo su texto llega a los agentes.
+subidas:
+  max_mb: 25                         # tamaño máximo de un documento
+  max_diarios: 40                    # subidas por persona y día
+  retencion_dias: 30                 # pasado este tiempo se borran el fichero y su texto
+  timeout_s: 130                     # plazo de la lectura del documento
+
+# Importación de listas de precios de proveedores (cerebro/listas_precios.py): valores con los que se dan de alta en el ERP. POR VERIFICAR con el ERPNext real: que el grupo de artículos y la
+# unidad existan (si no, la carga lo dice y se puede repetir tras crearlos).
+listas_precios:
+  item_group: Products               # grupo de los artículos nuevos
+  stock_uom: Nos                     # unidad por defecto de los artículos nuevos
+  supplier_group: All Supplier Groups
+  supplier_type: Company
+  moneda: EUR
+  monedas: [EUR, USD, GBP]
+  max_lineas: 3000                   # líneas máximas por importación
+  lote: 100                          # documentos por llamada al ERP
+  prefijo_lista: Compra              # la lista de precios se llama «Compra <proveedor>»

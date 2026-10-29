@@ -25,6 +25,7 @@ app.conf.task_routes = {"cerebro.tareas.celery_app.ejecutar_programada": {"queue
                         "cerebro.tareas.celery_app.rastreo_embudo": {"queue": "lote"},
                         "cerebro.tareas.celery_app.enviar_avisos_correo": {"queue": "lote"},
                         "cerebro.tareas.celery_app.vigilar_motor": {"queue": "lote"},
+                        "cerebro.tareas.celery_app.purgar_subidas": {"queue": "lote"},
                         "cerebro.tareas.celery_app.pedir_viabilidad": {"queue": "peticiones"},
                         "cerebro.tareas.celery_app.volcar_constancia": {"queue": "peticiones"}}
 
@@ -66,6 +67,7 @@ def _rastreo_embudo() -> dict:
 app.conf.beat_schedule = {**_calendario(), **_resumen_licitaciones(), **_rastreo_embudo(),
                           "avisos-por-correo": {"task": "cerebro.tareas.celery_app.enviar_avisos_correo", "schedule": 300.0},
                           "vigilante-motor": {"task": "cerebro.tareas.celery_app.vigilar_motor", "schedule": 900.0},
+                          "purgar-subidas": {"task": "cerebro.tareas.celery_app.purgar_subidas", "schedule": crontab(minute="17", hour="3")},
                           "constancia-pendiente": {"task": "cerebro.tareas.celery_app.volcar_constancia", "schedule": 300.0}}
 
 
@@ -145,6 +147,13 @@ def pedir_viabilidad(self, lid: int) -> dict:
         asyncio.run(embudo.cerrar_peticion_viabilidad(lid, "No se ha podido generar el informe: inténtalo de nuevo"))
         return {"estado": "error", "motivo": type(e).__name__}
     return {"estado": "ok", "recomendacion": informe["recomendacion"]}
+
+
+@app.task(name="cerebro.tareas.celery_app.purgar_subidas")
+def purgar_subidas() -> dict:
+    """Cada noche borra los documentos subidos al chat que pasan de `subidas.retencion_dias` (config/integraciones.yaml): el fichero y su texto."""
+    from ..subidas import purgar
+    return asyncio.run(purgar())
 
 
 @app.task(name="cerebro.tareas.celery_app.vigilar_motor")

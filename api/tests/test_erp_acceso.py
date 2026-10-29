@@ -41,6 +41,18 @@ class TestPoliticaDeAcceso(unittest.TestCase):
         sin = sorted(set(agentes_con_erp()) - set(DEPS))
         self.assertEqual(sin, [], f"sin política (se les bloquearía todo el ERP): {sin}")
 
+    def test_maestros_es_un_subconjunto_de_leer_y_no_se_mezcla_con_borrador(self):
+        for dep, v in POL["departamentos"].items():
+            self.assertLessEqual(set(v.get("maestros", [])), set(v.get("leer", [])), dep)
+            self.assertFalse(set(v.get("maestros", [])) & set(v.get("borrador", [])), dep)
+
+    def test_los_maestros_no_se_crean_con_la_operacion_generica_y_si_con_la_de_procesos_aprobados(self):
+        erp.comprobar_acceso("operaciones", "Supplier", "maestros")
+        erp.comprobar_acceso("operaciones", "Item Price", "maestros", "ABC")
+        for dep, doc, acc in [("operaciones", "Supplier", "borrador"), ("operaciones", "Item", "borrador"), ("comercial", "Supplier", "maestros"), ("operaciones", "Customer", "maestros")]:
+            with self.assertRaises(PermissionError, msg=f"{dep}/{doc}/{acc}"):
+                erp.comprobar_acceso(dep, doc, acc)
+
     def test_borrador_es_un_subconjunto_de_leer(self):
         for dep, v in DEPS.items():
             self.assertLessEqual(set(v.get("borrador", [])), set(v.get("leer", [])), dep)

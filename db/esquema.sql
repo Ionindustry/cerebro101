@@ -423,3 +423,88 @@ CREATE TABLE IF NOT EXISTS licitaciones_vigilante (
   avisado_en  timestamptz,                          -- último aviso enviado de este estado
   detalle     text NOT NULL DEFAULT ''
 );
+
+-- Ofertas de licitación (api/cerebro/licitaciones/ofertas.py): el borrador de la oferta de cada licitación, en sus tres sobres (administrativo, técnico, económico), dividido en secciones.
+-- Los agentes (Redactor de Memoria, Arquitecto de Solución, Administrativo, Costes, Precio…) solo escriben BORRADORES de las secciones; revisar, aprobar y fijar el precio lo hace una PERSONA.
+CREATE TABLE IF NOT EXISTS ofertas (
+  motor_id       uuid PRIMARY KEY,
+  precio_sin_iva numeric CHECK (precio_sin_iva IS NULL OR precio_sin_iva > 0),   -- el precio que ofrece 101.cat: lo fija una persona (nunca un agente)
+  iva_pct        numeric NOT NULL DEFAULT 21 CHECK (iva_pct >= 0 AND iva_pct <= 100),
+  precio_por     text,
+  precio_en      timestamptz,
+  creado         timestamptz NOT NULL DEFAULT now(),
+  creado_por     text NOT NULL,
+  actualizado    timestamptz NOT NULL DEFAULT now()
+);
+CREATE TABLE IF NOT EXISTS ofertas_secciones (
+  id           bigserial PRIMARY KEY,
+  motor_id     uuid NOT NULL REFERENCES ofertas (motor_id) ON DELETE CASCADE,
+  sobre        text NOT NULL CHECK (sobre IN ('administrativo', 'tecnico', 'economico')),
+  clave        text NOT NULL,                                -- identificador corto dentro del sobre (p. ej. crit-2)
+  titulo       text NOT NULL,
+  orden        integer NOT NULL DEFAULT 0,
+  guia         text NOT NULL DEFAULT '',                     -- lo que pide el pliego para esta sección (criterio, puntos, requisitos)
+  contenido    text NOT NULL DEFAULT '',
+  estado       text NOT NULL DEFAULT 'vacia' CHECK (estado IN ('vacia', 'borrador', 'revisada', 'aprobada')),
+  version      integer NOT NULL DEFAULT 0,
+  por          text NOT NULL DEFAULT '',                     -- quién escribió la versión actual: «agente:redactor-memoria» o el usuario
+  actualizado  timestamptz,
+  revisado_por text,
+  revisado     timestamptz,
+  citas        jsonb NOT NULL DEFAULT '[]',                  -- ids de requisitos del pliego (pliegos_requisitos) en los que se apoya
+  UNIQUE (motor_id, sobre, clave)
+);
+CREATE TABLE IF NOT EXISTS ofertas_secciones_historial (
+  seccion_id bigint NOT NULL REFERENCES ofertas_secciones (id) ON DELETE CASCADE,
+  version    integer NOT NULL,
+  contenido  text NOT NULL,
+  por        text NOT NULL,
+  creado     timestamptz NOT NULL DEFAULT now(),
+  PRIMARY KEY (seccion_id, version)
+);
+
+-- Documentos que una persona sube al chat de Jarvis (api/cerebro/subidas.py): pasan por cuarentena y antivirus como los pliegos, y de ellos solo se ofrece su TEXTO a los agentes (nunca el fichero).
+CREATE TABLE IF NOT EXISTS documentos_subidos (
+  id        uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  usuario   text NOT NULL,
+  nombre    text NOT NULL,
+  formato   text NOT NULL,                              -- pdf, docx, xlsx, odt, ods, csv, txt (según el contenido real)
+  bytes     bigint NOT NULL,
+  sha256    text NOT NULL,
+  estado    text NOT NULL DEFAULT 'cuarentena' CHECK (estado IN ('cuarentena', 'limpio', 'con_macros', 'infectado', 'no_analizable', 'error')),
+  motivo    text NOT NULL DEFAULT '',
+  unidad    text,                                       -- página | bloque | hoja
+  paginas   integer,                                    -- NULL = aún no se ha leído
+  aviso     text NOT NULL DEFAULT '',
+  creado    timestamptz NOT NULL DEFAULT now(),
+  analizado timestamptz
+);
+CREATE INDEX IF NOT EXISTS documentos_subidos_usuario ON documentos_subidos (usuario, creado DESC);
+CREATE TABLE IF NOT EXISTS documentos_subidos_paginas (
+  documento_id uuid NOT NULL REFERENCES documentos_subidos (id) ON DELETE CASCADE,
+  pagina       integer NOT NULL,
+  texto        text NOT NULL,
+  tsv          tsvector GENERATED ALWAYS AS (to_tsvector('spanish', texto)) STORED,
+  PRIMARY KEY (documento_id, pagina)
+);
+CREATE INDEX IF NOT EXISTS documentos_subidos_paginas_tsv ON documentos_subidos_paginas USING gin (tsv);
+
+-- Importaciones de listas de precios de proveedores (api/cerebro/listas_precios.py): un agente PROPONE (la tabla la lee el sistema del documento subido, no el modelo) y una persona APRUEBA en la bandeja
+-- de aprobaciones; solo entonces se da de alta el proveedor y se cargan artículos y precios en el ERP. Se puede repetir sin duplicar nada.
+CREATE TABLE IF NOT EXISTS importaciones_precios (
+  id           bigserial PRIMARY KEY,
+  documento_id uuid,
+  agente       text NOT NULL,
+  departamento text NOT NULL,
+  estado       text NOT NULL DEFAULT 'propuesta' CHECK (estado IN ('propuesta', 'aplicando', 'aplicada', 'error', 'descartada')),
+  proveedor    jsonb NOT NULL,
+  moneda       text NOT NULL DEFAULT 'EUR',
+  lista        text NOT NULL,                       -- nombre de la lista de precios en el ERP
+  lineas       jsonb NOT NULL,                      -- [{fila, ref, codigo, desc, precio, unidad}]
+  rechazadas   jsonb NOT NULL DEFAULT '[]',         -- [{fila, motivo}] (las primeras)
+  avisos       jsonb NOT NULL DEFAULT '[]',
+  resumen      jsonb NOT NULL DEFAULT '{}',
+  resultado    jsonb NOT NULL DEFAULT '{}',
+  creado       timestamptz NOT NULL DEFAULT now(),
+  aplicada_en  timestamptz
+);

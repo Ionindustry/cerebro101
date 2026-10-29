@@ -23,6 +23,12 @@ class TestPermisosDeLosRoles(unittest.TestCase):
         self.assertEqual(p["Lead"], {"read": 1, "write": 1, "create": 1})  # se puede crear en borrador
         self.assertEqual(p["CRM Lead"], {"read": 1, "write": 1, "create": 1})
 
+    def test_maestros_dan_leer_crear_y_modificar_en_el_erp(self):
+        pol = {"departamentos": {"x": {"leer": ["Supplier", "Item"], "borrador": [], "maestros": ["Supplier"]}}}
+        d = roles.permisos_deseados(pol, "x")
+        self.assertEqual(d["Supplier"], {"read": 1, "write": 1, "create": 1})
+        self.assertEqual(d["Item"], {"read": 1})
+
     def test_las_referencias_son_solo_seleccion_y_no_pisan_lo_que_ya_se_lee(self):
         p = roles.permisos_deseados(POL, "comercial")
         self.assertEqual(p["Account"], {"select": 1})

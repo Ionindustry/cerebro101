@@ -2,7 +2,7 @@
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useEffect, useState } from "react";
-import { FORMULAS_PRECIO, costeErpTexto, mensajeReglas, reglasAEnvio, reglasAFormulario, cercaniaTexto, mensajeParecidas, motivosTexto, aptitudSimulacion, costeDeTexto, filasDeCurva, mensajeSimulador, probabilidadConRango, porcentaje, CUMPLIMIENTOS, cumplimientoEtiqueta, cumplimientoNecesitaNota, estadoEtiqueta, estadoPliego, estadoRequisito, etiquetaEmbudo, fechaTexto, fichaOrgHref, importeTexto, lecturaPliego, lugarCita, matrizCsv, matrizDe, mensajeEmbudo, mensajePliegos, resumenMatriz, nombreFuente, puedeDescargarPliego, resumenRequisitos, tipoRequisito, urlSegura } from "../../../../lib/licitaciones";
+import { SOBRES_OFERTA, autorSeccionTexto, claseSeccion, estadoSeccionEtiqueta, mensajeOferta, pendientesOferta, precioAEnvio, resumenOfertaTexto, FORMULAS_PRECIO, costeErpTexto, mensajeReglas, reglasAEnvio, reglasAFormulario, cercaniaTexto, mensajeParecidas, motivosTexto, aptitudSimulacion, costeDeTexto, filasDeCurva, mensajeSimulador, probabilidadConRango, porcentaje, CUMPLIMIENTOS, cumplimientoEtiqueta, cumplimientoNecesitaNota, estadoEtiqueta, estadoPliego, estadoRequisito, etiquetaEmbudo, fechaTexto, fichaOrgHref, importeTexto, lecturaPliego, lugarCita, matrizCsv, matrizDe, mensajeEmbudo, mensajePliegos, resumenMatriz, nombreFuente, puedeDescargarPliego, resumenRequisitos, tipoRequisito, urlSegura } from "../../../../lib/licitaciones";
 import { Fallo, Item, pedir, pedirCerebro } from "../../cliente";
 
 const Dato = ({ t, children }) => <div><dt>{t}</dt><dd>{children ?? "—"}</dd></div>;
@@ -173,6 +173,112 @@ function Pliegos({ id }) {
           </>
         );
       })()}
+    </section>
+  );
+}
+
+// La oferta: el borrador por secciones (sobres administrativo, técnico y económico). Los agentes solo dejan borradores; revisar, aprobar, fijar el precio y presentar lo hace una persona.
+function SeccionOferta({ s, motorId, alCambiar }) {
+  const [texto, setTexto] = useState(s.contenido || "");
+  const [msg, setMsg] = useState(null);
+  const [trabajando, setTrabajando] = useState(false);
+  useEffect(() => { setTexto(s.contenido || ""); }, [s.contenido, s.version]);
+  const economica = s.sobre === "economico" && s.clave === "proposicion-economica";
+  const cambiado = texto.trim() !== (s.contenido || "").trim();
+  const guardar = async () => {
+    setTrabajando(true); setMsg(null);
+    try { await pedirCerebro("licitaciones/ofertas/seccion", enviar({ motor_id: motorId, sobre: s.sobre, clave: s.clave, contenido: texto })); await alCambiar(); }
+    catch (e) { setMsg(mensajeOferta(e.status, e.detalle)); } finally { setTrabajando(false); }
+  };
+  const estado = async (nuevo) => {
+    setTrabajando(true); setMsg(null);
+    try { await pedirCerebro(`licitaciones/ofertas/seccion/${s.id}/estado`, enviar({ estado: nuevo })); await alCambiar(); }
+    catch (e) { setMsg(mensajeOferta(e.status, e.detalle)); } finally { setTrabajando(false); }
+  };
+  return (
+    <details className="lic-informe" open={s.estado === "vacia" || undefined}>
+      <summary><strong>{s.titulo}</strong> <span className={`lic-etiqueta ${claseSeccion(s.estado)}`}>{estadoSeccionEtiqueta(s.estado)}</span></summary>
+      {s.guia && <p className="meta" style={{ whiteSpace: "pre-line" }}>{s.guia}</p>}
+      {economica
+        ? <p className="meta">Esta sección se genera sola con el precio que fijes arriba (o con el modelo oficial del pliego, si lo hay).</p>
+        : (
+          <>
+            <textarea value={texto} onChange={(e) => setTexto(e.target.value)} rows={10} maxLength={60000} aria-label={`Contenido de ${s.titulo}`} style={{ width: "100%" }} placeholder="Sin redactar todavía. Escríbela o pide a los agentes que la redacten." />
+            <div className="lic-fila">
+              <button className="boton si" onClick={guardar} disabled={trabajando || !cambiado}>Guardar</button>
+              {s.estado === "borrador" && !cambiado && <button className="boton no" onClick={() => estado("revisada")} disabled={trabajando}>Marcar como revisada</button>}
+              {(s.estado === "borrador" || s.estado === "revisada") && !cambiado && <button className="boton no" onClick={() => estado("aprobada")} disabled={trabajando}>Aprobar</button>}
+              {(s.estado === "revisada" || s.estado === "aprobada") && <button className="boton no" onClick={() => estado("borrador")} disabled={trabajando}>Volver a borrador</button>}
+              <span className="meta">{[autorSeccionTexto(s), s.revisado_por ? `${estadoSeccionEtiqueta(s.estado)} por ${s.revisado_por}` : "", s.citas?.length ? `cita ${s.citas.length} requisito${s.citas.length === 1 ? "" : "s"} del pliego` : ""].filter(Boolean).join(" · ")}</span>
+            </div>
+          </>
+        )}
+      {msg && <p role="alert" className="lic-error">{msg}</p>}
+    </details>
+  );
+}
+
+function Oferta({ id }) {
+  const [o, setO] = useState(null);
+  const [error, setError] = useState(null);
+  const [msg, setMsg] = useState(null);
+  const [trabajando, setTrabajando] = useState(false);
+  const [precio, setPrecio] = useState({ precio: "", iva: "" });
+  const cargar = async () => {
+    try { const r = await pedirCerebro(`licitaciones/ofertas/${id}`); setO(r); setError(null); if (r.precio_sin_iva != null) setPrecio({ precio: String(r.precio_sin_iva).replace(".", ","), iva: String(r.iva_pct) }); }
+    catch (e) { setError(e); }
+  };
+  useEffect(() => { cargar(); }, [id]);          // eslint-disable-line react-hooks/exhaustive-deps
+  if (error && (error.status === 403 || error.status === 401)) return null;        // para los demás grupos, la tarjeta no aparece
+  const accion = async (f) => { setTrabajando(true); setMsg(null); try { await f(); await cargar(); } catch (e) { setMsg(mensajeOferta(e.status, e.detalle)); } finally { setTrabajando(false); } };
+  const preparar = () => accion(() => pedirCerebro(`licitaciones/ofertas/${id}/preparar`, { method: "POST" }));
+  const fijarPrecio = () => {
+    const { cuerpo, error: err } = precioAEnvio(precio);
+    if (err) { setMsg(err); return; }
+    accion(() => pedirCerebro(`licitaciones/ofertas/${id}/precio`, enviar(cuerpo)));
+  };
+  const descargar = () => accion(async () => {
+    const d = await pedirCerebro(`licitaciones/ofertas/${id}/documento`);
+    const bytes = Uint8Array.from(atob(d.base64), (c) => c.charCodeAt(0));
+    const url = URL.createObjectURL(new Blob([bytes], { type: d.tipo }));
+    const a = document.createElement("a"); a.href = url; a.download = d.nombre; document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
+  });
+  const pendientes = pendientesOferta(o);
+  return (
+    <section className="tarjeta" aria-label="Oferta">
+      <h2>Oferta</h2>
+      <p className="meta">El borrador de la oferta, por sobres. Los agentes solo escriben <strong>borradores</strong> a partir de los requisitos del pliego que hayas confirmado; tú los revisas, apruebas y fijas el precio. Nada se presenta desde aquí: se exporta a Word para revisarlo, firmarlo y presentarlo.</p>
+      {error && !o && <p role="alert" className="lic-error">{mensajeOferta(error.status, error.detalle)}</p>}
+      {o && !o.existe && (
+        <div className="lic-fila">
+          <button className="boton si" onClick={preparar} disabled={trabajando}>{trabajando ? "Preparando…" : "Preparar la oferta a partir del pliego"}</button>
+          <span className="ayuda">Mejor después de leer el pliego y confirmar sus requisitos (tarjeta «Pliegos»): las secciones salen de ahí.</span>
+        </div>
+      )}
+      {o?.existe && (
+        <>
+          <p><strong>{resumenOfertaTexto(o)}</strong></p>
+          {pendientes.length > 0 && <p className="meta">Falta: {pendientes.join("; ")}.</p>}
+          <div className="lic-fila">
+            <label>Precio de la oferta, sin IVA (€)<input type="text" inputMode="decimal" value={precio.precio} onChange={(e) => setPrecio((x) => ({ ...x, precio: e.target.value }))} placeholder="125.000,50" /></label>
+            <label>IVA (%)<input type="text" inputMode="decimal" value={precio.iva} onChange={(e) => setPrecio((x) => ({ ...x, iva: e.target.value }))} placeholder="21" size={4} /></label>
+            <button className="boton no" onClick={fijarPrecio} disabled={trabajando}>Fijar precio</button>
+            <button className="boton si" onClick={descargar} disabled={trabajando}>Descargar en Word</button>
+            <button className="boton no" onClick={preparar} disabled={trabajando} title="Añade las secciones que falten si has confirmado más requisitos; no toca lo ya escrito">Actualizar secciones</button>
+          </div>
+          <p className="meta">El precio lo decides tú (el simulador de arriba te ayuda); con él se genera la proposición económica. {o.precio_por ? `Fijado por ${o.precio_por}.` : "Aún sin fijar."}</p>
+          {SOBRES_OFERTA.map(([sobre, titulo]) => {
+            const secs = o.secciones.filter((x) => x.sobre === sobre);
+            return secs.length === 0 ? null : (
+              <div key={sobre}>
+                <h3>{titulo}</h3>
+                {secs.map((x) => <SeccionOferta key={x.id} s={x} motorId={id} alCambiar={cargar} />)}
+              </div>
+            );
+          })}
+        </>
+      )}
+      {msg && <p role="alert" className="lic-error">{msg}</p>}
     </section>
   );
 }
@@ -402,6 +508,7 @@ export default function Ficha() {
 
           <Pliegos id={id} />
           <Simulador id={id} />
+          <Oferta id={id} />
           <Parecidas id={id} />
 
           {x.evidencia && (

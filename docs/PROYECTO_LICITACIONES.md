@@ -139,6 +139,17 @@ de los datos. Si algún día hay decenas de millones de documentos o hace falta 
   (del orden de 1 hora por cada ~50.000 expedientes en CPU; se ve en los registros `licitaciones-vectorizador-1`). Mientras tanto, la búsqueda por
   significado va devolviendo lo que ya está vectorizado.
 
+### Oferta de la licitación (primera entrega)
+Del pliego a la oferta, con los agentes de Oferta técnica y económica trabajando sobre **un mismo borrador** por licitación (`cerebro/licitaciones/ofertas.py`, herramienta `ofertas`, tarjeta «Oferta» en la ficha; solo Dirección y Licitaciones).
+- **Tres sobres, en secciones.** «Preparar la oferta» crea las secciones **a partir del pliego** (no de una plantilla fija): una por criterio de juicio de valor de la ficha (con sus puntos), la descripción de la solución, los criterios valorables por fórmula, la
+  proposición económica y la justificación del precio, y la declaración responsable/DEUC, la solvencia y otros documentos. Cada sección lleva su **guía** (lo que pide el pliego) y los **requisitos confirmados** que debe cubrir; la ficha muestra qué requisitos técnicos aún no cita ninguna sección.
+- **Los agentes solo escriben borradores** (`ofertas.guardar_seccion`; también `plan`, `leer` y `seccion`). No pueden revisar ni aprobar, ni fijar el precio, ni escribir la proposición económica, ni pisar una sección que una persona editó, revisó o aprobó. Lo que citan son ids de requisitos que **existen y están confirmados** en esa licitación
+  (no se pueden inventar). Quién escribe lo pone el sistema, no el modelo. Cada versión queda en el historial.
+- **Las personas** escriben y corrigen en el panel (la sección vuelve a «borrador» y hay que revisarla), la marcan como **revisada** o **aprobada**, y **fijan el precio** (con el simulador como ayuda). Con el precio se genera sola la proposición económica (importe, IVA y total).
+- **Word editable** (`.docx`, sin librerías nuevas): portada, sobres y secciones; lo no aprobado sale marcado `[BORRADOR — pendiente de revisión]`, las secciones vacías `[SECCIÓN SIN REDACTAR]` y, sin precio, `[PRECIO PENDIENTE]`; en el sobre administrativo añade la relación de requisitos con su cumplimiento (matriz).
+- **No se presenta nada desde aquí:** una persona revisa, firma y presenta en la plataforma. Los agentes con acceso: Redactor de Memoria, Arquitecto de Solución, Administrativo, Costes y Precio.
+- **Segunda entrega (pendiente):** el botón «Redactar con agentes», que lanza a los agentes sobre las secciones vacías de forma asíncrona (con el modelo local la generación es lenta: unos pocos tokens por segundo, así que una sección larga tarda minutos) y enseña el progreso.
+
 ### Vigilante de la ingesta (hecho)
 Un fallo repetido en cada vuelta de la ingesta (p. ej. el 304 de RustFS de octubre de 2026) puede dejar el feed parado más de un día sin que nada «falle» a la vista. Una tarea del Cerebro
 (`vigilar_motor`, cada 15 minutos; `cerebro/licitaciones/vigilante.py`) mira `/ops/status` y avisa por **correo interno** (buzón de notificaciones, solo a direcciones de la empresa): **una vez** cuando una

@@ -377,3 +377,12 @@ a.kp-fila:hover { background: var(--fondo); }
 .lic-barra span { display: block; width: 100%; background: var(--tinta); border-radius: 4px 4px 0 0; min-height: 0; }
 .lic-barra small { font-size: 11px; color: var(--secundario); white-space: nowrap; }
 ul.lic-fila, ol.lic-fila { list-style: none; margin: 0; padding: 0; }
+
+/* Documentos adjuntos al chat de Jarvis */
+.adjuntos { max-width: 760px; margin: 0 auto 8px; display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.adjunto { display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border-radius: 999px; background: var(--superficie, rgba(127,127,127,.15)); font-size: 14px; }
+.adjunto[data-ok="no"] { outline: 1px solid #c0392b; }
+.adjunto small { opacity: .75; }
+.adjunto button { border: 0; background: transparent; cursor: pointer; font-size: 16px; line-height: 1; color: inherit; }
+.clip { border: 0; background: transparent; cursor: pointer; font-size: 20px; padding: 4px 6px; }
+.clip:disabled { opacity: .4; cursor: default; }

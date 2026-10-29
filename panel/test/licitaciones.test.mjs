@@ -5,7 +5,7 @@ import {
   nombreFuente, queryAFiltros, rutaPermitida, totalTexto, urlSegura,
 } from "../lib/licitaciones.js";
 import { viabilidadEtiqueta, admiteResumen, avisosDeAlertaTexto, canalEtiqueta, CANALES_ALERTA, ambitoTexto, eventoEtiqueta, filtroDeAlerta, filtroTexto, mensajeAlertas, sinLeerTexto } from "../lib/licitaciones.js";
-import { FILTROS_VACIOS, cercaniaTexto, costeErpTexto, mensajeParecidas, mensajeReglas, motivosTexto, reglasAEnvio, reglasAFormulario } from "../lib/licitaciones.js";
+import { SOBRES_OFERTA, autorSeccionTexto, estadoSeccionEtiqueta, mensajeOferta, pendientesOferta, precioAEnvio, resumenOfertaTexto, FILTROS_VACIOS, cercaniaTexto, costeErpTexto, mensajeParecidas, mensajeReglas, motivosTexto, reglasAEnvio, reglasAFormulario } from "../lib/licitaciones.js";
 import { rutaNoExiste } from "../lib/licitaciones.js";
 import {
   alturasTrimestres, competenciaDeCpv, fichaOrgHref, identificadoresTexto, orgAQuery, queryAOrg, repeticionTexto, trimestreTexto,
@@ -783,4 +783,28 @@ test("coste del ERP en una frase", () => {
   assert.equal(costeErpTexto(null), "");
   assert.match(costeErpTexto({ presupuesto: "Q1", lineas: [1, 2], sin_coste: [] }), /2 líneas con coste\.$/);
   assert.match(costeErpTexto({ presupuesto: "Q1", lineas: [1], sin_sin: 0, sin_coste: [1] }), /1 línea con coste; 1 sin coste/);
+});
+
+test("oferta: etiquetas, autor, resumen y pendientes", () => {
+  assert.equal(estadoSeccionEtiqueta("vacia"), "Sin redactar");
+  assert.equal(estadoSeccionEtiqueta("aprobada"), "Aprobada");
+  assert.equal(autorSeccionTexto({ por: "agente:redactor-memoria", version: 2 }), "Redactada por el agente redactor-memoria");
+  assert.equal(autorSeccionTexto({ por: "marta", version: 1 }), "Escrita por marta");
+  assert.equal(autorSeccionTexto({ por: "", version: 0 }), "");
+  assert.equal(resumenOfertaTexto({ resumen: { vacia: 3, borrador: 1, revisada: 0, aprobada: 2 } }), "3 sin redactar · 1 borrador · 2 aprobadas");
+  assert.equal(resumenOfertaTexto(null), "");
+  const o = { existe: true, precio_sin_iva: null, cobertura: { sin_cubrir: [1, 2] }, secciones: [{ estado: "vacia" }, { estado: "borrador" }, { estado: "aprobada" }] };
+  assert.deepEqual(pendientesOferta(o), ["1 sección sin redactar", "1 sección sin aprobar", "falta fijar el precio", "2 requisitos técnicos del pliego sin cubrir"]);
+  assert.deepEqual(pendientesOferta({ existe: true, precio_sin_iva: 10, cobertura: { sin_cubrir: [] }, secciones: [{ estado: "aprobada" }] }), []);
+  assert.deepEqual(pendientesOferta({ existe: false }), []);
+});
+
+test("oferta: el precio del formulario, con coma decimal y comprobaciones", () => {
+  assert.deepEqual(precioAEnvio({ precio: "125.000,50", iva: "" }).cuerpo, { precio: 125000.5, iva_pct: 21 });
+  assert.deepEqual(precioAEnvio({ precio: "90000", iva: "10" }).cuerpo, { precio: 90000, iva_pct: 10 });
+  assert.deepEqual(precioAEnvio({ precio: "90000", iva: "0" }).cuerpo, { precio: 90000, iva_pct: 0 });
+  for (const f of [{ precio: "" }, { precio: "abc" }, { precio: "-5" }, { precio: "100", iva: "150" }, { precio: "100", iva: "x" }]) assert.ok(precioAEnvio(f).error, JSON.stringify(f));
+  assert.match(mensajeOferta(403), /Dirección/);
+  assert.equal(mensajeOferta(422, "Esa sección ya está revisada"), "Esa sección ya está revisada");
+  assert.match(mensajeOferta(500), /Inténtalo/);
 });

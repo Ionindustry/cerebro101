@@ -15,6 +15,9 @@ LISTA = [{"id": 2, "fecha": "2026-10-28", "origen": "programada", "estado": "ok"
 FICHA = {"id": 2, "fecha": "2026-10-28", "estado": "ok", "contenido": {"oportunidades": []}}
 
 
+ID = "0b1f7a3e-1111-4222-8333-444444444444"
+
+
 def como(roles=(), departamentos=()):
     main.app.dependency_overrides[usuario_actual] = lambda: Usuario("albert", set(roles), set(departamentos))
     return TestClient(main.app)             # sin «with»: no arranca la base de datos
@@ -199,6 +202,39 @@ class TestRutasDelEmbudo(unittest.TestCase):
         with mock.patch.object(rg, "leer", mock.AsyncMock(return_value=None)):
             self.assertEqual(como(("direccion",)).get("/licitaciones/reglas-precio/x").json(), {})
         self.assertEqual(como(("direccion",)).post("/licitaciones/reglas-precio", json={"formula": "inversa"}).status_code, 422)
+
+    def test_ofertas_permisos_rutas_y_errores(self):
+        of = main.ofertas_licitaciones
+        espias = {n: mock.AsyncMock(return_value={"ok": 1}) for n in ("leer", "plan", "escribir_seccion", "revisar_seccion", "fijar_precio", "historial", "exportar_docx")}
+        espias["exportar_docx"] = mock.AsyncMock(return_value=b"PK\x03\x04docx")
+        cuerpo = {"motor_id": ID, "sobre": "tecnico", "clave": "crit-1", "contenido": "Texto"}
+        with mock.patch.multiple(of, **espias), mock.patch.object(main.motor_lic, "_get", mock.AsyncMock(return_value={"titulo": "Videovigilancia", "expediente": "EXP 1/2026"})):
+            c = como(("usuario", "responsable"), ("finanzas",))
+            for r in (c.get(f"/licitaciones/ofertas/{ID}"), c.post(f"/licitaciones/ofertas/{ID}/preparar"), c.post("/licitaciones/ofertas/seccion", json=cuerpo),
+                      c.post("/licitaciones/ofertas/seccion/3/estado", json={"estado": "aprobada"}), c.post(f"/licitaciones/ofertas/{ID}/precio", json={"precio": 1000}),
+                      c.get("/licitaciones/ofertas/seccion/3/historial"), c.get(f"/licitaciones/ofertas/{ID}/documento")):
+                self.assertEqual(r.status_code, 403)
+            for e in espias.values():
+                e.assert_not_called()
+            c = como(("direccion",))
+            self.assertEqual(c.get(f"/licitaciones/ofertas/{ID}").json(), {"ok": 1})
+            self.assertEqual(c.post(f"/licitaciones/ofertas/{ID}/preparar").status_code, 200)
+            self.assertEqual(espias["plan"].await_args.args[2], "albert")                                    # el autor sale de la sesión
+            self.assertEqual(c.post("/licitaciones/ofertas/seccion", json=cuerpo).status_code, 200)
+            self.assertEqual(espias["escribir_seccion"].await_args.kwargs["usuario"], "albert")
+            self.assertEqual(c.post("/licitaciones/ofertas/seccion/3/estado", json={"estado": "aprobada"}).status_code, 200)
+            self.assertEqual(espias["revisar_seccion"].await_args.args, (3, "aprobada", "albert"))
+            self.assertEqual(c.post(f"/licitaciones/ofertas/{ID}/precio", json={"precio": 1000, "iva_pct": 10}).status_code, 200)
+            self.assertEqual(espias["fijar_precio"].await_args.args, (ID, 1000.0, 10.0, "albert"))
+            self.assertEqual(c.get("/licitaciones/ofertas/seccion/3/historial").json(), {"versiones": {"ok": 1}})
+            d = c.get(f"/licitaciones/ofertas/{ID}/documento").json()
+            self.assertEqual((d["nombre"], d["base64"]), ("oferta-EXP-1-2026.docx", "UEsDBGRvY3g="))
+        for fallo, codigo in ((of.ErrorOferta("mal"), 422), (of.NoExiste("no"), 404)):
+            with mock.patch.object(of, "escribir_seccion", mock.AsyncMock(side_effect=fallo)):
+                self.assertEqual(como(("direccion",)).post("/licitaciones/ofertas/seccion", json=cuerpo).status_code, codigo)
+        with mock.patch.object(of, "plan", mock.AsyncMock()), mock.patch.object(main.motor_lic, "_get", mock.AsyncMock(side_effect=main.MotorNoDisponible("x"))):
+            self.assertEqual(como(("direccion",)).post(f"/licitaciones/ofertas/{ID}/preparar").status_code, 503)
+        self.assertEqual(como(("direccion",)).post("/licitaciones/ofertas/seccion", json={"sobre": "tecnico"}).status_code, 422)
 
     def test_matriz_de_cumplimiento_permisos_rutas_y_errores(self):
         pl = main.pliegos_licitaciones
