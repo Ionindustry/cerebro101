@@ -119,6 +119,11 @@ func prefijos(vs []string) []string {
 	return out
 }
 
+// estadoEfectivo es el estado que se muestra y por el que se filtra: la plataforma deja una licitación como «publicada» (abierta) hasta que se evalúa,
+// mucho después de terminar el plazo de presentación; una «abierta» cuyo plazo ya pasó es, a efectos de quien la consulta, «cerrada». Se calcula al leer
+// (no se guarda): así no depende de que llegue otro evento y no hay que reproyectar nada.
+const estadoEfectivo = `(CASE WHEN e.estado = 'abierta' AND e.plazo_presentacion IS NOT NULL AND e.plazo_presentacion < now() THEN 'cerrada' ELSE e.estado END)`
+
 func (f Filtro) aplicar(c *consulta) {
 	if f.Q != "" {
 		c.add("e.busqueda @@ q.tsq")
@@ -130,7 +135,7 @@ func (f Filtro) aplicar(c *consulta) {
 		c.add(fmt.Sprintf("EXISTS (SELECT 1 FROM unnest(e.nuts) x WHERE x LIKE ANY (%s::text[]))", c.arg(prefijos(f.NUTS))))
 	}
 	if len(f.Estados) > 0 {
-		c.add("e.estado = ANY (" + c.arg(f.Estados) + "::text[])")
+		c.add(estadoEfectivo + " = ANY (" + c.arg(f.Estados) + "::text[])")
 	}
 	if len(f.Procedimientos) > 0 {
 		c.add("e.procedimiento = ANY (" + c.arg(f.Procedimientos) + "::text[])")
@@ -166,7 +171,7 @@ func (f Filtro) aplicar(c *consulta) {
 	}
 }
 
-const columnas = `e.id::text, e.fuente, e.id_origen, e.version_entidad, e.actualizada, e.expediente, e.estado_origen, e.estado, e.titulo,
+const columnas = `e.id::text, e.fuente, e.id_origen, e.version_entidad, e.actualizada, e.expediente, e.estado_origen, ` + estadoEfectivo + `, e.titulo,
     e.comprador_nombre, e.comprador_nif, e.comprador_dir3, e.procedimiento, e.cpv, e.nuts, e.valor_estimado::text, e.moneda, e.plazo_presentacion,
     e.enlace, e.sha256_original, e.clave_original, coalesce(v.visto_ultima, e.proyectada), e.proyectada, e.presupuesto_sin_iva::text,
     e.presupuesto_con_iva::text, e.tipo_contrato`

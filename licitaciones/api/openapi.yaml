@@ -937,7 +937,9 @@ components:
       type: string
       description: |
         Estado normalizado. El estado de origen se conserva en `estado_origen` (p. ej. códigos CODICE PUB, EV, ADJ, RES,
-        ANUL, PRE — mapeo POR VERIFICAR con el corpus).
+        ANUL, PRE — mapeo POR VERIFICAR con el corpus). La plataforma deja una licitación como publicada (PUB) hasta que se
+        evalúa, mucho después de terminar el plazo de presentación: una `abierta` cuyo `plazo_presentacion` ya pasó se devuelve
+        (y se filtra) como `cerrada`. Se calcula al leer; el estado de origen no cambia.
       enum: [anuncio_previo, abierta, cerrada, adjudicada, formalizada, anulada, desierta]
 
     Procedimiento:

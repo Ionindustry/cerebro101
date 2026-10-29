@@ -103,3 +103,59 @@ func TestAnularExpediente(t *testing.T) {
 		t.Fatalf("contar = %d, %v", n, err)
 	}
 }
+
+// Una licitación «publicada» sigue así en la plataforma mucho después de acabar el plazo: al leer, con el plazo vencido es «cerrada» (se muestra y se filtra
+// como tal); sin plazo o con el plazo por delante sigue «abierta». Una adjudicada o anulada no cambia aunque su plazo sea antiguo.
+func TestAbiertaConElPlazoVencidoSeLeeComoCerrada(t *testing.T) {
+	_, st := conectar(t)
+	ctx := context.Background()
+	ahora := time.Now().UTC()
+	casos := []struct {
+		id, status string
+		plazo      *time.Time
+		quiero     string
+	}{
+		{"p/vencida", "PUB", ptr(ahora.Add(-48 * time.Hour)), "cerrada"},
+		{"p/vigente", "PUB", ptr(ahora.Add(72 * time.Hour)), "abierta"},
+		{"p/sinplazo", "PUB", nil, "abierta"},
+		{"p/adjudicada", "ADJ", ptr(ahora.Add(-48 * time.Hour)), "adjudicada"},
+		{"p/previa", "PRE", ptr(ahora.Add(-48 * time.Hour)), "anuncio_previo"},
+	}
+	for _, c := range casos {
+		l := licitacion(c.id, "Servicio "+c.id, c.status, ahora)
+		l.TenderDeadline = c.plazo
+		if _, err := st.UpsertExpediente(ctx, ingest.Event{Source: "placsp-643", SourceID: c.id, Version: 1, RawSHA256: "s", RawKey: "k"}, l); err != nil {
+			t.Fatal(err)
+		}
+	}
+	filas, _, _, err := st.Buscar(ctx, Filtro{Limit: 50, Orden: OrdenActualizacion})
+	if err != nil {
+		t.Fatal(err)
+	}
+	vistos := map[string]string{}
+	for _, f := range filas {
+		vistos[f.IDOrigen] = f.Estado
+	}
+	for _, c := range casos {
+		if vistos[c.id] != c.quiero {
+			t.Errorf("%s: estado %q, quiero %q", c.id, vistos[c.id], c.quiero)
+		}
+	}
+	ids := func(estado string) map[string]bool {
+		fs, _, _, err := st.Buscar(ctx, Filtro{Estados: []string{estado}, Limit: 50, Orden: OrdenActualizacion})
+		if err != nil {
+			t.Fatal(err)
+		}
+		m := map[string]bool{}
+		for _, f := range fs {
+			m[f.IDOrigen] = true
+		}
+		return m
+	}
+	if a := ids("abierta"); a["p/vencida"] || !a["p/vigente"] || !a["p/sinplazo"] {
+		t.Errorf("filtro abierta: %v", a)
+	}
+	if c := ids("cerrada"); !c["p/vencida"] || c["p/vigente"] || c["p/adjudicada"] {
+		t.Errorf("filtro cerrada: %v", c)
+	}
+}
