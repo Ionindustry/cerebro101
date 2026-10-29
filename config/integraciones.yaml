@@ -21,3 +21,10 @@ contratacion:
     max_diarios: 40                  # descargas de documentos al día (en total)
     timeout_s: 120                   # plazo de una descarga y de un análisis
     firmas_max_horas: 48             # si las firmas del antivirus son más viejas, no se fía del análisis
+
+# Documentos que una persona sube al chat de Jarvis (cerebro/subidas.py): cuarentena, antivirus (ClamAV) y solo su texto llega a los agentes.
+subidas:
+  max_mb: 25                         # tamaño máximo de un documento
+  max_diarios: 40                    # subidas por persona y día
+  retencion_dias: 30                 # pasado este tiempo se borran el fichero y su texto
+  timeout_s: 130                     # plazo de la lectura del documento

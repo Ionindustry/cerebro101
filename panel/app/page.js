@@ -1,6 +1,7 @@
 "use client";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { detectarIdioma, limpiarParaHablar, mensajeAudioBloqueado, mensajeErrorVoz, recortarParaHablar } from "../lib/voz";
+import { ACCEPT, aBase64, estadoAdjuntoTexto, idsParaMensaje, mensajeSubida, textoConAdjuntos, validarAdjunto } from "../lib/adjuntos";
 import { ayudaSinMicrofonos, elegir, mensajeError, mensajeTranscripcion, nivel, nombre, restricciones, soloEntradas } from "../lib/microfonos";
 
 const SUGERENCIAS = [
@@ -15,6 +16,10 @@ export default function Jarvis() {
   const [texto, setTexto] = useState("");
   const [estado, setEstado] = useState("listo"); // listo | escuchando | pensando
   const [hilo, setHilo] = useState(null);
+  const [adjuntos, setAdjuntos] = useState([]);         // documentos subidos para el próximo mensaje
+  const [subiendo, setSubiendo] = useState(false);
+  const [avisoAdjunto, setAvisoAdjunto] = useState("");
+  const ficheroRef = useRef(null);
   const grabadora = useRef(null);
   const [micros, setMicros] = useState([]);       // micrófonos disponibles (el de una webcam USB, el del portátil…)
   const [micId, setMicId] = useState("");
@@ -61,15 +66,35 @@ export default function Jarvis() {
     try { localStorage.setItem("jarvis_micro", id); } catch {}
   }
 
+  async function adjuntar(ev) {
+    const f = ev.target.files?.[0];
+    ev.target.value = "";                                   // permite volver a elegir el mismo fichero
+    if (!f) return;
+    const motivo = validarAdjunto(f);
+    if (motivo) { setAvisoAdjunto(motivo); return; }
+    setAvisoAdjunto(""); setSubiendo(true);
+    try {
+      const r = await fetch("/cerebro/documentos/subir", { method: "POST", body: JSON.stringify({ nombre: f.name, base64: aBase64(await f.arrayBuffer()) }) });
+      const d = await r.json().catch(() => ({}));
+      if (!r.ok) throw { status: r.status, detalle: typeof d.detail === "string" ? d.detail : "" };
+      setAdjuntos((a) => [...a.filter((x) => x.id !== d.id), d].slice(-5));
+      if (!d.disponible) setAvisoAdjunto(`«${d.nombre}»: ${estadoAdjuntoTexto(d)}`);
+    } catch (e) {
+      setAvisoAdjunto(mensajeSubida(e.status, e.detalle));
+    } finally { setSubiendo(false); }
+  }
+
   async function enviar(contenido, porVoz = false) {
     if (!contenido.trim()) return;
-    setMensajes((m) => [...m, { de: "persona", texto: contenido }]);
+    const ids = idsParaMensaje(adjuntos);
+    setMensajes((m) => [...m, { de: "persona", texto: textoConAdjuntos(contenido, adjuntos) }]);
+    setAdjuntos([]); setAvisoAdjunto("");
     setTexto("");
     setEstado("pensando");
     try {
       const r = await fetch("/cerebro/jarvis/mensaje", {
         method: "POST",
-        body: JSON.stringify({ texto: contenido, hilo, origen: "jarvis" }),
+        body: JSON.stringify({ texto: contenido, hilo, origen: "jarvis", ...(ids.length ? { documentos: ids } : {}) }),
       });
       const d = await r.json();
       if (!r.ok) {
@@ -221,7 +246,22 @@ export default function Jarvis() {
         </div>
         {micros.length === 0 && !avisoMic && entorno && <div className="micro-ayuda">{ayudaSinMicrofonos(entorno.seguro, entorno.api)}</div>}
         {avisoMic && <div className="micro-aviso" role="alert">{avisoMic}</div>}
+        {(adjuntos.length > 0 || avisoAdjunto || subiendo) && (
+          <div className="adjuntos" aria-live="polite">
+            {adjuntos.map((a) => (
+              <span key={a.id} className="adjunto" data-ok={a.disponible ? "si" : "no"}>
+                📎 {a.nombre} <small>({estadoAdjuntoTexto(a)})</small>
+                <button type="button" aria-label={`Quitar ${a.nombre}`} onClick={() => setAdjuntos((x) => x.filter((y) => y.id !== a.id))}>×</button>
+              </span>
+            ))}
+            {subiendo && <span className="adjunto">Subiendo y analizando el documento…</span>}
+            {adjuntos.length > 0 && !texto.trim() && <span className="micro-ayuda">Escribe qué quieres que haga con {adjuntos.length === 1 ? "el documento" : "los documentos"}.</span>}
+            {avisoAdjunto && <span className="micro-aviso" role="alert">{avisoAdjunto}</span>}
+          </div>
+        )}
         <form className="compositor" onSubmit={(e) => { e.preventDefault(); enviar(texto); }}>
+          <input ref={ficheroRef} type="file" accept={ACCEPT} onChange={adjuntar} hidden />
+          <button type="button" className="clip" onClick={() => ficheroRef.current?.click()} disabled={estado === "pensando" || subiendo} aria-label="Adjuntar un documento (PDF, Word, Excel, CSV)" title="Adjuntar un documento">📎</button>
           <input value={texto} onChange={(e) => setTexto(e.target.value)} placeholder="Escribe o habla con Jarvis"
                  aria-label="Mensaje para Jarvis" disabled={estado === "pensando"} />
           {texto && <button className="enviar" type="submit">Enviar</button>}

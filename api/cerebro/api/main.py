@@ -15,6 +15,7 @@ from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
 from langgraph.types import Command
 from pydantic import BaseModel
 
+from .. import subidas
 from ..ajustes import ajustes
 from ..aprobaciones import bandeja, objetivos
 from ..aprobaciones.logica import DecisionNoValida
@@ -75,6 +76,7 @@ class Mensaje(BaseModel):
     hilo: str | None = None
     origen: str = "jarvis"
     sensibilidad: str | None = None
+    documentos: list[str] = []          # ids de documentos que la persona ha subido (POST /documentos/subir) y adjunta a este mensaje
 
 
 class Decision(BaseModel):
@@ -165,10 +167,36 @@ async def cambiar_modelo_externo(proveedor: str, i: Interruptor, usuario: Usuari
 @app.post("/jarvis/mensaje")
 async def mensaje(m: Mensaje, usuario: Usuario = Depends(usuario_actual)):
     hilo = m.hilo or str(uuid.uuid4())
+    peticion = m.texto
+    if m.documentos:
+        try:
+            peticion += await subidas.para_chat(usuario.id, m.documentos)          # lo añade el sistema, solo con documentos de esta persona que han pasado el antivirus
+        except subidas.ErrorSubida as e:
+            raise HTTPException(422, str(e)) from None
     config = {"configurable": {"thread_id": hilo}, "callbacks": callbacks(), "metadata": metadatos(hilo, usuario.id)}
-    estado = await GRAFO["g"].ainvoke({"peticion": m.texto, "usuario": usuario.id, "origen": m.origen,
+    estado = await GRAFO["g"].ainvoke({"peticion": peticion, "usuario": usuario.id, "origen": m.origen,
                                        "sensibilidad": m.sensibilidad}, config)
     return _salida(estado, hilo)
+
+
+class DocumentoEntrada(BaseModel):
+    nombre: str
+    base64: str
+
+
+@app.post("/documentos/subir")
+async def subir_documento(entrada: DocumentoEntrada, usuario: Usuario = Depends(usuario_actual)):
+    """Sube un documento al chat de Jarvis (JSON con el fichero en base64: la pasarela del panel solo lleva JSON). Pasa por cuarentena y antivirus; el agente solo recibirá su texto."""
+    cfg = subidas.configuracion()
+    if len(entrada.base64) > cfg["max_mb"] * 1_400_000:
+        raise HTTPException(413, f"El documento pesa más de {cfg['max_mb']} MB")
+    try:
+        datos = base64.b64decode(entrada.base64, validate=True)
+        r = await subidas.subir(usuario.id, entrada.nombre, datos, cfg=cfg)
+    except (ValueError, subidas.ErrorSubida) as e:            # binascii.Error es un ValueError
+        raise HTTPException(422, str(e) if isinstance(e, subidas.ErrorSubida) else "El documento no se ha recibido bien") from None
+    log.info("subidas: %s sube «%s» (%s, %s)", usuario.id, r["nombre"], r["formato"], r["estado"])
+    return r
 
 
 @app.post("/jarvis/enrutar")

@@ -462,3 +462,29 @@ CREATE TABLE IF NOT EXISTS ofertas_secciones_historial (
   creado     timestamptz NOT NULL DEFAULT now(),
   PRIMARY KEY (seccion_id, version)
 );
+
+-- Documentos que una persona sube al chat de Jarvis (api/cerebro/subidas.py): pasan por cuarentena y antivirus como los pliegos, y de ellos solo se ofrece su TEXTO a los agentes (nunca el fichero).
+CREATE TABLE IF NOT EXISTS documentos_subidos (
+  id        uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  usuario   text NOT NULL,
+  nombre    text NOT NULL,
+  formato   text NOT NULL,                              -- pdf, docx, xlsx, odt, ods, csv, txt (según el contenido real)
+  bytes     bigint NOT NULL,
+  sha256    text NOT NULL,
+  estado    text NOT NULL DEFAULT 'cuarentena' CHECK (estado IN ('cuarentena', 'limpio', 'con_macros', 'infectado', 'no_analizable', 'error')),
+  motivo    text NOT NULL DEFAULT '',
+  unidad    text,                                       -- página | bloque | hoja
+  paginas   integer,                                    -- NULL = aún no se ha leído
+  aviso     text NOT NULL DEFAULT '',
+  creado    timestamptz NOT NULL DEFAULT now(),
+  analizado timestamptz
+);
+CREATE INDEX IF NOT EXISTS documentos_subidos_usuario ON documentos_subidos (usuario, creado DESC);
+CREATE TABLE IF NOT EXISTS documentos_subidos_paginas (
+  documento_id uuid NOT NULL REFERENCES documentos_subidos (id) ON DELETE CASCADE,
+  pagina       integer NOT NULL,
+  texto        text NOT NULL,
+  tsv          tsvector GENERATED ALWAYS AS (to_tsvector('spanish', texto)) STORED,
+  PRIMARY KEY (documento_id, pagina)
+);
+CREATE INDEX IF NOT EXISTS documentos_subidos_paginas_tsv ON documentos_subidos_paginas USING gin (tsv);

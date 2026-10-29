@@ -10,4 +10,6 @@ export function middleware(req) {
   return NextResponse.redirect(new URL("/auth/login", process.env.PANEL_URL || req.url));
 }
 
-export const config = { matcher: ["/((?!auth/|_next/|favicon.ico).*)"] };
+// La subida de documentos al chat (hasta 25 MB en base64) no pasa por el middleware: Next recorta a 10 MB los cuerpos que lo atraviesan. No se pierde seguridad: la pasarela
+// (app/cerebro/[...ruta]/route.js) responde 401 sin sesión válida, igual que el resto de rutas /cerebro.
+export const config = { matcher: ["/((?!auth/|_next/|favicon.ico|cerebro/documentos/subir).*)"] };

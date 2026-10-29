@@ -19,6 +19,7 @@ herramientas:
   pliegos:                   {local: true,  sensibilidad_max: alta,  nota: "baja documentos públicos de licitaciones por id (lista de plataformas, anti-SSRF) a cuarentena y antivirus; nunca devuelve el fichero"}
   licitaciones:              {local: true,  sensibilidad_max: alta,  nota: "motor de licitaciones propio (red interna), solo lectura de datos públicos; no sale ningún dato"}
   ofertas:                   {local: true,  sensibilidad_max: alta,  nota: "borrador de la oferta de una licitación en la base del Cerebro; los agentes solo escriben borradores, una persona los revisa, fija el precio y presenta; no sale ningún dato"}
+  documentos_subidos:        {local: true,  sensibilidad_max: alta,  nota: "lee el TEXTO de los documentos que una persona sube al chat (tras cuarentena y antivirus); nunca devuelve el fichero"}
   mayorista:                 {local: false, sensibilidad_max: alta,  nota: "portal o API del mayorista de telecom"}
 
 # Si una herramienta externa no admite la sensibilidad del agente, se usa esta alternativa local.

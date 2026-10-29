@@ -50,6 +50,7 @@ agentes:
   herramientas:
   - conocimiento
   - erpnext
+  - documentos_subidos
   aprobacion: doble
   horario: null
   sensibilidad: media
@@ -65,6 +66,7 @@ agentes:
   - erpnext
   - ficheros
   - jev
+  - documentos_subidos
   aprobacion: libre
   horario: 0 1 * * *
   sensibilidad: media
