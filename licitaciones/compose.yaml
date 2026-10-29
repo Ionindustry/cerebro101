@@ -44,7 +44,7 @@ services:
 
   lic-db:
     <<: *endurecido
-    image: "${LIC_PG_IMAGEN:-pgvector/pgvector:pg16}"   # Postgres 16 con la extensión pgvector (búsqueda por significado); mismo formato de datos que postgres:16
+    image: "${LIC_PG_IMAGEN:-pgvector/pgvector:pg16-bookworm}"   # Postgres 16 con pgvector. La etiqueta fija el sistema (glibc 2.36): con «pg16» a secas un cambio de sistema de la imagen avisa de «collation version mismatch» y obliga a reindexar
     cap_add: [CHOWN, DAC_OVERRIDE, FOWNER, SETGID, SETUID]      # lo que necesita el arranque de la imagen oficial; el resto sigue quitado
     environment:
       POSTGRES_USER: lic

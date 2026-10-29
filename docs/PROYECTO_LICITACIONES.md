@@ -133,6 +133,8 @@ de los datos. Si algún día hay decenas de millones de documentos o hace falta 
 - **«Grafo» sin base de grafos**: la cercanía «por relaciones» (mismo comprador, mismo CPV) se resuelve con las relaciones que ya están en Postgres y se
   muestra junto a la cercanía de significado.
 - **Panel**: selector «Cómo buscar» en el buscador y tarjeta «Licitaciones parecidas» en la ficha. **Agentes**: `licitaciones.buscar(modo=…)` y `licitaciones.parecidas`.
+- **Cuidado con la versión del sistema de la imagen**: `postgres:16` (a fecha de octubre de 2026) se basa en Debian *trixie* (glibc 2.41) y `pgvector/pgvector:pg16-bookworm` en *bookworm* (glibc 2.36). Cambiar de una a otra con datos ya creados da el aviso
+  «collation version mismatch» y los índices de texto pueden quedar mal ordenados: hay que ejecutar `REINDEX DATABASE licitaciones;` y `ALTER DATABASE licitaciones REFRESH COLLATION VERSION;` (con ingestor, proyector y vectorizador parados). Por eso la etiqueta está fijada a `pg16-bookworm`.
 - **Primera vez**: la base cambia a la imagen con pgvector (haz antes una copia, `scripts/copia_seguridad.sh`) y el vectorizador tarda en recorrer todo
   (del orden de 1 hora por cada ~50.000 expedientes en CPU; se ve en los registros `licitaciones-vectorizador-1`). Mientras tanto, la búsqueda por
   significado va devolviendo lo que ya está vectorizado.
