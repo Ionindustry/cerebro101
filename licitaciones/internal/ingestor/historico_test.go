@@ -190,6 +190,41 @@ func TestHistoricoCargaUnZipPorVueltaDelMasRecienteAlMasAntiguo(t *testing.T) {
 	}
 }
 
+type dnsFalla struct {
+	fakeDL
+	host string
+}
+
+func (d *dnsFalla) Download(ctx context.Context, url, path string, o fetch.DownloadOptions) (int64, error) {
+	if strings.Contains(url, d.host) {
+		d.llamado = append(d.llamado, url)
+		return 0, errors.New("fetch: resolver " + d.host + ": no such host")
+	}
+	return d.fakeDL.Download(ctx, url, path, o)
+}
+
+func TestHistoricoSiUnServidorNoResuelvePruebaElSiguiente(t *testing.T) {
+	u := urlZip(zipHosts[1], "202609")
+	dl := &dnsFalla{fakeDL: fakeDL{zips: map[string][]byte{u: zipDe(t, map[string][]byte{"p.atom": muestra(t)})}}, host: zipHosts[0]}
+	h, st := nuevoHistorico(t, dl, "2026-09-01", "2026-10-28")
+	pend, err := h.Step(context.Background())
+	if err != nil || !pend {
+		t.Fatalf("pending=%v err=%v", pend, err)
+	}
+	if len(st.Events()) == 0 {
+		t.Fatal("no se ingirió nada")
+	}
+}
+
+func TestHistoricoSiNingunServidorRespondeDevuelveElError(t *testing.T) {
+	dl := &dnsFalla{host: zipHosts[0]}
+	dl.zips = map[string][]byte{}
+	h, _ := nuevoHistorico(t, dl, "2026-09-01", "2026-10-28")
+	if _, err := h.Step(context.Background()); err == nil || !strings.Contains(err.Error(), "no such host") {
+		t.Fatalf("esperaba el error de DNS, got %v", err)
+	}
+}
+
 func TestHistoricoTrasUnFalloDeRedContinuaYNoDuplica(t *testing.T) {
 	u := urlZip(zipHosts[0], "202609")
 	dl := &fakeDL{zips: map[string][]byte{u: zipDe(t, map[string][]byte{"p.atom": muestra(t)})}, fallos: map[string]bool{u: true}}

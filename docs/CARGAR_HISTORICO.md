@@ -59,8 +59,8 @@ Deja `LIC_HISTORICO_DESDE=` vacío en `.env` y recrea el ingestor. Se conserva t
 
 ## Si algo va mal
 - **El PC se pone al 99 % o se cuelga**: para (arriba). Con el ingestor limitado a media CPU y el proyector a una, no debería, pero tu equipo ya ha dado fallos de hardware.
-- **El ZIP no se descarga**: los servidores exactos de los ZIP están **por verificar con una descarga real**. El ingestor prueba `contrataciondelsectorpublico.gob.es` y
-  `contrataciondelestado.es`. Si ves «el ZIP del histórico aún no existe en este servidor» en los dos, copia la línea del log y me la pasas.
+- **El ZIP no se descarga**: los servidores exactos de los ZIP están **por verificar con una descarga real**. El ingestor prueba `contrataciondelestado.es` y
+  `contrataciondelsectorpublico.gob.es` (si uno falla por DNS o red, pasa al otro). Si ves «el ZIP del histórico aún no existe en este servidor» en los dos, copia la línea del log y me la pasas.
 - **«The service is unavailable» al guardar un original** (ingestor): el almacén RustFS se cae, casi siempre por falta de memoria. `./scripts/estado_historico.sh` enseña cuántas veces ha arrancado el proceso (1 = nunca se ha caído). Con el límite de 4 GB del compose actual no debería; si pasa, para y avisa.
 - **Disco casi lleno**: para y avisa. No borres volúmenes a mano.
 - **Ver los logs**: `docker logs --tail 50 licitaciones-ingestor-1` y `docker logs --tail 50 licitaciones-proyector-1`.
