@@ -65,33 +65,10 @@ func noDisponible(w http.ResponseWriter, r *http.Request, detalle string) {
 }
 
 func (s *Server) buscarPorSignificado(w http.ResponseWriter, r *http.Request, f pg.Filtro, modo string) {
-	porTexto := func(aviso string) {
-		g := f
-		g.Orden, g.Despues = pg.OrdenRelevancia, nil
-		filas, total, exacto, err := s.Repo.Buscar(r.Context(), g)
-		if err != nil {
-			s.internal(w, r, err)
-			return
-		}
-		if len(filas) > g.Limit {
-			filas = filas[:g.Limit]
-		}
-		items := make([]Resumen, len(filas))
-		for i, fl := range filas {
-			items[i] = resumen(fl)
-		}
-		rel := "eq"
-		if !exacto {
-			rel = "gte"
-		}
-		writeJSON(w, http.StatusOK, map[string]any{
-			"items": items, "siguiente_cursor": nil, "total": map[string]any{"valor": total, "relacion": rel}, "modo": modoTexto, "aviso": aviso,
-		})
-	}
 	sem, ok := s.semantico()
 	if !ok {
 		if modo == modoHibrido {
-			porTexto("La búsqueda por significado no está activada; se ha buscado solo por texto.")
+			s.respondeSoloTexto(w, r, f, "La búsqueda por significado no está activada; se ha buscado solo por texto.")
 			return
 		}
 		noDisponible(w, r, "La búsqueda por significado no está activada en este motor.")
@@ -101,7 +78,7 @@ func (s *Server) buscarPorSignificado(w http.ResponseWriter, r *http.Request, f 
 	if err != nil {
 		s.Log.Warn("búsqueda por significado: no se pudo vectorizar la consulta", "error", err)
 		if modo == modoHibrido {
-			porTexto("No se pudo calcular el significado de la búsqueda; se ha buscado solo por texto.")
+			s.respondeSoloTexto(w, r, f, "No se pudo calcular el significado de la búsqueda; se ha buscado solo por texto.")
 			return
 		}
 		noDisponible(w, r, "No se pudo calcular el significado de la búsqueda (el modelo de lenguaje no responde). Prueba la búsqueda por texto.")
@@ -263,3 +240,28 @@ func (s *Server) parecidas(w http.ResponseWriter, r *http.Request) {
 
 func parseFloat(s string) (float64, error) { return strconv.ParseFloat(s, 64) }
 func atoi(s string) (int, error)           { return strconv.Atoi(s) }
+
+// respondeSoloTexto atiende la petición con la búsqueda de texto de siempre, avisando de por qué no se ha buscado por significado.
+func (s *Server) respondeSoloTexto(w http.ResponseWriter, r *http.Request, f pg.Filtro, aviso string) {
+	g := f
+	g.Orden, g.Despues = pg.OrdenRelevancia, nil
+	filas, total, exacto, err := s.Repo.Buscar(r.Context(), g)
+	if err != nil {
+		s.internal(w, r, err)
+		return
+	}
+	if len(filas) > g.Limit {
+		filas = filas[:g.Limit]
+	}
+	items := make([]Resumen, len(filas))
+	for i, fl := range filas {
+		items[i] = resumen(fl)
+	}
+	rel := "eq"
+	if !exacto {
+		rel = "gte"
+	}
+	writeJSON(w, http.StatusOK, map[string]any{
+		"items": items, "siguiente_cursor": nil, "total": map[string]any{"valor": total, "relacion": rel}, "modo": modoTexto, "aviso": aviso,
+	})
+}
