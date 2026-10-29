@@ -20,6 +20,7 @@ from .. import actividad, constancia, kpis, modelos_externos, oficina
 from ..herramientas.licitaciones import MotorNoDisponible
 from ..licitaciones import alertas as alertas_licitaciones
 from ..licitaciones import calendario_plazos
+from ..licitaciones import pliegos as pliegos_licitaciones
 from ..licitaciones import embudo as embudo_licitaciones
 from ..licitaciones import resumen as resumen_licitaciones
 from ..cotizador import Solicitud, calcular
@@ -349,6 +350,70 @@ async def quitar_plazo_del_calendario(lid: int, usuario: Usuario = Depends(usuar
         raise HTTPException(503, str(e)) from None
     log.info("embudo: %s quita del calendario el plazo de la licitación %s", usuario.id, lid)
     return fila
+
+
+# ---- Pliegos de una licitación (cerebro/licitaciones/pliegos.py): documentos, texto y requisitos con cita. Solo Dirección y Licitaciones; nadie recibe el fichero ----
+
+def _error_pliegos(e: Exception) -> HTTPException:
+    if isinstance(e, pliegos_licitaciones.SinPermisoDescarga):
+        return HTTPException(403, str(e))
+    if isinstance(e, pliegos_licitaciones.ErrorPliego):
+        return HTTPException(422, str(e))
+    if isinstance(e, (pliegos_licitaciones.NoExiste, LookupError)):
+        return HTTPException(404, str(e) or "No existe")
+    return HTTPException(503, f"No se ha podido consultar el motor de licitaciones: {e}")
+
+
+class DescargaPliego(BaseModel):
+    n: int
+
+
+class RevisionRequisito(BaseModel):
+    estado: str                         # confirmado | rechazado | borrador
+
+
+@app.get("/licitaciones/pliegos/{motor_id}")
+async def pliegos_de_la_licitacion(motor_id: str, usuario: Usuario = Depends(usuario_actual)):
+    """Los documentos de la licitación (con su estado de descarga y antivirus) y los requisitos anotados."""
+    _exige_licitaciones(usuario)
+    try:
+        return {**await pliegos_licitaciones.documentos(motor_id), **{"requisitos": (await pliegos_licitaciones.requisitos(motor_id))["requisitos"]}}
+    except (pliegos_licitaciones.ErrorPliego, LookupError, MotorNoDisponible) as e:
+        raise _error_pliegos(e) from None
+
+
+@app.post("/licitaciones/pliegos/{motor_id}/descargar")
+async def descargar_pliego(motor_id: str, entrada: DescargaPliego, usuario: Usuario = Depends(usuario_actual)):
+    """«Descargar y analizar»: baja el documento nº n a cuarentena, lo pasa por el antivirus y lee su texto. Tarda unos segundos."""
+    _exige_licitaciones(usuario)
+    try:
+        r = await pliegos_licitaciones.obtener(motor_id, entrada.n)
+    except (pliegos_licitaciones.ErrorPliego, pliegos_licitaciones.SinPermisoDescarga, LookupError, MotorNoDisponible) as e:
+        raise _error_pliegos(e) from None
+    log.info("pliegos: %s baja el documento %s de %s (%s)", usuario.id, entrada.n, motor_id, r["estado"])
+    return r
+
+
+@app.get("/licitaciones/pliegos/{motor_id}/documentos/{n}/paginas/{pagina}")
+async def pagina_de_un_pliego(motor_id: str, n: int, pagina: int, usuario: Usuario = Depends(usuario_actual)):
+    """El texto de una página del documento (para comprobar una cita). Es texto de terceros."""
+    _exige_licitaciones(usuario)
+    try:
+        return await pliegos_licitaciones.leer(motor_id, n, pagina)
+    except pliegos_licitaciones.ErrorPliego as e:
+        raise _error_pliegos(e) from None
+
+
+@app.post("/licitaciones/pliegos/requisitos/{rid}/revisar")
+async def revisar_requisito_de_pliego(rid: int, entrada: RevisionRequisito, usuario: Usuario = Depends(usuario_actual)):
+    """Una persona confirma o rechaza un requisito que anotó el Analista de Pliegos. Queda registrado quién y cuándo."""
+    _exige_licitaciones(usuario)
+    try:
+        f = await pliegos_licitaciones.revisar_requisito(rid, entrada.estado, usuario.id)
+    except (pliegos_licitaciones.ErrorPliego, pliegos_licitaciones.NoExiste) as e:
+        raise _error_pliegos(e) from None
+    log.info("pliegos: %s marca el requisito %s como %s", usuario.id, rid, f["estado"])
+    return f
 
 
 @app.post("/licitaciones/embudo/{lid}/estado")

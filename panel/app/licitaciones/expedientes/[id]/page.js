@@ -2,7 +2,7 @@
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useEffect, useState } from "react";
-import { estadoEtiqueta, etiquetaEmbudo, fechaTexto, fichaOrgHref, importeTexto, mensajeEmbudo, nombreFuente, urlSegura } from "../../../../lib/licitaciones";
+import { estadoEtiqueta, estadoPliego, estadoRequisito, etiquetaEmbudo, fechaTexto, fichaOrgHref, importeTexto, lecturaPliego, lugarCita, mensajeEmbudo, mensajePliegos, nombreFuente, puedeDescargarPliego, resumenRequisitos, tipoRequisito, urlSegura } from "../../../../lib/licitaciones";
 import { Fallo, pedir, pedirCerebro } from "../../cliente";
 
 const Dato = ({ t, children }) => <div><dt>{t}</dt><dd>{children ?? "—"}</dd></div>;
@@ -39,6 +39,96 @@ function Estudiar({ id }) {
         </>
       )}
       {error && <p role="alert" className="lic-error">{mensajeEmbudo(error.status)}</p>}
+    </section>
+  );
+}
+
+const enviar = (cuerpo) => ({ method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(cuerpo) });
+
+// Pliegos: los documentos de la licitación (se bajan a cuarentena y pasan por el antivirus, nadie recibe el fichero) y los requisitos que ha anotado el Analista de Pliegos con su cita.
+// Los confirma o rechaza una persona. Solo Dirección y Licitaciones (para los demás la consulta da 403 y la tarjeta no aparece).
+function Requisito({ r, onRevisar, trabajando }) {
+  const [pagina, setPagina] = useState(null);       // texto de la página citada, si se ha abierto
+  const [errorPagina, setErrorPagina] = useState(null);
+  const e = estadoRequisito(r);
+  const ver = async () => {
+    if (pagina) { setPagina(null); return; }
+    setErrorPagina(null);
+    try { setPagina(await pedirCerebro(`licitaciones/pliegos/${encodeURIComponent(r.motor_id)}/documentos/${r.documento}/paginas/${r.pagina}`)); }
+    catch (x) { setErrorPagina(x); }
+  };
+  return (
+    <li className="tarjeta lic-item">
+      <span className="lic-fila">
+        <span className="lic-etiqueta">{tipoRequisito(r.tipo)}</span>
+        <span className={`lic-etiqueta ${e.clase}`}>{e.texto}</span>
+        {r.valor && <span className="meta">{r.valor}</span>}
+      </span>
+      <span>{r.resumen}</span>
+      <blockquote className="meta">«{r.cita}»<br />{lugarCita(r)}</blockquote>
+      <span className="lic-fila">
+        <button className="boton no" onClick={ver}>{pagina ? "Ocultar la página" : "Ver la página"}</button>
+        {r.estado !== "confirmado" && <button className="boton si" disabled={trabajando} onClick={() => onRevisar(r.id, "confirmado")}>Confirmar</button>}
+        {r.estado !== "rechazado" && <button className="boton no" disabled={trabajando} onClick={() => onRevisar(r.id, "rechazado")}>Rechazar</button>}
+        {r.estado !== "borrador" && <button className="boton no" disabled={trabajando} onClick={() => onRevisar(r.id, "borrador")}>Volver a borrador</button>}
+        {r.revisado_por && <span className="meta">Revisado por {r.revisado_por} el {fechaTexto(r.revisado)}</span>}
+      </span>
+      {errorPagina && <p role="alert" className="lic-error">{mensajePliegos(errorPagina.status)}</p>}
+      {pagina && (
+        <details open className="lic-informe">
+          <summary>Texto de la {pagina.unidad} {pagina.pagina} de {pagina.de}</summary>
+          <p className="meta">Texto de un documento de terceros, tal como se ha leído: puede tener errores de lectura.</p>
+          <pre className="lic-informe-texto">{pagina.texto}</pre>
+        </details>
+      )}
+    </li>
+  );
+}
+
+function Pliegos({ id }) {
+  const [d, setD] = useState(undefined);              // undefined = consultando; null = sin acceso
+  const [error, setError] = useState(null);
+  const [trabajando, setTrabajando] = useState(null);  // número del documento que se está bajando, o "revisando"
+  const cargar = async () => {
+    try { setD(await pedirCerebro(`licitaciones/pliegos/${encodeURIComponent(id)}`)); setError(null); }
+    catch (e) { if (e.status === 403 || e.status === 401) setD(null); else { setError(e); setD((x) => (x === undefined ? null : x)); } }
+  };
+  useEffect(() => { cargar(); }, [id]);
+  if (!d && !error) return null;
+  const bajar = async (n) => {
+    setTrabajando(n); setError(null);
+    try { await pedirCerebro(`licitaciones/pliegos/${encodeURIComponent(id)}/descargar`, enviar({ n })); await cargar(); }
+    catch (e) { setError(e); await cargar(); }
+    finally { setTrabajando(null); }
+  };
+  const revisar = async (rid, estado) => {
+    setTrabajando("revisando"); setError(null);
+    try { await pedirCerebro(`licitaciones/pliegos/requisitos/${rid}/revisar`, enviar({ estado })); await cargar(); }
+    catch (e) { setError(e); }
+    finally { setTrabajando(null); }
+  };
+  const docs = d?.documentos || [], reqs = (d?.requisitos || []).map((r) => ({ ...r, motor_id: id }));
+  return (
+    <section className="tarjeta" aria-label="Pliegos">
+      <h2>Pliegos</h2>
+      <p className="meta">Los documentos se bajan a cuarentena y pasan por el antivirus antes de leerse; nadie recibe el fichero original, solo su texto. Los requisitos los anota un agente de IA con su cita literal y una persona los confirma o rechaza.</p>
+      {error && <p role="alert" className="lic-error">{mensajePliegos(error.status)}</p>}
+      {docs.length === 0 && d && <p className="meta">Esta licitación no tiene documentos publicados.</p>}
+      <ul className="lic-lista">
+        {docs.map((x) => {
+          const e = estadoPliego(x.descarga), lectura = lecturaPliego(x.descarga);
+          return (
+            <li key={x.n} className="tarjeta lic-item">
+              <span className="lic-fila"><span className="titulo">{x.nombre}</span><span className={`lic-etiqueta ${e.clase}`}>{e.texto}</span></span>
+              {lectura && <span className="meta">{lectura}</span>}
+              {x.descarga?.motivo && <span className="meta">{x.descarga.motivo}</span>}
+              {puedeDescargarPliego(x.descarga) && <span className="lic-fila"><button className="boton no" disabled={trabajando !== null} onClick={() => bajar(x.n)}>{trabajando === x.n ? "Descargando y analizando…" : x.descarga ? "Reintentar" : "Descargar y analizar"}</button></span>}
+            </li>
+          );
+        })}
+      </ul>
+      <h3>Requisitos <span className="meta">· {resumenRequisitos(reqs)}</span></h3>
+      {reqs.length > 0 && <ul className="lic-lista">{reqs.map((r) => <Requisito key={r.id} r={r} onRevisar={revisar} trabajando={trabajando !== null} />)}</ul>}
     </section>
   );
 }
@@ -123,6 +213,8 @@ export default function Ficha() {
               <ul>{x.documentos.map((d, n) => <li key={n}><Enlace url={d.url_origen}>{d.nombre || d.url_origen}</Enlace> <span className="meta">{String(d.tipo || "").replace(/_/g, " ")}</span></li>)}</ul>
             </section>
           )}
+
+          <Pliegos id={id} />
 
           {x.evidencia && (
             <section className="tarjeta" aria-label="Evidencia">

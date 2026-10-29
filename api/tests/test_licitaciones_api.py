@@ -153,6 +153,35 @@ class TestRutasDelEmbudo(unittest.TestCase):
         with mock.patch.object(cp, "quitar", mock.AsyncMock(side_effect=cp.ErrorCalendario("x"))):
             self.assertEqual(c.post("/licitaciones/embudo/7/calendario/quitar").status_code, 503)
 
+    def test_pliegos_permisos_rutas_y_errores(self):
+        pl = main.pliegos_licitaciones
+        espias = {n: mock.AsyncMock(return_value={"requisitos": [], "documentos": []}) for n in ("documentos", "requisitos", "obtener", "leer", "revisar_requisito")}
+        c = como(("usuario", "responsable"), ("finanzas", "comercial"))
+        with mock.patch.multiple(pl, **espias):
+            for metodo, ruta, cuerpo in (("get", "/licitaciones/pliegos/x", None), ("post", "/licitaciones/pliegos/x/descargar", {"n": 1}),
+                                         ("get", "/licitaciones/pliegos/x/documentos/1/paginas/1", None), ("post", "/licitaciones/pliegos/requisitos/3/revisar", {"estado": "confirmado"})):
+                r = getattr(c, metodo)(ruta, json=cuerpo) if cuerpo else getattr(c, metodo)(ruta)
+                self.assertEqual(r.status_code, 403, ruta)
+        for n, espia in espias.items():
+            espia.assert_not_called()
+        c = como(("direccion",))
+        with mock.patch.multiple(pl, documentos=mock.AsyncMock(return_value={"licitacion": "x", "documentos": [{"n": 1}]}),
+                                 requisitos=mock.AsyncMock(return_value={"requisitos": [{"id": 4}]}), obtener=mock.AsyncMock(return_value={"estado": "limpio"}),
+                                 leer=mock.AsyncMock(return_value={"texto": "t"}), revisar_requisito=mock.AsyncMock(return_value={"id": 3, "estado": "confirmado"})) as _:
+            self.assertEqual(c.get("/licitaciones/pliegos/x").json(), {"licitacion": "x", "documentos": [{"n": 1}], "requisitos": [{"id": 4}]})
+            self.assertEqual(c.post("/licitaciones/pliegos/x/descargar", json={"n": 1}).json(), {"estado": "limpio"})
+            self.assertEqual(c.get("/licitaciones/pliegos/x/documentos/1/paginas/2").json(), {"texto": "t"})
+            self.assertEqual(c.post("/licitaciones/pliegos/requisitos/3/revisar", json={"estado": "confirmado"}).json()["estado"], "confirmado")
+            pl.revisar_requisito.assert_awaited_with(3, "confirmado", "albert")
+        for fallo, codigo in ((pl.ErrorPliego("x"), 422), (pl.SinPermisoDescarga("x"), 403), (LookupError("x"), 404), (main.MotorNoDisponible("x"), 503)):
+            with mock.patch.object(pl, "obtener", mock.AsyncMock(side_effect=fallo)):
+                self.assertEqual(c.post("/licitaciones/pliegos/x/descargar", json={"n": 1}).status_code, codigo, repr(fallo))
+        with mock.patch.object(pl, "revisar_requisito", mock.AsyncMock(side_effect=pl.NoExiste("No existe ese requisito"))):
+            self.assertEqual(c.post("/licitaciones/pliegos/requisitos/9/revisar", json={"estado": "confirmado"}).status_code, 404)
+        with mock.patch.object(pl, "revisar_requisito", mock.AsyncMock(side_effect=pl.ErrorPliego("estado debe ser"))):
+            self.assertEqual(c.post("/licitaciones/pliegos/requisitos/9/revisar", json={"estado": "raro"}).status_code, 422)
+        self.assertEqual(c.post("/licitaciones/pliegos/x/descargar", json={}).status_code, 422)             # falta n
+
     def test_estudiar_sin_motor_o_con_un_expediente_que_no_existe(self):
         e = main.embudo_licitaciones
         c = como(("direccion",))
