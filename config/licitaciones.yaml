@@ -85,3 +85,10 @@ simulador:
   baja_max_pct: 40            # baja máxima que se explora
   paginas_max: 5              # páginas de 100 adjudicaciones que se leen del motor por búsqueda
   anios: 5                    # antigüedad máxima de los concursos parecidos
+
+# Vigilante del motor (cerebro/licitaciones/vigilante.py): cada 15 minutos mira el estado del motor y, si una fuente lleva demasiado sin ingesta correcta (o el motor no responde),
+# avisa por correo interno UNA vez al empezar el problema, lo recuerda cada `repetir_cada_horas` mientras siga y avisa cuando se arregla. Sin destinatarios, solo queda en el registro.
+vigilante:
+  horas_sin_ingesta: 6        # una fuente sin ingesta correcta durante más de estas horas se da por atascada
+  repetir_cada_horas: 24      # mientras siga atascado, recordarlo cada tanto
+  destinatarios: []           # direcciones de la empresa (dominios de config/buzones.yaml → avisos), p. ej. [tecnologia@101.cat]; vacío = sin correo

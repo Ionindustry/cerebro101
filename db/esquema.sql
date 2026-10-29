@@ -414,3 +414,12 @@ CREATE TABLE IF NOT EXISTS licitaciones_reglas_precio (
   CHECK (puntos_precio > 0 AND puntos_total >= puntos_precio),
   CHECK (formula <> 'lineal_umbral' OR baja_tope_pct > 0)
 );
+
+-- Vigilante del motor de licitaciones (api/cerebro/licitaciones/vigilante.py): recuerda si el motor está bien o atascado, para avisar UNA vez al empezar el problema, recordarlo cada cierto tiempo y avisar al arreglarse.
+CREATE TABLE IF NOT EXISTS licitaciones_vigilante (
+  clave       text PRIMARY KEY,
+  estado      text NOT NULL CHECK (estado IN ('ok', 'atascado')),
+  desde       timestamptz NOT NULL,                 -- desde cuándo está en este estado
+  avisado_en  timestamptz,                          -- último aviso enviado de este estado
+  detalle     text NOT NULL DEFAULT ''
+);
