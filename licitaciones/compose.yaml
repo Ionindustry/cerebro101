@@ -25,8 +25,8 @@ services:
       RUSTFS_CONSOLE_ENABLE: "false"       # sin consola web; los cubos los crea el ingestor (EnsureBuckets), el de originales con Object Lock
     volumes: ["s3-datos:/data"]
     # Sin healthcheck propio hasta confirmar qué herramientas trae la imagen; el ingestor reintenta la conexión al arrancar.
-    mem_limit: 1g
-    cpus: 1.0
+    mem_limit: 4g                        # con 1 GiB el almacén se caía por falta de memoria durante una carga grande (el entrypoint lo relanzaba y el ingestor veía «service unavailable»)
+    cpus: 2.0
 
   nats:
     <<: *endurecido
@@ -52,8 +52,8 @@ services:
       POSTGRES_PASSWORD: "${LIC_PG_PASSWORD:?define LIC_PG_PASSWORD}"
     volumes: ["pg-datos:/var/lib/postgresql/data"]
     healthcheck: {test: ["CMD-SHELL", "pg_isready -U lic -d licitaciones"], interval: 5s, timeout: 5s, retries: 20}
-    mem_limit: 512m
-    cpus: 1.0
+    mem_limit: 2g                        # la carga del histórico escribe cientos de miles de filas (y sus índices y adjudicaciones derivadas)
+    cpus: 2.0
 
   ingestor:
     restart: unless-stopped
