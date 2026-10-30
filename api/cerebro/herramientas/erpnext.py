@@ -74,8 +74,12 @@ def _cabeceras(departamento: str) -> dict:
 async def crear_maestro(doctype: str, datos: dict[str, Any], departamento: str) -> dict:
     """Da de alta UN dato maestro (p. ej. un proveedor). Como `insertar_varios`, no es una operación de los agentes: solo la usan procesos ya aprobados."""
     comprobar_acceso(departamento, doctype, "maestros")
+    datos = {**datos, "docstatus": 0}
+    campo = PROPIETARIO.get(doctype)
+    if campo and not datos.get(campo):
+        datos[campo] = await _usuario_tecnico(departamento)
     async with httpx.AsyncClient(base_url=ajustes.erpnext_url, timeout=30) as c:
-        r = await c.post(f"/api/resource/{quote(doctype, safe='')}", json={**datos, "docstatus": 0}, headers=_cabeceras(departamento))
+        r = await c.post(f"/api/resource/{quote(doctype, safe='')}", json=datos, headers=_cabeceras(departamento))
     r.raise_for_status()
     return r.json()["data"]
 
@@ -318,6 +322,7 @@ AYUDA_DOCUMENTOS = (
     "Sales Invoice(customer, posting_date, due_date, items); Purchase Order(supplier, transaction_date, schedule_date, items); "
     "Purchase Invoice(supplier, bill_date, items); Project(project_name, status, expected_start_date, expected_end_date); "
     "Task(subject, status, project); Lead(lead_name, company_name, email_id, status); Employee(employee_name, department, status). "
+    "CRM: CRM Lead(first_name, email, status); CRM Deal(organization, status, lead); FCRM Note(title, content) y CRM Task(title, due_date, status) llevan reference_doctype y reference_docname del lead o trato. "
     "En «items» va una lista de {item_code, qty, rate}.")
 
 registrar(Herramienta(

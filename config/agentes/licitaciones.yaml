@@ -3,12 +3,14 @@ agentes:
 - id: director-licitaciones
   nombre: Director de Licitaciones
   subarea: Vigilancia de oportunidades
-  tareas: Coordina el ciclo completo de cada concurso y controla todos los plazos
+  tareas: Coordina el ciclo completo de cada concurso y controla todos los plazos; lleva el seguimiento de cada licitación
+    en el CRM (tratos, notas y tareas)
   modelo: principal
   herramientas:
   - conocimiento
   - calendario
   - licitaciones
+  - erpnext
   aprobacion: libre
   horario: 0 7 * * 1-5
   sensibilidad: baja

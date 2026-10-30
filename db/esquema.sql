@@ -241,6 +241,8 @@ ALTER TABLE licitaciones ADD COLUMN IF NOT EXISTS estado_motor    text;
 ALTER TABLE licitaciones ADD COLUMN IF NOT EXISTS viabilidad_peticion jsonb;
 -- Plazo que se puso en el calendario de la empresa (botón «Añadir el plazo al calendario»); NULL = no está. El evento se identifica por un UID fijo sacado del motor_id.
 ALTER TABLE licitaciones ADD COLUMN IF NOT EXISTS calendario_plazo timestamptz;
+-- Seguimiento en el CRM (cerebro/licitaciones/crm.py): {"trato": nombre del CRM Deal, "etapa": estado del trato en el CRM}
+ALTER TABLE licitaciones ADD COLUMN IF NOT EXISTS crm jsonb;
 -- El código de expediente no es único entre organismos: la identidad de una fila es el expediente del motor.
 ALTER TABLE licitaciones DROP CONSTRAINT IF EXISTS licitaciones_expediente_key;
 CREATE UNIQUE INDEX IF NOT EXISTS licitaciones_motor_id ON licitaciones (motor_id);

@@ -368,6 +368,27 @@ export function mensajeCalendario(status) {
   return mensajeEmbudo(status);
 }
 
+// ---- Seguimiento en el CRM (trato de la licitación; API del Cerebro: /licitaciones/embudo/{id}/crm) ----
+
+/** El trato del CRM de la licitación, o null si aún no lo tiene. */
+export const tratoCrm = (x) => (typeof x?.crm?.trato === "string" && x.crm.trato ? x.crm.trato : null);
+
+/** Enlace al trato en el CRM (solo http/https); null si no hay trato o la dirección base no es válida. */
+export function enlaceCrm(x, base) {
+  const t = tratoCrm(x);
+  const b = String(base || "").replace(/\/+$/, "");
+  return t && /^https?:\/\//.test(b) ? `${b}/deals/${encodeURIComponent(t)}` : null;
+}
+
+/** Se puede llevar al CRM una licitación que se estudia, se presenta o ya se resolvió, y que aún no tiene trato. */
+export const puedeSeguirEnCrm = (x) => !tratoCrm(x) && ["en_estudio", "presentada", "ganada", "perdida"].includes(x?.estado);
+
+export function mensajeCrm(status) {
+  if (status === 422) return "Esa licitación aún no se puede seguir en el CRM: primero hay que decidir estudiarla.";
+  if (status === 503) return "No se ha podido escribir en el CRM. Puede que no esté configurado o que no responda; inténtalo en unos minutos.";
+  return mensajeEmbudo(status);
+}
+
 // ---- Pliegos de una licitación: documentos, antivirus y requisitos con cita (API del Cerebro: /licitaciones/pliegos) ----
 
 const ESTADO_PLIEGO = {

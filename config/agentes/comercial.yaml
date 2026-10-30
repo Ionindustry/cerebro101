@@ -3,7 +3,7 @@ agentes:
 - id: director-comercial
   nombre: Director Comercial / CRM
   subarea: Gestión de clientes
-  tareas: Mantiene fichas y pipeline al día y detecta oportunidades paradas
+  tareas: Mantiene fichas y pipeline al día en el CRM y detecta oportunidades paradas
   modelo: principal
   herramientas:
   - conocimiento
@@ -45,7 +45,7 @@ agentes:
 - id: respuesta-leads
   nombre: Respuesta a Leads
   subarea: Prospección
-  tareas: Contesta cada consulta entrante en minutos y propone fechas de reunión
+  tareas: Contesta cada consulta entrante en minutos, propone fechas de reunión y lo anota en el CRM
   modelo: principal
   herramientas:
   - conocimiento

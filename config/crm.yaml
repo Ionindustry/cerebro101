@@ -1,0 +1,8 @@
+# Constancia en el CRM de lo que hacen los departamentos con clientes potenciales (cerebro/crm_comercial.py).
+# Cuando un correo APROBADO sale (enviar o responder) desde uno de estos departamentos hacia una dirección que es el e-mail de un CRM Lead del CRM (Frappe CRM), queda una nota
+# en ese lead y en los tratos que nacieron de él: asunto y texto del mensaje, para que todo el seguimiento esté en el mismo sitio. Es comodidad: si el CRM no responde, el correo
+# ya salió y solo se anota en el registro. Con la política de config/erp_acceso.yaml (el departamento necesita «borrador» de FCRM Note y «leer» de CRM Lead y CRM Deal).
+constancia_correo:
+  departamentos: [comercial]
+  limite_s: 20
+  max_caracteres: 3000      # de cada mensaje se guarda como mucho esto

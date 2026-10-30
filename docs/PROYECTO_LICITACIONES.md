@@ -562,3 +562,14 @@ Documento de partida: «Plataforma de detección y análisis de concursos públi
   original de cada expediente ya proyectado y rehace su modelo de lectura con el parser actual, para que los antiguos tengan, por ejemplo, el texto de las prórrogas. Comprueba el SHA-256 de cada
   original; no resucita los anulados, no pisa un expediente que cambió mientras tanto, no toca versión, original ni fecha de actualización y es idempotente. `-simular` cuenta cuántos cambiarían sin escribir.
 - Pendiente: canal `correo`; un botón «Pedir informe de viabilidad» para una licitación concreta; y llevar a Viabilidad lo que ya sabe 101.cat de cada organismo.
+
+
+## Seguimiento en el CRM
+
+Cada licitación que una persona decide estudiar es un **trato** (CRM Deal) del organismo comprador (CRM Organization) en el Frappe CRM instalado en el ERP (`http://localhost:8081/crm`). Código: `api/cerebro/licitaciones/crm.py`; ajustes: bloque `crm:` de `config/licitaciones.yaml`.
+
+- **Qué se anota solo:** el alta (título, expediente, organismo, importe, plazo y enlace), cada cambio de estado del embudo (estudiar, presentada, ganada, perdida con su motivo, descartada), que los agentes han preparado el borrador de la oferta (con el estado de cada paso) y el precio que fija una persona. La etapa del trato sigue al estado del embudo (`crm.etapas`). El estado del embudo del Cerebro manda; el CRM lo sigue.
+- **Los agentes** de Licitaciones leen el trato y pueden añadir notas y tareas con la herramienta «erpnext» (`FCRM Note`, `CRM Task`); no abren ni cierran tratos (`config/erp_acceso.yaml`, categoría «maestros»).
+- **El panel** muestra en el embudo el enlace al trato y el botón «Seguir en el CRM» para las que ya se estudiaban antes de conectarlo.
+- **Si el CRM falla** no se pierde nada: lo que hizo la persona ya está guardado, el fallo queda en el registro y el trato se crea o se pone al día en la siguiente anotación (o con el botón).
+- **Por verificar con el CRM real:** los nombres de campo del trato (`expected_deal_value`, `expected_closure_date`, `next_step`) y de las etapas son los de fábrica de Frappe CRM 1.x; si en tu CRM difieren, se cambian en `crm.etapas` o en `datos_trato`.

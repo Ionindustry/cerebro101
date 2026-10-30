@@ -57,6 +57,20 @@ calendario_plazos:
   recordatorios_dias: [3, 1]    # avisos del calendario antes del plazo
   calendario: ""                # nombre del calendario donde se crea; vacío = el primero de la cuenta
 
+# Seguimiento en el CRM (Frappe CRM, cerebro/licitaciones/crm.py): cada licitación que se estudia es un trato del organismo comprador y cada hito (estudiar, preparar la oferta, fijar el precio,
+# presentar, ganar, perder) queda como nota del trato. Los agentes de Licitaciones leen el trato y pueden añadir notas y tareas. Si el CRM no responde, no se pierde nada: se anota en el registro.
+crm:
+  activo: true
+  crear_detectadas: false       # false: el trato nace cuando se decide estudiarla; true: también las que detecta el sistema (más ruido en el CRM)
+  url_publica: http://localhost:8081/crm       # dirección del CRM para los enlaces del panel
+  etapas:                       # etapa del trato según el estado del embudo (los nombres de las etapas de tu CRM)
+    detectada: Qualification
+    en_estudio: Proposal/Quotation
+    presentada: Negotiation
+    ganada: Won
+    perdida: Lost
+    descartada: Lost
+
 # Alertas guardadas: un evento (nueva, adjudicada…) solo genera aviso si el expediente se ha actualizado en los últimos días. Así la carga del histórico y la
 # primera lectura del flujo no inundan a nadie de avisos de licitaciones de hace meses.
 alertas:

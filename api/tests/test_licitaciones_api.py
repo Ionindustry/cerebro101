@@ -66,6 +66,11 @@ class TestRutas(unittest.TestCase):
 class TestRutasDelEmbudo(unittest.TestCase):
     FILA = {"id": 7, "motor_id": "0b1f7a3e-1111-4222-8333-444444444444", "estado": "en_estudio"}
 
+    def setUp(self):
+        p = mock.patch.object(main.crm_licitaciones, "anotar", mock.AsyncMock(return_value=None))      # el CRM no es lo que se prueba aquí
+        self.crm = p.start()
+        self.addCleanup(p.stop)
+
     def tearDown(self):
         main.app.dependency_overrides.clear()
 
@@ -95,6 +100,24 @@ class TestRutasDelEmbudo(unittest.TestCase):
                 self.assertEqual(c.post("/licitaciones/embudo/estudiar", json={"motor_id": self.FILA["motor_id"]}).json(), self.FILA)
                 self.assertEqual(c.post("/licitaciones/embudo/7/estado", json={"estado": "perdida", "motivo_perdida": "precio"}).status_code, 200)
             cambiar.assert_awaited_with(7, "perdida", "precio")
+            self.assertEqual(self.crm.await_args_list[-1].args[0], 7)          # tras cambiar de estado se anota en el CRM
+
+    def test_seguir_en_el_crm(self):
+        e, crm = main.embudo_licitaciones, main.crm_licitaciones
+        estudiada = {**self.FILA, "crm": {"trato": "CRM-DEAL-1", "etapa": "Proposal/Quotation"}}
+        with mock.patch.object(e, "obtener", mock.AsyncMock(side_effect=[self.FILA, estudiada])), mock.patch.object(crm, "asegurar_trato", mock.AsyncMock(return_value="CRM-DEAL-1")) as asegurar:
+            r = como(("direccion",)).post("/licitaciones/embudo/7/crm")
+        self.assertEqual((r.status_code, r.json()["crm"]["trato"]), (200, "CRM-DEAL-1"))
+        asegurar.assert_awaited_once_with(7)
+        with mock.patch.object(e, "obtener", mock.AsyncMock(return_value=None)):
+            self.assertEqual(como(("direccion",)).post("/licitaciones/embudo/7/crm").status_code, 404)
+        with mock.patch.object(e, "obtener", mock.AsyncMock(return_value={**self.FILA, "estado": "detectada"})):
+            self.assertEqual(como(("direccion",)).post("/licitaciones/embudo/7/crm").status_code, 422)
+        with mock.patch.object(e, "obtener", mock.AsyncMock(return_value=self.FILA)), mock.patch.object(crm, "asegurar_trato", mock.AsyncMock(side_effect=RuntimeError("caído"))):
+            self.assertEqual(como(("direccion",)).post("/licitaciones/embudo/7/crm").status_code, 503)
+        with mock.patch.object(crm, "asegurar_trato", mock.AsyncMock()) as asegurar:
+            self.assertEqual(como(("usuario",), ("finanzas",)).post("/licitaciones/embudo/7/crm").status_code, 403)
+        asegurar.assert_not_called()
 
     def test_errores_de_validacion_y_de_existencia(self):
         e = main.embudo_licitaciones

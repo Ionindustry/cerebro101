@@ -29,6 +29,7 @@ Después, `docker compose up -d --force-recreate --no-deps api worker beat` (la 
 - **Leer:** Customer, Contact, Address, Lead, Opportunity, Prospect, Quotation, Sales Order, Item, Campaign, Territory, Customer Group, Project, CRM Lead, CRM Deal, CRM Organization, CRM Task, FCRM Note, CRM Call Log, CRM Lead Source, CRM Lead Status, CRM Deal Status, CRM Product, CRM Industry, CRM Territory, CRM Lost Reason
 - **Borrador (crear y modificar):** Lead, Opportunity, Prospect, Quotation, Contact, Address, CRM Lead, CRM Deal, CRM Organization, CRM Task, FCRM Note
 - **Preguntas para decidir:**
+  - Constancia de correos: cuando sale un correo aprobado de Comercial hacia la dirección de un CRM Lead, el sistema deja una nota (FCRM Note) en el lead y en sus tratos (`cerebro/crm_comercial.py`, `config/crm.yaml`).
   - ¿Deben los agentes comerciales dar de alta clientes (`Customer`)? Hoy no pueden: crean Lead, Oportunidad, Presupuesto, Contacto y los documentos del CRM.
   - ¿Necesitan ver el estado de cobro (`Sales Invoice`) para postventa? Hoy no.
 
@@ -54,10 +55,11 @@ Después, `docker compose up -d --force-recreate --no-deps api worker beat` (la 
 - **Preguntas para decidir:**
   - ¿Qué documentos de calidad (ISO 9001) existen realmente en vuestro ERP? La política incluye los de Quality Management.
 
-## licitaciones  (3 agentes: arquitecto-solucion, costes-licitacion, precio-licitacion)
+## licitaciones  (arquitecto-solucion, costes-licitacion, precio-licitacion, director-licitaciones…)
 
-- **Leer:** Customer, Contact, Opportunity, Quotation, Project, Task, Item, Item Price, Supplier, Contract
-- **Borrador (crear y modificar):** Opportunity, Quotation, Task
+- **Leer:** Customer, Contact, Opportunity, Quotation, Project, Task, Item, Item Price, Supplier, Contract, CRM Deal, CRM Organization, CRM Task, FCRM Note, CRM Deal Status
+- **Borrador (crear y modificar):** Opportunity, Quotation, Task, FCRM Note, CRM Task (los agentes anotan y programan tareas en el trato de la licitación)
+- **Maestros (solo el sistema, no los agentes):** CRM Deal, CRM Organization. El trato de cada licitación y el organismo comprador los crea y mueve de etapa el Cerebro según el embudo (`cerebro/licitaciones/crm.py`); un agente no abre ni cierra tratos por su cuenta.
 - **Sistema (solo lo lee el proceso de la documentación administrativa, no los agentes):** Company, Address, Contact. De ahí salen los datos de la sociedad con la que se presenta una oferta (`cerebro/licitaciones/empresa.py`); solo se piden los campos necesarios (nombre, NIF, dirección, contacto del representante…), nunca cuentas bancarias.
 - **Preguntas para decidir:**
   - ¿Necesitan leer facturas anteriores para justificar precios? Hoy no.

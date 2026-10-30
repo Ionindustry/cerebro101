@@ -357,6 +357,8 @@ async def enviar(departamento: str, para: list[str] | str, asunto: str, cuerpo: 
         finally:
             _cerrar(con)
     await asyncio.to_thread(hacer)
+    from .. import crm_comercial          # constancia en el CRM: comodidad, nunca falla
+    await crm_comercial.anotar_correo(departamento, m["To"], m["Subject"], cuerpo)
     return {"buzon": ident, "enviado": m["Message-ID"], "para": m["To"]}
 
 
@@ -375,7 +377,10 @@ async def responder(departamento: str, message_id: str, cuerpo: str, buzon: str 
             return {"buzon": ident, "enviado": m["Message-ID"], "para": m["To"], "asunto": m["Subject"]}
         finally:
             _cerrar(con)
-    return await asyncio.to_thread(hacer)
+    resultado = await asyncio.to_thread(hacer)
+    from .. import crm_comercial          # constancia en el CRM: comodidad, nunca falla
+    await crm_comercial.anotar_correo(departamento, resultado["para"], resultado["asunto"], cuerpo)
+    return resultado
 
 
 # --- Vista previa para quien aprueba ----------------------------------------------------------------------------------
