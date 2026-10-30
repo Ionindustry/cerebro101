@@ -437,3 +437,11 @@ ul.lic-fila, ol.lic-fila { list-style: none; margin: 0; padding: 0; }
 .adjunto button { border: 0; background: transparent; cursor: pointer; font-size: 16px; line-height: 1; color: inherit; }
 .clip { border: 0; background: transparent; cursor: pointer; font-size: 20px; padding: 4px 6px; }
 .clip:disabled { opacity: .4; cursor: default; }
+
+/* Preparar la oferta con los agentes: progreso por pasos y documentación administrativa */
+.lic-redaccion { display: grid; gap: 10px; border-top: 1px solid var(--linea); padding-top: 12px; margin-top: 8px; }
+.lic-redaccion h3 { margin: 0; }
+.lic-pasos { margin: 0; padding-left: 20px; display: grid; gap: 8px; }
+.lic-pasos li { display: grid; gap: 2px; }
+.lic-pasos details p { margin: 6px 0 0; }
+.lic-etiqueta.aviso { background: var(--senal-suave); color: #7a5206; }

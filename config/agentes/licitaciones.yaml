@@ -56,6 +56,7 @@ agentes:
   - licitaciones
   - pliegos
   - ofertas
+  - plantillas
   aprobacion: doble
   horario: null
   sensibilidad: media

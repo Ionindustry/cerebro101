@@ -48,7 +48,8 @@ def comprobar_acceso(departamento: str, doctype: str, accion: str, nombre: str |
     permitidos = ((pol.get("departamentos") or {}).get(departamento) or {}).get(accion) or []
     if doctype in permitidos:
         return
-    verbo = {"leer": "consultar", "maestros": "dar de alta o cambiar (datos maestros, solo con un proceso aprobado)"}.get(accion, "crear en borrador")
+    verbo = {"leer": "consultar", "maestros": "dar de alta o cambiar (datos maestros, solo con un proceso aprobado)",
+             "sistema": "consultar (solo un proceso del sistema)"}.get(accion, "crear en borrador")
     ejemplos = ", ".join(permitidos[:12]) + ("…" if len(permitidos) > 12 else "")
     mensaje = (f"El departamento «{departamento}» no tiene permitido {verbo} «{doctype}» en el ERP/CRM (config/erp_acceso.yaml). "
                + (f"Puede: {ejemplos}." if permitidos else "No tiene ningún documento permitido para esta acción."))
@@ -95,6 +96,19 @@ async def leer(doctype: str, nombre: str, departamento: str) -> dict:
     comprobar_acceso(departamento, doctype, "leer", nombre)
     async with httpx.AsyncClient(base_url=ajustes.erpnext_url, timeout=30) as c:
         r = await c.get(f"/api/resource/{quote(doctype, safe='')}/{quote(nombre, safe='')}", headers=_cabeceras(departamento))
+    r.raise_for_status()
+    return r.json()["data"]
+
+
+async def listar_sistema(doctype: str, departamento: str, filtros: list | None = None, campos: list[str] | None = None, limite: int = 20) -> list[dict]:
+    """Lee documentos de la categoría «sistema» de config/erp_acceso.yaml (p. ej. Company, Address). NO es una operación de los agentes: solo la usan procesos del sistema
+    (cerebro/licitaciones/empresa.py), que piden una lista cerrada de campos."""
+    comprobar_acceso(departamento, doctype, "sistema")
+    params = {"limit_page_length": limite, "fields": json.dumps(campos or ["name"])}
+    if filtros:
+        params["filters"] = json.dumps(filtros)
+    async with httpx.AsyncClient(base_url=ajustes.erpnext_url, timeout=30) as c:
+        r = await c.get(f"/api/resource/{quote(doctype, safe='')}", params=params, headers=_cabeceras(departamento))
     r.raise_for_status()
     return r.json()["data"]
 

@@ -159,7 +159,7 @@ async def leer(motor_id: str, con_contenido: bool = True, max_chars: int | None 
     secciones = [_seccion(f, con_contenido, max_chars) for f in filas]
     reqs = await _requisitos_confirmados(motor_id)
     return {"existe": True, "licitacion": motor_id, "precio_sin_iva": float(o["precio_sin_iva"]) if o["precio_sin_iva"] is not None else None, "iva_pct": float(o["iva_pct"]),
-            "precio_por": o["precio_por"], "precio_en": o["precio_en"].isoformat() if o["precio_en"] else None, "actualizado": o["actualizado"].isoformat(),
+            "precio_por": o["precio_por"], "precio_en": o["precio_en"].isoformat() if o["precio_en"] else None, "actualizado": o["actualizado"].isoformat(), "empresa": o.get("empresa"),
             "secciones": secciones, "resumen": {e: sum(1 for s in secciones if s["estado"] == e) for e in ESTADOS},
             "cobertura": cobertura(secciones, reqs), "nota": pliegos.AVISO_TERCEROS}
 
@@ -302,6 +302,15 @@ async def fijar_precio(motor_id: str, precio, iva_pct, usuario: str) -> dict:
             raise NoExiste("Esta licitación aún no tiene la oferta preparada")
     log.info("oferta: %s fija el precio de %s en %s € (IVA %s %%)", usuario, motor_id, p, iva)
     return await leer(motor_id)
+
+
+async def fijar_empresa(motor_id: str, empresa: str) -> None:
+    """La sociedad (Company del ERP) con la que se presenta esta oferta. Sus datos son los que se ponen en la documentación administrativa."""
+    motor_id = _id(motor_id)
+    async with await _conectar() as conn:
+        cur = await conn.execute("UPDATE ofertas SET empresa = %s, actualizado = now() WHERE motor_id = %s RETURNING motor_id", [str(empresa)[:140], motor_id])
+        if not await cur.fetchone():
+            raise NoExiste("Esta licitación aún no tiene la oferta preparada")
 
 
 async def historial(seccion_id: int) -> list[dict]:

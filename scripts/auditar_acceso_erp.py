@@ -136,7 +136,7 @@ def main() -> int:
     for dep in sorted(set(pol_deps) - set(usan)):
         print(f"(política de «{dep}» sin agentes que usen el ERP)")
 
-    probados = sorted(set(SENSIBLES) | {d for v in pol_deps.values() for d in (v.get("leer", []) + v.get("borrador", []) + v.get("maestros", []))})
+    probados = sorted(set(SENSIBLES) | {d for v in pol_deps.values() for d in (v.get("leer", []) + v.get("borrador", []) + v.get("maestros", []) + v.get("sistema", []))})
     claves = {dep: env.get(f"ERPNEXT_TOKEN_{dep.upper()}") for dep in sorted(usan) if env.get(f"ERPNEXT_TOKEN_{dep.upper()}")}
     if claves:
         print(f"\n== Lo que puede LEER cada usuario técnico en {a.url} (L = puede; · = no; ? = no se pudo comprobar) ==")
@@ -150,7 +150,7 @@ def main() -> int:
             if any(res[d][dep] == "clave-no-valida" for d in probados):
                 incidencias.append(f"{dep}: el ERP no reconoce su clave (ERPNEXT_TOKEN_{dep.upper()}): hay que regenerarla")
                 continue
-            leer_dep = set(pol_deps.get(dep, {}).get("leer", []))
+            leer_dep = set(pol_deps.get(dep, {}).get("leer", [])) | set(pol_deps.get(dep, {}).get("sistema", []))
             permitidos = leer_dep | set((politica or {}).get("referencias", []) or [])      # referencias: solo devuelven el nombre
             de_mas = [d for d in probados if res[d][dep] == "lee" and d not in permitidos]
             if "User" in de_mas and filas(a.url, claves[dep], "User") <= 1:                  # solo su propia ficha

@@ -26,6 +26,9 @@ from ..licitaciones import alertas as alertas_licitaciones
 from ..licitaciones import calendario_plazos
 from ..licitaciones import pliegos as pliegos_licitaciones
 from ..licitaciones import ofertas as ofertas_licitaciones
+from ..licitaciones import empresa as empresa_erp
+from ..licitaciones import plantillas as plantillas_ofertas
+from ..licitaciones import redaccion as redaccion_ofertas
 from ..licitaciones import reglas as reglas_licitaciones
 from ..licitaciones import simulador as simulador_licitaciones
 from ..licitaciones import embudo as embudo_licitaciones
@@ -586,6 +589,122 @@ async def preparar_oferta(motor_id: str, usuario: Usuario = Depends(usuario_actu
         ficha = await motor_lic._get(f"/tenders/{motor_id.strip().lower()}") if motor_lic._UUID.match(motor_id.strip()) else {}
         return await ofertas_licitaciones.plan(motor_id, ficha, usuario.id)
     except (ofertas_licitaciones.ErrorOferta, MotorNoDisponible, LookupError) as e:
+        raise _oferta_error(e) from None
+
+
+async def _fijar_sociedad(motor_id: str, oferta: dict, empresa: str | None) -> None:
+    """Deja elegida la sociedad con la que se presenta la oferta. Si el ERP tiene varias y no se ha elegido, VariasEmpresas (el panel pide elegir). Si el ERP no responde, se sigue: lo dirá la
+    documentación administrativa cuando haga falta, y el resto de la oferta no depende de ello."""
+    try:
+        nombre = await empresa_erp.elegir(empresa or oferta.get("empresa"))
+    except empresa_erp.VariasEmpresas:
+        raise
+    except empresa_erp.ErrorEmpresa as e:
+        log.warning("ofertas: no se ha podido fijar la sociedad de %s: %s", motor_id, e)
+        return
+    if nombre != oferta.get("empresa"):
+        await ofertas_licitaciones.fijar_empresa(motor_id, nombre)
+
+
+def _plantillas_error(e: Exception):
+    if isinstance(e, empresa_erp.VariasEmpresas):
+        return HTTPException(409, {"mensaje": str(e), "empresas": e.empresas})
+    if isinstance(e, empresa_erp.ErrorEmpresa):
+        return HTTPException(503 if "ERP" in str(e) and "leer" in str(e) else 422, str(e))
+    if isinstance(e, ofertas_licitaciones.NoExiste):
+        return HTTPException(404, str(e))
+    return HTTPException(422, str(e))
+
+
+class PlantillasEntrada(BaseModel):
+    empresa: str | None = None        # la sociedad del ERP con cuyos datos se rellena; se recuerda para esta oferta
+
+
+@app.get("/licitaciones/empresas")
+async def empresas_del_erp(usuario: Usuario = Depends(usuario_actual)):
+    """Las sociedades del ERP con las que se puede presentar una oferta (nombre, razón social y NIF)."""
+    _exige_licitaciones(usuario)
+    try:
+        return {"empresas": await empresa_erp.empresas()}
+    except empresa_erp.ErrorEmpresa as e:
+        raise _plantillas_error(e) from None
+
+
+@app.get("/licitaciones/ofertas/{motor_id}/plantillas")
+async def plantillas_de_la_oferta(motor_id: str, usuario: Usuario = Depends(usuario_actual)):
+    """La documentación administrativa preparada: cada plantilla del concurso rellenada (con el origen de cada dato) y lo que falta."""
+    _exige_licitaciones(usuario)
+    try:
+        return await plantillas_ofertas.listar(motor_id)
+    except ofertas_licitaciones.ErrorOferta as e:
+        raise _plantillas_error(e) from None
+
+
+@app.post("/licitaciones/ofertas/{motor_id}/plantillas")
+async def preparar_plantillas(motor_id: str, entrada: PlantillasEntrada | None = None, usuario: Usuario = Depends(usuario_actual)):
+    """Rellena las plantillas administrativas del concurso con los datos de la sociedad elegida (ERP). Trabaja sobre COPIAS: el documento original no se toca. Se puede repetir."""
+    _exige_licitaciones(usuario)
+    try:
+        ficha = await motor_lic._get(f"/tenders/{motor_id.strip().lower()}") if motor_lic._UUID.match(motor_id.strip()) else {}
+        return await plantillas_ofertas.preparar(motor_id, ficha, usuario.id, (entrada or PlantillasEntrada()).empresa)
+    except (MotorNoDisponible, LookupError) as e:
+        raise _oferta_error(e) from None
+    except (empresa_erp.ErrorEmpresa, plantillas_ofertas.ErrorPlantilla, ofertas_licitaciones.ErrorOferta) as e:
+        raise _plantillas_error(e) from None
+
+
+@app.get("/licitaciones/ofertas/{motor_id}/plantillas/{doc_id}/fichero")
+async def descargar_plantilla_rellenada(motor_id: str, doc_id: int, usuario: Usuario = Depends(usuario_actual)):
+    """El documento rellenado, en base64 (el panel solo habla JSON), listo para revisarlo y firmarlo con certificado digital."""
+    _exige_licitaciones(usuario)
+    try:
+        nombre, datos, tipo = await plantillas_ofertas.fichero(motor_id, doc_id)
+    except (ofertas_licitaciones.ErrorOferta, ofertas_licitaciones.NoExiste, plantillas_ofertas.ErrorPlantilla) as e:
+        raise _plantillas_error(e) from None
+    log.info("ofertas: %s descarga «%s» de %s (%d bytes)", usuario.id, nombre, motor_id, len(datos))
+    import base64
+    return {"nombre": nombre, "tipo": tipo, "base64": base64.b64encode(datos).decode("ascii")}
+
+
+class RedactarEntrada(BaseModel):
+    rehacer: bool = False             # también rehace los borradores de los agentes (nunca lo que haya escrito o revisado una persona)
+    empresa: str | None = None        # la sociedad del ERP con la que se presenta; si el ERP tiene varias y no se ha elegido nunca, hay que indicarla
+
+
+@app.post("/licitaciones/ofertas/{motor_id}/redactar", status_code=202)
+async def redactar_oferta_con_agentes(motor_id: str, entrada: RedactarEntrada | None = None, usuario: Usuario = Depends(usuario_actual)):
+    """«Preparar la oferta»: crea las secciones a partir del pliego y encola que los agentes de Licitaciones redacten el borrador, uno detrás de otro (tarda: son modelos de IA).
+    Responde 202 con la ejecución en curso; el panel consulta `/ejecucion` hasta que termina. Solo escriben borradores: una persona los revisa, fija el precio y presenta."""
+    _exige_licitaciones(usuario)
+    entrada = entrada or RedactarEntrada()
+    try:
+        ficha = await motor_lic._get(f"/tenders/{motor_id.strip().lower()}") if motor_lic._UUID.match(motor_id.strip()) else {}
+        oferta = await ofertas_licitaciones.plan(motor_id, ficha, usuario.id)
+        await _fijar_sociedad(motor_id, oferta, entrada.empresa)
+        ejecucion = await redaccion_ofertas.reservar(motor_id, usuario.id, entrada.rehacer)
+    except redaccion_ofertas.Conflicto as e:
+        raise HTTPException(409, str(e)) from None
+    except empresa_erp.VariasEmpresas as e:
+        raise HTTPException(409, {"mensaje": str(e), "empresas": e.empresas}) from None
+    except (ofertas_licitaciones.ErrorOferta, MotorNoDisponible, LookupError) as e:
+        raise _oferta_error(e) from None
+    try:
+        from ..tareas.celery_app import app as celery
+        celery.send_task("cerebro.tareas.celery_app.redactar_oferta", args=[ejecucion["id"]], queue="peticiones")
+    except Exception as e:      # noqa: BLE001 — sin cola no hay trabajo: se cierra la ejecución para poder volver a pedirla
+        log.error("ofertas: no se ha podido encolar la redacción de %s: %s: %s", motor_id, type(e).__name__, e)
+        await redaccion_ofertas.cerrar(ejecucion["id"], "No se ha podido encolar el trabajo: inténtalo de nuevo")
+        raise HTTPException(503, "No se ha podido encolar el trabajo") from None
+    return {"ejecucion": ejecucion, "oferta": oferta}
+
+
+@app.get("/licitaciones/ofertas/{motor_id}/ejecucion")
+async def ejecucion_de_la_oferta(motor_id: str, usuario: Usuario = Depends(usuario_actual)):
+    """La última redacción por los agentes de esta oferta, con el estado de cada paso (null si nunca se ha pedido)."""
+    _exige_licitaciones(usuario)
+    try:
+        return {"ejecucion": await redaccion_ofertas.ultima(motor_id)}
+    except ofertas_licitaciones.ErrorOferta as e:
         raise _oferta_error(e) from None
 
 

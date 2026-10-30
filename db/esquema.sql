@@ -463,6 +463,48 @@ CREATE TABLE IF NOT EXISTS ofertas_secciones_historial (
   PRIMARY KEY (seccion_id, version)
 );
 
+-- La sociedad (Company del ERP) con la que se presenta la oferta: en el ERP puede haber varias y cada concurso se presenta con una. NULL = aún sin elegir (si el ERP tiene una sola, se usa esa).
+ALTER TABLE ofertas ADD COLUMN IF NOT EXISTS empresa text;
+
+-- Documentación administrativa preparada (api/cerebro/licitaciones/plantillas.py): cada plantilla del concurso (anexo, declaración responsable…) rellenada en una COPIA que mantiene el documento original.
+-- El fichero está en /datos/licitaciones/ofertas/<licitación>/; aquí solo van los metadatos. «campos» = lo rellenado con su origen en el ERP; «pendientes» = lo que falta y por qué.
+CREATE TABLE IF NOT EXISTS ofertas_documentos (
+  id            bigserial PRIMARY KEY,
+  motor_id      uuid NOT NULL REFERENCES ofertas (motor_id) ON DELETE CASCADE,
+  documento_id  bigint NOT NULL,                              -- el documento del pliego del que sale (pliegos_documentos.id; sin clave ajena para no atar este bloque al del pliego)
+  n             integer NOT NULL,                              -- número del documento del pliego en la ficha
+  nombre        text NOT NULL,                                 -- nombre del documento original
+  formato       text NOT NULL,
+  estado        text NOT NULL CHECK (estado IN ('lista_para_firma', 'faltan_datos', 'sin_huecos', 'error')),
+  empresa       text,                                          -- la sociedad con cuyos datos se ha rellenado
+  nombre_salida text NOT NULL DEFAULT '',
+  sha256        text NOT NULL DEFAULT '',                      -- del fichero rellenado
+  bytes         bigint NOT NULL DEFAULT 0,
+  campos        jsonb NOT NULL DEFAULT '[]',
+  pendientes    jsonb NOT NULL DEFAULT '[]',
+  avisos        jsonb NOT NULL DEFAULT '[]',
+  asignaciones  jsonb NOT NULL DEFAULT '{}',                   -- {hueco: clave de dato} que eligió un agente para los huecos dudosos
+  por           text NOT NULL,
+  creado        timestamptz NOT NULL DEFAULT now(),
+  UNIQUE (motor_id, documento_id)
+);
+
+-- Redacción de la oferta por los agentes (api/cerebro/licitaciones/redaccion.py): cada pulsación de «Preparar la oferta» es una ejecución con un paso por agente, para que el panel enseñe el progreso.
+-- Solo puede haber una en curso por licitación. «pasos» = [{id, agente, titulo, estado, resumen, error, secciones, escritas, faltan, inicio, fin}].
+CREATE TABLE IF NOT EXISTS ofertas_ejecuciones (
+  id        bigserial PRIMARY KEY,
+  motor_id  uuid NOT NULL REFERENCES ofertas (motor_id) ON DELETE CASCADE,
+  estado    text NOT NULL DEFAULT 'en_curso' CHECK (estado IN ('en_curso', 'completa', 'parcial', 'error')),
+  por       text NOT NULL,
+  rehacer   boolean NOT NULL DEFAULT false,             -- también rehace los borradores de los agentes (nunca lo que haya escrito o revisado una persona)
+  pasos     jsonb NOT NULL DEFAULT '[]',
+  error     text NOT NULL DEFAULT '',
+  creada    timestamptz NOT NULL DEFAULT now(),
+  terminada timestamptz
+);
+CREATE UNIQUE INDEX IF NOT EXISTS ofertas_ejecuciones_una_en_curso ON ofertas_ejecuciones (motor_id) WHERE estado = 'en_curso';
+CREATE INDEX IF NOT EXISTS ofertas_ejecuciones_motor ON ofertas_ejecuciones (motor_id, id DESC);
+
 -- Documentos que una persona sube al chat de Jarvis (api/cerebro/subidas.py): pasan por cuarentena y antivirus como los pliegos, y de ellos solo se ofrece su TEXTO a los agentes (nunca el fichero).
 CREATE TABLE IF NOT EXISTS documentos_subidos (
   id        uuid PRIMARY KEY DEFAULT gen_random_uuid(),

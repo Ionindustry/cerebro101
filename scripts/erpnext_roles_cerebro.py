@@ -51,7 +51,7 @@ def permisos_deseados(politica: dict, dep: str) -> dict[str, dict[str, int]]:
     """{documento: {permiso: 1}} para el rol del departamento. Función pura (se prueba sin ERP)."""
     p = (politica.get("departamentos") or {}).get(dep) or {}
     d: dict[str, dict[str, int]] = {}
-    for doc in p.get("leer", []):
+    for doc in list(p.get("leer", [])) + list(p.get("sistema", [])):             # «sistema»: el ERP los deja leer; el código solo a procesos del sistema (empresa.py)
         d.setdefault(doc, {})["read"] = 1
     for doc in list(p.get("borrador", [])) + list(p.get("maestros", [])):          # «maestros»: el ERP los deja escribir; el código solo a procesos aprobados
         d.setdefault(doc, {}).update({"read": 1, "write": 1, "create": 1})
@@ -158,7 +158,7 @@ def aplicar_departamento(c: Cliente, politica: dict, dep: str, dominio: str, rut
     # 5) verificación con su propia clave (ERPNext tarda unos segundos en refrescar la caché de roles: se reintenta)
     if no_existen:
         print(f"  AVISO: no existen en este ERP (¿falta instalar la aplicación que los trae, p. ej. HRMS para RR. HH.?): {', '.join(sorted(no_existen))}")
-    leer = set((politica["departamentos"][dep]).get("leer", [])) - no_existen
+    leer = (set((politica["departamentos"][dep]).get("leer", [])) | set((politica["departamentos"][dep]).get("sistema", []))) - no_existen
     solo_nombre = set(politica.get("referencias", []) or [])           # con «selección» el ERP devuelve únicamente el nombre
     malos_no = malos_si = []
     for intento in range(4):

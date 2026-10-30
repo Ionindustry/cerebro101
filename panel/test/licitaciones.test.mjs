@@ -898,3 +898,64 @@ test("pulsar el dashboard cambia un solo filtro: estados se alternan, zona y CPV
 test("las columnas que se ordenan piden al motor órdenes que existen", () => {
   assert.deepEqual(Object.values(COLUMNAS_ORDENABLES).sort(), ["actualizacion", "importe", "plazo"]);
 });
+
+import {
+  clasePaso, clasePlantilla, empresaParaEnviar, mensajeRedaccion, origenTexto, pasoEtiqueta, pendientesQueBloquean, plantillaEtiqueta, redaccionEnCurso, resumenPlantillas, resumenRedaccion,
+} from "../lib/licitaciones.js";
+
+test("la redacción con agentes solo se sondea mientras trabajan y se resume en una frase", () => {
+  assert.equal(redaccionEnCurso({ estado: "en_curso" }), true);
+  for (const e of [{ estado: "completa" }, { estado: "parcial" }, { estado: "error" }, null, undefined]) assert.equal(redaccionEnCurso(e), false);
+  const pasos = (...estados) => estados.map((estado, i) => ({ id: `p${i}`, estado }));
+  assert.equal(resumenRedaccion({ estado: "en_curso", pasos: pasos("hecho", "en_curso", "pendiente", "pendiente") }), "En curso: 1 de 4 pasos");
+  assert.equal(resumenRedaccion({ estado: "completa", pasos: pasos("hecho", "hecho", "omitido") }), "Terminada: 2 hechos, 1 sin nada que hacer");
+  assert.equal(resumenRedaccion({ estado: "parcial", pasos: pasos("hecho", "parcial", "error") }), "Terminada a medias: 1 hecho, 1 a medias, 1 con error");
+  assert.equal(resumenRedaccion({ estado: "error", pasos: pasos("pendiente", "pendiente") }), "No se ha podido hacer: 2 sin hacer");
+  assert.equal(resumenRedaccion({ estado: "completa", pasos: [] }), "");
+  assert.equal(resumenRedaccion(null), "");
+});
+
+test("etiquetas y colores de los pasos y de las plantillas", () => {
+  assert.equal(pasoEtiqueta("en_curso"), "Trabajando…");
+  assert.equal(pasoEtiqueta("raro"), "raro");
+  assert.equal(clasePaso("hecho"), "abierta");
+  assert.equal(clasePaso("error"), "anulada");
+  assert.equal(clasePaso("parcial"), "aviso");
+  assert.equal(plantillaEtiqueta("lista_para_firma"), "Lista para firmar");
+  assert.equal(plantillaEtiqueta("faltan_datos"), "Faltan datos");
+  assert.equal(clasePlantilla("lista_para_firma"), "abierta");
+  assert.equal(clasePlantilla("faltan_datos"), "aviso");
+});
+
+test("de las plantillas solo bloquea lo que impide firmar; la fecha se completa al firmar", () => {
+  const d = { pendientes: [{ id: "t1", bloquea: true }, { id: "t2", bloquea: false }, { id: "c3", bloquea: true }] };
+  assert.deepEqual(pendientesQueBloquean(d).map((p) => p.id), ["t1", "c3"]);
+  assert.deepEqual(pendientesQueBloquean({}), []);
+  assert.deepEqual(pendientesQueBloquean(null), []);
+  assert.equal(resumenPlantillas({ resumen: { lista_para_firma: 2, faltan_datos: 1, sin_huecos: 0, error: 0 } }), "2 listas para firmar · 1 con datos pendientes");
+  assert.equal(resumenPlantillas({ resumen: { lista_para_firma: 1, faltan_datos: 0, sin_huecos: 0, error: 1 } }), "1 lista para firmar · 1 con error");
+  assert.equal(resumenPlantillas({ resumen: { lista_para_firma: 0, faltan_datos: 0, sin_huecos: 0, error: 0 } }), "");
+  assert.equal(resumenPlantillas(null), "");
+});
+
+test("el origen de un dato dice de qué campo del ERP sale", () => {
+  assert.equal(origenTexto("ERP · Company 101 Telecom S.L. · tax_id"), "ERP: tax_id de 101 Telecom S.L.");
+  assert.equal(origenTexto("Motor de licitaciones · ficha"), "Motor de licitaciones · ficha");
+  assert.equal(origenTexto(null), "");
+});
+
+test("la sociedad que se manda: la elegida, o la ya guardada en la oferta, o ninguna", () => {
+  assert.equal(empresaParaEnviar("Ion S.A.", "101 S.L."), "Ion S.A.");
+  assert.equal(empresaParaEnviar("", "101 S.L."), "101 S.L.");
+  assert.equal(empresaParaEnviar("", null), undefined);
+  assert.equal(empresaParaEnviar(undefined, undefined), undefined);
+});
+
+test("los mensajes de la redacción explican qué hacer", () => {
+  assert.match(mensajeRedaccion(403), /Dirección/);
+  assert.equal(mensajeRedaccion(409, "Los agentes ya están trabajando en esta oferta"), "Los agentes ya están trabajando en esta oferta");
+  assert.match(mensajeRedaccion(409), /Ya se está trabajando/);
+  assert.equal(mensajeRedaccion(422, "El documento 7 no está bajado"), "El documento 7 no está bajado");
+  assert.match(mensajeRedaccion(503), /ERP|motor|cola/);
+  assert.match(mensajeRedaccion(500), /Inténtalo de nuevo/);
+});
