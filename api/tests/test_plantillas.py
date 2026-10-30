@@ -393,6 +393,22 @@ def O_leer():
     return ejecutar(O.leer(ID, con_contenido=False))
 
 
+class TestImportaciones(unittest.TestCase):
+    """Cada módulo se tiene que poder importar el PRIMERO en un intérprete limpio: `herramientas` importa la herramienta «plantillas», que importa a `empresa`, que usa el ERP de `herramientas`.
+    Las demás pruebas importan antes las herramientas y no ven un ciclo (así se coló en producción al probar `empresa` suelto)."""
+
+    MODULOS = ("cerebro.licitaciones.empresa", "cerebro.licitaciones.plantillas", "cerebro.licitaciones.redaccion", "cerebro.licitaciones.formularios", "cerebro.licitaciones.importes",
+               "cerebro.herramientas.plantillas", "cerebro.herramientas.erpnext", "cerebro.herramientas")
+
+    def test_cada_modulo_se_importa_solo(self):
+        import subprocess
+        import sys
+        raiz = str(Path(__file__).resolve().parents[1])
+        for m in self.MODULOS:
+            r = subprocess.run([sys.executable, "-I", "-c", f"import sys; sys.path.insert(0, {raiz!r}); import {m}"], capture_output=True, timeout=60)
+            self.assertEqual(r.returncode, 0, f"{m}: {r.stderr.decode()[-400:]}")
+
+
 class TestHerramienta(unittest.TestCase):
     def test_el_agente_solo_elige_claves_y_no_hay_operaciones_para_escribir_valores(self):
         with self.assertRaisesRegex(ValueError, "Claves no válidas"):

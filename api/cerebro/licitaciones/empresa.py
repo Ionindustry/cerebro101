@@ -12,7 +12,6 @@ import httpx
 import yaml
 
 from ..ajustes import ajustes
-from ..herramientas import erpnext
 
 log = logging.getLogger("cerebro.licitaciones.empresa")
 
@@ -39,6 +38,12 @@ CLAVES = {
     "representante.poder": "Contacto del representante › campo con los datos del poder",
 }
 _DESIGNACION_ESPACIOS = re.compile(r"\s+")
+
+
+def _erp():
+    """El módulo del ERP, importado al usarlo: `herramientas` importa la herramienta «plantillas», que importa este módulo, y un import al principio haría un ciclo si este se importa primero."""
+    from ..herramientas import erpnext
+    return erpnext
 
 
 class ErrorEmpresa(ValueError):
@@ -70,11 +75,11 @@ def _t(v, n: int = 300) -> str:
 async def _pedir(doctype: str, filtros: list, base: list[str], opcionales: list[str], dep: str) -> tuple[list[dict], set[str]]:
     """Lee con una lista cerrada de campos. Los campos opcionales (los personalizados) pueden no existir en el ERP: si da error con ellos, se repite sin ellos."""
     try:
-        return await erpnext.listar_sistema(doctype, dep, filtros, base + opcionales), set(opcionales)
+        return await _erp().listar_sistema(doctype, dep, filtros, base + opcionales), set(opcionales)
     except httpx.HTTPStatusError as e:
         if not opcionales or e.response.status_code not in (400, 417, 500):
             raise
-    return await erpnext.listar_sistema(doctype, dep, filtros, base), set()
+    return await _erp().listar_sistema(doctype, dep, filtros, base), set()
 
 
 async def _leer_erp(llamada):
@@ -90,7 +95,7 @@ async def _leer_erp(llamada):
 async def empresas() -> list[dict]:
     """Las empresas del ERP: [{nombre, razon_social, nif}]. Para elegir con cuál se presenta una oferta."""
     dep = configuracion()["departamento_erp"]
-    filas = await _leer_erp(erpnext.listar_sistema("Company", dep, None, ["name", "company_name", "tax_id"], 50))
+    filas = await _leer_erp(_erp().listar_sistema("Company", dep, None, ["name", "company_name", "tax_id"], 50))
     return [{"nombre": f["name"], "razon_social": _t(f.get("company_name") or f["name"]), "nif": _t(f.get("tax_id"), 40)} for f in filas]
 
 
