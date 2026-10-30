@@ -334,13 +334,39 @@ class TestBaseDeDatos(unittest.TestCase):
         self.assertTrue(any(x["valor"] == "Girona" for x in por["Anexo II.docx"]["rellenados"] if x["etiqueta"] == "dato raro"))
         self.assertFalse(any(x["etiqueta"] == "dato raro" for x in por["Anexo I.docx"]["rellenados"]))        # el otro anexo no se toca
 
-    def test_un_modelo_en_odt_o_excel_deja_constancia_y_lo_demas_no(self):
-        self.documento(1, "Anexo II - Modelo de proposición.odt", "odt", lambda r: r.write_bytes(b"PK odt"))
-        self.documento(2, "Memoria descriptiva.xlsx", "xlsx", lambda r: r.write_bytes(b"PK xlsx"))
+    def test_un_modelo_en_excel_deja_constancia_y_lo_demas_no(self):
+        self.documento(1, "Anexo II - Modelo de oferta.xlsx", "xlsx", lambda r: r.write_bytes(b"PK xlsx"))
+        self.documento(2, "Memoria descriptiva.xlsx", "xlsx", lambda r: r.write_bytes(b"PK xlsx memoria"))
         r = self.preparar(empresa="101 Telecom S.L.")
         self.assertEqual([(d["documento"], d["estado"]) for d in r["documentos"]], [(1, "error")])      # solo el que parece un modelo
-        self.assertIn("odt", r["documentos"][0]["avisos"][0])
+        self.assertIn("xlsx", r["documentos"][0]["avisos"][0])
         self.assertIn("Word", r["documentos"][0]["avisos"][0])
+
+    def test_un_modelo_en_odt_se_convierte_a_word_se_rellena_y_lo_dice(self):
+        self.documento(1, "Anexo I - Declaración.odt", "odt", lambda r: r.write_bytes(b"PK odt"))
+        convertidos = []
+
+        def convertir(origen, destino, formato):
+            convertidos.append(formato)
+            destino.parent.mkdir(parents=True, exist_ok=True)
+            docx(destino)
+            return destino
+        with mock.patch.object(PL.C, "a_docx", convertir):
+            d = self.preparar(empresa="101 Telecom S.L.")["documentos"][0]
+        self.assertEqual(convertidos, ["odt"])
+        self.assertEqual((d["formato"], d["fichero"].endswith(".docx")), ("docx", True))
+        self.assertTrue(d["rellenados"])
+        self.assertTrue(any("convertido de odt a Word" in a for a in d["avisos"]))
+
+    def test_si_la_conversion_falla_queda_como_error_con_su_motivo(self):
+        self.documento(1, "Anexo I - Declaración.odt", "odt", lambda r: r.write_bytes(b"PK odt"))
+
+        def convertir(origen, destino, formato):
+            raise F.ErrorFormulario("El servicio de conversión a Word no responde")
+        with mock.patch.object(PL.C, "a_docx", convertir):
+            d = self.preparar(empresa="101 Telecom S.L.")["documentos"][0]
+        self.assertEqual(d["estado"], "error")
+        self.assertIn("no responde", d["avisos"][0])
 
     def test_los_huecos_se_agrupan_por_anexo(self):
         self.documento(1, "Documentación administrativa.docx", "docx", lambda r: docx(r, "<w:p><w:r><w:t>ANEXO I. DECLARACIÓN</w:t></w:r></w:p>" + CUERPO_SIMPLE + "<w:p><w:r><w:t>ANEXO II. MODELO DE OFERTA</w:t></w:r></w:p>" + CUERPO_SIMPLE))

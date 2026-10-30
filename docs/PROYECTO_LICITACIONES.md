@@ -573,3 +573,13 @@ Cada licitación que una persona decide estudiar es un **trato** (CRM Deal) del 
 - **El panel** muestra en el embudo el enlace al trato y el botón «Seguir en el CRM» para las que ya se estudiaban antes de conectarlo.
 - **Si el CRM falla** no se pierde nada: lo que hizo la persona ya está guardado, el fallo queda en el registro y el trato se crea o se pone al día en la siguiente anotación (o con el botón).
 - **Por verificar con el CRM real:** los nombres de campo del trato (`expected_deal_value`, `expected_closure_date`, `next_step`) y de las etapas son los de fábrica de Frappe CRM 1.x; si en tu CRM difieren, se cambian en `crm.etapas` o en `datos_trato`.
+
+## Conversión de modelos .doc, .odt y .rtf (servicio `conversor`)
+
+Muchos pliegos traen sus modelos en Word antiguo (`.doc`), OpenDocument (`.odt`) o RTF, solos o dentro de un ZIP. Para rellenarlos como cualquier otro Word, se convierten a `.docx` con LibreOffice (`api/cerebro/licitaciones/conversion.py`).
+
+- **LibreOffice NO corre en la API.** Corre en el contenedor `conversor` (`servicios/conversor`): red interna `cerebro-conversion` SIN salida a internet y sin acceso a la base de datos ni al ERP (solo lo ve la API), sistema de ficheros de solo lectura, sin privilegios, 2 GB de memoria, de una conversión en una. La API le manda el documento y valida lo que vuelve (tiene que ser un Word de verdad).
+- Cada conversión usa un perfil desechable con las macros desactivadas y un entorno vacío; el contenido ha de ser lo que dice el formato.
+- El documento rellenado se entrega en `.docx` y el panel avisa: «Se ha convertido de odt a Word… revisa que el formato se ha conservado antes de firmar». El original no se toca.
+- Siguen sin rellenarse solos: `.xls`, `.xlsx`, `.ods` y PDF sin campos de formulario (se avisa en la tarjeta).
+- La imagen se publica en GitHub (`cerebro101-conversor`) y `./scripts/actualizar.sh` la descarga con las demás. Si el servicio no está, los modelos en esos formatos quedan como «error» con su motivo, como antes.

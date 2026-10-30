@@ -20,6 +20,7 @@ from psycopg.types.json import Jsonb
 
 from decimal import Decimal
 
+from . import conversion as C
 from . import empresa as E
 from . import importes as I
 from . import formularios as F
@@ -42,7 +43,7 @@ CLAVES_OFERTA = {
 CLAVES_VALIDAS = set(E.CLAVES) | set(CLAVES_LICITACION) | set(CLAVES_OFERTA) | {F.SIN_DATO}
 MAX_PLANTILLAS = 40
 RE_MODELO = re.compile(r"(?i)anexo|annex|anexe|modelo|model|declaraci|deuc|formulari|plantilla")
-FORMATOS_SIN_SOPORTE = ("odt", "ods", "xlsx")
+FORMATOS_SIN_SOPORTE = ("ods", "xlsx")
 MIME = {"docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document", "pdf": "application/pdf"}
 NOTA_FIRMA = ("Revisa cada documento y fírmalo con tu certificado digital (por ejemplo con AutoFirma). Los huecos de fecha se completan al firmar. "
               "Nada se firma ni se presenta desde aquí.")
@@ -169,6 +170,7 @@ async def _procesar(motor_id: str, doc: dict, fuente: dict[str, dict], empresa: 
         return None
     asignaciones = {**await _asignaciones_previas(motor_id, doc["id"], doc.get("miembro", "")), **{k: v for k, v in nuevas.items() if v in CLAVES_VALIDAS}}
     valores, rellenados, pendientes = clasificar(det["campos"], asignaciones, fuente)
+    avisos = det["avisos"] + ([doc["conversion"]] if doc.get("conversion") else [])
     salida, sha, tam = "", "", 0
     if valores:
         nombre = _nombre_salida(doc["n"], doc.get("miembro") or doc["nombre"], doc["formato"], doc.get("sub"))
@@ -179,16 +181,26 @@ async def _procesar(motor_id: str, doc: dict, fuente: dict[str, dict], empresa: 
         os.chmod(destino, 0o600)
         salida, sha, tam = nombre, hashlib.sha256(datos).hexdigest(), len(datos)
     estado = estado_de(det["campos"], valores, pendientes)
-    await _guardar(motor_id, doc, estado, empresa, salida, sha, tam, rellenados, pendientes, det["avisos"], asignaciones, por)
+    await _guardar(motor_id, doc, estado, empresa, salida, sha, tam, rellenados, pendientes, avisos, asignaciones, por)
     log.info("plantillas: %s rellena «%s» de %s con la sociedad %s → %s (%d huecos rellenados, %d pendientes)", por, doc["nombre"], motor_id, empresa, estado, len(rellenados), len(pendientes))
     return {"documento": doc["n"], "estado": estado}
+
+
+async def _como_word(motor_id: str, doc: dict) -> dict:
+    """Si el documento es de Word antiguo u OpenDocument (doc, odt, rtf), lo convierte a .docx (conversion.py) y devuelve el documento ya como Word; si no, lo devuelve igual."""
+    if doc["formato"] not in C.CONVERTIBLES:
+        return doc
+    origen = Path(doc["ruta"]) if doc.get("ruta") else P.carpeta(motor_id, "limpio") / f"{doc['sha256']}.{doc['formato']}"
+    destino = RAIZ / motor_id / "_conv" / f"{doc['sha256']}-{doc.get('sub') or 0}.docx"
+    await asyncio.to_thread(C.a_docx, origen, destino, doc["formato"])
+    return {**doc, "formato": "docx", "ruta": str(destino), "conversion": f"Se ha convertido de {doc['formato']} a Word para poder rellenarlo: revisa que el formato se ha conservado antes de firmar"}
 
 
 async def _tratar(motor_id: str, doc: dict, fuente: dict, empresa: str, asignaciones: dict, usuario: str, explicito: bool, miembro: str | None = None) -> None:
     """Un documento del pliego: si es Word o PDF se rellena; si es un ZIP de documentación se abre y se rellena cada anexo/modelo de dentro; si es un modelo en un formato que no se rellena solo
     (odt, xlsx…) se deja constancia para que nadie lo pase por alto."""
-    if doc["formato"] in ("docx", "pdf"):
-        await _procesar(motor_id, doc, fuente, empresa, asignaciones, usuario, explicito)
+    if doc["formato"] in ("docx", "pdf") + C.CONVERTIBLES:
+        await _procesar(motor_id, await _como_word(motor_id, doc), fuente, empresa, asignaciones, usuario, explicito)
     elif doc["formato"] == "zip":
         origen = P.carpeta(motor_id, "limpio") / f"{doc['sha256']}.zip"
         res = await asyncio.to_thread(F.ejecutar_aislado, {"accion": "extraer_zip", "ruta": str(origen), "formato": "zip", "destino": str(RAIZ / motor_id / "_zip" / doc["sha256"])})
@@ -199,6 +211,11 @@ async def _tratar(motor_id: str, doc: dict, fuente: dict, empresa: str, asignaci
             if miembro and m["miembro"] != miembro:
                 continue
             sub = {**doc, "nombre": f"{doc['nombre']} › {m['miembro']}", "miembro": m["miembro"], "formato": m["formato"], "ruta": m["ruta"], "sub": k}
+            try:
+                sub = await _como_word(motor_id, sub)
+            except F.ErrorFormulario as e:
+                await _guardar(motor_id, sub, "error", empresa, "", "", 0, [], [], [str(e)[:300]], {}, usuario)
+                continue
             if await _procesar(motor_id, sub, fuente, empresa, asignaciones, usuario, explicito):
                 hechos += 1
         if res["avisos"] and not miembro:

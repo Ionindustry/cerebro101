@@ -540,7 +540,8 @@ def rellenar(ruta: Path, formato: str, destino: Path, valores: dict[str, str]) -
 MAX_MIEMBROS = 500
 MAX_MIEMBRO = 60 << 20
 RATIO_MAX = 200
-SIN_SOPORTE = (".doc", ".odt", ".ods", ".xls", ".xlsx", ".docm", ".rtf")
+SIN_SOPORTE = (".ods", ".xls", ".xlsx", ".docm")
+CONVERTIBLES = {".doc": b"\xd0\xcf\x11\xe0", ".odt": b"PK", ".rtf": b"{\\rtf"}      # se convierten a Word antes de rellenarlos (conversion.py)
 
 
 def extraer_zip(ruta: Path, destino: Path) -> dict:
@@ -568,7 +569,7 @@ def extraer_zip(ruta: Path, destino: Path) -> dict:
         if ext in SIN_SOPORTE:
             avisos.append(f"«{nombre[:80]}» no se rellena solo (formato {ext[1:]}): hay que rellenarlo a mano o pedirlo en Word")
             continue
-        if ext not in (".docx", ".pdf"):
+        if ext not in (".docx", ".pdf") and ext not in CONVERTIBLES:
             continue
         if info.file_size > MAX_MIEMBRO or (info.compress_size > 0 and info.file_size / info.compress_size > RATIO_MAX):
             avisos.append(f"«{nombre[:80]}» se ha ignorado: demasiado grande o sospechoso")
@@ -577,6 +578,14 @@ def extraer_zip(ruta: Path, destino: Path) -> dict:
             datos = f.read(MAX_MIEMBRO + 1)
         if len(datos) > MAX_MIEMBRO:
             avisos.append(f"«{nombre[:80]}» se ha ignorado: demasiado grande")
+            continue
+        if ext in CONVERTIBLES:
+            if not datos.startswith(CONVERTIBLES[ext]):
+                avisos.append(f"«{nombre[:80]}» se ha ignorado: su contenido no es {ext[1:]}")
+                continue
+            salida = destino / f"{k:03d}{ext}"
+            salida.write_bytes(datos)
+            miembros.append({"miembro": "/".join(partes)[:200], "formato": ext[1:], "ruta": str(salida), "bytes": len(datos)})
             continue
         formato = "pdf" if datos[:5] == b"%PDF-" else ("docx" if datos[:2] == b"PK" else None)
         if formato is None or (ext == ".docx") != (formato == "docx"):
