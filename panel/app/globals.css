@@ -9,7 +9,7 @@
   --hecho: #2e7d4f;
   --radio-grande: 20px;
   --radio: 12px;
-  --fuente: "Figtree", system-ui, sans-serif;
+  --fuente: "Figtree Variable", "Figtree", system-ui, sans-serif;
 }
 * { box-sizing: border-box; }
 html, body { margin: 0; background: var(--fondo); color: var(--tinta); font-family: var(--fuente);
