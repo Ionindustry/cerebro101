@@ -76,7 +76,8 @@ services:
       LIC_NATS_USUARIO: "${LIC_NATS_USUARIO}"
       LIC_NATS_PASSWORD: "${LIC_NATS_PASSWORD}"
       LIC_FUENTES: "${LIC_FUENTES:-placsp-643}"
-      LIC_INTERVALO: "${LIC_INTERVALO:-1h}"
+      LIC_INTERVALO: "${LIC_INTERVALO:-15m}"
+      LIC_MAX_PAGINAS: "${LIC_MAX_PAGINAS:-10}"         # páginas que se DESCARGAN por pasada (≈1 min cada una): así la cabecera (lo de hoy) se mira cada ~15 min aunque se esté rellenando el pasado
       LIC_TIMEOUT_DESCARGA: "${LIC_TIMEOUT_DESCARGA:-5m}"
       LIC_CONTACTO: "${LIC_CONTACTO:-}"
       LIC_HISTORICO_DESDE: "${LIC_HISTORICO_DESDE:-}"       # vacío = sin histórico; p. ej. 2023 o 2023-06

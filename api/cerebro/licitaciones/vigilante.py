@@ -3,7 +3,8 @@
 El motor puede dejar de traer licitaciones sin que nada falle a la vista (un error repetido en cada vuelta de la ingesta): el panel lo dice en «Estado del motor», pero
 solo si alguien lo mira. Este vigilante lo mira cada 15 minutos con `/ops/status` y lo recuerda en `licitaciones_vigilante` para avisar lo justo:
 
-  - una vez cuando empieza el problema (una fuente lleva más de `horas_sin_ingesta` sin ingesta correcta, nunca ha completado una, o el motor no responde);
+  - una vez cuando empieza el problema (una fuente lleva más de `horas_sin_ingesta` sin ingesta correcta, nunca ha completado una, el motor no responde, o —en día laborable y pasada
+    `hora_control_hoy`— no ha entrado NINGUNA licitación nueva ni actualizada hoy);
   - un recordatorio cada `repetir_cada_horas` mientras siga;
   - una vez cuando se arregla.
 
@@ -27,7 +28,7 @@ from . import resumen as resumen_mod
 
 log = logging.getLogger("cerebro.licitaciones.vigilante")
 CLAVE = "motor"
-DEFECTO = {"horas_sin_ingesta": 6, "repetir_cada_horas": 24, "destinatarios": []}
+DEFECTO = {"horas_sin_ingesta": 6, "repetir_cada_horas": 24, "destinatarios": [], "hora_control_hoy": 22}
 
 
 def configuracion(cfg: dict | None = None) -> dict:
@@ -35,13 +36,24 @@ def configuracion(cfg: dict | None = None) -> dict:
     c["horas_sin_ingesta"] = min(max(float(c["horas_sin_ingesta"]), 1), 168)
     c["repetir_cada_horas"] = min(max(float(c["repetir_cada_horas"]), 1), 168)
     c["destinatarios"] = [d for d in (c.get("destinatarios") or []) if isinstance(d, str)]
+    c["hora_control_hoy"] = min(max(int(c["hora_control_hoy"]), 6), 23)
     return c
 
 
 # ---- Lo puro: qué está mal y qué hay que hacer ----
 
-def problemas(estado: dict | None, horas: float) -> list[str]:
-    """Las frases de lo que está mal en el estado del motor (la respuesta de `/ops/status`); `None` es que el motor no ha respondido. Sin problemas, lista vacía."""
+def sin_novedades_hoy(ahora_local: datetime, novedades_hoy: int | None, hora_control: int) -> str | None:
+    """El control de «lo de hoy»: la plataforma (PLACSP) publica UNA tanda al día, hacia las 20:15, así que lo de hoy no existe hasta entonces: en día laborable, pasada la hora de control
+    (por defecto las 22:00, con margen sobre esa tanda), tiene que haber entrado alguna licitación nueva o actualizada hoy. `novedades_hoy` None = no se ha podido contar (no se avisa por eso: lo dice ya «el motor no responde»). Pura."""
+    if novedades_hoy is None or novedades_hoy > 0 or ahora_local.weekday() >= 5 or ahora_local.hour < hora_control:
+        return None
+    return (f"Hoy no ha entrado ninguna licitación nueva ni actualizada (son las {ahora_local:%H:%M} de un día laborable y la plataforma publica su tanda diaria hacia las 20:15): "
+            "la ingesta no está trayendo lo de hoy.")
+
+
+def problemas(estado: dict | None, horas: float, hoy: str | None = None) -> list[str]:
+    """Las frases de lo que está mal en el estado del motor (la respuesta de `/ops/status`); `None` es que el motor no ha respondido. `hoy` es el resultado de `sin_novedades_hoy`.
+    Sin problemas, lista vacía."""
     if estado is None:
         return ["El motor de licitaciones no responde."]
     out = []
@@ -52,6 +64,8 @@ def problemas(estado: dict | None, horas: float) -> list[str]:
             out.append(f"La fuente {nombre} no ha completado ninguna ingesta.")
         elif edad > horas * 3600:
             out.append(f"La fuente {nombre} lleva {edad / 3600:.1f} horas sin ingesta correcta (límite: {horas:g}).")
+    if hoy:
+        out.append(hoy)
     if not out and estado.get("estado") == "caido":
         out.append("El motor se declara caído (mira «Estado del motor» en el panel).")
     return out
@@ -138,7 +152,17 @@ async def vigilar(consulta=None, enviar=None, ahora: datetime | None = None, cfg
         estado = await consulta("/ops/status", None)
     except (motor.MotorNoDisponible, ValueError):
         estado = None
-    lista = problemas(estado, c["horas_sin_ingesta"])
+    hoy = None
+    if estado is not None:
+        from zoneinfo import ZoneInfo
+        local = ahora.astimezone(ZoneInfo(ajustes.zona_horaria))
+        try:
+            r = await consulta("/tenders", {"actualizada_desde": local.replace(hour=0, minute=0, second=0, microsecond=0).isoformat(), "limit": 1})
+            novedades = int((r.get("total") or {}).get("valor", 0))
+        except (motor.MotorNoDisponible, ValueError, TypeError, AttributeError):
+            novedades = None
+        hoy = sin_novedades_hoy(local, novedades, c["hora_control_hoy"])
+    lista = problemas(estado, c["horas_sin_ingesta"], hoy)
     previo = await _leer()
     nuevo, aviso = decidir(previo, bool(lista), ahora, c["repetir_cada_horas"])
     res = {"estado": nuevo, "aviso": aviso, "problemas": lista, "enviados": 0, "fallidos": 0}

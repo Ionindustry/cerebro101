@@ -16,7 +16,7 @@ try:
     import httpx
     import psycopg
     from cerebro.herramientas import erpnext, plantillas as herramienta
-    from cerebro.licitaciones import empresa as E, formularios as F, ofertas as O, plantillas as PL, pliegos, redaccion as R
+    from cerebro.licitaciones import deuc as D, empresa as E, formularios as F, ofertas as O, plantillas as PL, pliegos, redaccion as R
     from test_formularios import DATOS, docx, pdf_con_formulario
 except ImportError as e:      # pragma: no cover
     raise unittest.SkipTest(str(e))
@@ -119,6 +119,11 @@ class TestEmpresa(unittest.TestCase):
 
 
 class TestDeucBase(unittest.TestCase):
+    def setUp(self):
+        p = mock.patch.object(D, "base_local", mock.AsyncMock(return_value=None))       # sin nada subido desde Jarvis (eso se prueba con base de datos más abajo)
+        p.start()
+        self.addCleanup(p.stop)
+
     def fichero(self, nombre, modificado, empresa="101 Telecom S.L."):
         return {"attached_to_name": empresa, "name": nombre, "file_name": nombre, "file_url": f"/private/files/{nombre}", "modified": modificado}
 
@@ -130,10 +135,10 @@ class TestDeucBase(unittest.TestCase):
 
     def test_elige_el_word_mas_reciente_con_deuc_en_el_nombre_y_lo_lee_con_la_clave_del_departamento(self):
         erp, descargar, a, b = self.con([self.fichero("DEUC 2024.docx", "2024-01-01"), self.fichero("DEUC 2026.docx", "2026-03-01"), self.fichero("Escrituras.docx", "2026-05-01"),
-                                         self.fichero("DEUC.pdf", "2026-06-01")])
+                                         self.fichero("DEUC.txt", "2026-06-01")])
         with a, b:
-            nombre, datos = ejecutar(E.deuc_base("101 Telecom S.L."))
-        self.assertEqual((nombre, datos), ("DEUC 2026.docx", b"PK\x03\x04docx"))
+            nombre, datos, formato = ejecutar(E.deuc_base("101 Telecom S.L."))
+        self.assertEqual((nombre, datos, formato), ("DEUC 2026.docx", b"PK\x03\x04docx", "docx"))
         descargar.assert_awaited_once_with("/private/files/DEUC 2026.docx", "licitaciones", E.MAX_DEUC)
         self.assertEqual(erp.llamadas[0][:2], ("File", "licitaciones"))
 
@@ -148,6 +153,15 @@ class TestDeucBase(unittest.TestCase):
         _, _, a, b = self.con([self.fichero("DEUC.docx", "2026-01-01")], contenido=b"<html>")
         with a, b, self.assertRaisesRegex(E.ErrorEmpresa, "no es un Word"):
             ejecutar(E.deuc_base("101 Telecom S.L."))
+        _, _, a, b = self.con([self.fichero("DEUC.pdf", "2026-01-01")], contenido=b"PK\x03\x04")
+        with a, b, self.assertRaisesRegex(E.ErrorEmpresa, "no es un PDF"):
+            ejecutar(E.deuc_base("101 Telecom S.L."))
+
+    def test_el_deuc_base_puede_ser_un_pdf_y_gana_el_mas_reciente_sea_cual_sea_el_formato(self):
+        _, _, a, b = self.con([self.fichero("DEUC 2025.docx", "2025-01-01"), self.fichero("DEUC 2026.pdf", "2026-02-01")], contenido=b"%PDF-1.7 x")
+        with a, b:
+            nombre, datos, formato = ejecutar(E.deuc_base("101 Telecom S.L."))
+        self.assertEqual((nombre, formato), ("DEUC 2026.pdf", "pdf"))
 
     def test_rutas_de_fichero_solo_dentro_de_files(self):
         for mala in ("/api/method/frappe.client.get", "/private/files/../../etc/passwd", "http://otro/x", "/files/a?x=1"):
@@ -155,6 +169,37 @@ class TestDeucBase(unittest.TestCase):
                 ejecutar(erpnext.descargar_sistema(mala, "licitaciones"))
         with self.assertRaises(PermissionError):
             ejecutar(erpnext.descargar_sistema("/files/a.docx", "comercial"))          # solo quien tiene «File» en «sistema»
+
+
+class TestFichaDeLaLicitacion(unittest.TestCase):
+    """Las plantillas reciben la ficha COMPLETA del motor; pero si les llega la resumida que ven los agentes (comprador a secas) no deben romperse (fallo visto con una licitación real)."""
+    def test_ficha_resumida_de_los_agentes_comprador_como_texto(self):
+        d = {k: v["valor"] for k, v in PL.datos_licitacion({"titulo": "Obra", "expediente": "X/1", "comprador": "Ajuntament de Girona", "cpv": ["32323500"],
+                                                           "plazo_presentacion": "2026-11-20T09:00:00+00:00", "importes": ["1000 EUR (sin iva; valor estimado)"]}).items()}
+        self.assertEqual((d["licitacion.organo"], d["licitacion.objeto"], d["licitacion.cpv"], d["licitacion.plazo"]), ("Ajuntament de Girona", "Obra", "32323500", "20/11/2026"))
+        self.assertNotIn("licitacion.importe", d)                                     # el importe de la ficha resumida es texto: no se interpreta
+
+    def test_ficha_completa_y_formas_raras_no_rompen(self):
+        d = {k: v["valor"] for k, v in PL.datos_licitacion({"comprador": {"nombre": "Ajuntament"}, "plazos": {"presentacion": "2026-11-20T09:00:00+00:00"}}).items()}
+        self.assertEqual((d["licitacion.organo"], d["licitacion.plazo"]), ("Ajuntament", "20/11/2026"))
+        for rara in (None, "texto", [], {"comprador": ["x"], "plazos": "mañana", "cpv": "32", "importes": "1"}, {"comprador": None, "importes": [None, 3, "x"]}):
+            PL.datos_licitacion(rara)                                                    # no lanza
+
+    def test_la_cadena_pide_la_ficha_completa_y_no_la_resumida(self):
+        ficha = {"comprador": {"nombre": "Ajuntament"}}
+        preparar = mock.AsyncMock(return_value={"documentos": []})
+        with mock.patch.object(PL, "ficha_del_motor", mock.AsyncMock(return_value=ficha)), mock.patch.object(PL, "preparar", preparar):
+            ejecutar(R._preparar_plantillas(ID, {"comprador": "resumida, a secas"}, "agente:administrativo"))
+        preparar.assert_awaited_once_with(ID, ficha, "agente:administrativo")
+
+    def test_el_motor_caido_no_impide_rellenar(self):
+        from cerebro.herramientas import licitaciones as motor
+        with mock.patch.object(motor, "_get", mock.AsyncMock(side_effect=motor.MotorNoDisponible("caído"))):
+            self.assertEqual(ejecutar(PL.ficha_del_motor(ID)), {})
+        with mock.patch.object(motor, "_get", mock.AsyncMock(return_value={"titulo": "T"})) as g:
+            self.assertEqual(ejecutar(PL.ficha_del_motor(ID.upper())), {"titulo": "T"})
+        g.assert_awaited_once_with(f"/tenders/{ID}")
+        self.assertEqual(ejecutar(PL.ficha_del_motor("no-es-un-uuid")), {})
 
 
 class TestClasificar(unittest.TestCase):
@@ -462,6 +507,97 @@ class TestBaseDeDatos(unittest.TestCase):
         self.assertEqual({d["documento"]: d["estado"] for d in r["documentos"]}[0], "error")
         self.assertIn(1, [d["documento"] for d in r["documentos"]])
 
+    def test_el_deuc_base_en_pdf_con_formulario_se_rellena_y_un_pdf_plano_se_dice_claro(self):
+        ruta = self.dir / "deuc-base.pdf"
+        pdf_con_formulario(ruta, [("a", "Nombre oficial"), ("b", "Título o breve descripción de la contratación"), ("c", "Número de referencia del expediente asignado por el poder adjudicador")])
+        self.poner_deuc(contenido=ruta.read_bytes(), nombre="DEUC 101.pdf")
+        d = next(x for x in self.preparar(empresa="101 Telecom S.L.")["documentos"] if x["documento"] == 0)
+        self.assertEqual((d["formato"], d["estado"], d["fichero"]), ("pdf", "lista_para_firma", "00 - DEUC (rellenado).pdf"))
+        from pypdf import PdfReader
+        _, datos, tipo = ejecutar(PL.fichero(ID, d["id"]))
+        self.assertEqual(tipo, "application/pdf")
+        (self.dir / "x.pdf").write_bytes(datos)
+        self.assertEqual({k: v.get("/V") for k, v in PdfReader(str(self.dir / "x.pdf")).get_fields().items()},
+                         {"a": "Ajuntament de Girona", "b": "Videovigilancia urbana", "c": "2026/045"})
+        from pypdf import PdfWriter
+        w = PdfWriter()
+        w.add_blank_page(100, 100)
+        with open(self.dir / "plano.pdf", "wb") as f:
+            w.write(f)
+        self.poner_deuc(contenido=(self.dir / "plano.pdf").read_bytes(), nombre="DEUC plano.pdf")
+        d = next(x for x in self.preparar(empresa="101 Telecom S.L.")["documentos"] if x["documento"] == 0)
+        self.assertEqual(d["estado"], "error")
+        self.assertIn("sin campos de formulario", d["avisos"][0])
+
+    def subido(self, formato="docx", estado="limpio", contenido=None, nombre="DEUC 101.docx"):
+        """Un documento subido a Jarvis, ya analizado, en una carpeta de prueba."""
+        limpio = self.dir / "subidas" / "limpio"
+        limpio.mkdir(parents=True, exist_ok=True)
+        ruta = limpio / f"abc.{formato}"
+        if contenido is not None:
+            ruta.write_bytes(contenido)
+        elif formato == "docx":
+            docx(ruta, self.DEUC)
+        else:
+            pdf_con_formulario(ruta, [("a", "Nombre oficial")])
+        cm = mock.MagicMock()
+        cm.__aenter__ = mock.AsyncMock(return_value=cm)
+        cm.__aexit__ = mock.AsyncMock(return_value=False)
+        ficha = {"id": "abc", "nombre": nombre, "formato": formato, "estado": estado, "bytes": ruta.stat().st_size, "paginas": 1, "aviso": None}
+        for p in (mock.patch.object(D.S, "_id", lambda x: x), mock.patch.object(D.S, "_carpeta", lambda e: limpio), mock.patch.object(D.S, "_disponible", mock.AsyncMock(return_value=ficha)),
+                  mock.patch.object(D.S, "_conectar", mock.AsyncMock(return_value=cm)), mock.patch.object(D, "DIR", self.dir / "deuc")):
+            p.start()
+            self.addCleanup(p.stop)
+        return ruta
+
+    def test_un_deuc_subido_desde_jarvis_se_guarda_se_usa_y_gana_al_del_erp(self):
+        self.subido()
+        self.assertIn("101 Telecom S.L.", ejecutar(D.vista("abc", "101 Telecom S.L.", departamento="licitaciones"))["campos"][0])
+        r = ejecutar(D.guardar("abc", "101 Telecom S.L.", "agente:administrativo-licitaciones"))
+        self.assertEqual((r["guardado"], r["sociedad"], r["formato"]), (True, "101 Telecom S.L.", "docx"))
+        self.assertEqual(len(list((self.dir / "deuc").rglob("*.docx"))), 1)
+        # hay además uno más reciente adjunto en el ERP: lo subido desde Jarvis tiene prioridad
+        self.poner_deuc(nombre="DEUC del ERP.docx")
+        d = next(x for x in self.preparar(empresa="101 Telecom S.L.")["documentos"] if x["documento"] == 0)
+        self.assertEqual(d["estado"], "lista_para_firma")
+        self.assertIn("DEUC 101.docx", d["nombre"])
+        # una versión nueva sustituye a la anterior y la anterior se conserva
+        self.subido(contenido=b"PK\x03\x04")                                                  # no es un Word válido: no se guarda
+        with self.assertRaisesRegex(D.ErrorDeuc, "no es un Word"):
+            ejecutar(D.guardar("abc", "101 Telecom S.L."))
+
+    def test_lo_que_no_sirve_como_deuc_se_rechaza_antes_de_pedir_aprobacion(self):
+        self.subido(estado="con_macros")
+        with self.assertRaisesRegex(D.ErrorDeuc, "macros"):
+            ejecutar(D.vista("abc", "101 Telecom S.L."))
+        self.subido(formato="docx", estado="limpio")
+        with self.assertRaisesRegex(D.ErrorDeuc, "sociedades|no existe"):
+            ejecutar(D.vista("abc", "Inventada S.A."))
+        with self.assertRaisesRegex(D.ErrorDeuc, "varias sociedades"):
+            ejecutar(D.vista("abc", None))                                                   # hay dos sociedades y no se dice cuál
+        from pypdf import PdfWriter
+        plano = self.dir / "plano.pdf"
+        w = PdfWriter()
+        w.add_blank_page(100, 100)
+        with open(plano, "wb") as f:
+            w.write(f)
+        self.subido(formato="pdf", contenido=plano.read_bytes())
+        with self.assertRaisesRegex(D.ErrorDeuc, "sin campos|no tiene campos"):
+            ejecutar(D.vista("abc", "101 Telecom S.L."))
+
+    def test_un_pdf_con_formulario_subido_desde_jarvis_vale(self):
+        self.subido(formato="pdf", nombre="DEUC 101.pdf")
+        r = ejecutar(D.guardar("abc", "101 Telecom S.L."))
+        self.assertEqual(r["formato"], "pdf")
+        self.assertEqual(ejecutar(D.base_local("101 Telecom S.L."))[2], "pdf")
+
+    def test_si_el_fichero_guardado_cambia_en_el_disco_no_se_usa(self):
+        self.subido()
+        ejecutar(D.guardar("abc", "101 Telecom S.L."))
+        next((self.dir / "deuc").rglob("*.docx")).write_bytes(b"PK manipulado")
+        with self.assertRaisesRegex(D.ErrorDeuc, "ha cambiado"):
+            ejecutar(D.base_local("101 Telecom S.L."))
+
     def test_los_datos_de_la_licitacion_para_el_deuc(self):
         f = {"titulo": "Obra", "expediente": "X/1", "comprador": {"nombre": "Ajuntament"}, "cpv": ["32323500", "35120000"], "procedimiento": "abierto",
              "plazos": {"presentacion": "2026-11-20T09:00:00+00:00"}, "importes": [{"valor": "1234567.5", "moneda": "EUR", "significado": "valor_estimado"}]}
@@ -548,7 +684,9 @@ class TestHerramienta(unittest.TestCase):
         from cerebro.herramientas import base, esquemas
         h = base._REGISTRO.get("plantillas")
         self.assertIsNotNone(h)
-        self.assertEqual(set(h.operaciones), {"listar", "datos_disponibles", "rellenar"})
+        self.assertEqual(set(h.operaciones), {"listar", "datos_disponibles", "rellenar", "guardar_deuc"})
+        self.assertEqual(h.externas, {"guardar_deuc"})                       # guardar un DEUC necesita la aprobación de una persona
+        self.assertIn("guardar_deuc", h.vistas)
         parametros, _ = esquemas.parametros(h.operaciones["rellenar"])
         self.assertNotIn("agente", [p.nombre for p in parametros])
 

@@ -5,6 +5,7 @@ va en un hueco (por su clave), nunca escribir el valor, que siempre sale del ERP
 """
 from __future__ import annotations
 
+from ..licitaciones import deuc as D
 from ..licitaciones import empresa as E
 from ..licitaciones import ofertas as O
 from ..licitaciones import plantillas as P
@@ -13,10 +14,7 @@ from .base import Herramienta, registrar
 
 
 async def _ficha(licitacion: str) -> dict:
-    try:
-        return await motor.ficha(licitacion)
-    except Exception:      # noqa: BLE001 — sin la ficha se rellena con lo del ERP; los datos de la licitación quedan como hueco
-        return {}
+    return await P.ficha_del_motor(licitacion)      # la ficha completa del motor (la resumida que ven los agentes no trae el comprador como objeto)
 
 
 async def _tal_cual(coro) -> dict:
@@ -52,13 +50,32 @@ async def rellenar(licitacion: str, documento: int, asignaciones: dict[str, str]
     return await _tal_cual(P.preparar(licitacion, await _ficha(licitacion), f"agente:{agente or 'agente'}", o.get("empresa"), documento, asignaciones, miembro))
 
 
+async def guardar_deuc(documento: str, empresa: str | None = None, agente: str | None = None) -> dict:
+    """Guarda un documento que la persona ha subido al chat como DEUC base de una sociedad. Operación con aprobación: solo se ejecuta tras aprobarla una persona."""
+    try:
+        return await D.guardar(documento, empresa, f"agente:{agente or 'agente'}")
+    except (D.ErrorDeuc, E.ErrorEmpresa) as e:
+        raise ValueError(str(e)) from None
+
+
+async def vista_guardar_deuc(documento: str, empresa: str | None = None, **_) -> dict:
+    try:
+        return await D.vista(documento, empresa)
+    except (D.ErrorDeuc, E.ErrorEmpresa) as e:
+        raise ValueError(str(e)) from None
+
+
 registrar(Herramienta(
     nombre="plantillas",
     descripcion="Las plantillas de la documentación administrativa del concurso (anexos, declaración responsable, modelos), ya rellenadas con los datos de la sociedad que se presenta, que salen del ERP. "
                 "El sistema rellena una COPIA y respeta el documento original; tú solo ayudas con los huecos dudosos eligiendo QUÉ DATO va en cada uno (por su clave): nunca escribes el valor, que sale del ERP o de la ficha. "
                 "Nada se firma ni se presenta: una persona revisa y firma con su certificado digital. La licitación se indica por su identificador (UUID), que se obtiene con la herramienta «licitaciones».",
-    operaciones={"listar": listar, "datos_disponibles": datos_disponibles, "rellenar": rellenar},
+    operaciones={"listar": listar, "datos_disponibles": datos_disponibles, "rellenar": rellenar, "guardar_deuc": guardar_deuc},
+    externas=frozenset({"guardar_deuc"}),
+    vistas={"guardar_deuc": vista_guardar_deuc},
     ayuda={"listar": "las plantillas ya preparadas: estado (lista_para_firma, faltan_datos…), lo rellenado con su origen y los huecos pendientes con su id, su etiqueta y el motivo",
+           "guardar_deuc": "guarda un documento que la persona ha subido al chat (Word o PDF con formulario, con los datos de la empresa ya rellenados) como DEUC base de una sociedad (empresa = su nombre en el ERP, si hay varias). "
+                           "Propón la acción «guardar_deuc» (documento = el UUID del mensaje) para que una persona la apruebe: hasta entonces no se guarda nada",
            "datos_disponibles": "qué datos hay para rellenar (clave y valor, del ERP y de la ficha) y cuáles faltan y dónde se completan en el ERP",
            "rellenar": "vuelve a rellenar UN documento del pliego (por su número) eligiendo qué dato va en los huecos dudosos: asignaciones = {id del hueco: clave de dato}. El documento 0 es el DEUC de la sociedad (solo faltan los campos propios del concurso). Si el documento es un ZIP con varios anexos, indica también el «miembro» (el fichero de dentro). Solo se elige entre las claves de «datos_disponibles»; "
                        "para la fecha usa «al_firmar». Si el dato falta en el ERP, el hueco queda pendiente y se dice dónde completarlo"},

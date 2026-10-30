@@ -61,15 +61,19 @@ def datos_licitacion(ficha: dict) -> dict[str, dict]:
     """Los datos de la licitación que piden las plantillas (expediente, objeto, órgano), de la ficha del motor."""
     out: dict[str, dict] = {}
     origen = "Motor de licitaciones · ficha"
-    for clave, valor in (("licitacion.expediente", (ficha or {}).get("expediente")), ("licitacion.objeto", (ficha or {}).get("titulo")),
-                         ("licitacion.organo", ((ficha or {}).get("comprador") or {}).get("nombre"))):
+    ficha = ficha if isinstance(ficha, dict) else {}
+    comprador = ficha.get("comprador")        # en la ficha completa del motor es un objeto {nombre…}; en la ficha resumida que ven los agentes, el nombre a secas
+    organo = comprador.get("nombre") if isinstance(comprador, dict) else comprador
+    for clave, valor in (("licitacion.expediente", ficha.get("expediente")), ("licitacion.objeto", ficha.get("titulo")), ("licitacion.organo", organo)):
         v = re.sub(r"\s+", " ", str(valor or "")).strip()[:400]
         if v:
             out[clave] = {"valor": v, "origen": origen}
-    f = ficha or {}
-    extra = {"licitacion.cpv": ", ".join(str(c) for c in (f.get("cpv") or [])[:8]), "licitacion.procedimiento": f.get("procedimiento"),
-             "licitacion.plazo": _fecha_es((f.get("plazos") or {}).get("presentacion"))}
-    importes = f.get("importes") or []
+    f = ficha
+    plazos = f.get("plazos") if isinstance(f.get("plazos"), dict) else {}
+    cpv = f.get("cpv") if isinstance(f.get("cpv"), list) else []
+    extra = {"licitacion.cpv": ", ".join(str(c) for c in cpv[:8]), "licitacion.procedimiento": f.get("procedimiento"),
+             "licitacion.plazo": _fecha_es(plazos.get("presentacion") or f.get("plazo_presentacion"))}
+    importes = f.get("importes") if isinstance(f.get("importes"), list) else []
     elegido = next((i for i in importes if isinstance(i, dict) and i.get("significado") == "valor_estimado"), None)
     if elegido and elegido.get("moneda") in (None, "EUR"):
         try:
@@ -81,6 +85,18 @@ def datos_licitacion(ficha: dict) -> dict[str, dict]:
         if v:
             out[clave] = {"valor": v, "origen": origen}
     return out
+
+
+async def ficha_del_motor(motor_id: str) -> dict:
+    """La ficha COMPLETA del expediente tal como la da el motor (comprador como objeto, plazos, importes…), que es la que entienden los datos de las plantillas. {} si el motor no responde:
+    las plantillas se rellenan igual con lo del ERP y lo de la licitación queda como hueco."""
+    from ..herramientas import licitaciones as motor
+    try:
+        f = await motor._get(f"/tenders/{motor_id.strip().lower()}") if motor._UUID.match(str(motor_id).strip()) else {}
+    except Exception as e:      # noqa: BLE001 — el motor caído no impide rellenar lo demás
+        log.warning("plantillas: no se ha podido leer la ficha de %s en el motor: %s: %s", motor_id, type(e).__name__, e)
+        return {}
+    return f if isinstance(f, dict) else {}
 
 
 def _fecha_es(t) -> str:
@@ -255,23 +271,30 @@ async def _tratar(motor_id: str, doc: dict, fuente: dict, empresa: str, asignaci
 
 
 async def _deuc(motor_id: str, fuente: dict, empresa: str, asignaciones: dict, usuario: str, hay_deuc_en_el_pliego: bool) -> None:
-    """El DEUC base de la sociedad (Word adjunto a la Company en el ERP, con los datos de la empresa ya rellenados) se copia y se rellenan SOLO los campos propios del concurso (título, expediente,
+    """El DEUC base de la sociedad (Word o PDF con formulario adjunto a la Company en el ERP, con los datos de la empresa ya rellenados) se copia y se rellenan SOLO los campos propios del concurso (título, expediente,
     órgano…); lo demás no se toca. Si la sociedad no tiene DEUC base no se inventa nada: solo se avisa cuando el pliego pide un DEUC."""
     doc = {"id": DEUC_N, "n": DEUC_N, "nombre": "DEUC", "miembro": "DEUC", "formato": "docx", "sha256": ""}
     try:
         base = await E.deuc_base(empresa)
         if base is None:
             if hay_deuc_en_el_pliego:
-                await _guardar(motor_id, doc, "error", empresa, "", "", 0, [], [], [f"El pliego pide un DEUC y la sociedad «{empresa}» no tiene el DEUC base: adjúntalo a su ficha de empresa en el ERP (un Word con «DEUC» en el nombre)"],
+                await _guardar(motor_id, doc, "error", empresa, "", "", 0, [], [], [f"El pliego pide un DEUC y la sociedad «{empresa}» no tiene el DEUC base: adjúntalo a su ficha de empresa en el ERP (un Word o un PDF con formulario, con «DEUC» en el nombre)"],
                                {}, usuario)
             return
-        nombre, datos = base
+        nombre, datos, formato = base
         sha = hashlib.sha256(datos).hexdigest()
-        ruta = RAIZ / motor_id / "_deuc" / f"{sha}.docx"
+        ruta = RAIZ / motor_id / "_deuc" / f"{sha}.{formato}"
         ruta.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
         ruta.write_bytes(datos)
         os.chmod(ruta, 0o600)
-        await _procesar(motor_id, {**doc, "sha256": sha, "ruta": str(ruta), "nombre": f"DEUC ({nombre})"}, fuente, empresa, asignaciones, usuario, True)
+        doc = {**doc, "formato": formato, "sha256": sha, "ruta": str(ruta), "nombre": f"DEUC ({nombre})"}
+        if formato == "pdf":
+            det = await asyncio.to_thread(F.ejecutar_aislado, {"accion": "detectar", "ruta": str(ruta), "formato": "pdf"})
+            if not det["campos"]:
+                await _guardar(motor_id, doc, "error", empresa, "", "", 0, [], [], [f"El DEUC base «{nombre}» es un PDF sin campos de formulario editables: no se puede rellenar. Súbelo en Word (.docx) o como PDF con formulario"],
+                               {}, usuario)
+                return
+        await _procesar(motor_id, doc, fuente, empresa, asignaciones, usuario, True)
     except (E.ErrorEmpresa, F.ErrorFormulario, OSError) as e:
         log.warning("plantillas: no se ha podido preparar el DEUC de %s: %s", motor_id, e)
         await _guardar(motor_id, doc, "error", empresa, "", "", 0, [], [], [str(e)[:300]], {}, usuario)
