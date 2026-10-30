@@ -308,3 +308,88 @@ func TestEstadoDelMotorConPuntoDeControl(t *testing.T) {
 		t.Fatalf("punto de control vacío: %+v", out)
 	}
 }
+
+func TestEstadisticasSobreTodosLosResultados(t *testing.T) {
+	ts, _, pool := conPostgres(t)
+	// La siembra tiene los plazos en el pasado (la abierta sin plazo sigue abierta): tres abiertas pasan a vencer en el futuro (dos esta semana, una dentro de 20 días).
+	for titulo, dias := range map[string]int{"Mantenimiento de sistemas de videovigilancia": 3, "Subministrament de càmeres de vigilància": 3, "Suministro de mobiliario": 20} {
+		if _, err := pool.Exec(context.Background(), "UPDATE expedientes SET plazo_presentacion = now() + make_interval(days => $2) WHERE titulo = $1", titulo, dias); err != nil {
+			t.Fatal(err)
+		}
+	}
+	type grupo struct {
+		Valor   string `json:"valor"`
+		NIF     string `json:"nif"`
+		Cuenta  int    `json:"cuenta"`
+		Importe string `json:"importe"`
+	}
+	type stats struct {
+		Total, Abiertas int
+		Vencen          int `json:"vencen_7_dias"`
+		Importe         struct {
+			Total, Medio string
+			ConImporte   int `json:"con_importe"`
+		}
+		Estados, Zonas, CPV, Importes, Compradores, Plazos []grupo
+	}
+	pedir := func(q string) stats {
+		res := get(t, ts, "/api/v1/tenders/estadisticas?"+q, token)
+		if res.StatusCode != http.StatusOK {
+			t.Fatalf("%s: %d %s", q, res.StatusCode, res.Body)
+		}
+		var s stats
+		decode(t, res, &s)
+		return s
+	}
+	cuentas := func(gs []grupo) map[string]int {
+		m := map[string]int{}
+		for _, g := range gs {
+			m[g.Valor] = g.Cuenta
+		}
+		return m
+	}
+	igual := func(nombre string, got, want map[string]int) {
+		t.Helper()
+		if fmt.Sprint(got) != fmt.Sprint(want) {
+			t.Errorf("%s: %v, quería %v", nombre, got, want)
+		}
+	}
+
+	s := pedir("")
+	if s.Total != 7 || s.Abiertas != 4 || s.Vencen != 2 || s.Importe.ConImporte != 6 || s.Importe.Total != "1455000.50" || s.Importe.Medio == "" {
+		t.Fatalf("cifras: %+v", s)
+	}
+	igual("zonas", cuentas(s.Zonas), map[string]int{"ES512": 4, "ES511": 1, "ES300": 1, "ES613": 1})
+	igual("cpv", cuentas(s.CPV), map[string]int{"35": 2, "72": 3, "45": 1, "39": 1})
+	igual("importes", cuentas(s.Importes), map[string]int{"menos_15k": 0, "15k_50k": 1, "50k_200k": 3, "200k_1m": 2, "mas_1m": 0, "sin_importe": 1})
+	if len(s.Importes) != 6 || s.Importes[0].Valor != "menos_15k" || s.Importes[5].Valor != "sin_importe" {
+		t.Errorf("los tramos van en orden fijo: %+v", s.Importes)
+	}
+	if s.Estados[0].Valor != "cerrada" && s.Estados[0].Valor != "abierta" {
+		t.Errorf("estados: %+v", s.Estados)
+	}
+	if len(s.Compradores) != 1 || s.Compradores[0].Cuenta != 7 || s.Compradores[0].NIF != "P1708500E" || s.Compradores[0].Importe != "1455000.50" {
+		t.Errorf("compradores: %+v", s.Compradores)
+	}
+	madrid, _ := time.LoadLocation("Europe/Madrid")
+	d3, d20 := time.Now().AddDate(0, 0, 3).In(madrid).Format("2006-01-02"), time.Now().AddDate(0, 0, 20).In(madrid).Format("2006-01-02")
+	if len(s.Plazos) != 2 || s.Plazos[0].Valor != d3 || s.Plazos[0].Cuenta != 2 || s.Plazos[1].Valor != d20 || s.Plazos[1].Cuenta != 1 {
+		t.Errorf("plazos (esperaba %s ×2 y %s ×1): %+v", d3, d20, s.Plazos)
+	}
+
+	// Los filtros acotan todos los repartos, igual que /tenders (y el total coincide con el de la búsqueda).
+	f := pedir("estado=abierta&nuts=ES512")
+	if f.Total != 2 || f.Abiertas != 2 || len(f.Compradores) != 1 || f.Compradores[0].Cuenta != 2 {
+		t.Errorf("abiertas en Girona: %+v", f)
+	}
+	_, total := recorrer(t, ts, "estado=abierta&nuts=ES512", 100)
+	if total != f.Total {
+		t.Errorf("el total de las estadísticas (%d) no coincide con el de la búsqueda (%d)", f.Total, total)
+	}
+	if v := pedir("q=videovigilancia"); v.Total != 1 || v.Importe.Total != "100000.00" {
+		t.Errorf("con texto: %+v", v)
+	}
+	if v := pedir("importe_min=999999999"); v.Total != 0 || len(v.Estados) != 0 || len(v.Importes) != 0 || v.Importe.Medio != "" {
+		t.Errorf("sin resultados: %+v", v)
+	}
+}

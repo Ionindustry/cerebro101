@@ -24,6 +24,7 @@ import (
 type Repo interface {
 	Buscar(ctx context.Context, f pg.Filtro) ([]pg.Fila, int, bool, error)
 	Expediente(ctx context.Context, id string) (pg.Fila, error)
+	Estadisticas(ctx context.Context, f pg.Filtro) (pg.Estadisticas, error)
 	BuscarAdjudicaciones(ctx context.Context, f pg.FiltroAdjudicaciones) ([]pg.Adjudicacion, int, bool, error)
 	Competidores(ctx context.Context, f pg.FiltroCompetidores) ([]pg.Competidor, int, pg.MuestraMercado, error)
 	ContratosQueVencen(ctx context.Context, f pg.FiltroVencimientos) ([]pg.ContratoVence, int, bool, error)
@@ -62,6 +63,7 @@ func New(repo Repo, token string, log *slog.Logger) (*Server, error) {
 // Register añade las rutas a mux. /healthz lo sirve el arranque común, sin autenticación.
 func (s *Server) Register(mux *http.ServeMux) {
 	mux.Handle("GET /api/v1/tenders", s.wrap(s.buscar))
+	mux.Handle("GET /api/v1/tenders/estadisticas", s.wrap(s.estadisticas))
 	mux.Handle("GET /api/v1/tenders/{id}", s.wrap(s.ficha))
 	mux.Handle("GET /api/v1/tenders/{id}/parecidas", s.wrap(s.parecidas))
 	mux.Handle("GET /api/v1/awards", s.wrap(s.adjudicaciones))

@@ -342,6 +342,57 @@ a.kp-fila:hover { background: var(--fondo); }
 .lic-enlace { border: 0; background: none; padding: 6px 0; text-align: left; font: inherit; cursor: pointer; text-decoration: underline; text-underline-offset: 3px; }
 .lic-enlace[aria-current="true"] { font-weight: 700; text-decoration: none; }
 
+/* Búsqueda de licitaciones: dashboard, tabla y filtros laterales */
+.lic.lic-ancho { max-width: none; }
+.lic-titulo { justify-content: space-between; }
+.lic-titulo h1 { margin: 0; }
+.lic-pantalla { display: grid; grid-template-columns: minmax(0, 1fr); gap: 16px; align-items: start; }
+.lic-pantalla.con-filtros { grid-template-columns: 300px minmax(0, 1fr); }
+.lic-lateral[hidden] { display: none; }
+.lic-lateral { position: sticky; top: 12px; max-height: calc(100dvh - 24px); overflow-y: auto; }
+.lic-filtros .lic-campos { grid-template-columns: 1fr; }
+.lic-principal { display: grid; gap: 16px; min-width: 0; }
+.lic-dashboard { display: grid; gap: 16px; }
+.lic-cifras { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 12px; }
+.lic-cifra { display: grid; gap: 2px; align-content: start; padding: 14px 16px; }
+.lic-cifra-titulo { font-size: 12px; text-transform: uppercase; letter-spacing: .05em; color: var(--secundario); }
+.lic-cifra-valor { font-size: 28px; font-weight: 700; line-height: 1.15; }
+.lic-graficos { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 420px), 1fr)); gap: 12px; }
+.lic-grafico h3 { margin: 0 0 10px; font-size: 15px; font-weight: 600; }
+.dash-barras { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; }
+.dash-fila { display: grid; grid-template-columns: minmax(90px, 40%) 1fr auto; gap: 8px; align-items: center; width: 100%; text-align: left; font-size: 14px; border: 0; background: none; padding: 3px 6px; border-radius: 8px; color: inherit; }
+button.dash-fila:hover { background: var(--fondo); }
+button.dash-fila[aria-pressed="true"] { background: var(--senal-suave); font-weight: 600; }
+.dash-etiqueta { overflow-wrap: anywhere; }
+.dash-pista { height: 10px; background: var(--fondo); border-radius: 99px; overflow: hidden; }
+.dash-relleno { display: block; height: 100%; min-width: 2px; background: var(--tinta); border-radius: 99px; }
+.dash-relleno.abierta { background: var(--hecho); }
+.dash-relleno.anulada, .dash-relleno.desierta { background: #b5352b; }
+.dash-relleno.cerrada { background: var(--secundario); }
+.dash-cuenta { font-variant-numeric: tabular-nums; font-weight: 600; white-space: nowrap; }
+.lic-cal-columnas { display: grid; grid-template-columns: repeat(60, minmax(0, 1fr)); gap: 2px; height: 90px; align-items: end; }
+.lic-cal-dia { display: flex; align-items: flex-end; height: 100%; background: var(--fondo); border-radius: 3px; }
+.lic-cal-dia.finde { background: #ecece8; }
+.lic-cal-dia.hoy { outline: 1px solid var(--tinta); }
+.lic-cal-barra { display: block; width: 100%; background: var(--senal); border-radius: 3px; }
+.lic-cal-ejes { display: grid; grid-template-columns: repeat(60, minmax(0, 1fr)); gap: 2px; font-size: 10px; color: var(--secundario); margin-top: 4px; }
+.lic-cal-ejes span { overflow: visible; white-space: nowrap; }
+.lic-tabla-caja { padding: 6px 10px; overflow-x: auto; }
+.lic-tabla-resultados td.lic-num, .lic-tabla-resultados th:nth-child(n+4) { white-space: nowrap; }
+.lic-tabla-resultados td.lic-num { font-variant-numeric: tabular-nums; }
+.lic-bloque { display: block; }
+.lic-titulo-fila { font-weight: 600; text-decoration: none; overflow-wrap: anywhere; }
+.lic-titulo-fila:hover { text-decoration: underline; }
+.lic-th-orden { border: 0; background: none; padding: 0; font: inherit; text-transform: inherit; letter-spacing: inherit; color: inherit; cursor: pointer; text-decoration: underline; text-underline-offset: 3px; }
+th[aria-sort="ascending"] .lic-th-orden, th[aria-sort="descending"] .lic-th-orden { color: var(--tinta); font-weight: 700; }
+@media (max-width: 960px) {
+  .lic-pantalla.con-filtros { grid-template-columns: minmax(0, 1fr); }
+  .lic-lateral { position: static; max-height: none; }
+}
+.lic-tabla-resultados { display: table; min-width: 760px; }
+.lic-tabla-resultados td { overflow-wrap: normal; }
+.lic-tabla-resultados td:nth-child(2) { min-width: 240px; overflow-wrap: break-word; }
+
 /* Embudo de licitaciones */
 .lic-cifras { display: grid; grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)); gap: 10px; margin-bottom: 8px; }
 .lic-cifra { display: flex; flex-direction: column; gap: 2px; }

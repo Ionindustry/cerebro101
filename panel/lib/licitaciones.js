@@ -16,7 +16,7 @@ export function rutaPermitida(segmentos, metodo) {
   const [a, b, ...resto] = segmentos;
   if (a === "tenders" && UUID.test(b || "") && resto.length === 1) return resto[0] === "parecidas";     // licitaciones parecidas a una
   if (resto.length > 0) return false;
-  if (a === "tenders") return b === undefined || UUID.test(b);
+  if (a === "tenders") return b === undefined || b === "estadisticas" || UUID.test(b);
   if (a === "awards" || a === "competitors" || a === "expiring-contracts") return b === undefined;
   if (a === "organizations") return UUID.test(b || "");                                // la ficha de una organización, siempre por su UUID                   // solo la lista, con sus filtros en la dirección
   return a === "ops" && b === "status";
@@ -114,6 +114,87 @@ export function queryAFiltros(sp) {
     modo: MODOS.some(([k]) => k && k === sp.get("modo")) ? sp.get("modo") : "",
   };
 }
+
+
+// ---- Dashboard de la búsqueda (GET tenders/estadisticas): todo lo que no es pintar está aquí para probarlo ----
+
+/** Los filtros de la búsqueda para las estadísticas: los mismos, sin orden ni modo (se agrega por palabras sobre todo lo que cumple los filtros). */
+export function estadisticasQuery(f) {
+  const p = filtrosAQuery({ ...f, modo: "", orden: "" });
+  return p;
+}
+
+const ZONAS = {
+  ES511: "Barcelona", ES512: "Girona", ES513: "Lleida", ES514: "Tarragona", ES300: "Madrid", ES521: "Alicante", ES522: "Castellón", ES523: "Valencia",
+  ES611: "Almería", ES612: "Cádiz", ES613: "Córdoba", ES618: "Sevilla", ES211: "Álava", ES212: "Gipuzkoa", ES213: "Bizkaia", ES243: "Zaragoza",
+};
+/** «ES512» → «Girona (ES512)»; un código que no conocemos se deja tal cual; vacío = «Sin zona». */
+export const zonaEtiqueta = (c) => (!c ? "Sin zona" : ZONAS[c] ? `${ZONAS[c]} (${c})` : c);
+
+const DIVISIONES_CPV = {
+  "03": "Agricultura y pesca", "09": "Combustibles y energía", "14": "Minería", "15": "Alimentación", "18": "Ropa y calzado", "22": "Impresos", "24": "Químicos",
+  "30": "Equipos de oficina e informática", "31": "Material eléctrico", "32": "Telecomunicaciones y radio", "33": "Equipos médicos", "34": "Transporte", "35": "Seguridad y defensa",
+  "37": "Música, deporte y ocio", "38": "Laboratorio y óptica", "39": "Mobiliario y menaje", "41": "Agua", "42": "Maquinaria industrial", "43": "Maquinaria de obra",
+  "44": "Materiales de construcción", "45": "Obras", "48": "Software", "50": "Reparación y mantenimiento", "51": "Instalación", "55": "Hostelería", "60": "Transporte (servicios)",
+  "63": "Servicios de apoyo al transporte", "64": "Correos y telecomunicaciones", "65": "Suministros (servicios)", "66": "Servicios financieros", "70": "Inmobiliarios",
+  "71": "Arquitectura e ingeniería", "72": "Servicios informáticos", "73": "Investigación y desarrollo", "75": "Administración pública", "76": "Servicios petrolíferos",
+  "77": "Agricultura (servicios)", "79": "Servicios a empresas", "80": "Educación", "85": "Sanidad y servicios sociales", "90": "Limpieza y residuos", "92": "Cultura y deporte", "98": "Otros servicios",
+};
+/** «72» → «Servicios informáticos (72)». */
+export const divisionEtiqueta = (c) => (!c ? "Sin CPV" : DIVISIONES_CPV[c] ? `${DIVISIONES_CPV[c]} (${c})` : `CPV ${c}`);
+
+export const TRAMOS_IMPORTE = {
+  menos_15k: "Menos de 15.000 €", "15k_50k": "15.000 – 50.000 €", "50k_200k": "50.000 – 200.000 €", "200k_1m": "200.000 € – 1 M€", mas_1m: "Más de 1 M€", sin_importe: "Sin importe",
+};
+export const tramoEtiqueta = (c) => TRAMOS_IMPORTE[c] || c;
+
+/** «1,5 M€», «250 k€», «980 €»; vacío o no numérico = «—». */
+export function importeCorto(v) {
+  if (v === "" || v === null || v === undefined || !/^-?\d{1,15}(\.\d{1,4})?$/.test(String(v))) return "—";
+  const n = Number(v);
+  const f = (x, d) => new Intl.NumberFormat("es-ES", { maximumFractionDigits: d }).format(x);
+  if (Math.abs(n) >= 1e6) return `${f(n / 1e6, 1)} M€`;
+  if (Math.abs(n) >= 1e4) return `${f(n / 1e3, 0)} k€`;
+  return `${f(n, 0)} €`;
+}
+
+/** Un reparto → barras: etiqueta legible y anchura (0–100) relativa a la mayor; las vacías se quedan en 0. `etiqueta` convierte el valor en texto. */
+export function repartoBarras(grupos, etiqueta = (v) => v) {
+  const lista = Array.isArray(grupos) ? grupos : [];
+  const max = Math.max(0, ...lista.map((g) => g.cuenta || 0));
+  return lista.map((g) => ({ ...g, etiqueta: etiqueta(g.valor), pct: max > 0 ? Math.round(((g.cuenta || 0) / max) * 100) : 0 }));
+}
+
+/** Los plazos que vienen por día (AAAA-MM-DD) → los próximos `dias` días seguidos, con ceros donde no vence nada. `hoy` es una fecha AAAA-MM-DD (hora de Madrid). */
+export function calendarioPlazos(plazos, hoy, dias = 60) {
+  const por = new Map((Array.isArray(plazos) ? plazos : []).map((g) => [g.valor, g.cuenta || 0]));
+  const [a, m, d] = String(hoy).split("-").map(Number);
+  const out = [];
+  for (let i = 0; i < dias; i++) {
+    const t = new Date(Date.UTC(a, m - 1, d + i));
+    const fecha = t.toISOString().slice(0, 10);
+    out.push({ fecha, cuenta: por.get(fecha) || 0, dia: t.getUTCDate(), diaSemana: t.getUTCDay(), esHoy: i === 0 });
+  }
+  const max = Math.max(0, ...out.map((x) => x.cuenta));
+  return out.map((x) => ({ ...x, pct: max > 0 ? Math.round((x.cuenta / max) * 100) : 0 }));
+}
+
+/** La fecha de hoy en Madrid como AAAA-MM-DD (los plazos del motor van por día de Madrid). */
+export const hoyMadrid = (ahora = new Date()) => new Intl.DateTimeFormat("sv-SE", { timeZone: "Europe/Madrid" }).format(ahora);
+
+/** Cambia un filtro desde el dashboard: estados se alternan; zona y CPV se fijan (o se quitan si ya estaban fijados). */
+export function filtroDesdeDashboard(f, tipo, valor) {
+  if (tipo === "estado") {
+    const ya = f.estados.includes(valor);
+    return { ...f, estados: ya ? f.estados.filter((e) => e !== valor) : [...f.estados, valor] };
+  }
+  if (tipo === "zona") return { ...f, nuts: f.nuts.trim() === valor ? "" : valor };
+  if (tipo === "cpv") return { ...f, cpv: f.cpv.trim() === valor ? "" : valor };
+  return f;
+}
+
+/** Las columnas de la tabla que se ordenan en el motor, y el orden que cada una le pide. */
+export const COLUMNAS_ORDENABLES = { plazo: "plazo", importe: "importe", actualizada: "actualizacion" };
 
 /** «83 % de parecido» a partir de la cercanía (0 a 1) que da la API; vacío si no hay. */
 export function cercaniaTexto(c) {

@@ -336,7 +336,9 @@ async def _cerrar(did: int, motor_id: str, sha: str, formato: str, datos: bytes,
 
 def _entorno_hijo() -> dict:
     """El entorno del extractor: VACÍO de secretos (ni claves ni la dirección de la base de datos). Solo lo mínimo para arrancar Python y encontrar el paquete."""
-    return {"PATH": "/usr/local/bin:/usr/bin:/bin", "LANG": "C.UTF-8", "PYTHONDONTWRITEBYTECODE": "1", "PYTHONPATH": str(Path(__file__).resolve().parents[2])}
+    return {"PATH": "/usr/local/bin:/usr/bin:/bin", "LANG": "C.UTF-8", "PYTHONDONTWRITEBYTECODE": "1", "PYTHONPATH": str(Path(__file__).resolve().parents[2]),
+            # Con el límite de memoria virtual (RLIMIT_AS), OpenBLAS reserva búferes por núcleo y falla ("Memory allocation still failed"): un solo hilo.
+            "OPENBLAS_NUM_THREADS": "1", "OMP_NUM_THREADS": "1", "MKL_NUM_THREADS": "1", "NUMEXPR_NUM_THREADS": "1"}
 
 
 def _lanzar_extractor(ruta: Path, formato: str, timeout: float) -> dict:

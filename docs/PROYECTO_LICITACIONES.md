@@ -139,6 +139,13 @@ de los datos. Si algún día hay decenas de millones de documentos o hace falta 
   (del orden de 1 hora por cada ~50.000 expedientes en CPU; se ve en los registros `licitaciones-vectorizador-1`). Mientras tanto, la búsqueda por
   significado va devolviendo lo que ya está vectorizado.
 
+### Dashboard de la pantalla de búsqueda (hecho)
+`/licitaciones/buscar` ya no es solo un formulario y una lista: arriba hay un **dashboard** de TODO lo que cumple los filtros (no solo de la página que se ve), con los filtros en una **barra lateral plegable** y los resultados en una **tabla**.
+- **Cifras**: resultados, importe total y medio (valor estimado sin IVA), abiertas y las que vencen en 7 días. **Repartos**: por estado, por tramo de importe, por zona (provincia) y por sector (división CPV). **Calendario** de plazos de los próximos 60 días y **principales organismos** (con su importe).
+- **Pulsar un estado, una zona o un sector filtra la búsqueda** (otra pulsación lo quita); la dirección de la página sigue siendo la búsqueda, así que se puede compartir.
+- **Tabla ordenable**: Importe, Plazo (el más próximo primero) y Actualizada se ordenan en el motor pulsando su cabecera. En el móvil la tabla se desplaza en horizontal.
+- **Motor**: `GET /tenders/estadisticas` (mismos filtros que `/tenders`; en `licitaciones/internal/storage/pg/estadisticas.go`). Una consulta por reparto sobre el mismo `WHERE`, y el estado es el efectivo (una «abierta» con el plazo pasado cuenta como «cerrada»). Con la búsqueda «por significado» las cifras cuentan por palabras (el aviso se muestra en pantalla). Si el motor es anterior a esta función, el dashboard avisa de que hay que actualizarlo y la lista sigue funcionando.
+
 ### Oferta de la licitación (primera entrega)
 Del pliego a la oferta, con los agentes de Oferta técnica y económica trabajando sobre **un mismo borrador** por licitación (`cerebro/licitaciones/ofertas.py`, herramienta `ofertas`, tarjeta «Oferta» en la ficha; solo Dirección y Licitaciones).
 - **Tres sobres, en secciones.** «Preparar la oferta» crea las secciones **a partir del pliego** (no de una plantilla fija): una por criterio de juicio de valor de la ficha (con sus puntos), la descripción de la solución, los criterios valorables por fórmula, la

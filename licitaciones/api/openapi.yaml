@@ -213,6 +213,36 @@ paths:
         '429': {$ref: '#/components/responses/DemasiadasPeticiones'}
         '503': {$ref: '#/components/responses/NoDisponible'}
 
+  /tenders/estadisticas:
+    get:
+      tags: [licitaciones]
+      operationId: licitacionesEstadisticas
+      summary: Agregados de todo lo que cumple una búsqueda (dashboard)
+      description: |
+        Cifras y repartos de TODOS los expedientes que cumplen los filtros (no solo los de una página): total, importe, abiertas, las que vencen en 7 días, y los repartos por
+        estado, zona (provincia NUTS 3 del primer lugar de ejecución), división CPV (2 cifras del primer código), tramo de importe, principales compradores y plazos de
+        los próximos 60 días (por día, hora de Madrid). Admite los mismos filtros que `/tenders` (el orden, el cursor y el límite no cuentan; `modo` se ignora: se
+        agrega por palabras). Los importes son el valor estimado sin IVA, en euros. Un reparto sin resultados es una lista vacía. Implementado.
+      x-permisos: grupos licitaciones, direccion, comercial, telecom, areas; cuenta servicio
+      parameters:
+        - {name: q, in: query, schema: {type: string, minLength: 2, maxLength: 200}}
+        - {name: cpv, in: query, style: form, explode: false, schema: {type: array, items: {type: string}}}
+        - {name: nuts, in: query, style: form, explode: false, schema: {type: array, items: {type: string}}}
+        - {name: estado, in: query, style: form, explode: false, schema: {type: array, items: {$ref: '#/components/schemas/EstadoLicitacion'}}}
+        - {name: importe_min, in: query, schema: {type: string}}
+        - {name: importe_max, in: query, schema: {type: string}}
+        - {name: plazo_hasta, in: query, schema: {type: string, format: date-time}}
+      responses:
+        '200':
+          description: Agregados
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Estadisticas'}
+        '400': {$ref: '#/components/responses/Invalida'}
+        '401': {$ref: '#/components/responses/NoAutenticado'}
+        '403': {$ref: '#/components/responses/Prohibido'}
+        '429': {$ref: '#/components/responses/DemasiadasPeticiones'}
+
   /tenders/{id}:
     get:
       tags: [licitaciones]
@@ -962,6 +992,39 @@ components:
           properties:
             valor: {type: integer, minimum: 0}
             relacion: {type: string, enum: [eq, gte]}
+
+    GrupoEstadistica:
+      type: object
+      required: [valor, cuenta]
+      properties:
+        valor: {type: string, description: "Estado, código NUTS, división CPV, tramo (menos_15k, 15k_50k, 50k_200k, 200k_1m, mas_1m, sin_importe), nombre del comprador o fecha AAAA-MM-DD."}
+        nif: {type: string, description: Solo en compradores.}
+        cuenta: {type: integer, minimum: 0}
+        importe: {type: string, description: "Solo en compradores: valor estimado sumado (decimal, EUR sin IVA)."}
+
+    Estadisticas:
+      type: object
+      required: [total, abiertas, vencen_7_dias, importe, estados, zonas, cpv, importes, compradores, plazos]
+      properties:
+        total: {type: integer, minimum: 0}
+        abiertas: {type: integer, minimum: 0}
+        vencen_7_dias: {type: integer, minimum: 0, description: Abiertas o con anuncio previo cuyo plazo termina en los próximos 7 días.}
+        importe:
+          type: object
+          required: [total, medio, con_importe, moneda, impuestos, significado]
+          properties:
+            total: {type: string}
+            medio: {type: string, description: Vacío si ningún expediente tiene valor estimado.}
+            con_importe: {type: integer}
+            moneda: {type: string}
+            impuestos: {type: string}
+            significado: {type: string}
+        estados: {type: array, items: {$ref: '#/components/schemas/GrupoEstadistica'}}
+        zonas: {type: array, maxItems: 12, items: {$ref: '#/components/schemas/GrupoEstadistica'}}
+        cpv: {type: array, maxItems: 12, items: {$ref: '#/components/schemas/GrupoEstadistica'}}
+        importes: {type: array, items: {$ref: '#/components/schemas/GrupoEstadistica'}}
+        compradores: {type: array, maxItems: 10, items: {$ref: '#/components/schemas/GrupoEstadistica'}}
+        plazos: {type: array, items: {$ref: '#/components/schemas/GrupoEstadistica'}}
 
     Faceta:
       type: object
