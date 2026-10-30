@@ -103,7 +103,8 @@ simulador:
 # Vigilante del motor (cerebro/licitaciones/vigilante.py): cada 15 minutos mira el estado del motor y, si una fuente lleva demasiado sin ingesta correcta (o el motor no responde),
 # avisa por correo interno UNA vez al empezar el problema, lo recuerda cada `repetir_cada_horas` mientras siga y avisa cuando se arregla. Sin destinatarios, solo queda en el registro.
 vigilante:
-  horas_sin_ingesta: 6        # una fuente sin ingesta correcta durante más de estas horas se da por atascada
+  horas_sin_ingesta: 3        # una fuente sin ingesta correcta durante más de estas horas se da por atascada (la ingesta corre cada hora)
+  hora_control_hoy: 11        # en día laborable, pasada esta hora (local), si no ha entrado NINGUNA licitación nueva ni actualizada hoy, se avisa
   repetir_cada_horas: 24      # mientras siga atascado, recordarlo cada tanto
   destinatarios: [soporte@101.cat]   # direcciones de la empresa (dominios de config/buzones.yaml → avisos); vacío = sin correo
 

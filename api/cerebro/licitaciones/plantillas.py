@@ -255,23 +255,30 @@ async def _tratar(motor_id: str, doc: dict, fuente: dict, empresa: str, asignaci
 
 
 async def _deuc(motor_id: str, fuente: dict, empresa: str, asignaciones: dict, usuario: str, hay_deuc_en_el_pliego: bool) -> None:
-    """El DEUC base de la sociedad (Word adjunto a la Company en el ERP, con los datos de la empresa ya rellenados) se copia y se rellenan SOLO los campos propios del concurso (título, expediente,
+    """El DEUC base de la sociedad (Word o PDF con formulario adjunto a la Company en el ERP, con los datos de la empresa ya rellenados) se copia y se rellenan SOLO los campos propios del concurso (título, expediente,
     órgano…); lo demás no se toca. Si la sociedad no tiene DEUC base no se inventa nada: solo se avisa cuando el pliego pide un DEUC."""
     doc = {"id": DEUC_N, "n": DEUC_N, "nombre": "DEUC", "miembro": "DEUC", "formato": "docx", "sha256": ""}
     try:
         base = await E.deuc_base(empresa)
         if base is None:
             if hay_deuc_en_el_pliego:
-                await _guardar(motor_id, doc, "error", empresa, "", "", 0, [], [], [f"El pliego pide un DEUC y la sociedad «{empresa}» no tiene el DEUC base: adjúntalo a su ficha de empresa en el ERP (un Word con «DEUC» en el nombre)"],
+                await _guardar(motor_id, doc, "error", empresa, "", "", 0, [], [], [f"El pliego pide un DEUC y la sociedad «{empresa}» no tiene el DEUC base: adjúntalo a su ficha de empresa en el ERP (un Word o un PDF con formulario, con «DEUC» en el nombre)"],
                                {}, usuario)
             return
-        nombre, datos = base
+        nombre, datos, formato = base
         sha = hashlib.sha256(datos).hexdigest()
-        ruta = RAIZ / motor_id / "_deuc" / f"{sha}.docx"
+        ruta = RAIZ / motor_id / "_deuc" / f"{sha}.{formato}"
         ruta.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
         ruta.write_bytes(datos)
         os.chmod(ruta, 0o600)
-        await _procesar(motor_id, {**doc, "sha256": sha, "ruta": str(ruta), "nombre": f"DEUC ({nombre})"}, fuente, empresa, asignaciones, usuario, True)
+        doc = {**doc, "formato": formato, "sha256": sha, "ruta": str(ruta), "nombre": f"DEUC ({nombre})"}
+        if formato == "pdf":
+            det = await asyncio.to_thread(F.ejecutar_aislado, {"accion": "detectar", "ruta": str(ruta), "formato": "pdf"})
+            if not det["campos"]:
+                await _guardar(motor_id, doc, "error", empresa, "", "", 0, [], [], [f"El DEUC base «{nombre}» es un PDF sin campos de formulario editables: no se puede rellenar. Súbelo en Word (.docx) o como PDF con formulario"],
+                               {}, usuario)
+                return
+        await _procesar(motor_id, doc, fuente, empresa, asignaciones, usuario, True)
     except (E.ErrorEmpresa, F.ErrorFormulario, OSError) as e:
         log.warning("plantillas: no se ha podido preparar el DEUC de %s: %s", motor_id, e)
         await _guardar(motor_id, doc, "error", empresa, "", "", 0, [], [], [str(e)[:300]], {}, usuario)

@@ -118,22 +118,25 @@ async def elegir(empresa: str | None = None) -> str:
 MAX_DEUC = 20 << 20
 
 
-async def deuc_base(empresa: str) -> tuple[str, bytes] | None:
-    """El DEUC base de la empresa: el Word cuyo nombre lleva «DEUC» (o «ESPD») adjunto a la Company en el ERP, con los datos de la empresa ya rellenados. Si hay varios, el más reciente.
-    None si no hay ninguno. Se lee con la clave del departamento (categoría «sistema»: Company y File); un fichero que no es un Word de verdad no se admite."""
+async def deuc_base(empresa: str) -> tuple[str, bytes, str] | None:
+    """El DEUC base de la empresa: el fichero cuyo nombre lleva «DEUC» (o «ESPD») adjunto a la Company en el ERP, con los datos de la empresa ya rellenados. Puede ser un Word (.docx) o un PDF
+    con formulario (campos editables). Si hay varios, el más reciente. Devuelve (nombre, contenido, formato) o None si no hay ninguno. Se lee con la clave del departamento (categoría
+    «sistema»: Company y File); un fichero que no es lo que dice su extensión no se admite."""
     cfg = configuracion()
     dep = cfg["departamento_erp"]
     filas = await _leer_erp(_erp().listar_sistema("File", dep, [["attached_to_doctype", "=", "Company"], ["attached_to_name", "=", empresa]],
                                                   ["name", "file_name", "file_url", "modified"], 50))
     patron = re.compile(cfg["deuc_patron"], re.I)
-    validos = [f for f in filas if f.get("file_url") and str(f.get("file_name") or "").lower().endswith(".docx") and patron.search(str(f.get("file_name") or ""))]
+    validos = [f for f in filas if f.get("file_url") and str(f.get("file_name") or "").lower().endswith((".docx", ".pdf")) and patron.search(str(f.get("file_name") or ""))]
     if not validos:
         return None
     elegido = max(validos, key=lambda f: str(f.get("modified") or ""))
+    nombre = _t(elegido["file_name"], 120)
+    formato = "pdf" if nombre.lower().endswith(".pdf") else "docx"
     datos = await _leer_erp(_erp().descargar_sistema(elegido["file_url"], dep, MAX_DEUC))
-    if datos[:2] != b"PK":
-        raise ErrorEmpresa(f"El fichero «{_t(elegido['file_name'], 80)}» adjunto a la empresa no es un Word (.docx) válido")
-    return _t(elegido["file_name"], 120), datos
+    if (formato == "pdf" and not datos.lstrip()[:5] == b"%PDF-") or (formato == "docx" and datos[:2] != b"PK"):
+        raise ErrorEmpresa(f"El fichero «{_t(nombre, 80)}» adjunto a la empresa no es un {'PDF' if formato == 'pdf' else 'Word (.docx)'} válido")
+    return nombre, datos, formato
 
 
 def _origen(doctype: str, nombre: str, campo: str) -> str:

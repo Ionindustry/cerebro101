@@ -130,10 +130,10 @@ class TestDeucBase(unittest.TestCase):
 
     def test_elige_el_word_mas_reciente_con_deuc_en_el_nombre_y_lo_lee_con_la_clave_del_departamento(self):
         erp, descargar, a, b = self.con([self.fichero("DEUC 2024.docx", "2024-01-01"), self.fichero("DEUC 2026.docx", "2026-03-01"), self.fichero("Escrituras.docx", "2026-05-01"),
-                                         self.fichero("DEUC.pdf", "2026-06-01")])
+                                         self.fichero("DEUC.txt", "2026-06-01")])
         with a, b:
-            nombre, datos = ejecutar(E.deuc_base("101 Telecom S.L."))
-        self.assertEqual((nombre, datos), ("DEUC 2026.docx", b"PK\x03\x04docx"))
+            nombre, datos, formato = ejecutar(E.deuc_base("101 Telecom S.L."))
+        self.assertEqual((nombre, datos, formato), ("DEUC 2026.docx", b"PK\x03\x04docx", "docx"))
         descargar.assert_awaited_once_with("/private/files/DEUC 2026.docx", "licitaciones", E.MAX_DEUC)
         self.assertEqual(erp.llamadas[0][:2], ("File", "licitaciones"))
 
@@ -148,6 +148,15 @@ class TestDeucBase(unittest.TestCase):
         _, _, a, b = self.con([self.fichero("DEUC.docx", "2026-01-01")], contenido=b"<html>")
         with a, b, self.assertRaisesRegex(E.ErrorEmpresa, "no es un Word"):
             ejecutar(E.deuc_base("101 Telecom S.L."))
+        _, _, a, b = self.con([self.fichero("DEUC.pdf", "2026-01-01")], contenido=b"PK\x03\x04")
+        with a, b, self.assertRaisesRegex(E.ErrorEmpresa, "no es un PDF"):
+            ejecutar(E.deuc_base("101 Telecom S.L."))
+
+    def test_el_deuc_base_puede_ser_un_pdf_y_gana_el_mas_reciente_sea_cual_sea_el_formato(self):
+        _, _, a, b = self.con([self.fichero("DEUC 2025.docx", "2025-01-01"), self.fichero("DEUC 2026.pdf", "2026-02-01")], contenido=b"%PDF-1.7 x")
+        with a, b:
+            nombre, datos, formato = ejecutar(E.deuc_base("101 Telecom S.L."))
+        self.assertEqual((nombre, formato), ("DEUC 2026.pdf", "pdf"))
 
     def test_rutas_de_fichero_solo_dentro_de_files(self):
         for mala in ("/api/method/frappe.client.get", "/private/files/../../etc/passwd", "http://otro/x", "/files/a?x=1"):
@@ -461,6 +470,28 @@ class TestBaseDeDatos(unittest.TestCase):
         r = self.preparar(empresa="101 Telecom S.L.")
         self.assertEqual({d["documento"]: d["estado"] for d in r["documentos"]}[0], "error")
         self.assertIn(1, [d["documento"] for d in r["documentos"]])
+
+    def test_el_deuc_base_en_pdf_con_formulario_se_rellena_y_un_pdf_plano_se_dice_claro(self):
+        ruta = self.dir / "deuc-base.pdf"
+        pdf_con_formulario(ruta, [("a", "Nombre oficial"), ("b", "Título o breve descripción de la contratación"), ("c", "Número de referencia del expediente asignado por el poder adjudicador")])
+        self.poner_deuc(contenido=ruta.read_bytes(), nombre="DEUC 101.pdf")
+        d = next(x for x in self.preparar(empresa="101 Telecom S.L.")["documentos"] if x["documento"] == 0)
+        self.assertEqual((d["formato"], d["estado"], d["fichero"]), ("pdf", "lista_para_firma", "00 - DEUC (rellenado).pdf"))
+        from pypdf import PdfReader
+        _, datos, tipo = ejecutar(PL.fichero(ID, d["id"]))
+        self.assertEqual(tipo, "application/pdf")
+        (self.dir / "x.pdf").write_bytes(datos)
+        self.assertEqual({k: v.get("/V") for k, v in PdfReader(str(self.dir / "x.pdf")).get_fields().items()},
+                         {"a": "Ajuntament de Girona", "b": "Videovigilancia urbana", "c": "2026/045"})
+        from pypdf import PdfWriter
+        w = PdfWriter()
+        w.add_blank_page(100, 100)
+        with open(self.dir / "plano.pdf", "wb") as f:
+            w.write(f)
+        self.poner_deuc(contenido=(self.dir / "plano.pdf").read_bytes(), nombre="DEUC plano.pdf")
+        d = next(x for x in self.preparar(empresa="101 Telecom S.L.")["documentos"] if x["documento"] == 0)
+        self.assertEqual(d["estado"], "error")
+        self.assertIn("sin campos de formulario", d["avisos"][0])
 
     def test_los_datos_de_la_licitacion_para_el_deuc(self):
         f = {"titulo": "Obra", "expediente": "X/1", "comprador": {"nombre": "Ajuntament"}, "cpv": ["32323500", "35120000"], "procedimiento": "abierto",

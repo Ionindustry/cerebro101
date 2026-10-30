@@ -37,6 +37,16 @@ class TestProblemas(unittest.TestCase):
         self.assertIn("7.0 horas", V.problemas(estado(7), 6)[0])
         self.assertIn("no ha completado", V.problemas(estado(None), 6)[0])
 
+    def test_control_de_lo_de_hoy_solo_en_dia_laborable_y_pasada_la_hora(self):
+        from datetime import datetime
+        jueves, sabado = datetime(2026, 10, 29, 12, 30), datetime(2026, 10, 31, 12, 30)
+        self.assertIn("Hoy no ha entrado ninguna licitación", V.sin_novedades_hoy(jueves, 0, 11))
+        self.assertIsNone(V.sin_novedades_hoy(jueves, 3, 11))                                  # hay novedades
+        self.assertIsNone(V.sin_novedades_hoy(jueves.replace(hour=9), 0, 11))                  # aún es pronto
+        self.assertIsNone(V.sin_novedades_hoy(sabado, 0, 11))                                  # fin de semana
+        self.assertIsNone(V.sin_novedades_hoy(jueves, None, 11))                               # no se ha podido contar: no se avisa por eso
+        self.assertEqual(V.problemas(estado(1), 6, V.sin_novedades_hoy(jueves, 0, 11))[0][:6], "Hoy no")
+
     def test_motor_sin_respuesta_y_motor_caido(self):
         self.assertIn("no responde", V.problemas(None, 6)[0])
         self.assertIn("caído", V.problemas({"estado": "caido", "fuentes": []}, 6)[0])
@@ -94,7 +104,7 @@ class TestFlujo(unittest.TestCase):
                   mock.patch.object(V.B, "cargar", lambda: {"buzones": {"notificaciones": {"direccion": "notificaciones@101.cat"}}})]
         for p in self.p:
             p.start()
-        self.enviados, self.estado, self.falla = [], estado(1), False
+        self.enviados, self.estado, self.falla, self.novedades_hoy, self.consultas_hoy = [], estado(1), False, 5, []
 
     def tearDown(self):
         for p in self.p:
@@ -105,6 +115,9 @@ class TestFlujo(unittest.TestCase):
     async def consulta(self, ruta, params=None):
         if self.estado is None:
             raise V.motor.MotorNoDisponible("caído")
+        if ruta == "/tenders":
+            self.consultas_hoy.append(params)
+            return {"total": {"valor": self.novedades_hoy}, "items": []}
         return self.estado
 
     def enviar(self, buzon, mensaje):
@@ -115,6 +128,16 @@ class TestFlujo(unittest.TestCase):
     def paso(self, horas=0, destinatarios=("tec@101.cat",)):
         cfg = {"vigilante": {"destinatarios": list(destinatarios), "horas_sin_ingesta": 6, "repetir_cada_horas": 24}}
         return ejecutar(V.vigilar(self.consulta, self.enviar, AHORA + timedelta(hours=horas), cfg))
+
+    def test_sin_nada_de_hoy_en_dia_laborable_avisa_aunque_la_ingesta_figure_al_dia(self):
+        self.novedades_hoy = 0
+        r = self.paso()
+        self.assertEqual((r["aviso"], len(r["problemas"])), ("problema", 1))
+        self.assertIn("Hoy no ha entrado ninguna licitación", r["problemas"][0])
+        self.assertEqual(self.consultas_hoy[0]["limit"], 1)
+        self.assertTrue(self.consultas_hoy[0]["actualizada_desde"].startswith("2026-"))
+        self.novedades_hoy = 7
+        self.assertEqual(self.paso(1)["aviso"], "recuperado")
 
     def test_avisa_una_vez_recuerda_y_avisa_al_recuperarse(self):
         self.assertEqual(self.paso()["aviso"], None)                                   # todo bien
