@@ -149,6 +149,23 @@ def pedir_viabilidad(self, lid: int) -> dict:
     return {"estado": "ok", "recomendacion": informe["recomendacion"]}
 
 
+@app.task(name="cerebro.tareas.celery_app.redactar_oferta", bind=True, max_retries=4)
+def redactar_oferta(self, ejecucion_id: int) -> dict:
+    """Una persona ha pulsado «Preparar la oferta»: los agentes de Licitaciones redactan el borrador, uno detrás de otro (cerebro/licitaciones/redaccion.py). Si el modelo no está
+    disponible se reintenta con espera creciente SIN repetir los pasos ya hechos; si no hay manera, la ejecución se cierra con lo que haya y lo escrito se conserva."""
+    import logging
+    from ..licitaciones import redaccion
+    try:
+        return asyncio.run(redaccion.ejecutar(ejecucion_id, _ejecutar))
+    except redaccion.FALLOS_DEL_MODELO:
+        if self.request.retries < self.max_retries:
+            raise self.retry(countdown=min(60 * 2 ** self.request.retries, 900))
+        return asyncio.run(redaccion.cerrar(ejecucion_id, "El modelo de IA no está disponible ahora: lo hecho se conserva; vuelve a pulsar el botón en unos minutos"))
+    except Exception as e:      # noqa: BLE001 — la ejecución no puede quedarse «en curso» para siempre
+        logging.getLogger("cerebro.tareas").warning("redactar_oferta %s: %s: %s", ejecucion_id, type(e).__name__, e)
+        return asyncio.run(redaccion.cerrar(ejecucion_id, f"No se ha podido terminar la redacción ({type(e).__name__})"))
+
+
 @app.task(name="cerebro.tareas.celery_app.purgar_subidas")
 def purgar_subidas() -> dict:
     """Cada noche borra los documentos subidos al chat que pasan de `subidas.retencion_dias` (config/integraciones.yaml): el fichero y su texto."""

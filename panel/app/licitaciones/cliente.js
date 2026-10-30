@@ -51,9 +51,16 @@ export async function pedirCerebro(ruta, opciones = {}) {
     throw { status: 401 };
   }
   if (!r.ok) {
-    let detalle = "";
-    try { const j = await r.json(); if (typeof j?.detail === "string") detalle = j.detail.slice(0, 300); } catch { /* sin cuerpo legible */ }
-    throw { status: r.status, detalle };
+    let detalle = "", empresas;
+    try {
+      const j = await r.json();
+      if (typeof j?.detail === "string") detalle = j.detail.slice(0, 300);
+      else if (j?.detail && typeof j.detail === "object") {            // p. ej. «hay varias empresas en el ERP»: el mensaje y la lista para elegir
+        detalle = String(j.detail.mensaje || "").slice(0, 300);
+        if (Array.isArray(j.detail.empresas)) empresas = j.detail.empresas.slice(0, 50);
+      }
+    } catch { /* sin cuerpo legible */ }
+    throw { status: r.status, detalle, ...(empresas ? { empresas } : {}) };
   }
   return r.json();
 }

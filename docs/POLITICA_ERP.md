@@ -1,7 +1,7 @@
 # Política de acceso al ERP y al CRM: qué puede tocar cada departamento
 
 Fuente de verdad: `config/erp_acceso.yaml` (esta página se generó a partir de él). **Es una propuesta inicial para revisar con la empresa.**
-Para cada departamento: **leer** = puede consultar; **borrador** = además puede crear y modificar en borrador (validar, cancelar y borrar no los puede nadie); **maestros** = datos maestros que solo escribe un proceso ya aprobado por una persona.
+Para cada departamento: **leer** = puede consultar; **borrador** = además puede crear y modificar en borrador (validar, cancelar y borrar no los puede nadie); **maestros** = datos maestros que solo escribe un proceso ya aprobado por una persona; **sistema** = documentos que solo lee un proceso del sistema, con una lista cerrada de campos (los agentes no los ven con la herramienta `erpnext`).
 
 Cómo revisarla: para cada departamento, mira si le sobra algo (principio de mínimo privilegio) o le falta algo que sus agentes necesiten, y contesta las preguntas. Después se edita el YAML y se aplica con:
 ```
@@ -58,6 +58,7 @@ Después, `docker compose up -d --force-recreate --no-deps api worker beat` (la 
 
 - **Leer:** Customer, Contact, Opportunity, Quotation, Project, Task, Item, Item Price, Supplier, Contract
 - **Borrador (crear y modificar):** Opportunity, Quotation, Task
+- **Sistema (solo lo lee el proceso de la documentación administrativa, no los agentes):** Company, Address, Contact. De ahí salen los datos de la sociedad con la que se presenta una oferta (`cerebro/licitaciones/empresa.py`); solo se piden los campos necesarios (nombre, NIF, dirección, contacto del representante…), nunca cuentas bancarias.
 - **Preguntas para decidir:**
   - ¿Necesitan leer facturas anteriores para justificar precios? Hoy no.
 

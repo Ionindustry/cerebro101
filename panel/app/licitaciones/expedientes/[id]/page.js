@@ -2,6 +2,7 @@
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useEffect, useState } from "react";
+import Redaccion from "./Redaccion";
 import { SOBRES_OFERTA, autorSeccionTexto, claseSeccion, estadoSeccionEtiqueta, mensajeOferta, pendientesOferta, precioAEnvio, resumenOfertaTexto, FORMULAS_PRECIO, costeErpTexto, mensajeReglas, reglasAEnvio, reglasAFormulario, cercaniaTexto, mensajeParecidas, motivosTexto, aptitudSimulacion, costeDeTexto, filasDeCurva, mensajeSimulador, probabilidadConRango, porcentaje, CUMPLIMIENTOS, cumplimientoEtiqueta, cumplimientoNecesitaNota, estadoEtiqueta, estadoPliego, estadoRequisito, etiquetaEmbudo, fechaTexto, fichaOrgHref, importeTexto, lecturaPliego, lugarCita, matrizCsv, matrizDe, mensajeEmbudo, mensajePliegos, resumenMatriz, nombreFuente, puedeDescargarPliego, resumenRequisitos, tipoRequisito, urlSegura } from "../../../../lib/licitaciones";
 import { Fallo, Item, pedir, pedirCerebro } from "../../cliente";
 
@@ -250,13 +251,17 @@ function Oferta({ id }) {
       <p className="meta">El borrador de la oferta, por sobres. Los agentes solo escriben <strong>borradores</strong> a partir de los requisitos del pliego que hayas confirmado; tú los revisas, apruebas y fijas el precio. Nada se presenta desde aquí: se exporta a Word para revisarlo, firmarlo y presentarlo.</p>
       {error && !o && <p role="alert" className="lic-error">{mensajeOferta(error.status, error.detalle)}</p>}
       {o && !o.existe && (
-        <div className="lic-fila">
-          <button className="boton si" onClick={preparar} disabled={trabajando}>{trabajando ? "Preparando…" : "Preparar la oferta a partir del pliego"}</button>
-          <span className="ayuda">Mejor después de leer el pliego y confirmar sus requisitos (tarjeta «Pliegos»): las secciones salen de ahí.</span>
-        </div>
+        <>
+          <Redaccion id={id} o={o} alCambiar={cargar} />
+          <div className="lic-fila">
+            <button className="boton no" onClick={preparar} disabled={trabajando}>{trabajando ? "Preparando…" : "Solo crear las secciones (sin agentes)"}</button>
+            <span className="ayuda">Mejor después de leer el pliego y confirmar sus requisitos (tarjeta «Pliegos»): las secciones salen de ahí.</span>
+          </div>
+        </>
       )}
       {o?.existe && (
         <>
+          <Redaccion id={id} o={o} alCambiar={cargar} />
           <p><strong>{resumenOfertaTexto(o)}</strong></p>
           {pendientes.length > 0 && <p className="meta">Falta: {pendientes.join("; ")}.</p>}
           <div className="lic-fila">

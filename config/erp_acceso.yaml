@@ -13,6 +13,8 @@
 #   maestros datos maestros (proveedores, artículos, precios) que SOLO escribe un proceso del sistema que ya ha pasado por una aprobación (p. ej. aplicar una lista de precios
 #            importada). NO se pueden crear con la operación genérica «crear_borrador», así que un agente no da de alta un proveedor ni cambia un precio por su cuenta.
 #            Siempre un subconjunto de «leer».
+#   sistema  documentos que SOLO lee un proceso del sistema, con una lista cerrada de campos (p. ej. los datos de la propia empresa para rellenar la documentación administrativa de una
+#            licitación: cerebro/licitaciones/empresa.py). NO están en «leer»: un agente no puede listarlos ni leerlos con la herramienta «erpnext». Siempre solo lectura.
 #   modo     bloquear (por defecto) | avisar (solo deja constancia en el registro; útil para ver qué se bloquearía)
 # Un departamento que no figura aquí no puede usar el ERP. `User`, `Role`, `Company` y `Bank Account` no están pensados para nadie salvo
 # donde se indica: son de lo primero que se leería para atacar.
@@ -59,6 +61,7 @@ departamentos:
   licitaciones:
     leer: [Customer, Contact, Opportunity, Quotation, Project, Task, Item, Item Price, Supplier, Contract]
     borrador: [Opportunity, Quotation, Task]
+    sistema: [Company, Address, Contact]     # los datos de la empresa (o empresas) del ERP para rellenar las plantillas administrativas; solo los lee cerebro/licitaciones/empresa.py
   legal:
     leer: [Contract, Customer, Supplier, Project, Task, Non Conformance, Quality Goal, Quality Procedure, Quality Review, Quality Action]
     borrador: [Contract, Non Conformance, Quality Goal, Quality Review, Quality Action, Task]

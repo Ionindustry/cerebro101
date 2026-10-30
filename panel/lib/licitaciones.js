@@ -574,6 +574,69 @@ export function mensajeOferta(status, detalle = "") {
   return "No se ha podido completar la operación. Inténtalo de nuevo más tarde.";
 }
 
+// ---- «Preparar la oferta» con los agentes y documentación administrativa (API: /licitaciones/ofertas/{id}/redactar, /ejecucion, /plantillas) ----
+
+const ESTADOS_PASO = { pendiente: "Pendiente", en_curso: "Trabajando…", hecho: "Hecho", parcial: "A medias", omitido: "Nada que hacer", error: "No se ha podido" };
+export const pasoEtiqueta = (e) => ESTADOS_PASO[e] || e || "—";
+export const clasePaso = (e) => (e === "hecho" ? "abierta" : e === "error" ? "anulada" : e === "parcial" || e === "en_curso" ? "aviso" : "");
+
+/** ¿Hay que seguir preguntando por el progreso? Solo mientras los agentes trabajan. */
+export const redaccionEnCurso = (e) => e?.estado === "en_curso";
+
+/** «Terminada: 4 pasos hechos, 1 a medias, 1 con error», o «En curso: 2 de 6 pasos». */
+export function resumenRedaccion(e) {
+  const pasos = Array.isArray(e?.pasos) ? e.pasos : [];
+  if (!e || pasos.length === 0) return "";
+  const n = (...estados) => pasos.filter((p) => estados.includes(p.estado)).length;
+  if (e.estado === "en_curso") return `En curso: ${n("hecho", "parcial", "omitido", "error")} de ${pasos.length} pasos`;
+  const partes = [[n("hecho"), "hecho", "hechos"], [n("parcial"), "a medias", "a medias"], [n("error"), "con error", "con error"], [n("omitido"), "sin nada que hacer", "sin nada que hacer"],
+    [n("pendiente"), "sin hacer", "sin hacer"]].filter(([k]) => k > 0).map(([k, uno, varios]) => `${k} ${k === 1 ? uno : varios}`);
+  const titulo = { completa: "Terminada", parcial: "Terminada a medias", error: "No se ha podido hacer" }[e.estado] || "Terminada";
+  return `${titulo}: ${partes.join(", ")}`;
+}
+
+export function mensajeRedaccion(status, detalle = "") {
+  if (status === 403) return "Solo Dirección y el departamento de Licitaciones pueden preparar la oferta.";
+  if (status === 409 && detalle) return detalle;
+  if (status === 409) return "Ya se está trabajando en esta oferta.";
+  if ((status === 422 || status === 404) && detalle) return detalle;
+  if (status === 503) return detalle || "No se ha podido completar la operación ahora (el ERP, el motor o la cola no responden). Inténtalo en unos minutos.";
+  return "No se ha podido completar la operación. Inténtalo de nuevo más tarde.";
+}
+
+const ESTADOS_PLANTILLA = { lista_para_firma: "Lista para firmar", faltan_datos: "Faltan datos", sin_huecos: "Sin huecos que rellenar", error: "No se ha podido rellenar" };
+export const plantillaEtiqueta = (e) => ESTADOS_PLANTILLA[e] || e || "—";
+export const clasePlantilla = (e) => (e === "lista_para_firma" ? "abierta" : e === "error" ? "anulada" : e === "faltan_datos" ? "aviso" : "");
+
+/** Los huecos que impiden firmar (los demás —la fecha— se completan al firmar). */
+export const pendientesQueBloquean = (d) => (Array.isArray(d?.pendientes) ? d.pendientes.filter((p) => p.bloquea) : []);
+
+/** «2 listas para firmar · 1 con datos pendientes», o vacío. */
+export function resumenPlantillas(r) {
+  const x = r?.resumen;
+  if (!x) return "";
+  return [[x.lista_para_firma, "lista para firmar", "listas para firmar"], [x.faltan_datos, "con datos pendientes", "con datos pendientes"], [x.error, "con error", "con error"],
+    [x.sin_huecos, "sin huecos", "sin huecos"]].filter(([n]) => n > 0).map(([n, uno, varios]) => `${n} ${n === 1 ? uno : varios}`).join(" · ");
+}
+
+/** Los huecos de un documento agrupados por anexo o modelo, en el orden en que salen: [{anexo, rellenados, pendientes}]. El anexo vacío es lo que no cuelga de ningún título. */
+export function agruparPorAnexo(d) {
+  const grupos = new Map();
+  const grupo = (a) => { const k = String(a || ""); if (!grupos.has(k)) grupos.set(k, { anexo: k, rellenados: [], pendientes: [] }); return grupos.get(k); };
+  for (const r of d?.rellenados || []) grupo(r.anexo).rellenados.push(r);
+  for (const p of d?.pendientes || []) grupo(p.anexo).pendientes.push(p);
+  return [...grupos.values()];
+}
+
+/** De dónde sale un dato rellenado, en una frase corta («ERP · Company 101 S.L. · tax_id» → «ERP: tax_id de 101 S.L.»). */
+export function origenTexto(o) {
+  const m = /^ERP · (\S+) (.+) · (\S+)$/.exec(String(o || ""));
+  return m ? `ERP: ${m[3]} de ${m[2]}` : String(o || "");
+}
+
+/** Qué sociedad se manda: la elegida en el selector, o la ya guardada en la oferta, o ninguna (si el ERP solo tiene una, el servidor la usa). */
+export const empresaParaEnviar = (elegida, guardada) => (elegida || guardada || undefined);
+
 /** Qué falta antes de presentar la oferta: lista de frases (vacía si está todo). */
 export function pendientesOferta(o) {
   if (!o?.existe) return [];

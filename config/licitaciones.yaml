@@ -92,3 +92,14 @@ vigilante:
   horas_sin_ingesta: 6        # una fuente sin ingesta correcta durante más de estas horas se da por atascada
   repetir_cada_horas: 24      # mientras siga atascado, recordarlo cada tanto
   destinatarios: [soporte@101.cat]   # direcciones de la empresa (dominios de config/buzones.yaml → avisos); vacío = sin correo
+
+# Datos de la empresa para rellenar la documentación administrativa de una oferta (cerebro/licitaciones/empresa.py). SALEN DEL ERP (Company, Address y Contact): así toda la información está
+# en el mismo sitio y no hay otro fichero que mantener. Aquí solo se dice DÓNDE está cada cosa. Si falta un dato, la plantilla queda con ese hueco y el panel dice qué hay que completar en el ERP.
+# Si hay varias empresas en el ERP, se elige con cuál se presenta cada oferta. El representante es el contacto de la empresa (Contact enlazado a la Company) cuyo cargo (designation) es uno de estos.
+empresa:
+  departamento_erp: licitaciones        # el usuario técnico del ERP con el que se leen (necesita «sistema» en config/erp_acceso.yaml)
+  designaciones: [administrador, apoderado, representante legal, gerente, director general, consejero delegado]
+  campos:                               # nombre del campo en ERPNext; los personalizados se cambian aquí (si el campo no existe en tu ERP, el dato se da por no informado)
+    empresa_registro: registration_details       # Company: datos de inscripción en el Registro Mercantil
+    representante_dni: dni                       # Contact: campo personalizado con el DNI/NIE del representante
+    representante_poder: poder                   # Contact: campo personalizado con los datos del poder (escritura, notario, fecha)

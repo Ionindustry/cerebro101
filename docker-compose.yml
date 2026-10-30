@@ -72,6 +72,7 @@ x-api: &api
     CLAMD_PORT: "${CLAMD_PORT:-3310}"
     PLIEGOS_DIR: "${PLIEGOS_DIR:-/datos/licitaciones/pliegos}"      # dónde se guardan (volumen datos)
     SUBIDAS_DIR: "${SUBIDAS_DIR:-/datos/subidas}"                     # documentos que se suben al chat (volumen datos)
+    OFERTAS_DIR: "${OFERTAS_DIR:-/datos/licitaciones/ofertas}"       # documentación administrativa rellenada de las ofertas (volumen datos)
     # Calendarios (los buzones de correo van por secretos/buzones.env, no por el .env)
     CALENDARIO_USUARIO: "${CALENDARIO_USUARIO:-}"
     CALENDARIO_CLAVE: "${CALENDARIO_CLAVE:-}"
