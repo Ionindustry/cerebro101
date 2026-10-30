@@ -20,6 +20,7 @@ from psycopg.types.json import Jsonb
 
 from decimal import Decimal
 
+from . import conversion as C
 from . import empresa as E
 from . import importes as I
 from . import formularios as F
@@ -30,7 +31,10 @@ log = logging.getLogger("cerebro.licitaciones.plantillas")
 
 RAIZ = Path(os.environ.get("OFERTAS_DIR", "/datos/licitaciones/ofertas"))
 CLAVES_LICITACION = {"licitacion.expediente": "la ficha de la licitación (número de expediente)", "licitacion.objeto": "la ficha de la licitación (título)",
-                     "licitacion.organo": "la ficha de la licitación (órgano de contratación)"}
+                     "licitacion.organo": "la ficha de la licitación (órgano de contratación)", "licitacion.cpv": "la ficha de la licitación (códigos CPV)",
+                     "licitacion.procedimiento": "la ficha de la licitación (procedimiento)", "licitacion.importe": "la ficha de la licitación (valor estimado, sin IVA)",
+                     "licitacion.plazo": "la ficha de la licitación (fin del plazo de presentación)"}
+DEUC_N = 0                      # el DEUC base de la sociedad se trata como «documento 0» de la oferta (no es un documento del pliego)
 CLAVES_OFERTA = {
     "oferta.precio": "la tarjeta «Oferta» (el precio sin IVA lo fija una persona con «Fijar precio»)",
     "oferta.iva_pct": "la tarjeta «Oferta» (el IVA que fija una persona junto al precio)",
@@ -42,7 +46,7 @@ CLAVES_OFERTA = {
 CLAVES_VALIDAS = set(E.CLAVES) | set(CLAVES_LICITACION) | set(CLAVES_OFERTA) | {F.SIN_DATO}
 MAX_PLANTILLAS = 40
 RE_MODELO = re.compile(r"(?i)anexo|annex|anexe|modelo|model|declaraci|deuc|formulari|plantilla")
-FORMATOS_SIN_SOPORTE = ("odt", "ods", "xlsx")
+FORMATOS_SIN_SOPORTE = ("ods", "xlsx")
 MIME = {"docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document", "pdf": "application/pdf"}
 NOTA_FIRMA = ("Revisa cada documento y fírmalo con tu certificado digital (por ejemplo con AutoFirma). Los huecos de fecha se completan al firmar. "
               "Nada se firma ni se presenta desde aquí.")
@@ -62,7 +66,30 @@ def datos_licitacion(ficha: dict) -> dict[str, dict]:
         v = re.sub(r"\s+", " ", str(valor or "")).strip()[:400]
         if v:
             out[clave] = {"valor": v, "origen": origen}
+    f = ficha or {}
+    extra = {"licitacion.cpv": ", ".join(str(c) for c in (f.get("cpv") or [])[:8]), "licitacion.procedimiento": f.get("procedimiento"),
+             "licitacion.plazo": _fecha_es((f.get("plazos") or {}).get("presentacion"))}
+    importes = f.get("importes") or []
+    elegido = next((i for i in importes if isinstance(i, dict) and i.get("significado") == "valor_estimado"), None)
+    if elegido and elegido.get("moneda") in (None, "EUR"):
+        try:
+            extra["licitacion.importe"] = f"{I.formato_es(Decimal(str(elegido['valor'])))} €"
+        except (ArithmeticError, ValueError, KeyError, TypeError):
+            pass
+    for clave, valor in extra.items():
+        v = re.sub(r"\s+", " ", str(valor or "")).strip()[:400]
+        if v:
+            out[clave] = {"valor": v, "origen": origen}
     return out
+
+
+def _fecha_es(t) -> str:
+    """dd/mm/aaaa de una fecha ISO (la del plazo de la ficha); vacío si no es una fecha."""
+    from datetime import datetime
+    try:
+        return datetime.fromisoformat(str(t)).strftime("%d/%m/%Y")
+    except ValueError:
+        return ""
 
 
 def _donde(clave: str) -> str:
@@ -169,6 +196,7 @@ async def _procesar(motor_id: str, doc: dict, fuente: dict[str, dict], empresa: 
         return None
     asignaciones = {**await _asignaciones_previas(motor_id, doc["id"], doc.get("miembro", "")), **{k: v for k, v in nuevas.items() if v in CLAVES_VALIDAS}}
     valores, rellenados, pendientes = clasificar(det["campos"], asignaciones, fuente)
+    avisos = det["avisos"] + ([doc["conversion"]] if doc.get("conversion") else [])
     salida, sha, tam = "", "", 0
     if valores:
         nombre = _nombre_salida(doc["n"], doc.get("miembro") or doc["nombre"], doc["formato"], doc.get("sub"))
@@ -179,16 +207,26 @@ async def _procesar(motor_id: str, doc: dict, fuente: dict[str, dict], empresa: 
         os.chmod(destino, 0o600)
         salida, sha, tam = nombre, hashlib.sha256(datos).hexdigest(), len(datos)
     estado = estado_de(det["campos"], valores, pendientes)
-    await _guardar(motor_id, doc, estado, empresa, salida, sha, tam, rellenados, pendientes, det["avisos"], asignaciones, por)
+    await _guardar(motor_id, doc, estado, empresa, salida, sha, tam, rellenados, pendientes, avisos, asignaciones, por)
     log.info("plantillas: %s rellena «%s» de %s con la sociedad %s → %s (%d huecos rellenados, %d pendientes)", por, doc["nombre"], motor_id, empresa, estado, len(rellenados), len(pendientes))
     return {"documento": doc["n"], "estado": estado}
+
+
+async def _como_word(motor_id: str, doc: dict) -> dict:
+    """Si el documento es de Word antiguo u OpenDocument (doc, odt, rtf), lo convierte a .docx (conversion.py) y devuelve el documento ya como Word; si no, lo devuelve igual."""
+    if doc["formato"] not in C.CONVERTIBLES:
+        return doc
+    origen = Path(doc["ruta"]) if doc.get("ruta") else P.carpeta(motor_id, "limpio") / f"{doc['sha256']}.{doc['formato']}"
+    destino = RAIZ / motor_id / "_conv" / f"{doc['sha256']}-{doc.get('sub') or 0}.docx"
+    await asyncio.to_thread(C.a_docx, origen, destino, doc["formato"])
+    return {**doc, "formato": "docx", "ruta": str(destino), "conversion": f"Se ha convertido de {doc['formato']} a Word para poder rellenarlo: revisa que el formato se ha conservado antes de firmar"}
 
 
 async def _tratar(motor_id: str, doc: dict, fuente: dict, empresa: str, asignaciones: dict, usuario: str, explicito: bool, miembro: str | None = None) -> None:
     """Un documento del pliego: si es Word o PDF se rellena; si es un ZIP de documentación se abre y se rellena cada anexo/modelo de dentro; si es un modelo en un formato que no se rellena solo
     (odt, xlsx…) se deja constancia para que nadie lo pase por alto."""
-    if doc["formato"] in ("docx", "pdf"):
-        await _procesar(motor_id, doc, fuente, empresa, asignaciones, usuario, explicito)
+    if doc["formato"] in ("docx", "pdf") + C.CONVERTIBLES:
+        await _procesar(motor_id, await _como_word(motor_id, doc), fuente, empresa, asignaciones, usuario, explicito)
     elif doc["formato"] == "zip":
         origen = P.carpeta(motor_id, "limpio") / f"{doc['sha256']}.zip"
         res = await asyncio.to_thread(F.ejecutar_aislado, {"accion": "extraer_zip", "ruta": str(origen), "formato": "zip", "destino": str(RAIZ / motor_id / "_zip" / doc["sha256"])})
@@ -199,6 +237,11 @@ async def _tratar(motor_id: str, doc: dict, fuente: dict, empresa: str, asignaci
             if miembro and m["miembro"] != miembro:
                 continue
             sub = {**doc, "nombre": f"{doc['nombre']} › {m['miembro']}", "miembro": m["miembro"], "formato": m["formato"], "ruta": m["ruta"], "sub": k}
+            try:
+                sub = await _como_word(motor_id, sub)
+            except F.ErrorFormulario as e:
+                await _guardar(motor_id, sub, "error", empresa, "", "", 0, [], [], [str(e)[:300]], {}, usuario)
+                continue
             if await _procesar(motor_id, sub, fuente, empresa, asignaciones, usuario, explicito):
                 hechos += 1
         if res["avisos"] and not miembro:
@@ -209,6 +252,29 @@ async def _tratar(motor_id: str, doc: dict, fuente: dict, empresa: str, asignaci
     elif explicito or RE_MODELO.search(doc["nombre"]):
         aviso = f"Este documento está en formato {doc['formato']} y no se rellena solo: hay que rellenarlo a mano o pedir la versión en Word"
         await _guardar(motor_id, doc, "error", empresa, "", "", 0, [], [], [aviso], {}, usuario)
+
+
+async def _deuc(motor_id: str, fuente: dict, empresa: str, asignaciones: dict, usuario: str, hay_deuc_en_el_pliego: bool) -> None:
+    """El DEUC base de la sociedad (Word adjunto a la Company en el ERP, con los datos de la empresa ya rellenados) se copia y se rellenan SOLO los campos propios del concurso (título, expediente,
+    órgano…); lo demás no se toca. Si la sociedad no tiene DEUC base no se inventa nada: solo se avisa cuando el pliego pide un DEUC."""
+    doc = {"id": DEUC_N, "n": DEUC_N, "nombre": "DEUC", "miembro": "DEUC", "formato": "docx", "sha256": ""}
+    try:
+        base = await E.deuc_base(empresa)
+        if base is None:
+            if hay_deuc_en_el_pliego:
+                await _guardar(motor_id, doc, "error", empresa, "", "", 0, [], [], [f"El pliego pide un DEUC y la sociedad «{empresa}» no tiene el DEUC base: adjúntalo a su ficha de empresa en el ERP (un Word con «DEUC» en el nombre)"],
+                               {}, usuario)
+            return
+        nombre, datos = base
+        sha = hashlib.sha256(datos).hexdigest()
+        ruta = RAIZ / motor_id / "_deuc" / f"{sha}.docx"
+        ruta.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
+        ruta.write_bytes(datos)
+        os.chmod(ruta, 0o600)
+        await _procesar(motor_id, {**doc, "sha256": sha, "ruta": str(ruta), "nombre": f"DEUC ({nombre})"}, fuente, empresa, asignaciones, usuario, True)
+    except (E.ErrorEmpresa, F.ErrorFormulario, OSError) as e:
+        log.warning("plantillas: no se ha podido preparar el DEUC de %s: %s", motor_id, e)
+        await _guardar(motor_id, doc, "error", empresa, "", "", 0, [], [], [str(e)[:300]], {}, usuario)
 
 
 async def preparar(motor_id: str, ficha: dict | None, usuario: str, empresa: str | None = None, n: int | None = None, asignaciones: dict | None = None, miembro: str | None = None) -> dict:
@@ -223,6 +289,9 @@ async def preparar(motor_id: str, ficha: dict | None, usuario: str, empresa: str
         await O.fijar_empresa(motor_id, nombre)
     datos = await E.datos(nombre)
     fuente = {**datos["valores"], **datos_licitacion(ficha or {}), **await datos_oferta(motor_id)}
+    if n == DEUC_N and n is not None:
+        await _deuc(motor_id, fuente, nombre, asignaciones or {}, str(usuario), True)
+        return await listar(motor_id)
     docs = await _candidatos(motor_id, n)
     if asignaciones and docs and any(d["formato"] == "zip" for d in docs) and not miembro:
         raise ErrorPlantilla("Ese documento es un ZIP con varios anexos: indica de cuál (miembro) son los huecos que eliges")
@@ -234,6 +303,8 @@ async def preparar(motor_id: str, ficha: dict | None, usuario: str, empresa: str
         except (F.ErrorFormulario, OSError) as e:
             log.warning("plantillas: no se ha podido rellenar «%s» de %s: %s", doc["nombre"], motor_id, e)
             await _guardar(motor_id, doc, "error", nombre, "", "", 0, [], [], [str(e)[:300]], {}, str(usuario))
+    if n is None:
+        await _deuc(motor_id, fuente, nombre, {}, str(usuario), any(re.search(r"(?i)deuc|espd", d["nombre"]) for d in docs))
     return await listar(motor_id)
 
 

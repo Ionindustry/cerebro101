@@ -84,6 +84,7 @@ x-api: &api
     LANGFUSE_PUBLIC_KEY: "${LANGFUSE_PUBLIC_KEY:-}"
     LANGFUSE_SECRET_KEY: "${LANGFUSE_SECRET_KEY:-}"
     LANGFUSE_REGISTRAR_CONTENIDO: "${LANGFUSE_REGISTRAR_CONTENIDO:-true}"
+    CONVERSOR_URL: "${CONVERSOR_URL:-http://conversor:8080}"       # servicio que convierte modelos .doc/.odt/.rtf a Word (LibreOffice, aparte y sin red)
   # secretos/ lleva las contraseñas de los buzones de correo (ver docs/CORREO.md); solo la API y el worker lo montan
   volumes: ["./config:/app/config:ro", "datos:/datos", "./secretos:/run/secretos:ro"]
   depends_on:
@@ -91,7 +92,7 @@ x-api: &api
     redis: {condition: service_started}
     ollama: {condition: service_started}
     migraciones: {condition: service_completed_successfully}
-  networks: [cerebro]
+  networks: [cerebro, conversion]
   restart: unless-stopped
 
 x-langfuse-depende: &langfuse-depende
@@ -171,6 +172,19 @@ services:
     <<: *api
     build: {context: ., dockerfile: api/Dockerfile}
     ports: ["127.0.0.1:8000:8000"]
+
+  conversor:              # LibreOffice aparte (modelos .doc, .odt, .rtf → .docx): red interna SIN salida, sin acceso a la base de datos ni al ERP, sistema de ficheros de solo lectura
+    image: "${CEREBRO_IMAGENES:-ghcr.io/ionindustry}/cerebro101-conversor:${CEREBRO_VERSION:-latest}"
+    build: {context: ., dockerfile: servicios/conversor/Dockerfile}
+    read_only: true
+    tmpfs: ["/tmp:size=512m,mode=1777"]
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    mem_limit: 2g
+    cpus: 2
+    pids_limit: 256
+    networks: [conversion]
+    restart: unless-stopped
 
   worker:                 # tareas pedidas y programadas; Jarvis lo atiende la API directamente
     <<: *api
@@ -403,3 +417,4 @@ volumes: {pgdata: {}, ollama: {}, datos: {}, whisper: {}, agent-reach: {}, langf
 
 networks:
   cerebro: {name: cerebro}
+  conversion: {name: cerebro-conversion, internal: true}      # sin salida a internet: solo la API y el conversor

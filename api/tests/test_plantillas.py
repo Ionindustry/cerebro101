@@ -56,11 +56,14 @@ class ERPFalso:
     def __init__(self, sin_personalizados=False):
         self.sin_personalizados = sin_personalizados
         self.llamadas = []
+        self.ficheros = []                      # los File adjuntos a la Company (DEUC base…)
 
     async def __call__(self, doctype, dep, filtros=None, campos=None, limite=20):
         self.llamadas.append((doctype, dep, tuple(campos or [])))
         if self.sin_personalizados and any(c in (campos or []) for c in ("registration_details", "dni", "poder")):
             raise httpx.HTTPStatusError("x", request=httpx.Request("GET", "http://x"), response=httpx.Response(417))
+        if doctype == "File":
+            return [f for f in self.ficheros if f["attached_to_name"] == filtros[1][2]]
         if doctype == "Company":
             return [c for c in EMPRESAS if not filtros or c["name"] == filtros[0][2]]
         nombre = next(f[3] for f in filtros if f[1] == "link_name")
@@ -113,6 +116,45 @@ class TestEmpresa(unittest.TestCase):
             ejecutar(E.empresas())
         with mock.patch.object(erpnext, "listar_sistema", mock.AsyncMock(side_effect=PermissionError("no permitido"))), self.assertRaisesRegex(E.ErrorEmpresa, "no permitido"):
             ejecutar(E.empresas())
+
+
+class TestDeucBase(unittest.TestCase):
+    def fichero(self, nombre, modificado, empresa="101 Telecom S.L."):
+        return {"attached_to_name": empresa, "name": nombre, "file_name": nombre, "file_url": f"/private/files/{nombre}", "modified": modificado}
+
+    def con(self, ficheros, contenido=b"PK\x03\x04docx"):
+        erp = ERPFalso()
+        erp.ficheros = ficheros
+        descargar = mock.AsyncMock(return_value=contenido)
+        return erp, descargar, mock.patch.object(erpnext, "listar_sistema", erp), mock.patch.object(erpnext, "descargar_sistema", descargar)
+
+    def test_elige_el_word_mas_reciente_con_deuc_en_el_nombre_y_lo_lee_con_la_clave_del_departamento(self):
+        erp, descargar, a, b = self.con([self.fichero("DEUC 2024.docx", "2024-01-01"), self.fichero("DEUC 2026.docx", "2026-03-01"), self.fichero("Escrituras.docx", "2026-05-01"),
+                                         self.fichero("DEUC.pdf", "2026-06-01")])
+        with a, b:
+            nombre, datos = ejecutar(E.deuc_base("101 Telecom S.L."))
+        self.assertEqual((nombre, datos), ("DEUC 2026.docx", b"PK\x03\x04docx"))
+        descargar.assert_awaited_once_with("/private/files/DEUC 2026.docx", "licitaciones", E.MAX_DEUC)
+        self.assertEqual(erp.llamadas[0][:2], ("File", "licitaciones"))
+
+    def test_sin_deuc_no_hay_nada_y_cada_sociedad_tiene_el_suyo(self):
+        _, descargar, a, b = self.con([self.fichero("Escrituras.docx", "2026-05-01"), self.fichero("DEUC Ion.docx", "2026-05-01", "Ion Industry S.A.")])
+        with a, b:
+            self.assertIsNone(ejecutar(E.deuc_base("101 Telecom S.L.")))
+            self.assertEqual(ejecutar(E.deuc_base("Ion Industry S.A."))[0], "DEUC Ion.docx")
+        descargar.assert_awaited_once()
+
+    def test_un_fichero_que_no_es_un_word_no_se_admite(self):
+        _, _, a, b = self.con([self.fichero("DEUC.docx", "2026-01-01")], contenido=b"<html>")
+        with a, b, self.assertRaisesRegex(E.ErrorEmpresa, "no es un Word"):
+            ejecutar(E.deuc_base("101 Telecom S.L."))
+
+    def test_rutas_de_fichero_solo_dentro_de_files(self):
+        for mala in ("/api/method/frappe.client.get", "/private/files/../../etc/passwd", "http://otro/x", "/files/a?x=1"):
+            with self.assertRaises(PermissionError, msg=mala):
+                ejecutar(erpnext.descargar_sistema(mala, "licitaciones"))
+        with self.assertRaises(PermissionError):
+            ejecutar(erpnext.descargar_sistema("/files/a.docx", "comercial"))          # solo quien tiene «File» en «sistema»
 
 
 class TestClasificar(unittest.TestCase):
@@ -334,13 +376,97 @@ class TestBaseDeDatos(unittest.TestCase):
         self.assertTrue(any(x["valor"] == "Girona" for x in por["Anexo II.docx"]["rellenados"] if x["etiqueta"] == "dato raro"))
         self.assertFalse(any(x["etiqueta"] == "dato raro" for x in por["Anexo I.docx"]["rellenados"]))        # el otro anexo no se toca
 
-    def test_un_modelo_en_odt_o_excel_deja_constancia_y_lo_demas_no(self):
-        self.documento(1, "Anexo II - Modelo de proposición.odt", "odt", lambda r: r.write_bytes(b"PK odt"))
-        self.documento(2, "Memoria descriptiva.xlsx", "xlsx", lambda r: r.write_bytes(b"PK xlsx"))
+    def test_un_modelo_en_excel_deja_constancia_y_lo_demas_no(self):
+        self.documento(1, "Anexo II - Modelo de oferta.xlsx", "xlsx", lambda r: r.write_bytes(b"PK xlsx"))
+        self.documento(2, "Memoria descriptiva.xlsx", "xlsx", lambda r: r.write_bytes(b"PK xlsx memoria"))
         r = self.preparar(empresa="101 Telecom S.L.")
         self.assertEqual([(d["documento"], d["estado"]) for d in r["documentos"]], [(1, "error")])      # solo el que parece un modelo
-        self.assertIn("odt", r["documentos"][0]["avisos"][0])
+        self.assertIn("xlsx", r["documentos"][0]["avisos"][0])
         self.assertIn("Word", r["documentos"][0]["avisos"][0])
+
+    def test_un_modelo_en_odt_se_convierte_a_word_se_rellena_y_lo_dice(self):
+        self.documento(1, "Anexo I - Declaración.odt", "odt", lambda r: r.write_bytes(b"PK odt"))
+        convertidos = []
+
+        def convertir(origen, destino, formato):
+            convertidos.append(formato)
+            destino.parent.mkdir(parents=True, exist_ok=True)
+            docx(destino)
+            return destino
+        with mock.patch.object(PL.C, "a_docx", convertir):
+            d = self.preparar(empresa="101 Telecom S.L.")["documentos"][0]
+        self.assertEqual(convertidos, ["odt"])
+        self.assertEqual((d["formato"], d["fichero"].endswith(".docx")), ("docx", True))
+        self.assertTrue(d["rellenados"])
+        self.assertTrue(any("convertido de odt a Word" in a for a in d["avisos"]))
+
+    def test_si_la_conversion_falla_queda_como_error_con_su_motivo(self):
+        self.documento(1, "Anexo I - Declaración.odt", "odt", lambda r: r.write_bytes(b"PK odt"))
+
+        def convertir(origen, destino, formato):
+            raise F.ErrorFormulario("El servicio de conversión a Word no responde")
+        with mock.patch.object(PL.C, "a_docx", convertir):
+            d = self.preparar(empresa="101 Telecom S.L.")["documentos"][0]
+        self.assertEqual(d["estado"], "error")
+        self.assertIn("no responde", d["avisos"][0])
+
+    DEUC = ("<w:p><w:r><w:t>PARTE I: INFORMACIÓN SOBRE EL PROCEDIMIENTO DE CONTRATACIÓN</w:t></w:r></w:p>"
+            '<w:p><w:r><w:t xml:space="preserve">Nombre oficial: </w:t></w:r><w:r><w:t>__________</w:t></w:r></w:p>'
+            '<w:p><w:r><w:t xml:space="preserve">Título o breve descripción de la contratación: </w:t></w:r><w:r><w:t>__________</w:t></w:r></w:p>'
+            '<w:p><w:r><w:t xml:space="preserve">Número de referencia del expediente asignado por el poder adjudicador (si procede): </w:t></w:r><w:r><w:t>__________</w:t></w:r></w:p>'
+            "<w:p><w:r><w:t>PARTE II: INFORMACIÓN SOBRE EL OPERADOR ECONÓMICO</w:t></w:r></w:p>"
+            '<w:p><w:r><w:t xml:space="preserve">Nombre: 101 Telecomunicaciones &amp; Seguridad, S.L.</w:t></w:r></w:p>')
+
+    def poner_deuc(self, contenido=None, nombre="DEUC 101.docx"):
+        r = erpnext.listar_sistema.ficheros = [{"attached_to_name": "101 Telecom S.L.", "name": nombre, "file_name": nombre, "file_url": f"/private/files/{nombre}", "modified": "2026-01-01"}]
+        if contenido is None:
+            ruta = self.dir / "deuc-base.docx"
+            docx(ruta, self.DEUC)
+            contenido = ruta.read_bytes()
+        p = mock.patch.object(erpnext, "descargar_sistema", mock.AsyncMock(return_value=contenido))
+        p.start()
+        self.addCleanup(p.stop)
+        return r
+
+    def test_el_deuc_base_de_la_sociedad_se_copia_y_solo_se_rellenan_los_campos_del_concurso(self):
+        self.poner_deuc()
+        r = self.preparar(empresa="101 Telecom S.L.")
+        d = next(x for x in r["documentos"] if x["documento"] == 0)
+        self.assertEqual((d["miembro"], d["fichero"]), ("DEUC", "00 - DEUC (rellenado).docx"))
+        dados = {x["clave"]: x["valor"] for x in d["rellenados"]}
+        self.assertEqual(dados, {"licitacion.organo": "Ajuntament de Girona", "licitacion.objeto": "Videovigilancia urbana", "licitacion.expediente": "2026/045"})
+        self.assertEqual(d["estado"], "lista_para_firma")
+        self.assertEqual(d["pendientes"], [])
+
+    def test_el_deuc_se_puede_rehacer_con_el_documento_cero_y_no_se_toca_el_resto(self):
+        self.documento(1, "Anexo I - Declaración responsable.docx", "docx", docx)
+        self.poner_deuc()
+        self.preparar(empresa="101 Telecom S.L.")
+        r = self.preparar(empresa="101 Telecom S.L.", n=0)
+        self.assertEqual(sorted(d["documento"] for d in r["documentos"]), [0, 1])
+
+    def test_sin_deuc_base_solo_se_avisa_si_el_pliego_pide_un_deuc(self):
+        self.documento(1, "Anexo I - Declaración responsable.docx", "docx", docx)
+        r = self.preparar(empresa="101 Telecom S.L.")
+        self.assertEqual([d["documento"] for d in r["documentos"]], [1])             # no hay DEUC y el pliego no lo pide: nada
+        self.documento(2, "Modelo DEUC.xlsx", "xlsx", lambda r: r.write_bytes(b"PK deuc"))
+        r = self.preparar(empresa="101 Telecom S.L.")
+        d = next(x for x in r["documentos"] if x["documento"] == 0)
+        self.assertEqual(d["estado"], "error")
+        self.assertIn("DEUC base", d["avisos"][0])
+
+    def test_un_deuc_base_roto_queda_como_error_sin_tumbar_lo_demas(self):
+        self.documento(1, "Anexo I - Declaración responsable.docx", "docx", docx)
+        self.poner_deuc(contenido=b"esto no es un word")
+        r = self.preparar(empresa="101 Telecom S.L.")
+        self.assertEqual({d["documento"]: d["estado"] for d in r["documentos"]}[0], "error")
+        self.assertIn(1, [d["documento"] for d in r["documentos"]])
+
+    def test_los_datos_de_la_licitacion_para_el_deuc(self):
+        f = {"titulo": "Obra", "expediente": "X/1", "comprador": {"nombre": "Ajuntament"}, "cpv": ["32323500", "35120000"], "procedimiento": "abierto",
+             "plazos": {"presentacion": "2026-11-20T09:00:00+00:00"}, "importes": [{"valor": "1234567.5", "moneda": "EUR", "significado": "valor_estimado"}]}
+        d = {k: v["valor"] for k, v in PL.datos_licitacion(f).items()}
+        self.assertEqual((d["licitacion.cpv"], d["licitacion.procedimiento"], d["licitacion.plazo"], d["licitacion.importe"]), ("32323500, 35120000", "abierto", "20/11/2026", "1.234.567,50 €"))
 
     def test_los_huecos_se_agrupan_por_anexo(self):
         self.documento(1, "Documentación administrativa.docx", "docx", lambda r: docx(r, "<w:p><w:r><w:t>ANEXO I. DECLARACIÓN</w:t></w:r></w:p>" + CUERPO_SIMPLE + "<w:p><w:r><w:t>ANEXO II. MODELO DE OFERTA</w:t></w:r></w:p>" + CUERPO_SIMPLE))
@@ -416,7 +542,7 @@ class TestHerramienta(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "asignaciones"):
             ejecutar(herramienta.rellenar(ID, 1, {"t1": 5}))
         with self.assertRaisesRegex(ValueError, "documento"):
-            ejecutar(herramienta.rellenar(ID, 0, {}))
+            ejecutar(herramienta.rellenar(ID, -1, {}))
 
     def test_esta_registrada_con_el_esquema_que_ve_el_modelo(self):
         from cerebro.herramientas import base, esquemas

@@ -27,8 +27,8 @@ docker compose "${MOTOR[@]}" up -d --build ingestor proyector vectorizador api
 
 echo "→ Cerebro: imágenes de la API y del panel"
 if [ "$CONSTRUIR" = 1 ]; then
-  docker compose build api panel
-elif ! docker compose pull api panel; then
+  docker compose build api panel conversor
+elif ! docker compose pull api panel conversor; then
   cat >&2 <<'AYUDA'
 
 No se han podido descargar las imágenes del Cerebro. Causas habituales:
@@ -41,6 +41,6 @@ AYUDA
 fi
 
 echo "→ Cerebro: reiniciando con las imágenes nuevas"
-docker compose up -d --no-build api worker beat panel licitaciones-eventos
+docker compose up -d --no-build api worker beat panel licitaciones-eventos conversor
 docker compose ps --format "table {{.Name}}\t{{.Status}}" | head -30
 echo "Listo. Versión del código: $(git rev-parse --short HEAD)"

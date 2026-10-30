@@ -573,3 +573,22 @@ Cada licitación que una persona decide estudiar es un **trato** (CRM Deal) del 
 - **El panel** muestra en el embudo el enlace al trato y el botón «Seguir en el CRM» para las que ya se estudiaban antes de conectarlo.
 - **Si el CRM falla** no se pierde nada: lo que hizo la persona ya está guardado, el fallo queda en el registro y el trato se crea o se pone al día en la siguiente anotación (o con el botón).
 - **Por verificar con el CRM real:** los nombres de campo del trato (`expected_deal_value`, `expected_closure_date`, `next_step`) y de las etapas son los de fábrica de Frappe CRM 1.x; si en tu CRM difieren, se cambian en `crm.etapas` o en `datos_trato`.
+
+## Conversión de modelos .doc, .odt y .rtf (servicio `conversor`)
+
+Muchos pliegos traen sus modelos en Word antiguo (`.doc`), OpenDocument (`.odt`) o RTF, solos o dentro de un ZIP. Para rellenarlos como cualquier otro Word, se convierten a `.docx` con LibreOffice (`api/cerebro/licitaciones/conversion.py`).
+
+- **LibreOffice NO corre en la API.** Corre en el contenedor `conversor` (`servicios/conversor`): red interna `cerebro-conversion` SIN salida a internet y sin acceso a la base de datos ni al ERP (solo lo ve la API), sistema de ficheros de solo lectura, sin privilegios, 2 GB de memoria, de una conversión en una. La API le manda el documento y valida lo que vuelve (tiene que ser un Word de verdad).
+- Cada conversión usa un perfil desechable con las macros desactivadas y un entorno vacío; el contenido ha de ser lo que dice el formato.
+- El documento rellenado se entrega en `.docx` y el panel avisa: «Se ha convertido de odt a Word… revisa que el formato se ha conservado antes de firmar». El original no se toca.
+- Siguen sin rellenarse solos: `.xls`, `.xlsx`, `.ods` y PDF sin campos de formulario (se avisa en la tarjeta).
+- La imagen se publica en GitHub (`cerebro101-conversor`) y `./scripts/actualizar.sh` la descarga con las demás. Si el servicio no está, los modelos en esos formatos quedan como «error» con su motivo, como antes.
+
+## DEUC de la sociedad
+
+El DEUC (documento europeo único de contratación) se adjunta **ya rellenado con los datos de la empresa**; en cada concurso solo se completan los campos propios del concurso, y los rellenan los agentes eligiendo la clave de cada hueco (el valor siempre sale de la ficha, nunca lo escribe el modelo).
+
+- **Dónde está:** cada sociedad tiene su DEUC base, un **Word (.docx)** con «DEUC» (o «ESPD») en el nombre, **adjunto a su ficha de empresa (Company) en el ERP** (Adjuntos). Si hay varios, se usa el más reciente. Si hay varias sociedades, cada una tiene el suyo. Se lee con la clave del departamento de Licitaciones (categoría «sistema»: `Company` y `File`), no lo leen los agentes.
+- **Qué se hace:** al preparar la documentación administrativa se copia el DEUC base a la oferta (el original del ERP no se toca) y se rellenan los huecos del concurso: órgano de contratación («Nombre oficial»), título del contrato, número de expediente, CPV, procedimiento, valor estimado y fecha del plazo. Aparece en la tarjeta como «DEUC de la sociedad» (documento 0) y sigue el mismo ciclo que los demás: lo dudoso lo elige un agente con `plantillas.rellenar` (documento 0) o una persona; lo firma una persona.
+- **Si la sociedad no tiene DEUC base:** no se inventa nada. Solo se avisa cuando el pliego trae un DEUC («adjunta el DEUC base a la empresa en el ERP»).
+- **Permisos:** tras actualizar, `python3 scripts/erpnext_roles_cerebro.py --departamento licitaciones` y reiniciar api/worker/beat (el rol necesita leer `File`).

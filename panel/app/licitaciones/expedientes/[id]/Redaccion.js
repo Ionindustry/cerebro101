@@ -128,7 +128,7 @@ export default function Redaccion({ id, o, alCambiar }) {
         return (
           <details key={d.id} className="lic-informe" open={d.estado !== "lista_para_firma" || undefined}>
             <summary><strong>{d.nombre}</strong> <span className={`lic-etiqueta ${clasePlantilla(d.estado)}`}>{plantillaEtiqueta(d.estado)}</span></summary>
-            <p className="meta">Documento {d.documento} del pliego{d.empresa ? ` · rellenado con los datos de ${d.empresa}` : ""} · {d.rellenados.length} {d.rellenados.length === 1 ? "hueco rellenado" : "huecos rellenados"}</p>
+            <p className="meta">{d.documento === 0 ? "DEUC de la sociedad (los campos propios del concurso)" : `Documento ${d.documento} del pliego`}{d.empresa ? ` · rellenado con los datos de ${d.empresa}` : ""} · {d.rellenados.length} {d.rellenados.length === 1 ? "hueco rellenado" : "huecos rellenados"}</p>
             {d.avisos.map((a, i) => <p key={i} className="meta lic-aviso">{a}</p>)}
             {agruparPorAnexo(d).map((g) => (
               <div key={g.anexo || "_"}>

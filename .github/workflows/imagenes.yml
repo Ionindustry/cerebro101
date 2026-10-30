@@ -11,6 +11,7 @@ on:
       - "config/**"
       - "db/**"
       - "scripts/**"
+      - "servicios/conversor/**"
       - ".github/workflows/imagenes.yml"
   push:
     branches: [main]
@@ -20,6 +21,7 @@ on:
       - "config/**"
       - "db/**"
       - "scripts/**"
+      - "servicios/conversor/**"
       - ".github/workflows/imagenes.yml"
   workflow_dispatch:
 
@@ -44,6 +46,7 @@ jobs:
         include:
           - {nombre: api,   contexto: ".",     dockerfile: api/Dockerfile}
           - {nombre: panel, contexto: ./panel, dockerfile: panel/Dockerfile}
+          - {nombre: conversor, contexto: ".", dockerfile: servicios/conversor/Dockerfile}
     steps:
       - uses: actions/checkout@v4
       - name: Nombre de la imagen (ghcr.io exige minúsculas)

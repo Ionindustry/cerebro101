@@ -97,10 +97,15 @@ REGLAS = (
     (r"(telefono|tfno\.?|tel\.?|movil|telefono movil)\s*[:,]?$", "empresa.telefono"),
     (r"(correo( electronico)?|e-?mail|email|direccion de correo( electronico)?)\s*[:,]?$", "empresa.email"),
     (r"(en calidad de|con el cargo de|cargo|caracter|actuando como|en su condicion de|en su calidad de)\s*[:,]?$", "representante.cargo"),
+    (r"(numero de referencia|referencia del expediente)\b.{0,90}$", "licitacion.expediente"),               # DEUC: «Número de referencia del expediente asignado por el poder adjudicador»
+    (r"(organo de contratacion|nombre oficial|poder adjudicador|entidad adjudicadora)\s*[:,]?$", "licitacion.organo"),
+    (r"(titulo o breve descripcion de la contratacion|breve descripcion de la contratacion|titulo de la contratacion|titulo del contrato)\s*[:,]?$", "licitacion.objeto"),
+    (r"(codigos? cpv|cpv)\s*[:,]?$", "licitacion.cpv"),
+    (r"(procedimiento de contratacion|tipo de procedimiento)\s*[:,]?$", "licitacion.procedimiento"),
+    (r"(valor estimado( del contrato)?|presupuesto base de licitacion)\s*[:,]?$", "licitacion.importe"),
     (r"(poder|escritura|notario|protocolo)\b.*$", "representante.poder"),
     (r"(registro mercantil|inscrita en|inscripcion)\b.*$", "empresa.registro"),
     (r"(numero de expediente|n[º°o.]? de expediente|expediente( n[º°o.])?|referencia)\s*[:,]?$", "licitacion.expediente"),
-    (r"(organo de contratacion)\s*[:,]?$", "licitacion.organo"),
     (r"(objeto del contrato|contrato de|licitacion denominada|denominad[ao]|para la contratacion de|objeto)\s*[:,]?$", "licitacion.objeto"),
 )
 _REP = re.compile(r"en representacion|en nombre de|actuando en nombre")
@@ -540,7 +545,8 @@ def rellenar(ruta: Path, formato: str, destino: Path, valores: dict[str, str]) -
 MAX_MIEMBROS = 500
 MAX_MIEMBRO = 60 << 20
 RATIO_MAX = 200
-SIN_SOPORTE = (".doc", ".odt", ".ods", ".xls", ".xlsx", ".docm", ".rtf")
+SIN_SOPORTE = (".ods", ".xls", ".xlsx", ".docm")
+CONVERTIBLES = {".doc": b"\xd0\xcf\x11\xe0", ".odt": b"PK", ".rtf": b"{\\rtf"}      # se convierten a Word antes de rellenarlos (conversion.py)
 
 
 def extraer_zip(ruta: Path, destino: Path) -> dict:
@@ -568,7 +574,7 @@ def extraer_zip(ruta: Path, destino: Path) -> dict:
         if ext in SIN_SOPORTE:
             avisos.append(f"«{nombre[:80]}» no se rellena solo (formato {ext[1:]}): hay que rellenarlo a mano o pedirlo en Word")
             continue
-        if ext not in (".docx", ".pdf"):
+        if ext not in (".docx", ".pdf") and ext not in CONVERTIBLES:
             continue
         if info.file_size > MAX_MIEMBRO or (info.compress_size > 0 and info.file_size / info.compress_size > RATIO_MAX):
             avisos.append(f"«{nombre[:80]}» se ha ignorado: demasiado grande o sospechoso")
@@ -577,6 +583,14 @@ def extraer_zip(ruta: Path, destino: Path) -> dict:
             datos = f.read(MAX_MIEMBRO + 1)
         if len(datos) > MAX_MIEMBRO:
             avisos.append(f"«{nombre[:80]}» se ha ignorado: demasiado grande")
+            continue
+        if ext in CONVERTIBLES:
+            if not datos.startswith(CONVERTIBLES[ext]):
+                avisos.append(f"«{nombre[:80]}» se ha ignorado: su contenido no es {ext[1:]}")
+                continue
+            salida = destino / f"{k:03d}{ext}"
+            salida.write_bytes(datos)
+            miembros.append({"miembro": "/".join(partes)[:200], "formato": ext[1:], "ruta": str(salida), "bytes": len(datos)})
             continue
         formato = "pdf" if datos[:5] == b"%PDF-" else ("docx" if datos[:2] == b"PK" else None)
         if formato is None or (ext == ".docx") != (formato == "docx"):

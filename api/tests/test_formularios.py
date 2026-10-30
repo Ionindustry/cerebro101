@@ -96,6 +96,10 @@ class TestDetectar(unittest.TestCase):
         self.assertEqual(F.emparejar("con NIF", "D. Ana, con NIF"), "representante.dni")
         self.assertEqual(F.emparejar("con NIF", "D. Ana, en representación de X, con NIF"), "empresa.nif")
         self.assertEqual(F.emparejar("NIF/CIF", "", en_tabla=True), "empresa.nif")
+        for etiqueta, clave in (("Nombre oficial:", "licitacion.organo"), ("Título o breve descripción de la contratación:", "licitacion.objeto"),
+                                ("Número de referencia del expediente asignado por el poder adjudicador (si procede):", "licitacion.expediente"),
+                                ("Código CPV:", "licitacion.cpv"), ("Valor estimado:", "licitacion.importe")):
+            self.assertEqual(F.emparejar(etiqueta, ""), clave, etiqueta)
         self.assertEqual(F.emparejar("NIF del representante", "", en_tabla=True), "representante.dni")
         self.assertIsNone(F.emparejar("Observaciones", ""))
 
