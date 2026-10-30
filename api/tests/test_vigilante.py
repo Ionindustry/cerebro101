@@ -126,7 +126,7 @@ class TestFlujo(unittest.TestCase):
         self.enviados.append((mensaje["To"], mensaje["Subject"]))
 
     def paso(self, horas=0, destinatarios=("tec@101.cat",)):
-        cfg = {"vigilante": {"destinatarios": list(destinatarios), "horas_sin_ingesta": 6, "repetir_cada_horas": 24}}
+        cfg = {"vigilante": {"destinatarios": list(destinatarios), "horas_sin_ingesta": 6, "repetir_cada_horas": 24, "hora_control_hoy": 11}}
         return ejecutar(V.vigilar(self.consulta, self.enviar, AHORA + timedelta(hours=horas), cfg))
 
     def test_sin_nada_de_hoy_en_dia_laborable_avisa_aunque_la_ingesta_figure_al_dia(self):

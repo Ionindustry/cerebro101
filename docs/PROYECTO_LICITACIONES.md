@@ -592,3 +592,9 @@ El DEUC (documento europeo único de contratación) se adjunta **ya rellenado co
 - **Qué se hace:** al preparar la documentación administrativa se copia el DEUC base a la oferta (el original del ERP no se toca) y se rellenan los huecos del concurso: órgano de contratación («Nombre oficial»), título del contrato, número de expediente, CPV, procedimiento, valor estimado y fecha del plazo. Aparece en la tarjeta como «DEUC de la sociedad» (documento 0) y sigue el mismo ciclo que los demás: lo dudoso lo elige un agente con `plantillas.rellenar` (documento 0) o una persona; lo firma una persona.
 - **Si la sociedad no tiene DEUC base:** no se inventa nada. Solo se avisa cuando el pliego trae un DEUC («adjunta el DEUC base a la empresa en el ERP»).
 - **Permisos:** tras actualizar, `python3 scripts/erpnext_roles_cerebro.py --departamento licitaciones` y reiniciar api/worker/beat (el rol necesita leer `File`).
+
+## Cuándo llegan las licitaciones de «hoy»
+
+La plataforma de contratación (PLACSP) **publica una sola tanda al día, hacia las 20:15** (hora de Madrid): la cabecera de la fuente lleva `<updated>` de esa hora y cada día se archiva un fichero `…_AAAAMMDD_2015xx.atom`. Por eso **lo de hoy no existe hasta esa publicación** y lo de ayer llega, como pronto, anoche. El ingestor consulta la fuente cada 15 minutos (`LIC_INTERVALO`): mientras la cabecera no cambia, la respuesta es un «304 sin cambios» que no cuesta nada, y en cuanto la plataforma publica, la tanda entra en minutos. Tras una caída (Docker, apagón) se recupera sola: recorre hacia atrás hasta encontrar lo ya ingerido.
+
+El vigilante lo comprueba de dos maneras: antigüedad de la última ingesta correcta (más de 3 h) y, en día laborable pasadas las 22:00, que haya entrado alguna licitación nueva o actualizada ese día.

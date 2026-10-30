@@ -28,7 +28,7 @@ from . import resumen as resumen_mod
 
 log = logging.getLogger("cerebro.licitaciones.vigilante")
 CLAVE = "motor"
-DEFECTO = {"horas_sin_ingesta": 6, "repetir_cada_horas": 24, "destinatarios": [], "hora_control_hoy": 11}
+DEFECTO = {"horas_sin_ingesta": 6, "repetir_cada_horas": 24, "destinatarios": [], "hora_control_hoy": 22}
 
 
 def configuracion(cfg: dict | None = None) -> dict:
@@ -43,11 +43,12 @@ def configuracion(cfg: dict | None = None) -> dict:
 # ---- Lo puro: qué está mal y qué hay que hacer ----
 
 def sin_novedades_hoy(ahora_local: datetime, novedades_hoy: int | None, hora_control: int) -> str | None:
-    """El control de «lo de hoy»: en día laborable, pasada la hora de control, tiene que haber entrado alguna licitación nueva o actualizada hoy (la plataforma publica todos los días
-    laborables). `novedades_hoy` None = no se ha podido contar (no se avisa por eso: lo dice ya «el motor no responde»). Pura."""
+    """El control de «lo de hoy»: la plataforma (PLACSP) publica UNA tanda al día, hacia las 20:15, así que lo de hoy no existe hasta entonces: en día laborable, pasada la hora de control
+    (por defecto las 22:00, con margen sobre esa tanda), tiene que haber entrado alguna licitación nueva o actualizada hoy. `novedades_hoy` None = no se ha podido contar (no se avisa por eso: lo dice ya «el motor no responde»). Pura."""
     if novedades_hoy is None or novedades_hoy > 0 or ahora_local.weekday() >= 5 or ahora_local.hour < hora_control:
         return None
-    return f"Hoy no ha entrado ninguna licitación nueva ni actualizada (son las {ahora_local:%H:%M} de un día laborable): la ingesta no está trayendo lo de hoy."
+    return (f"Hoy no ha entrado ninguna licitación nueva ni actualizada (son las {ahora_local:%H:%M} de un día laborable y la plataforma publica su tanda diaria hacia las 20:15): "
+            "la ingesta no está trayendo lo de hoy.")
 
 
 def problemas(estado: dict | None, horas: float, hoy: str | None = None) -> list[str]:
