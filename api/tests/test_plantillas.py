@@ -16,7 +16,7 @@ try:
     import httpx
     import psycopg
     from cerebro.herramientas import erpnext, plantillas as herramienta
-    from cerebro.licitaciones import empresa as E, formularios as F, ofertas as O, plantillas as PL, pliegos, redaccion as R
+    from cerebro.licitaciones import deuc as D, empresa as E, formularios as F, ofertas as O, plantillas as PL, pliegos, redaccion as R
     from test_formularios import DATOS, docx, pdf_con_formulario
 except ImportError as e:      # pragma: no cover
     raise unittest.SkipTest(str(e))
@@ -119,6 +119,11 @@ class TestEmpresa(unittest.TestCase):
 
 
 class TestDeucBase(unittest.TestCase):
+    def setUp(self):
+        p = mock.patch.object(D, "base_local", mock.AsyncMock(return_value=None))       # sin nada subido desde Jarvis (eso se prueba con base de datos más abajo)
+        p.start()
+        self.addCleanup(p.stop)
+
     def fichero(self, nombre, modificado, empresa="101 Telecom S.L."):
         return {"attached_to_name": empresa, "name": nombre, "file_name": nombre, "file_url": f"/private/files/{nombre}", "modified": modificado}
 
@@ -493,6 +498,75 @@ class TestBaseDeDatos(unittest.TestCase):
         self.assertEqual(d["estado"], "error")
         self.assertIn("sin campos de formulario", d["avisos"][0])
 
+    def subido(self, formato="docx", estado="limpio", contenido=None, nombre="DEUC 101.docx"):
+        """Un documento subido a Jarvis, ya analizado, en una carpeta de prueba."""
+        limpio = self.dir / "subidas" / "limpio"
+        limpio.mkdir(parents=True, exist_ok=True)
+        ruta = limpio / f"abc.{formato}"
+        if contenido is not None:
+            ruta.write_bytes(contenido)
+        elif formato == "docx":
+            docx(ruta, self.DEUC)
+        else:
+            pdf_con_formulario(ruta, [("a", "Nombre oficial")])
+        cm = mock.MagicMock()
+        cm.__aenter__ = mock.AsyncMock(return_value=cm)
+        cm.__aexit__ = mock.AsyncMock(return_value=False)
+        ficha = {"id": "abc", "nombre": nombre, "formato": formato, "estado": estado, "bytes": ruta.stat().st_size, "paginas": 1, "aviso": None}
+        for p in (mock.patch.object(D.S, "_id", lambda x: x), mock.patch.object(D.S, "_carpeta", lambda e: limpio), mock.patch.object(D.S, "_disponible", mock.AsyncMock(return_value=ficha)),
+                  mock.patch.object(D.S, "_conectar", mock.AsyncMock(return_value=cm)), mock.patch.object(D, "DIR", self.dir / "deuc")):
+            p.start()
+            self.addCleanup(p.stop)
+        return ruta
+
+    def test_un_deuc_subido_desde_jarvis_se_guarda_se_usa_y_gana_al_del_erp(self):
+        self.subido()
+        self.assertIn("101 Telecom S.L.", ejecutar(D.vista("abc", "101 Telecom S.L.", departamento="licitaciones"))["campos"][0])
+        r = ejecutar(D.guardar("abc", "101 Telecom S.L.", "agente:administrativo-licitaciones"))
+        self.assertEqual((r["guardado"], r["sociedad"], r["formato"]), (True, "101 Telecom S.L.", "docx"))
+        self.assertEqual(len(list((self.dir / "deuc").rglob("*.docx"))), 1)
+        # hay además uno más reciente adjunto en el ERP: lo subido desde Jarvis tiene prioridad
+        self.poner_deuc(nombre="DEUC del ERP.docx")
+        d = next(x for x in self.preparar(empresa="101 Telecom S.L.")["documentos"] if x["documento"] == 0)
+        self.assertEqual(d["estado"], "lista_para_firma")
+        self.assertIn("DEUC 101.docx", d["nombre"])
+        # una versión nueva sustituye a la anterior y la anterior se conserva
+        self.subido(contenido=b"PK\x03\x04")                                                  # no es un Word válido: no se guarda
+        with self.assertRaisesRegex(D.ErrorDeuc, "no es un Word"):
+            ejecutar(D.guardar("abc", "101 Telecom S.L."))
+
+    def test_lo_que_no_sirve_como_deuc_se_rechaza_antes_de_pedir_aprobacion(self):
+        self.subido(estado="con_macros")
+        with self.assertRaisesRegex(D.ErrorDeuc, "macros"):
+            ejecutar(D.vista("abc", "101 Telecom S.L."))
+        self.subido(formato="docx", estado="limpio")
+        with self.assertRaisesRegex(D.ErrorDeuc, "sociedades|no existe"):
+            ejecutar(D.vista("abc", "Inventada S.A."))
+        with self.assertRaisesRegex(D.ErrorDeuc, "varias sociedades"):
+            ejecutar(D.vista("abc", None))                                                   # hay dos sociedades y no se dice cuál
+        from pypdf import PdfWriter
+        plano = self.dir / "plano.pdf"
+        w = PdfWriter()
+        w.add_blank_page(100, 100)
+        with open(plano, "wb") as f:
+            w.write(f)
+        self.subido(formato="pdf", contenido=plano.read_bytes())
+        with self.assertRaisesRegex(D.ErrorDeuc, "sin campos|no tiene campos"):
+            ejecutar(D.vista("abc", "101 Telecom S.L."))
+
+    def test_un_pdf_con_formulario_subido_desde_jarvis_vale(self):
+        self.subido(formato="pdf", nombre="DEUC 101.pdf")
+        r = ejecutar(D.guardar("abc", "101 Telecom S.L."))
+        self.assertEqual(r["formato"], "pdf")
+        self.assertEqual(ejecutar(D.base_local("101 Telecom S.L."))[2], "pdf")
+
+    def test_si_el_fichero_guardado_cambia_en_el_disco_no_se_usa(self):
+        self.subido()
+        ejecutar(D.guardar("abc", "101 Telecom S.L."))
+        next((self.dir / "deuc").rglob("*.docx")).write_bytes(b"PK manipulado")
+        with self.assertRaisesRegex(D.ErrorDeuc, "ha cambiado"):
+            ejecutar(D.base_local("101 Telecom S.L."))
+
     def test_los_datos_de_la_licitacion_para_el_deuc(self):
         f = {"titulo": "Obra", "expediente": "X/1", "comprador": {"nombre": "Ajuntament"}, "cpv": ["32323500", "35120000"], "procedimiento": "abierto",
              "plazos": {"presentacion": "2026-11-20T09:00:00+00:00"}, "importes": [{"valor": "1234567.5", "moneda": "EUR", "significado": "valor_estimado"}]}
@@ -579,7 +653,9 @@ class TestHerramienta(unittest.TestCase):
         from cerebro.herramientas import base, esquemas
         h = base._REGISTRO.get("plantillas")
         self.assertIsNotNone(h)
-        self.assertEqual(set(h.operaciones), {"listar", "datos_disponibles", "rellenar"})
+        self.assertEqual(set(h.operaciones), {"listar", "datos_disponibles", "rellenar", "guardar_deuc"})
+        self.assertEqual(h.externas, {"guardar_deuc"})                       # guardar un DEUC necesita la aprobación de una persona
+        self.assertIn("guardar_deuc", h.vistas)
         parametros, _ = esquemas.parametros(h.operaciones["rellenar"])
         self.assertNotIn("agente", [p.nombre for p in parametros])
 

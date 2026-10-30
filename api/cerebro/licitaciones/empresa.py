@@ -119,9 +119,16 @@ MAX_DEUC = 20 << 20
 
 
 async def deuc_base(empresa: str) -> tuple[str, bytes, str] | None:
-    """El DEUC base de la empresa: el fichero cuyo nombre lleva «DEUC» (o «ESPD») adjunto a la Company en el ERP, con los datos de la empresa ya rellenados. Puede ser un Word (.docx) o un PDF
+    """El DEUC base de la empresa: el que se subió desde Jarvis (cerebro/licitaciones/deuc.py) o, si no hay, el fichero cuyo nombre lleva «DEUC» (o «ESPD») adjunto a la Company en el ERP, con los datos de la empresa ya rellenados. Puede ser un Word (.docx) o un PDF
     con formulario (campos editables). Si hay varios, el más reciente. Devuelve (nombre, contenido, formato) o None si no hay ninguno. Se lee con la clave del departamento (categoría
     «sistema»: Company y File); un fichero que no es lo que dice su extensión no se admite."""
+    from . import deuc      # al usarlo, no al importar (deuc importa este módulo)
+    try:
+        subido = await deuc.base_local(empresa)          # lo subido desde Jarvis tiene prioridad sobre un adjunto del ERP
+    except deuc.ErrorDeuc as e:
+        raise ErrorEmpresa(str(e)) from None
+    if subido:
+        return subido
     cfg = configuracion()
     dep = cfg["departamento_erp"]
     filas = await _leer_erp(_erp().listar_sistema("File", dep, [["attached_to_doctype", "=", "Company"], ["attached_to_name", "=", empresa]],

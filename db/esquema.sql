@@ -553,3 +553,17 @@ CREATE TABLE IF NOT EXISTS importaciones_precios (
   creado       timestamptz NOT NULL DEFAULT now(),
   aplicada_en  timestamptz
 );
+
+-- DEUC base de cada sociedad, subido desde Jarvis (api/cerebro/licitaciones/deuc.py): un Word o un PDF con formulario con los datos de la empresa ya rellenados. El fichero está en
+-- DEUC_DIR/<sociedad>/<sha256>.<formato>; aquí queda quién lo subió y cuándo (la versión más reciente de cada sociedad es la que se usa; las anteriores se conservan).
+CREATE TABLE IF NOT EXISTS deuc_base (
+  id        bigserial PRIMARY KEY,
+  empresa   text NOT NULL,                       -- nombre de la Company en el ERP
+  nombre    text NOT NULL,                       -- nombre del fichero subido
+  formato   text NOT NULL CHECK (formato IN ('docx', 'pdf')),
+  sha256    text NOT NULL,
+  bytes     bigint NOT NULL,
+  por       text NOT NULL,                       -- quién lo aprobó/guardó (agente:… o la persona)
+  creado    timestamptz NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS deuc_base_empresa ON deuc_base (empresa, creado DESC);

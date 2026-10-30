@@ -73,6 +73,7 @@ x-api: &api
     PLIEGOS_DIR: "${PLIEGOS_DIR:-/datos/licitaciones/pliegos}"      # dónde se guardan (volumen datos)
     SUBIDAS_DIR: "${SUBIDAS_DIR:-/datos/subidas}"                     # documentos que se suben al chat (volumen datos)
     OFERTAS_DIR: "${OFERTAS_DIR:-/datos/licitaciones/ofertas}"       # documentación administrativa rellenada de las ofertas (volumen datos)
+    DEUC_DIR: "${DEUC_DIR:-/datos/licitaciones/deuc}"                 # DEUC base de cada sociedad, subido desde Jarvis (volumen datos)
     # Calendarios (los buzones de correo van por secretos/buzones.env, no por el .env)
     CALENDARIO_USUARIO: "${CALENDARIO_USUARIO:-}"
     CALENDARIO_CLAVE: "${CALENDARIO_CLAVE:-}"
