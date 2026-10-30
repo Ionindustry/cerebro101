@@ -775,8 +775,7 @@ async def _refrescar_plantillas(motor_id: str, usuario: str) -> int | None:
     try:
         if not (await plantillas_ofertas.listar(motor_id))["documentos"]:
             return 0
-        ficha = await motor_lic._get(f"/tenders/{motor_id.strip().lower()}") if motor_lic._UUID.match(motor_id.strip()) else {}
-        return len((await plantillas_ofertas.preparar(motor_id, ficha, usuario))["documentos"])
+        return len((await plantillas_ofertas.preparar(motor_id, await plantillas_ofertas.ficha_del_motor(motor_id), usuario))["documentos"])
     except Exception as e:      # noqa: BLE001 — el precio ya está guardado; esto es solo comodidad
         log.warning("ofertas: no se han podido actualizar las plantillas de %s al fijar el precio: %s: %s", motor_id, type(e).__name__, e)
         return None

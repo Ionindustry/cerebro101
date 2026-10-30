@@ -171,6 +171,37 @@ class TestDeucBase(unittest.TestCase):
             ejecutar(erpnext.descargar_sistema("/files/a.docx", "comercial"))          # solo quien tiene «File» en «sistema»
 
 
+class TestFichaDeLaLicitacion(unittest.TestCase):
+    """Las plantillas reciben la ficha COMPLETA del motor; pero si les llega la resumida que ven los agentes (comprador a secas) no deben romperse (fallo visto con una licitación real)."""
+    def test_ficha_resumida_de_los_agentes_comprador_como_texto(self):
+        d = {k: v["valor"] for k, v in PL.datos_licitacion({"titulo": "Obra", "expediente": "X/1", "comprador": "Ajuntament de Girona", "cpv": ["32323500"],
+                                                           "plazo_presentacion": "2026-11-20T09:00:00+00:00", "importes": ["1000 EUR (sin iva; valor estimado)"]}).items()}
+        self.assertEqual((d["licitacion.organo"], d["licitacion.objeto"], d["licitacion.cpv"], d["licitacion.plazo"]), ("Ajuntament de Girona", "Obra", "32323500", "20/11/2026"))
+        self.assertNotIn("licitacion.importe", d)                                     # el importe de la ficha resumida es texto: no se interpreta
+
+    def test_ficha_completa_y_formas_raras_no_rompen(self):
+        d = {k: v["valor"] for k, v in PL.datos_licitacion({"comprador": {"nombre": "Ajuntament"}, "plazos": {"presentacion": "2026-11-20T09:00:00+00:00"}}).items()}
+        self.assertEqual((d["licitacion.organo"], d["licitacion.plazo"]), ("Ajuntament", "20/11/2026"))
+        for rara in (None, "texto", [], {"comprador": ["x"], "plazos": "mañana", "cpv": "32", "importes": "1"}, {"comprador": None, "importes": [None, 3, "x"]}):
+            PL.datos_licitacion(rara)                                                    # no lanza
+
+    def test_la_cadena_pide_la_ficha_completa_y_no_la_resumida(self):
+        ficha = {"comprador": {"nombre": "Ajuntament"}}
+        preparar = mock.AsyncMock(return_value={"documentos": []})
+        with mock.patch.object(PL, "ficha_del_motor", mock.AsyncMock(return_value=ficha)), mock.patch.object(PL, "preparar", preparar):
+            ejecutar(R._preparar_plantillas(ID, {"comprador": "resumida, a secas"}, "agente:administrativo"))
+        preparar.assert_awaited_once_with(ID, ficha, "agente:administrativo")
+
+    def test_el_motor_caido_no_impide_rellenar(self):
+        from cerebro.herramientas import licitaciones as motor
+        with mock.patch.object(motor, "_get", mock.AsyncMock(side_effect=motor.MotorNoDisponible("caído"))):
+            self.assertEqual(ejecutar(PL.ficha_del_motor(ID)), {})
+        with mock.patch.object(motor, "_get", mock.AsyncMock(return_value={"titulo": "T"})) as g:
+            self.assertEqual(ejecutar(PL.ficha_del_motor(ID.upper())), {"titulo": "T"})
+        g.assert_awaited_once_with(f"/tenders/{ID}")
+        self.assertEqual(ejecutar(PL.ficha_del_motor("no-es-un-uuid")), {})
+
+
 class TestClasificar(unittest.TestCase):
     CAMPOS = [{"id": "t1", "tipo": "texto", "etiqueta": "con NIF", "clave": "empresa.nif", "opcional": False, "fijo": False},
               {"id": "t2", "tipo": "texto", "etiqueta": "domicilio en", "clave": "empresa.domicilio", "opcional": False, "fijo": False},

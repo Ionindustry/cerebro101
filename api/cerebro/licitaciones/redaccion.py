@@ -254,7 +254,7 @@ def _respuesta(estado: dict | None) -> str:
 
 async def _preparar_plantillas(motor_id: str, ficha: dict, usuario: str) -> dict:
     from . import plantillas
-    return await plantillas.preparar(motor_id, ficha, usuario)
+    return await plantillas.preparar(motor_id, await plantillas.ficha_del_motor(motor_id), usuario)      # la ficha completa del motor, no la resumida que ven los agentes
 
 
 def texto_plantillas(resultado: dict | None, error: str = "") -> str:

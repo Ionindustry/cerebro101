@@ -61,15 +61,19 @@ def datos_licitacion(ficha: dict) -> dict[str, dict]:
     """Los datos de la licitación que piden las plantillas (expediente, objeto, órgano), de la ficha del motor."""
     out: dict[str, dict] = {}
     origen = "Motor de licitaciones · ficha"
-    for clave, valor in (("licitacion.expediente", (ficha or {}).get("expediente")), ("licitacion.objeto", (ficha or {}).get("titulo")),
-                         ("licitacion.organo", ((ficha or {}).get("comprador") or {}).get("nombre"))):
+    ficha = ficha if isinstance(ficha, dict) else {}
+    comprador = ficha.get("comprador")        # en la ficha completa del motor es un objeto {nombre…}; en la ficha resumida que ven los agentes, el nombre a secas
+    organo = comprador.get("nombre") if isinstance(comprador, dict) else comprador
+    for clave, valor in (("licitacion.expediente", ficha.get("expediente")), ("licitacion.objeto", ficha.get("titulo")), ("licitacion.organo", organo)):
         v = re.sub(r"\s+", " ", str(valor or "")).strip()[:400]
         if v:
             out[clave] = {"valor": v, "origen": origen}
-    f = ficha or {}
-    extra = {"licitacion.cpv": ", ".join(str(c) for c in (f.get("cpv") or [])[:8]), "licitacion.procedimiento": f.get("procedimiento"),
-             "licitacion.plazo": _fecha_es((f.get("plazos") or {}).get("presentacion"))}
-    importes = f.get("importes") or []
+    f = ficha
+    plazos = f.get("plazos") if isinstance(f.get("plazos"), dict) else {}
+    cpv = f.get("cpv") if isinstance(f.get("cpv"), list) else []
+    extra = {"licitacion.cpv": ", ".join(str(c) for c in cpv[:8]), "licitacion.procedimiento": f.get("procedimiento"),
+             "licitacion.plazo": _fecha_es(plazos.get("presentacion") or f.get("plazo_presentacion"))}
+    importes = f.get("importes") if isinstance(f.get("importes"), list) else []
     elegido = next((i for i in importes if isinstance(i, dict) and i.get("significado") == "valor_estimado"), None)
     if elegido and elegido.get("moneda") in (None, "EUR"):
         try:
@@ -81,6 +85,18 @@ def datos_licitacion(ficha: dict) -> dict[str, dict]:
         if v:
             out[clave] = {"valor": v, "origen": origen}
     return out
+
+
+async def ficha_del_motor(motor_id: str) -> dict:
+    """La ficha COMPLETA del expediente tal como la da el motor (comprador como objeto, plazos, importes…), que es la que entienden los datos de las plantillas. {} si el motor no responde:
+    las plantillas se rellenan igual con lo del ERP y lo de la licitación queda como hueco."""
+    from ..herramientas import licitaciones as motor
+    try:
+        f = await motor._get(f"/tenders/{motor_id.strip().lower()}") if motor._UUID.match(str(motor_id).strip()) else {}
+    except Exception as e:      # noqa: BLE001 — el motor caído no impide rellenar lo demás
+        log.warning("plantillas: no se ha podido leer la ficha de %s en el motor: %s: %s", motor_id, type(e).__name__, e)
+        return {}
+    return f if isinstance(f, dict) else {}
 
 
 def _fecha_es(t) -> str:

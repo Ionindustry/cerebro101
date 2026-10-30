@@ -14,10 +14,7 @@ from .base import Herramienta, registrar
 
 
 async def _ficha(licitacion: str) -> dict:
-    try:
-        return await motor.ficha(licitacion)
-    except Exception:      # noqa: BLE001 — sin la ficha se rellena con lo del ERP; los datos de la licitación quedan como hueco
-        return {}
+    return await P.ficha_del_motor(licitacion)      # la ficha completa del motor (la resumida que ven los agentes no trae el comprador como objeto)
 
 
 async def _tal_cual(coro) -> dict:
