@@ -2,8 +2,9 @@
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useRef, useState } from "react";
-import { ESTADOS, MODOS, ORDENES, filtroDeAlerta, filtroTexto, filtrosAQuery, mensajeAlertas, queryAFiltros, totalTexto } from "../../../lib/licitaciones";
-import { Fallo, Item, pedir, pedirCerebro } from "../cliente";
+import { COLUMNAS_ORDENABLES, ESTADOS, MODOS, ORDENES, estadisticasQuery, estadoEtiqueta, fechaTexto, filtroDeAlerta, filtroDesdeDashboard, filtroTexto, filtrosAQuery, importeCorto, mensajeAlertas, mensajeDeError, queryAFiltros, rutaNoExiste, totalTexto } from "../../../lib/licitaciones";
+import { Fallo, pedir, pedirCerebro } from "../cliente";
+import Dashboard from "./Dashboard";
 
 function Buscador() {
   const router = useRouter();
@@ -17,6 +18,9 @@ function Buscador() {
   const [cargando, setCargando] = useState(true);
   const [error, setError] = useState(null);
   const ultima = useRef(0);
+  const [stats, setStats] = useState({ datos: null, cargando: true, error: "" });
+  const [filtrosAbiertos, setFiltrosAbiertos] = useState(true);
+  const ultimaStats = useRef(0);
 
   useEffect(() => {
     const n = ++ultima.current;
@@ -25,6 +29,15 @@ function Buscador() {
       .then((d) => { if (n === ultima.current) { setItems(d.items); setTotal(d.total); setCursor(d.siguiente_cursor); setAviso(d.aviso || ""); } })
       .catch((e) => { if (n === ultima.current) { setError(e); setItems([]); setTotal(null); setCursor(null); } })
       .finally(() => { if (n === ultima.current) setCargando(false); });
+  }, [clave]);
+
+  // El dashboard agrega sobre TODO lo que cumple los filtros (no solo la página): una petición aparte para no frenar la lista.
+  useEffect(() => {
+    const n = ++ultimaStats.current;
+    setStats((x) => ({ ...x, cargando: true, error: "" }));
+    pedir(`tenders/estadisticas?${estadisticasQuery(queryAFiltros(new URLSearchParams(clave)))}`)
+      .then((d) => { if (n === ultimaStats.current) setStats({ datos: d, cargando: false, error: "" }); })
+      .catch((e) => { if (n === ultimaStats.current) setStats({ datos: null, cargando: false, error: rutaNoExiste(e) ? "El resumen necesita actualizar el motor de licitaciones." : mensajeDeError(e?.status, e?.detalle) }); });
   }, [clave]);
 
   const mas = async () => {
@@ -48,11 +61,32 @@ function Buscador() {
   const poner = (k) => (ev) => setF((x) => ({ ...x, [k]: ev.target.value }));
   const alternar = (e) => setF((x) => ({ ...x, estados: x.estados.includes(e) ? x.estados.filter((y) => y !== e) : [...x.estados, e] }));
 
+  const irA = (nuevo) => { const q = filtrosAQuery(nuevo).toString(); router.push(q ? `/licitaciones/buscar?${q}` : "/licitaciones/buscar"); };
+  const desdeDashboard = (tipo, valor) => { const nuevo = filtroDesdeDashboard(queryAFiltros(new URLSearchParams(clave)), tipo, valor); setF(nuevo); irA(nuevo); };
+  const ordenar = (columna) => { const nuevo = { ...queryAFiltros(new URLSearchParams(clave)), orden: COLUMNAS_ORDENABLES[columna] }; setF(nuevo); irA(nuevo); };
+  const ordenActual = queryAFiltros(new URLSearchParams(clave)).orden;
+  const porSignificado = !!queryAFiltros(new URLSearchParams(clave)).modo && queryAFiltros(new URLSearchParams(clave)).q.trim().length >= 2;
+  const Cabecera = ({ columna, children }) => {
+    const activa = !porSignificado && ordenActual === COLUMNAS_ORDENABLES[columna];
+    return (
+      <th aria-sort={activa ? (columna === "plazo" ? "ascending" : "descending") : "none"}>
+        {porSignificado ? children : <button type="button" className="lic-th-orden" onClick={() => ordenar(columna)} title="Ordenar por esta columna">{children}{activa ? (columna === "plazo" ? " ↑" : " ↓") : ""}</button>}
+      </th>
+    );
+  };
+
   return (
-    <div className="lic">
+    <div className="lic lic-ancho">
       <p className="lic-vuelve"><Link href="/licitaciones">← Licitaciones</Link></p>
-      <h1>Buscar licitaciones</h1>
-      <form className="tarjeta lic-form" onSubmit={enviar} role="search">
+      <div className="lic-fila lic-titulo">
+        <h1>Buscar licitaciones</h1>
+        <button type="button" className="boton no" aria-expanded={filtrosAbiertos} aria-controls="lic-filtros" onClick={() => setFiltrosAbiertos((a) => !a)}>
+          {filtrosAbiertos ? "Ocultar filtros" : "Mostrar filtros"}
+        </button>
+      </div>
+      <div className={`lic-pantalla${filtrosAbiertos ? " con-filtros" : ""}`}>
+        <aside id="lic-filtros" className="lic-lateral" hidden={!filtrosAbiertos} aria-label="Filtros">
+      <form className="tarjeta lic-form lic-filtros" onSubmit={enviar} role="search">
         <div className="lic-campos">
           <label>Texto<input type="text" value={f.q} onChange={poner("q")} maxLength={200} placeholder="castellano o catalán" /></label>
           <label>Cómo buscar
@@ -82,7 +116,8 @@ function Buscador() {
           <button className="boton no" type="button" onClick={() => { setF(queryAFiltros(new URLSearchParams())); router.push("/licitaciones/buscar"); }}>Limpiar</button>
         </div>
       </form>
-
+        </aside>
+        <div className="lic-principal">
       {(() => {
         const filtro = filtroDeAlerta(queryAFiltros(new URLSearchParams(clave)));
         if (Object.keys(filtro).length === 0) return null;
@@ -103,13 +138,47 @@ function Buscador() {
         );
       })()}
 
-      <p className="meta" aria-live="polite">{cargando && items.length === 0 ? "Buscando…" : totalTexto(total)}</p>
-      {aviso && <p className="meta" role="note">{aviso}</p>}
-      {error && (error.status === 503 && f.modo ? <p role="alert" className="lic-error">La búsqueda por significado no está disponible ahora. Prueba «Por palabras».</p> : <Fallo e={error} />)}
-      {!error && !cargando && items.length === 0 && <p className="meta">No hay licitaciones con esos filtros.</p>}
-      <ul className="lic-lista">{items.map((x) => <Item key={x.id} x={x} />)}</ul>
-      {cursor && <div><button className="boton no" onClick={mas} disabled={cargando}>{cargando ? "Cargando…" : "Cargar más"}</button></div>}
+          <Dashboard st={stats.datos} cargando={stats.cargando} error={stats.error} filtros={queryAFiltros(new URLSearchParams(clave))} alFiltrar={desdeDashboard} />
+          {porSignificado && <p className="meta" role="note">Las cifras cuentan las licitaciones que contienen tus palabras; la lista de abajo se ordena por parecido de significado.</p>}
+
+          <p className="meta" aria-live="polite">{cargando && items.length === 0 ? "Buscando…" : totalTexto(total)}</p>
+          {aviso && <p className="meta" role="note">{aviso}</p>}
+          {error && (error.status === 503 && f.modo ? <p role="alert" className="lic-error">La búsqueda por significado no está disponible ahora. Prueba «Por palabras».</p> : <Fallo e={error} />)}
+          {!error && !cargando && items.length === 0 && <p className="meta">No hay licitaciones con esos filtros.</p>}
+          {items.length > 0 && (
+            <div className="tarjeta lic-tabla-caja">
+              <table className="lic-tabla lic-tabla-resultados">
+                <thead>
+                  <tr>
+                    <th>Estado</th><th>Licitación</th><th>Organismo</th>
+                    <Cabecera columna="importe">Importe</Cabecera>
+                    <Cabecera columna="plazo">Plazo</Cabecera>
+                    <Cabecera columna="actualizada">Actualizada</Cabecera>
+                  </tr>
+                </thead>
+                <tbody>{items.map((x) => <Fila key={x.id} x={x} />)}</tbody>
+              </table>
+            </div>
+          )}
+          {cursor && <div><button className="boton no" onClick={mas} disabled={cargando}>{cargando ? "Cargando…" : "Cargar más"}</button></div>}
+        </div>
+      </div>
     </div>
+  );
+}
+
+/** Una licitación en la tabla: el título enlaza a su ficha. El plazo solo cuenta mientras la licitación sigue abierta. */
+function Fila({ x }) {
+  const conPlazo = x.plazo_presentacion && (x.estado === "abierta" || x.estado === "anuncio_previo");
+  return (
+    <tr>
+      <td><span className={`lic-etiqueta ${x.estado}`}>{estadoEtiqueta(x.estado)}</span></td>
+      <td><Link href={`/licitaciones/expedientes/${x.id}`} className="lic-titulo-fila">{x.titulo || "(sin título)"}</Link>{x.expediente ? <span className="meta lic-bloque">{x.expediente}</span> : null}</td>
+      <td>{x.comprador?.nombre || "—"}</td>
+      <td className="lic-num" title={x.importe ? "Valor estimado sin IVA" : undefined}>{x.importe ? importeCorto(x.importe.valor) : "—"}</td>
+      <td className="lic-num">{conPlazo ? fechaTexto(x.plazo_presentacion) : "—"}</td>
+      <td className="lic-num">{x.actualizada_en ? fechaTexto(x.actualizada_en, false) : "—"}</td>
+    </tr>
   );
 }
 

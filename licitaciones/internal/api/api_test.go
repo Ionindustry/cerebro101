@@ -18,9 +18,11 @@ import (
 const token = "token-de-pruebas-con-al-menos-32-caracteres"
 
 type fakeRepo struct {
-	filas  []pg.Fila
-	visto  pg.Filtro
-	pingEr error
+	filas    []pg.Fila
+	visto    pg.Filtro
+	pingEr   error
+	estad    pg.Estadisticas
+	estadErr error
 
 	vistoAdj   pg.FiltroAdjudicaciones
 	vistoComp  pg.FiltroCompetidores
@@ -55,6 +57,10 @@ func (f *fakeRepo) Buscar(_ context.Context, fl pg.Filtro) ([]pg.Fila, int, bool
 }
 func (f *fakeRepo) Expediente(context.Context, string) (pg.Fila, error) {
 	return pg.Fila{}, pg.ErrNoEncontrado
+}
+func (f *fakeRepo) Estadisticas(_ context.Context, fl pg.Filtro) (pg.Estadisticas, error) {
+	f.visto = fl
+	return f.estad, f.estadErr
 }
 func (f *fakeRepo) Fuentes(context.Context) ([]pg.EstadoFuente, error) { return nil, nil }
 func (f *fakeRepo) Ping(context.Context) (time.Duration, error)        { return time.Millisecond, f.pingEr }

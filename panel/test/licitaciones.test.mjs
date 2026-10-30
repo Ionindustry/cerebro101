@@ -808,3 +808,93 @@ test("oferta: el precio del formulario, con coma decimal y comprobaciones", () =
   assert.equal(mensajeOferta(422, "Esa sección ya está revisada"), "Esa sección ya está revisada");
   assert.match(mensajeOferta(500), /Inténtalo/);
 });
+
+import {
+  COLUMNAS_ORDENABLES, calendarioPlazos, divisionEtiqueta, estadisticasQuery, filtroDesdeDashboard, hoyMadrid, importeCorto, repartoBarras, tramoEtiqueta, zonaEtiqueta,
+} from "../lib/licitaciones.js";
+
+test("la pasarela deja pasar las estadísticas del dashboard, solo con GET", () => {
+  assert.ok(rutaPermitida(["tenders", "estadisticas"], "GET"));
+  assert.ok(!rutaPermitida(["tenders", "estadisticas"], "POST"));
+  assert.ok(!rutaPermitida(["tenders", "estadisticas", "x"], "GET"));
+  assert.ok(!rutaPermitida(["tenders", "otra-cosa"], "GET"));
+});
+
+test("las estadísticas llevan los filtros de la búsqueda pero ni el orden ni el modo", () => {
+  const f = { ...queryAFiltros(new URLSearchParams("q=cámaras&estado=abierta&nuts=ES512&orden=plazo&modo=significado&importe_min=1000")) };
+  const q = estadisticasQuery(f);
+  assert.equal(q.get("q"), "cámaras");
+  assert.deepEqual(q.getAll("estado"), ["abierta"]);
+  assert.deepEqual(q.getAll("nuts"), ["ES512"]);
+  assert.equal(q.get("importe_min"), "1000");
+  assert.equal(q.has("orden"), false);
+  assert.equal(q.has("modo"), false);
+});
+
+test("importeCorto resume sin perder el orden de magnitud", () => {
+  assert.equal(importeCorto("1500000"), "1,5 M€");
+  assert.equal(importeCorto("250000"), "250 k€");
+  assert.equal(importeCorto("980"), "980 €");
+  assert.equal(importeCorto("0.00"), "0 €");
+  for (const malo of ["", null, undefined, "abc", "1e9", "1,5"]) assert.equal(importeCorto(malo), "—");
+});
+
+test("etiquetas de zona, sector e importe: conocidas, desconocidas y vacías", () => {
+  assert.equal(zonaEtiqueta("ES512"), "Girona (ES512)");
+  assert.equal(zonaEtiqueta("FR101"), "FR101");
+  assert.equal(zonaEtiqueta(""), "Sin zona");
+  assert.equal(divisionEtiqueta("72"), "Servicios informáticos (72)");
+  assert.equal(divisionEtiqueta("99"), "CPV 99");
+  assert.equal(divisionEtiqueta(""), "Sin CPV");
+  assert.equal(tramoEtiqueta("15k_50k"), "15.000 – 50.000 €");
+  assert.equal(tramoEtiqueta("raro"), "raro");
+});
+
+test("repartoBarras escala a la mayor y aguanta lo que no es una lista", () => {
+  const b = repartoBarras([{ valor: "a", cuenta: 10 }, { valor: "b", cuenta: 5 }, { valor: "c", cuenta: 0 }], (v) => v.toUpperCase());
+  assert.deepEqual(b.map((x) => [x.etiqueta, x.pct]), [["A", 100], ["B", 50], ["C", 0]]);
+  assert.deepEqual(repartoBarras([{ valor: "a", cuenta: 0 }]).map((x) => x.pct), [0]);
+  assert.deepEqual(repartoBarras(null), []);
+  assert.deepEqual(repartoBarras(undefined), []);
+});
+
+test("el calendario rellena con ceros los 60 días, empieza hoy y cruza meses y años", () => {
+  const c = calendarioPlazos([{ valor: "2027-01-02", cuenta: 3 }, { valor: "2026-12-31", cuenta: 1 }], "2026-12-30", 60);
+  assert.equal(c.length, 60);
+  assert.equal(c[0].fecha, "2026-12-30");
+  assert.equal(c[0].esHoy, true);
+  assert.equal(c.filter((d) => d.esHoy).length, 1);
+  assert.equal(c[1].cuenta, 1);
+  assert.equal(c[3].fecha, "2027-01-02");
+  assert.equal(c[3].cuenta, 3);
+  assert.equal(c[3].pct, 100);
+  assert.equal(c[1].pct, 33);
+  assert.equal(c[59].fecha, "2027-02-27");
+  assert.equal(c.reduce((a, d) => a + d.cuenta, 0), 4);
+  assert.equal(calendarioPlazos(undefined, "2026-10-30", 3).every((d) => d.cuenta === 0 && d.pct === 0), true);
+});
+
+test("hoyMadrid da la fecha de Madrid aunque en UTC sea otro día", () => {
+  assert.equal(hoyMadrid(new Date("2026-10-30T23:30:00Z")), "2026-10-31");   // 00:30 del día siguiente en Madrid (CET)
+  assert.equal(hoyMadrid(new Date("2026-07-01T10:00:00Z")), "2026-07-01");
+});
+
+test("pulsar el dashboard cambia un solo filtro: estados se alternan, zona y CPV se fijan o se quitan", () => {
+  const base = queryAFiltros(new URLSearchParams("q=red&estado=abierta"));
+  const a = filtroDesdeDashboard(base, "estado", "cerrada");
+  assert.deepEqual(a.estados, ["abierta", "cerrada"]);
+  assert.deepEqual(filtroDesdeDashboard(a, "estado", "abierta").estados, ["cerrada"]);
+  const z = filtroDesdeDashboard(base, "zona", "ES512");
+  assert.equal(z.nuts, "ES512");
+  assert.equal(filtroDesdeDashboard(z, "zona", "ES512").nuts, "");
+  const c = filtroDesdeDashboard(base, "cpv", "72");
+  assert.equal(c.cpv, "72");
+  assert.equal(filtroDesdeDashboard(c, "cpv", "72").cpv, "");
+  assert.equal(c.q, "red");                                  // lo demás se queda
+  assert.deepEqual(filtroDesdeDashboard(base, "otra", "x"), base);
+  assert.deepEqual(base.estados, ["abierta"]);               // y no toca el original
+});
+
+test("las columnas que se ordenan piden al motor órdenes que existen", () => {
+  assert.deepEqual(Object.values(COLUMNAS_ORDENABLES).sort(), ["actualizacion", "importe", "plazo"]);
+});
