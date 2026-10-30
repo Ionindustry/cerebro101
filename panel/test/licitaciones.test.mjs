@@ -973,3 +973,24 @@ test("los huecos de un documento se agrupan por anexo o modelo", () => {
   assert.deepEqual(agruparPorAnexo({ rellenados: [], pendientes: [] }), []);
   assert.deepEqual(agruparPorAnexo(null), []);
 });
+
+import { tratoCrm, enlaceCrm, puedeSeguirEnCrm, mensajeCrm } from "../lib/licitaciones.js";
+
+test("CRM: trato, enlace seguro y cuándo se puede seguir", () => {
+  const x = { estado: "en_estudio", crm: { trato: "CRM-DEAL-2026-00001", etapa: "Proposal/Quotation" } };
+  assert.equal(tratoCrm(x), "CRM-DEAL-2026-00001");
+  assert.equal(tratoCrm({ crm: null }), null);
+  assert.equal(enlaceCrm(x, "http://localhost:8081/crm/"), "http://localhost:8081/crm/deals/CRM-DEAL-2026-00001");
+  assert.equal(enlaceCrm(x, "javascript:alert(1)"), null);
+  assert.equal(enlaceCrm({ crm: { trato: "a/b?c" } }, "https://crm.101.cat"), "https://crm.101.cat/deals/a%2Fb%3Fc");
+  assert.equal(enlaceCrm({ estado: "en_estudio" }, "http://x"), null);
+  assert.equal(puedeSeguirEnCrm({ estado: "en_estudio" }), true);
+  assert.equal(puedeSeguirEnCrm({ estado: "detectada" }), false);
+  assert.equal(puedeSeguirEnCrm({ estado: "descartada" }), false);
+  assert.equal(puedeSeguirEnCrm(x), false);
+});
+
+test("CRM: mensajes de error", () => {
+  assert.match(mensajeCrm(503), /CRM/);
+  assert.match(mensajeCrm(422), /estudiarla/);
+});

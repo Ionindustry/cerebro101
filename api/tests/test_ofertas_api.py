@@ -142,6 +142,11 @@ class TestPlantillas(unittest.TestCase):
 class TestFijarPrecio(unittest.TestCase):
     OFERTA = {"existe": True, "licitacion": ID, "precio_sin_iva": 125000.0, "iva_pct": 21.0}
 
+    def setUp(self):
+        p = mock.patch.object(main.crm_licitaciones, "anotar_por_oferta", mock.AsyncMock(return_value=None))      # el CRM no es lo que se prueba aquí
+        self.crm = p.start()
+        self.addCleanup(p.stop)
+
     def tearDown(self):
         main.app.dependency_overrides.clear()
 
@@ -157,6 +162,7 @@ class TestFijarPrecio(unittest.TestCase):
         self.assertEqual(r.status_code, 200)
         self.assertEqual((r.json()["precio_sin_iva"], r.json()["plantillas_actualizadas"]), (125000.0, 2))
         fijar.assert_awaited_once_with(ID, 125000.0, 21.0, "albert")                      # lo fija la persona que pulsa, no un agente
+        self.assertEqual(self.crm.await_args.args[0], ID)                                 # y queda anotado en el trato del CRM
         preparar.assert_awaited_once()
 
     def test_sin_plantillas_preparadas_no_se_toca_nada(self):

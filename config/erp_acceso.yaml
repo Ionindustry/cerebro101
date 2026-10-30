@@ -59,8 +59,10 @@ departamentos:
            Warranty Claim, Maintenance Schedule, Maintenance Visit]
     borrador: [Quotation, Task, Maintenance Visit, Warranty Claim]
   licitaciones:
-    leer: [Customer, Contact, Opportunity, Quotation, Project, Task, Item, Item Price, Supplier, Contract]
-    borrador: [Opportunity, Quotation, Task]
+    leer: [Customer, Contact, Opportunity, Quotation, Project, Task, Item, Item Price, Supplier, Contract,
+           CRM Deal, CRM Organization, CRM Task, FCRM Note, CRM Deal Status]
+    borrador: [Opportunity, Quotation, Task, FCRM Note, CRM Task]      # los agentes anotan y programan tareas en el trato de la licitación
+    maestros: [CRM Deal, CRM Organization]     # el trato (y el organismo) los crea y mueve de etapa el sistema según el embudo (cerebro/licitaciones/crm.py), no un agente
     sistema: [Company, Address, Contact]     # los datos de la empresa (o empresas) del ERP para rellenar las plantillas administrativas; solo los lee cerebro/licitaciones/empresa.py
   legal:
     leer: [Contract, Customer, Supplier, Project, Task, Non Conformance, Quality Goal, Quality Procedure, Quality Review, Quality Action]

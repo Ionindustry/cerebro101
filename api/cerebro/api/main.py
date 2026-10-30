@@ -1,6 +1,7 @@
 """API del Cerebro: la usan el panel, Jarvis (voz) y las tareas programadas."""
 from __future__ import annotations
 
+import asyncio
 import base64
 import logging
 import os
@@ -24,6 +25,7 @@ from ..herramientas import licitaciones as motor_lic
 from ..herramientas.licitaciones import MotorNoDisponible
 from ..licitaciones import alertas as alertas_licitaciones
 from ..licitaciones import calendario_plazos
+from ..licitaciones import crm as crm_licitaciones
 from ..licitaciones import pliegos as pliegos_licitaciones
 from ..licitaciones import ofertas as ofertas_licitaciones
 from ..licitaciones import empresa as empresa_erp
@@ -309,6 +311,7 @@ async def listar_embudo_licitaciones(estado: str | None = None, motor_id: str | 
     _exige_licitaciones(usuario)
     try:
         return {"items": await embudo_licitaciones.listar(estado, motor_id, limite), "motivos_perdida": embudo_licitaciones.MOTIVOS_PERDIDA,
+                "crm_url": crm_licitaciones.configuracion()["url_publica"],
                 "transiciones": {k: sorted(v) for k, v in embudo_licitaciones.TRANSICIONES.items()}}
     except embudo_licitaciones.ErrorEmbudo as e:
         raise HTTPException(422, str(e)) from None
@@ -327,6 +330,8 @@ async def estudiar_licitacion(entrada: EstudiarEntrada, usuario: Usuario = Depen
     except (MotorNoDisponible, ValueError) as e:
         raise HTTPException(503, f"No se ha podido consultar el motor de licitaciones: {e}") from None
     log.info("embudo: %s estudia %s (estado %s)", usuario.id, fila["motor_id"], fila["estado"])
+    if fila.get("id"):
+        await crm_licitaciones.anotar(fila["id"], "")      # el trato del CRM (si procede); nunca falla
     return fila
 
 
@@ -357,6 +362,24 @@ async def pedir_viabilidad_licitacion(lid: int, entrada: ViabilidadEntrada | Non
         raise HTTPException(503, "No se ha podido encolar la petición") from None
     log.info("embudo: %s pide el informe de viabilidad de la licitación %s", usuario.id, lid)
     return {"id": lid, "viabilidad_peticion": peticion}
+
+
+@app.post("/licitaciones/embudo/{lid}/crm")
+async def enviar_licitacion_al_crm(lid: int, usuario: Usuario = Depends(usuario_actual)):
+    """«Seguir en el CRM»: crea (o pone al día) el trato de la licitación en el CRM, con su nota de alta. Sirve para las que ya se estudiaban antes de conectar el CRM."""
+    _exige_licitaciones(usuario)
+    fila = await embudo_licitaciones.obtener(lid)
+    if not fila:
+        raise HTTPException(404, "No existe esa licitación en el embudo")
+    if fila["estado"] in ("detectada", "descartada") and not (fila.get("crm") or {}).get("trato"):
+        raise HTTPException(422, "Solo se sigue en el CRM una licitación que se estudia, se presenta o ya se ha resuelto")
+    try:
+        trato = await asyncio.wait_for(crm_licitaciones.asegurar_trato(lid), crm_licitaciones.configuracion()["limite_s"])
+    except Exception as e:      # noqa: BLE001 — el CRM falla de muchas maneras: se dice sin ruido y se anota
+        log.warning("embudo: no se ha podido llevar la licitación %s al CRM: %s: %s", lid, type(e).__name__, e)
+        raise HTTPException(503, "No se ha podido escribir en el CRM. Inténtalo en unos minutos.") from None
+    log.info("embudo: %s sigue la licitación %s en el CRM (trato %s)", usuario.id, lid, trato)
+    return await embudo_licitaciones.obtener(lid)
 
 
 @app.post("/licitaciones/embudo/{lid}/calendario")
@@ -742,6 +765,7 @@ async def fijar_precio_oferta(motor_id: str, entrada: PrecioOfertaEntrada, usuar
         oferta = await ofertas_licitaciones.fijar_precio(motor_id, entrada.precio, entrada.iva_pct, usuario.id)
     except (ofertas_licitaciones.ErrorOferta, LookupError) as e:
         raise _oferta_error(e) from None
+    await crm_licitaciones.anotar_por_oferta(motor_id, *crm_licitaciones.nota_de_precio(entrada.precio, entrada.iva_pct, usuario.id))
     return {**oferta, "plantillas_actualizadas": await _refrescar_plantillas(motor_id, usuario.id)}
 
 
@@ -783,6 +807,7 @@ async def cambiar_estado_licitacion(lid: int, entrada: CambioEstadoEntrada, usua
     except embudo_licitaciones.ErrorEmbudo as e:
         raise HTTPException(422, str(e)) from None
     log.info("embudo: %s pasa la licitación %s a %s", usuario.id, lid, fila["estado"])
+    await crm_licitaciones.anotar(lid, *crm_licitaciones.nota_de_estado(fila["estado"], fila.get("motivo_perdida_texto"), usuario.id))
     return fila
 
 

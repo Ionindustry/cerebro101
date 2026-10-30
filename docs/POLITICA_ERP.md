@@ -54,10 +54,11 @@ Después, `docker compose up -d --force-recreate --no-deps api worker beat` (la 
 - **Preguntas para decidir:**
   - ¿Qué documentos de calidad (ISO 9001) existen realmente en vuestro ERP? La política incluye los de Quality Management.
 
-## licitaciones  (3 agentes: arquitecto-solucion, costes-licitacion, precio-licitacion)
+## licitaciones  (arquitecto-solucion, costes-licitacion, precio-licitacion, director-licitaciones…)
 
-- **Leer:** Customer, Contact, Opportunity, Quotation, Project, Task, Item, Item Price, Supplier, Contract
-- **Borrador (crear y modificar):** Opportunity, Quotation, Task
+- **Leer:** Customer, Contact, Opportunity, Quotation, Project, Task, Item, Item Price, Supplier, Contract, CRM Deal, CRM Organization, CRM Task, FCRM Note, CRM Deal Status
+- **Borrador (crear y modificar):** Opportunity, Quotation, Task, FCRM Note, CRM Task (los agentes anotan y programan tareas en el trato de la licitación)
+- **Maestros (solo el sistema, no los agentes):** CRM Deal, CRM Organization. El trato de cada licitación y el organismo comprador los crea y mueve de etapa el Cerebro según el embudo (`cerebro/licitaciones/crm.py`); un agente no abre ni cierra tratos por su cuenta.
 - **Sistema (solo lo lee el proceso de la documentación administrativa, no los agentes):** Company, Address, Contact. De ahí salen los datos de la sociedad con la que se presenta una oferta (`cerebro/licitaciones/empresa.py`); solo se piden los campos necesarios (nombre, NIF, dirección, contacto del representante…), nunca cuentas bancarias.
 - **Preguntas para decidir:**
   - ¿Necesitan leer facturas anteriores para justificar precios? Hoy no.

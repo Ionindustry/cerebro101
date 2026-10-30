@@ -206,7 +206,7 @@ def datos_de_ficha(ficha: dict, cfg: dict, ahora: datetime) -> dict:
 # ---- Base de datos ----
 
 COLUMNAS = ("id, motor_id, motor_version, expediente, organismo, titulo, cpv, importe, fecha_limite, enlace, encaje, estado, estado_motor, motivo_perdida, "
-            "decision, viabilidad, viabilidad_peticion, calendario_plazo, creado, actualizado, decidida_en, presentada_en, resuelta_en")
+            "decision, viabilidad, viabilidad_peticion, calendario_plazo, crm, creado, actualizado, decidida_en, presentada_en, resuelta_en")
 
 
 def _fila(f: dict) -> dict:

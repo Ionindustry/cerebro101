@@ -176,7 +176,10 @@ async def cerrar(ejecucion_id: int, error: str = "", ahora: datetime | None = No
                                      [estado, Jsonb(pasos), str(error)[:300], ahora, ejecucion_id])
             f = await cur.fetchone()
     log.info("oferta: la redacción de %s (ejecución %s) termina en «%s»", f["motor_id"], ejecucion_id, f["estado"])
-    return _ejecucion(f)
+    resultado = _ejecucion(f)
+    from . import crm      # el seguimiento en el CRM es comodidad: no falla ni retrasa la ejecución
+    await crm.anotar_por_oferta(resultado["licitacion"], *crm.nota_de_redaccion(resultado))
+    return resultado
 
 
 # ---- Lo que se le pide a cada agente ----
