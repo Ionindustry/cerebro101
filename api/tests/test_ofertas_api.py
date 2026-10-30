@@ -139,5 +139,46 @@ class TestPlantillas(unittest.TestCase):
         self.assertEqual(como(("direccion",)).get(f"/licitaciones/ofertas/{ID}/plantillas/no-es-numero/fichero").status_code, 422)
 
 
+class TestFijarPrecio(unittest.TestCase):
+    OFERTA = {"existe": True, "licitacion": ID, "precio_sin_iva": 125000.0, "iva_pct": 21.0}
+
+    def tearDown(self):
+        main.app.dependency_overrides.clear()
+
+    def post(self, listar, preparar):
+        with mock.patch.object(main.ofertas_licitaciones, "fijar_precio", mock.AsyncMock(return_value=dict(self.OFERTA))) as fijar, mock.patch.object(PL, "listar", listar), \
+                mock.patch.object(PL, "preparar", preparar), mock.patch.object(main.motor_lic, "_get", mock.AsyncMock(return_value={})):
+            r = como(("direccion",)).post(f"/licitaciones/ofertas/{ID}/precio", json={"precio": 125000, "iva_pct": 21})
+        return r, fijar
+
+    def test_al_fijar_el_precio_los_modelos_ya_preparados_se_rellenan_con_el_importe(self):
+        preparar = mock.AsyncMock(return_value={"documentos": [{}, {}]})
+        r, fijar = self.post(mock.AsyncMock(return_value={"documentos": [{}]}), preparar)
+        self.assertEqual(r.status_code, 200)
+        self.assertEqual((r.json()["precio_sin_iva"], r.json()["plantillas_actualizadas"]), (125000.0, 2))
+        fijar.assert_awaited_once_with(ID, 125000.0, 21.0, "albert")                      # lo fija la persona que pulsa, no un agente
+        preparar.assert_awaited_once()
+
+    def test_sin_plantillas_preparadas_no_se_toca_nada(self):
+        preparar = mock.AsyncMock()
+        r, _ = self.post(mock.AsyncMock(return_value={"documentos": []}), preparar)
+        self.assertEqual(r.json()["plantillas_actualizadas"], 0)
+        preparar.assert_not_called()
+
+    def test_si_las_plantillas_fallan_el_precio_ya_esta_fijado(self):
+        r, _ = self.post(mock.AsyncMock(return_value={"documentos": [{}]}), mock.AsyncMock(side_effect=E.ErrorEmpresa("No se ha podido leer el ERP")))
+        self.assertEqual(r.status_code, 200)
+        self.assertIsNone(r.json()["plantillas_actualizadas"])
+        self.assertEqual(r.json()["precio_sin_iva"], 125000.0)
+
+    def test_precio_no_valido_y_permisos(self):
+        with mock.patch.object(main.ofertas_licitaciones, "fijar_precio", mock.AsyncMock(side_effect=O.ErrorOferta("El precio no es válido"))):
+            self.assertEqual(como(("direccion",)).post(f"/licitaciones/ofertas/{ID}/precio", json={"precio": -5}).status_code, 422)
+        fijar = mock.AsyncMock()
+        with mock.patch.object(main.ofertas_licitaciones, "fijar_precio", fijar):
+            self.assertEqual(como(("usuario",), ("finanzas",)).post(f"/licitaciones/ofertas/{ID}/precio", json={"precio": 5}).status_code, 403)
+        fijar.assert_not_called()
+
+
 if __name__ == "__main__":
     unittest.main()

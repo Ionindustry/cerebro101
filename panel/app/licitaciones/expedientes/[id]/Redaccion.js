@@ -33,6 +33,9 @@ export default function Redaccion({ id, o, alCambiar }) {
       .catch((e) => { if (vivo.current) { setEmpresas([]); setErrorEmpresas(mensajeRedaccion(e.status, e.detalle)); } });
   }, [id]);                                                                  // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Al fijar el precio, los modelos de proposición económica ya preparados se rellenan con el importe: se vuelven a leer.
+  useEffect(() => { if (o?.precio_en) cargarPlantillas(); }, [o?.precio_en]);        // eslint-disable-line react-hooks/exhaustive-deps
+
   // Mientras los agentes trabajan se pregunta cada pocos segundos; al terminar se recarga la oferta (las secciones ya escritas) y las plantillas.
   const trabajandoAgentes = redaccionEnCurso(ejec);
   useEffect(() => {
@@ -116,7 +119,8 @@ export default function Redaccion({ id, o, alCambiar }) {
 
       <h3>Documentación administrativa {plant?.documentos?.length > 0 && <span className="meta">· {resumenPlantillas(plant)}</span>}</h3>
       <p className="meta">Las plantillas del concurso (declaración responsable, anexos…) se rellenan en una <strong>copia</strong> con los datos de la sociedad elegida, que salen del ERP; el documento original no se toca.
-        Lo que falte se completa en el ERP (si es un dato de la empresa) o a mano en el documento.</p>
+        Lo que falte se completa en el ERP (si es un dato de la empresa) o a mano en el documento.
+        Los <strong>modelos de proposición económica</strong> se rellenan con el precio cuando una persona lo fija (importe en número y en letra, IVA y total); el precio nunca lo escribe un agente.</p>
       <div className="lic-fila"><button className="boton no" onClick={rellenar} disabled={trabajando || trabajandoAgentes || (hayVarias && !sociedad) || !o?.existe} title={o?.existe ? "Rellena de nuevo desde el original todas las plantillas del concurso" : "Primero hay que preparar la oferta"}>Rellenar las plantillas del concurso</button></div>
       {plant?.documentos?.length === 0 && <p className="meta">Todavía no hay plantillas rellenadas. Primero baja y lee los documentos del pliego (tarjeta «Pliegos»): se buscan las plantillas en Word y en PDF con formulario.</p>}
       {(plant?.documentos || []).map((d) => {

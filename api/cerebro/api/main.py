@@ -739,9 +739,23 @@ async def fijar_precio_oferta(motor_id: str, entrada: PrecioOfertaEntrada, usuar
     """Una PERSONA fija el precio de la oferta (sin IVA). Con él se genera la proposición económica. Los agentes no pueden."""
     _exige_licitaciones(usuario)
     try:
-        return await ofertas_licitaciones.fijar_precio(motor_id, entrada.precio, entrada.iva_pct, usuario.id)
+        oferta = await ofertas_licitaciones.fijar_precio(motor_id, entrada.precio, entrada.iva_pct, usuario.id)
     except (ofertas_licitaciones.ErrorOferta, LookupError) as e:
         raise _oferta_error(e) from None
+    return {**oferta, "plantillas_actualizadas": await _refrescar_plantillas(motor_id, usuario.id)}
+
+
+async def _refrescar_plantillas(motor_id: str, usuario: str) -> int | None:
+    """Con el precio fijado, los modelos de proposición económica ya preparados se rellenan con el importe (en número y en letra, IVA y total). Si algo falla (el ERP, el motor), el precio
+    ya está fijado y se dice con None: las plantillas se pueden rellenar de nuevo a mano desde la tarjeta."""
+    try:
+        if not (await plantillas_ofertas.listar(motor_id))["documentos"]:
+            return 0
+        ficha = await motor_lic._get(f"/tenders/{motor_id.strip().lower()}") if motor_lic._UUID.match(motor_id.strip()) else {}
+        return len((await plantillas_ofertas.preparar(motor_id, ficha, usuario))["documentos"])
+    except Exception as e:      # noqa: BLE001 — el precio ya está guardado; esto es solo comodidad
+        log.warning("ofertas: no se han podido actualizar las plantillas de %s al fijar el precio: %s: %s", motor_id, type(e).__name__, e)
+        return None
 
 
 @app.get("/licitaciones/ofertas/{motor_id}/documento")

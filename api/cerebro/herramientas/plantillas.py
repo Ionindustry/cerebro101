@@ -37,7 +37,7 @@ async def listar(licitacion: str) -> dict:
 
 async def datos_disponibles(licitacion: str) -> dict:
     o = await O.leer(licitacion, con_contenido=False)
-    return await _tal_cual(P.claves_disponibles(o.get("empresa"), await _ficha(licitacion)))
+    return await _tal_cual(P.claves_disponibles(o.get("empresa"), await _ficha(licitacion), licitacion))
 
 
 async def rellenar(licitacion: str, documento: int, asignaciones: dict[str, str] | None = None, miembro: str | None = None, agente: str | None = None) -> dict:

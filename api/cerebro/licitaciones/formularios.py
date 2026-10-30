@@ -76,6 +76,13 @@ def _valor_xml(v: str) -> str:
 
 # (patrón sobre la etiqueta normalizada —lo que hay justo antes del hueco—, clave). El orden importa: lo más específico primero.
 REGLAS = (
+    # El precio y sus derivados (los pone una persona al fijar el precio de la oferta): «por el precio de ___ euros», «(en letra ___)», «IVA (21 %): ___», «Importe (IVA incluido): ___»
+    (r"(en letras?|en letra y cifra|cantidad en letras?)[\s:,)]*$", "oferta.precio_letras"),
+    (r"(importe|precio|total)\b.{0,50}(iva incluido|con iva|incluido (el )?iva|iva incl\.?)[\s:,)]*$", "oferta.precio_con_iva"),
+    (r"((importe|cuota|cantidad) (del|de) iva|(^|\s)iva\s*\(\s*\d{1,2}(,\d+)?\s*%\s*\))\s*[:,]?$", "oferta.iva"),
+    (r"((tipo|porcentaje|%)( de)? iva|(^|\s)iva\s*(\(%\)|%))\s*[:,]?$", "oferta.iva_pct"),
+    (r"((por )?(el )?(precio|importe)( de la oferta| ofertado| del contrato| de licitacion)?( \(?(sin iva|iva excluido|excluido (el )?iva|iva no incluido|antes de iva)\)?)?"
+     r"|por (un )?importe de|por la (cantidad|suma) de|oferta (la cantidad|el precio) de|ofrece (el precio|la cantidad) de)\s*(de|:|,)?\s*$", "oferta.precio"),
     (r"(d\.?\s*/\s*d(n|ñ)?a\.?|don|dona|d\.|dna\.?|nombre y apellidos|apellidos y nombre|el abajo firmante|firmante|apoderado/a?|representante legal)\s*[:,]?$", "representante.nombre"),
     (r"(en representacion de|en nombre de|razon social|denominacion social|denominacion de la (empresa|sociedad|entidad)|nombre de la (empresa|sociedad|entidad)|empresa|sociedad|entidad|licitador|contratista|empresario)\s*[:,]?$",
      "empresa.razon_social"),
@@ -99,7 +106,7 @@ REGLAS = (
 _REP = re.compile(r"en representacion|en nombre de|actuando en nombre")
 
 
-def emparejar(etiqueta: str, antes: str = "", en_tabla: bool = False) -> str | None:
+def emparejar(etiqueta: str, antes: str = "", en_tabla: bool = False, despues: str = "") -> str | None:
     """La clave del dato que corresponde a un hueco, mirando lo que hay justo antes (`etiqueta`) y todo el texto anterior (`antes`). None si no está claro: lo completa una persona
     (o un agente que elige la clave, nunca el valor)."""
     e = _norm(etiqueta)[-90:]
@@ -110,6 +117,8 @@ def emparejar(etiqueta: str, antes: str = "", en_tabla: bool = False) -> str | N
         return "empresa.localidad"                                   # «En ______, a … de … de 2026»
     for patron, clave in REGLAS:
         if re.search(patron, e):
+            if clave == "oferta.precio_letras" and re.match(r"\s*(euros?\b|€|eur\b)", despues, re.I):
+                return "oferta.precio_letras_sin_unidad"                  # el documento ya trae «euros» detrás del hueco: solo se escribe la cifra en letra
             if clave == "nif":
                 if re.search(r"cif", e):
                     return "empresa.nif"                                   # un CIF es siempre de una empresa (y «NIF/CIF» también)
@@ -371,7 +380,7 @@ def _campos_docx(x: str) -> list[dict]:
             if any(a <= ini_b < z for a, z in fecha):
                 nuevo("texto", m.start() + ini_b, etiqueta=etiqueta.strip(), clave=SIN_DATO, ini=m.start(), fin=m.end(), a=ini_b, b=fin_b, fijo=False, opcional=False)
                 continue
-            clave = emparejar(etiqueta, antes)
+            clave = emparejar(etiqueta, antes, despues=p.texto[fin_b:fin_b + 30])
             nuevo("texto", m.start() + ini_b, etiqueta=etiqueta.strip(), clave=clave, ini=m.start(), fin=m.end(), a=ini_b, b=fin_b, fijo=False,
                   opcional=bool(RE_OPCIONAL.search(etiqueta + " " + p.texto[fin_b:fin_b + 40])))
         for k in RE_CASILLA.finditer(p.texto):

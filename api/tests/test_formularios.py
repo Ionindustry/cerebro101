@@ -356,6 +356,39 @@ class TestAnexosYZip(unittest.TestCase):
         self.assertEqual([m["miembro"] for m in r["miembros"]], ["Anexo I.docx"])
 
 
+class TestModeloDeProposicion(unittest.TestCase):
+    def test_las_etiquetas_del_precio_se_emparejan_con_su_dato(self):
+        casos = [("D. Ana se compromete a ejecutar el contrato por el precio de", "oferta.precio"), ("Precio ofertado (sin IVA)", "oferta.precio"), ("Importe de la oferta:", "oferta.precio"),
+                 ("por un importe de", "oferta.precio"), ("IVA (21 %):", "oferta.iva"), ("Importe del IVA", "oferta.iva"), ("Tipo de IVA", "oferta.iva_pct"),
+                 ("Importe total (IVA incluido):", "oferta.precio_con_iva"), ("Precio con IVA", "oferta.precio_con_iva"), ("(en letra)", "oferta.precio_letras"),
+                 ("Importe total", None), ("Observaciones", None)]
+        for etiqueta, clave in casos:
+            self.assertEqual(F.emparejar(etiqueta, etiqueta, en_tabla=True), clave, etiqueta)
+
+    def test_si_euros_va_detras_del_hueco_la_letra_no_repite_la_unidad(self):
+        self.assertEqual(F.emparejar("(en letra", "", despues=" euros)"), "oferta.precio_letras_sin_unidad")
+        self.assertEqual(F.emparejar("(en letra", "", despues=" € )"), "oferta.precio_letras_sin_unidad")
+        self.assertEqual(F.emparejar("(en letra", "", despues=")"), "oferta.precio_letras")
+        self.assertEqual(F.emparejar("en letra:", "", despues=""), "oferta.precio_letras")
+
+    def test_un_modelo_completo_se_detecta_y_se_rellena(self):
+        with tempfile.TemporaryDirectory() as d:
+            ruta, destino = Path(d) / "m.docx", Path(d) / "o.docx"
+            docx(ruta, p(r("ANEXO II. MODELO DE PROPOSICIÓN ECONÓMICA")) +
+                 p(r("D./Dª "), r("__________"), r(", en representación de la empresa "), r("__________"), r(", se compromete a ejecutar el contrato por el precio de "), r("__________"),
+                   r(" euros (IVA excluido), (en letra "), r("______________"), r(" euros)")) +
+                 "<w:tbl><w:tblPr/><w:tblGrid/>" + fila(celda("IVA (21 %):"), celda()) + fila(celda("Importe total (IVA incluido):"), celda()) + "</w:tbl>")
+            det = F.detectar(ruta, "docx")["campos"]
+            self.assertEqual([c["clave"] for c in det], ["representante.nombre", "empresa.razon_social", "oferta.precio", "oferta.precio_letras_sin_unidad", "oferta.iva", "oferta.precio_con_iva"])
+            valores = {"representante.nombre": "Ana Pérez", "empresa.razon_social": "101 S.L.", "oferta.precio": "125.000,00", "oferta.precio_letras_sin_unidad": "ciento veinticinco mil",
+                       "oferta.iva": "26.250,00", "oferta.precio_con_iva": "151.250,00"}
+            F.rellenar(ruta, "docx", destino, {c["id"]: valores[c["clave"]] for c in det})
+            t = " ".join(texto_original_n(destino).split())
+            self.assertIn("por el precio de 125.000,00 euros (iva excluido), (en letra ciento veinticinco mil euros)", t)
+            self.assertIn("iva (21 %): 26.250,00", t)
+            self.assertIn("importe total (iva incluido): 151.250,00", t)
+
+
 class TestPdf(unittest.TestCase):
     def test_detecta_y_rellena_los_campos_del_formulario(self):
         from pypdf import PdfReader

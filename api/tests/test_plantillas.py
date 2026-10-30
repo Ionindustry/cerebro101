@@ -347,6 +347,47 @@ class TestBaseDeDatos(unittest.TestCase):
         d = self.preparar(empresa="101 Telecom S.L.")["documentos"][0]
         self.assertEqual({x["anexo"] for x in d["rellenados"]}, {"ANEXO I. DECLARACIÓN", "ANEXO II. MODELO DE OFERTA"})
 
+    def test_el_modelo_de_proposicion_se_rellena_con_el_precio_que_fija_una_persona(self):
+        def modelo(r):
+            docx(r, "<w:p><w:r><w:t>ANEXO II. MODELO DE PROPOSICIÓN ECONÓMICA</w:t></w:r></w:p>"
+                    '<w:p><w:r><w:t xml:space="preserve">Se compromete a ejecutar el contrato por el precio de </w:t></w:r><w:r><w:t>__________</w:t></w:r><w:r><w:t xml:space="preserve"> euros (IVA excluido), (en letra </w:t></w:r><w:r><w:t>____________</w:t></w:r><w:r><w:t xml:space="preserve"> euros)</w:t></w:r></w:p>'
+                    '<w:tbl><w:tblPr/><w:tblGrid/><w:tr><w:tc><w:p><w:r><w:t>IVA (21 %):</w:t></w:r></w:p></w:tc><w:tc><w:p/></w:tc></w:tr>'
+                    '<w:tr><w:tc><w:p><w:r><w:t>Importe total (IVA incluido):</w:t></w:r></w:p></w:tc><w:tc><w:p/></w:tc></w:tr></w:tbl>')
+        self.documento(1, "Anexo II - Modelo de proposición.docx", "docx", modelo)
+        self.assertEqual(ejecutar(PL.datos_oferta(ID)), {})                                    # sin precio fijado no hay nada que poner
+        d = self.preparar(empresa="101 Telecom S.L.")["documentos"][0]
+        motivos = " ".join(p["motivo"] for p in d["pendientes"] if p["bloquea"])
+        self.assertIn("Fijar precio", motivos)                                                 # se dice dónde se resuelve
+        self.assertEqual(d["estado"], "faltan_datos")
+        ejecutar(O.fijar_precio(ID, 125000, 21, "albert"))                                       # lo fija una PERSONA
+        d = self.preparar()["documentos"][0]
+        valores = {x["clave"]: x for x in d["rellenados"]}
+        self.assertEqual(valores["oferta.precio"]["valor"], "125.000,00")
+        self.assertEqual(valores["oferta.precio_letras_sin_unidad"]["valor"], "ciento veinticinco mil")
+        self.assertEqual((valores["oferta.iva"]["valor"], valores["oferta.precio_con_iva"]["valor"]), ("26.250,00", "151.250,00"))
+        self.assertIn("precio fijado por albert", valores["oferta.precio"]["origen"])
+        _, datos, _ = ejecutar(PL.fichero(ID, d["id"]))
+        ruta = self.dir / "r.docx"
+        ruta.write_bytes(datos)
+        t = " ".join(F._texto_xml(__import__("zipfile").ZipFile(ruta).read("word/document.xml").decode()).split())
+        self.assertIn("por el precio de 125.000,00 euros (iva excluido), (en letra ciento veinticinco mil euros)", t)
+        self.assertIn("iva (21 %): 26.250,00", t)
+
+    def test_con_centimos_y_euros_ya_escrito_la_letra_queda_para_una_persona(self):
+        self.documento(1, "Modelo.docx", "docx", lambda r: docx(r, '<w:p><w:r><w:t xml:space="preserve">Precio (en letra </w:t></w:r><w:r><w:t>____________</w:t></w:r><w:r><w:t xml:space="preserve"> euros)</w:t></w:r></w:p>'))
+        ejecutar(O.fijar_precio(ID, 125000.5, 21, "albert"))
+        d = self.preparar(empresa="101 Telecom S.L.")["documentos"][0]
+        pendiente = next(p for p in d["pendientes"] if p["bloquea"])
+        self.assertIn("céntimos", pendiente["motivo"])
+        self.assertEqual(d["estado"], "faltan_datos")
+
+    def test_la_letra_de_un_millon_exacto_lleva_de(self):
+        ejecutar(O.fijar_precio(ID, 2000000, 10, "albert"))
+        v = ejecutar(PL.datos_oferta(ID))
+        self.assertEqual(v["oferta.precio_letras"]["valor"], "dos millones de euros")
+        self.assertNotIn("oferta.precio_letras_sin_unidad", v)
+        self.assertEqual((v["oferta.iva_pct"]["valor"], v["oferta.iva"]["valor"], v["oferta.precio_con_iva"]["valor"]), ("10", "200.000,00", "2.200.000,00"))
+
 
 def O_leer():
     return ejecutar(O.leer(ID, con_contenido=False))

@@ -18,7 +18,10 @@ from pathlib import Path
 
 from psycopg.types.json import Jsonb
 
+from decimal import Decimal
+
 from . import empresa as E
+from . import importes as I
 from . import formularios as F
 from . import ofertas as O
 from . import pliegos as P
@@ -28,7 +31,15 @@ log = logging.getLogger("cerebro.licitaciones.plantillas")
 RAIZ = Path(os.environ.get("OFERTAS_DIR", "/datos/licitaciones/ofertas"))
 CLAVES_LICITACION = {"licitacion.expediente": "la ficha de la licitación (número de expediente)", "licitacion.objeto": "la ficha de la licitación (título)",
                      "licitacion.organo": "la ficha de la licitación (órgano de contratación)"}
-CLAVES_VALIDAS = set(E.CLAVES) | set(CLAVES_LICITACION) | {F.SIN_DATO}
+CLAVES_OFERTA = {
+    "oferta.precio": "la tarjeta «Oferta» (el precio sin IVA lo fija una persona con «Fijar precio»)",
+    "oferta.iva_pct": "la tarjeta «Oferta» (el IVA que fija una persona junto al precio)",
+    "oferta.iva": "la tarjeta «Oferta» (se calcula cuando una persona fija el precio)",
+    "oferta.precio_con_iva": "la tarjeta «Oferta» (se calcula cuando una persona fija el precio)",
+    "oferta.precio_letras": "la tarjeta «Oferta» (se calcula cuando una persona fija el precio)",
+    "oferta.precio_letras_sin_unidad": "el precio de la oferta (si tiene céntimos, con «euros» ya escrito detrás del hueco no se puede poner en letra: escríbelo a mano)",
+}
+CLAVES_VALIDAS = set(E.CLAVES) | set(CLAVES_LICITACION) | set(CLAVES_OFERTA) | {F.SIN_DATO}
 MAX_PLANTILLAS = 40
 RE_MODELO = re.compile(r"(?i)anexo|annex|anexe|modelo|model|declaraci|deuc|formulari|plantilla")
 FORMATOS_SIN_SOPORTE = ("odt", "ods", "xlsx")
@@ -55,7 +66,27 @@ def datos_licitacion(ficha: dict) -> dict[str, dict]:
 
 
 def _donde(clave: str) -> str:
-    return E.CLAVES.get(clave) or CLAVES_LICITACION.get(clave) or clave
+    return E.CLAVES.get(clave) or CLAVES_LICITACION.get(clave) or CLAVES_OFERTA.get(clave) or clave
+
+
+async def datos_oferta(motor_id: str) -> dict[str, dict]:
+    """El precio de la oferta para los modelos de proposición económica. SOLO si una persona lo ha fijado (ofertas.fijar_precio): nunca sale de un agente. Con el precio sin IVA y el IVA que
+    fijó la persona se calculan el importe del IVA, el total, y las cantidades en letra."""
+    async with await O._conectar() as conn:
+        cur = await conn.execute("SELECT precio_sin_iva::text AS p, iva_pct::text AS i, precio_por, precio_en FROM ofertas WHERE motor_id = %s", [motor_id])
+        f = await cur.fetchone()
+    if not f or f["p"] is None:
+        return {}
+    base, pct = I.euros(f["p"]), Decimal(f["i"])
+    iva = I.euros(base * pct / 100)
+    total = base + iva
+    origen = f"Oferta · precio fijado por {f['precio_por']}" + (f" el {f['precio_en']:%d/%m/%Y}" if f["precio_en"] else "")
+    out = {"oferta.precio": I.formato_es(base), "oferta.iva_pct": I.porcentaje_es(pct), "oferta.iva": I.formato_es(iva), "oferta.precio_con_iva": I.formato_es(total),
+           "oferta.precio_letras": I.euros_en_letra(base)}
+    sin_unidad = I.euros_en_letra(base, con_unidad=False)
+    if sin_unidad:
+        out["oferta.precio_letras_sin_unidad"] = sin_unidad
+    return {k: {"valor": v, "origen": origen} for k, v in out.items()}
 
 
 def _nombre_salida(n: int, nombre: str, formato: str, sub: int | None = None) -> str:
@@ -191,7 +222,7 @@ async def preparar(motor_id: str, ficha: dict | None, usuario: str, empresa: str
     if nombre != o.get("empresa"):
         await O.fijar_empresa(motor_id, nombre)
     datos = await E.datos(nombre)
-    fuente = {**datos["valores"], **datos_licitacion(ficha or {})}
+    fuente = {**datos["valores"], **datos_licitacion(ficha or {}), **await datos_oferta(motor_id)}
     docs = await _candidatos(motor_id, n)
     if asignaciones and docs and any(d["formato"] == "zip" for d in docs) and not miembro:
         raise ErrorPlantilla("Ese documento es un ZIP con varios anexos: indica de cuál (miembro) son los huecos que eliges")
@@ -242,10 +273,12 @@ async def fichero(motor_id: str, doc_id: int) -> tuple[str, bytes, str]:
     return f["nombre_salida"], datos, MIME[f["formato"]]
 
 
-async def claves_disponibles(empresa: str | None, ficha: dict | None) -> dict:
+async def claves_disponibles(empresa: str | None, ficha: dict | None, motor_id: str | None = None) -> dict:
     """Qué datos hay para rellenar (con su origen) y cuáles faltan (con dónde completarlos): lo que un agente necesita para elegir qué dato va en un hueco dudoso."""
     nombre = await E.elegir(empresa)
     datos = await E.datos(nombre)
-    fuente = {**datos["valores"], **datos_licitacion(ficha or {})}
+    fuente = {**datos["valores"], **datos_licitacion(ficha or {}), **(await datos_oferta(O._id(motor_id)) if motor_id else {})}
     return {"empresa": nombre, "disponibles": {k: v["valor"] for k, v in fuente.items()},
-            "faltan": {k: _donde(k) for k in [*E.CLAVES, *CLAVES_LICITACION] if k not in fuente}, "al_firmar": F.SIN_DATO}
+            "faltan": {k: _donde(k) for k in [*E.CLAVES, *CLAVES_LICITACION] if k not in fuente},
+            "oferta": "el precio y el IVA de la oferta (oferta.precio, oferta.iva_pct, oferta.iva, oferta.precio_con_iva, oferta.precio_letras) los pone el sistema solo cuando una persona fija el precio",
+            "al_firmar": F.SIN_DATO}
