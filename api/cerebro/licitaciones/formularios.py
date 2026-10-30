@@ -97,10 +97,15 @@ REGLAS = (
     (r"(telefono|tfno\.?|tel\.?|movil|telefono movil)\s*[:,]?$", "empresa.telefono"),
     (r"(correo( electronico)?|e-?mail|email|direccion de correo( electronico)?)\s*[:,]?$", "empresa.email"),
     (r"(en calidad de|con el cargo de|cargo|caracter|actuando como|en su condicion de|en su calidad de)\s*[:,]?$", "representante.cargo"),
+    (r"(numero de referencia|referencia del expediente)\b.{0,90}$", "licitacion.expediente"),               # DEUC: «Número de referencia del expediente asignado por el poder adjudicador»
+    (r"(organo de contratacion|nombre oficial|poder adjudicador|entidad adjudicadora)\s*[:,]?$", "licitacion.organo"),
+    (r"(titulo o breve descripcion de la contratacion|breve descripcion de la contratacion|titulo de la contratacion|titulo del contrato)\s*[:,]?$", "licitacion.objeto"),
+    (r"(codigos? cpv|cpv)\s*[:,]?$", "licitacion.cpv"),
+    (r"(procedimiento de contratacion|tipo de procedimiento)\s*[:,]?$", "licitacion.procedimiento"),
+    (r"(valor estimado( del contrato)?|presupuesto base de licitacion)\s*[:,]?$", "licitacion.importe"),
     (r"(poder|escritura|notario|protocolo)\b.*$", "representante.poder"),
     (r"(registro mercantil|inscrita en|inscripcion)\b.*$", "empresa.registro"),
     (r"(numero de expediente|n[º°o.]? de expediente|expediente( n[º°o.])?|referencia)\s*[:,]?$", "licitacion.expediente"),
-    (r"(organo de contratacion)\s*[:,]?$", "licitacion.organo"),
     (r"(objeto del contrato|contrato de|licitacion denominada|denominad[ao]|para la contratacion de|objeto)\s*[:,]?$", "licitacion.objeto"),
 )
 _REP = re.compile(r"en representacion|en nombre de|actuando en nombre")

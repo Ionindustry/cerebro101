@@ -271,6 +271,7 @@ def texto_plantillas(resultado: dict | None, error: str = "") -> str:
             ". Pendientes: " + "; ".join(f"{p['id']} «{p['etiqueta'][-50:]}» ({p['motivo']})" for p in pend) if pend else ""))
     return ("\nPlantillas del concurso (ya rellenadas por el sistema con los datos del ERP; el original no se toca):\n" + "\n".join(lineas) +
             "\nSi un hueco pendiente es dudoso y sabes qué dato le corresponde, elígelo con «plantillas», operación «rellenar» (documento y asignaciones {hueco: clave}); mira antes «datos_disponibles». "
+            "El «Documento 0» (si está) es el DEUC de la sociedad: ya trae los datos de la empresa y solo falta lo propio del concurso; completa sus huecos con «rellenar» (documento 0). "
             "Nunca escribas el valor: sale del ERP. Los datos que faltan en el ERP los completa una persona allí.")
 
 

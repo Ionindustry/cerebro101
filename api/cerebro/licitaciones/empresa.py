@@ -19,6 +19,7 @@ DEFECTO = {
     "departamento_erp": "licitaciones",
     "designaciones": ["administrador", "apoderado", "representante legal", "gerente", "director general", "consejero delegado"],
     "campos": {"empresa_registro": "registration_details", "representante_dni": "dni", "representante_poder": "poder"},
+    "deuc_patron": "deuc|espd",
 }
 # Los datos que se pueden poner en un documento, y dónde se completa cada uno en el ERP si falta.
 CLAVES = {
@@ -65,7 +66,8 @@ def configuracion() -> dict:
         c = {}
     return {"departamento_erp": str(c.get("departamento_erp") or DEFECTO["departamento_erp"]),
             "designaciones": [str(x).lower().strip() for x in (c.get("designaciones") or DEFECTO["designaciones"]) if x],
-            "campos": {**DEFECTO["campos"], **{k: str(v) for k, v in (c.get("campos") or {}).items() if v}}}
+            "campos": {**DEFECTO["campos"], **{k: str(v) for k, v in (c.get("campos") or {}).items() if v}},
+            "deuc_patron": str(c.get("deuc_patron") or DEFECTO["deuc_patron"])}
 
 
 def _t(v, n: int = 300) -> str:
@@ -111,6 +113,27 @@ async def elegir(empresa: str | None = None) -> str:
     if len(lista) == 1:
         return lista[0]["nombre"]
     raise VariasEmpresas(lista)
+
+
+MAX_DEUC = 20 << 20
+
+
+async def deuc_base(empresa: str) -> tuple[str, bytes] | None:
+    """El DEUC base de la empresa: el Word cuyo nombre lleva «DEUC» (o «ESPD») adjunto a la Company en el ERP, con los datos de la empresa ya rellenados. Si hay varios, el más reciente.
+    None si no hay ninguno. Se lee con la clave del departamento (categoría «sistema»: Company y File); un fichero que no es un Word de verdad no se admite."""
+    cfg = configuracion()
+    dep = cfg["departamento_erp"]
+    filas = await _leer_erp(_erp().listar_sistema("File", dep, [["attached_to_doctype", "=", "Company"], ["attached_to_name", "=", empresa]],
+                                                  ["name", "file_name", "file_url", "modified"], 50))
+    patron = re.compile(cfg["deuc_patron"], re.I)
+    validos = [f for f in filas if f.get("file_url") and str(f.get("file_name") or "").lower().endswith(".docx") and patron.search(str(f.get("file_name") or ""))]
+    if not validos:
+        return None
+    elegido = max(validos, key=lambda f: str(f.get("modified") or ""))
+    datos = await _leer_erp(_erp().descargar_sistema(elegido["file_url"], dep, MAX_DEUC))
+    if datos[:2] != b"PK":
+        raise ErrorEmpresa(f"El fichero «{_t(elegido['file_name'], 80)}» adjunto a la empresa no es un Word (.docx) válido")
+    return _t(elegido["file_name"], 120), datos
 
 
 def _origen(doctype: str, nombre: str, campo: str) -> str:

@@ -117,6 +117,23 @@ async def listar_sistema(doctype: str, departamento: str, filtros: list | None =
     return r.json()["data"]
 
 
+_RUTA_FICHERO = re.compile(r"^/(private/)?files/[^?#\\\x00-\x1f]{1,200}$")
+
+
+async def descargar_sistema(ruta: str, departamento: str, max_bytes: int = 20 << 20) -> bytes:
+    """Descarga un fichero del ERP (p. ej. el DEUC base adjunto a una empresa) con la clave del departamento. NO es una operación de los agentes: solo procesos del sistema, y exige el tipo «File»
+    en «sistema». Solo rutas /files/… o /private/files/… (nada de «..» ni de otras direcciones); pasarse del tamaño es un error."""
+    comprobar_acceso(departamento, "File", "sistema")
+    if not isinstance(ruta, str) or not _RUTA_FICHERO.match(ruta) or ".." in ruta:
+        raise PermissionError("La ruta del fichero no es válida")
+    async with httpx.AsyncClient(base_url=ajustes.erpnext_url, timeout=60) as c:
+        r = await c.get(quote(ruta, safe="/"), headers=_cabeceras(departamento))
+    r.raise_for_status()
+    if len(r.content) > max_bytes:
+        raise ValueError("El fichero es demasiado grande")
+    return r.content
+
+
 # Frappe CRM solo deja ver los leads y tratos de los que el usuario es propietario (o se le asignan): sin propietario, quien los crea no los ve
 PROPIETARIO = {"CRM Lead": "lead_owner", "CRM Deal": "deal_owner"}
 _usuarios: dict[str, str] = {}

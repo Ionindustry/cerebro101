@@ -583,3 +583,12 @@ Muchos pliegos traen sus modelos en Word antiguo (`.doc`), OpenDocument (`.odt`)
 - El documento rellenado se entrega en `.docx` y el panel avisa: «Se ha convertido de odt a Word… revisa que el formato se ha conservado antes de firmar». El original no se toca.
 - Siguen sin rellenarse solos: `.xls`, `.xlsx`, `.ods` y PDF sin campos de formulario (se avisa en la tarjeta).
 - La imagen se publica en GitHub (`cerebro101-conversor`) y `./scripts/actualizar.sh` la descarga con las demás. Si el servicio no está, los modelos en esos formatos quedan como «error» con su motivo, como antes.
+
+## DEUC de la sociedad
+
+El DEUC (documento europeo único de contratación) se adjunta **ya rellenado con los datos de la empresa**; en cada concurso solo se completan los campos propios del concurso, y los rellenan los agentes eligiendo la clave de cada hueco (el valor siempre sale de la ficha, nunca lo escribe el modelo).
+
+- **Dónde está:** cada sociedad tiene su DEUC base, un **Word (.docx)** con «DEUC» (o «ESPD») en el nombre, **adjunto a su ficha de empresa (Company) en el ERP** (Adjuntos). Si hay varios, se usa el más reciente. Si hay varias sociedades, cada una tiene el suyo. Se lee con la clave del departamento de Licitaciones (categoría «sistema»: `Company` y `File`), no lo leen los agentes.
+- **Qué se hace:** al preparar la documentación administrativa se copia el DEUC base a la oferta (el original del ERP no se toca) y se rellenan los huecos del concurso: órgano de contratación («Nombre oficial»), título del contrato, número de expediente, CPV, procedimiento, valor estimado y fecha del plazo. Aparece en la tarjeta como «DEUC de la sociedad» (documento 0) y sigue el mismo ciclo que los demás: lo dudoso lo elige un agente con `plantillas.rellenar` (documento 0) o una persona; lo firma una persona.
+- **Si la sociedad no tiene DEUC base:** no se inventa nada. Solo se avisa cuando el pliego trae un DEUC («adjunta el DEUC base a la empresa en el ERP»).
+- **Permisos:** tras actualizar, `python3 scripts/erpnext_roles_cerebro.py --departamento licitaciones` y reiniciar api/worker/beat (el rol necesita leer `File`).

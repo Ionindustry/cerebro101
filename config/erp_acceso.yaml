@@ -63,7 +63,7 @@ departamentos:
            CRM Deal, CRM Organization, CRM Task, FCRM Note, CRM Deal Status]
     borrador: [Opportunity, Quotation, Task, FCRM Note, CRM Task]      # los agentes anotan y programan tareas en el trato de la licitación
     maestros: [CRM Deal, CRM Organization]     # el trato (y el organismo) los crea y mueve de etapa el sistema según el embudo (cerebro/licitaciones/crm.py), no un agente
-    sistema: [Company, Address, Contact]     # los datos de la empresa (o empresas) del ERP para rellenar las plantillas administrativas; solo los lee cerebro/licitaciones/empresa.py
+    sistema: [Company, Address, Contact, File]     # los datos de la empresa (o empresas) del ERP y su DEUC base (un Word adjunto a la Company) para rellenar las plantillas administrativas; solo los lee cerebro/licitaciones/empresa.py
   legal:
     leer: [Contract, Customer, Supplier, Project, Task, Non Conformance, Quality Goal, Quality Procedure, Quality Review, Quality Action]
     borrador: [Contract, Non Conformance, Quality Goal, Quality Review, Quality Action, Task]

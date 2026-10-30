@@ -31,7 +31,10 @@ log = logging.getLogger("cerebro.licitaciones.plantillas")
 
 RAIZ = Path(os.environ.get("OFERTAS_DIR", "/datos/licitaciones/ofertas"))
 CLAVES_LICITACION = {"licitacion.expediente": "la ficha de la licitación (número de expediente)", "licitacion.objeto": "la ficha de la licitación (título)",
-                     "licitacion.organo": "la ficha de la licitación (órgano de contratación)"}
+                     "licitacion.organo": "la ficha de la licitación (órgano de contratación)", "licitacion.cpv": "la ficha de la licitación (códigos CPV)",
+                     "licitacion.procedimiento": "la ficha de la licitación (procedimiento)", "licitacion.importe": "la ficha de la licitación (valor estimado, sin IVA)",
+                     "licitacion.plazo": "la ficha de la licitación (fin del plazo de presentación)"}
+DEUC_N = 0                      # el DEUC base de la sociedad se trata como «documento 0» de la oferta (no es un documento del pliego)
 CLAVES_OFERTA = {
     "oferta.precio": "la tarjeta «Oferta» (el precio sin IVA lo fija una persona con «Fijar precio»)",
     "oferta.iva_pct": "la tarjeta «Oferta» (el IVA que fija una persona junto al precio)",
@@ -63,7 +66,30 @@ def datos_licitacion(ficha: dict) -> dict[str, dict]:
         v = re.sub(r"\s+", " ", str(valor or "")).strip()[:400]
         if v:
             out[clave] = {"valor": v, "origen": origen}
+    f = ficha or {}
+    extra = {"licitacion.cpv": ", ".join(str(c) for c in (f.get("cpv") or [])[:8]), "licitacion.procedimiento": f.get("procedimiento"),
+             "licitacion.plazo": _fecha_es((f.get("plazos") or {}).get("presentacion"))}
+    importes = f.get("importes") or []
+    elegido = next((i for i in importes if isinstance(i, dict) and i.get("significado") == "valor_estimado"), None)
+    if elegido and elegido.get("moneda") in (None, "EUR"):
+        try:
+            extra["licitacion.importe"] = f"{I.formato_es(Decimal(str(elegido['valor'])))} €"
+        except (ArithmeticError, ValueError, KeyError, TypeError):
+            pass
+    for clave, valor in extra.items():
+        v = re.sub(r"\s+", " ", str(valor or "")).strip()[:400]
+        if v:
+            out[clave] = {"valor": v, "origen": origen}
     return out
+
+
+def _fecha_es(t) -> str:
+    """dd/mm/aaaa de una fecha ISO (la del plazo de la ficha); vacío si no es una fecha."""
+    from datetime import datetime
+    try:
+        return datetime.fromisoformat(str(t)).strftime("%d/%m/%Y")
+    except ValueError:
+        return ""
 
 
 def _donde(clave: str) -> str:
@@ -228,6 +254,29 @@ async def _tratar(motor_id: str, doc: dict, fuente: dict, empresa: str, asignaci
         await _guardar(motor_id, doc, "error", empresa, "", "", 0, [], [], [aviso], {}, usuario)
 
 
+async def _deuc(motor_id: str, fuente: dict, empresa: str, asignaciones: dict, usuario: str, hay_deuc_en_el_pliego: bool) -> None:
+    """El DEUC base de la sociedad (Word adjunto a la Company en el ERP, con los datos de la empresa ya rellenados) se copia y se rellenan SOLO los campos propios del concurso (título, expediente,
+    órgano…); lo demás no se toca. Si la sociedad no tiene DEUC base no se inventa nada: solo se avisa cuando el pliego pide un DEUC."""
+    doc = {"id": DEUC_N, "n": DEUC_N, "nombre": "DEUC", "miembro": "DEUC", "formato": "docx", "sha256": ""}
+    try:
+        base = await E.deuc_base(empresa)
+        if base is None:
+            if hay_deuc_en_el_pliego:
+                await _guardar(motor_id, doc, "error", empresa, "", "", 0, [], [], [f"El pliego pide un DEUC y la sociedad «{empresa}» no tiene el DEUC base: adjúntalo a su ficha de empresa en el ERP (un Word con «DEUC» en el nombre)"],
+                               {}, usuario)
+            return
+        nombre, datos = base
+        sha = hashlib.sha256(datos).hexdigest()
+        ruta = RAIZ / motor_id / "_deuc" / f"{sha}.docx"
+        ruta.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
+        ruta.write_bytes(datos)
+        os.chmod(ruta, 0o600)
+        await _procesar(motor_id, {**doc, "sha256": sha, "ruta": str(ruta), "nombre": f"DEUC ({nombre})"}, fuente, empresa, asignaciones, usuario, True)
+    except (E.ErrorEmpresa, F.ErrorFormulario, OSError) as e:
+        log.warning("plantillas: no se ha podido preparar el DEUC de %s: %s", motor_id, e)
+        await _guardar(motor_id, doc, "error", empresa, "", "", 0, [], [], [str(e)[:300]], {}, usuario)
+
+
 async def preparar(motor_id: str, ficha: dict | None, usuario: str, empresa: str | None = None, n: int | None = None, asignaciones: dict | None = None, miembro: str | None = None) -> dict:
     """Rellena las plantillas del concurso (todas, o solo el documento `n`) con los datos de la sociedad elegida. Se puede repetir: rehace lo rellenado desde el original, conservando lo que
     un agente eligió para los huecos dudosos. Lanza E.VariasEmpresas si el ERP tiene varias y no se ha elegido, y NoExiste si la oferta aún no está preparada."""
@@ -240,6 +289,9 @@ async def preparar(motor_id: str, ficha: dict | None, usuario: str, empresa: str
         await O.fijar_empresa(motor_id, nombre)
     datos = await E.datos(nombre)
     fuente = {**datos["valores"], **datos_licitacion(ficha or {}), **await datos_oferta(motor_id)}
+    if n == DEUC_N and n is not None:
+        await _deuc(motor_id, fuente, nombre, asignaciones or {}, str(usuario), True)
+        return await listar(motor_id)
     docs = await _candidatos(motor_id, n)
     if asignaciones and docs and any(d["formato"] == "zip" for d in docs) and not miembro:
         raise ErrorPlantilla("Ese documento es un ZIP con varios anexos: indica de cuál (miembro) son los huecos que eliges")
@@ -251,6 +303,8 @@ async def preparar(motor_id: str, ficha: dict | None, usuario: str, empresa: str
         except (F.ErrorFormulario, OSError) as e:
             log.warning("plantillas: no se ha podido rellenar «%s» de %s: %s", doc["nombre"], motor_id, e)
             await _guardar(motor_id, doc, "error", nombre, "", "", 0, [], [], [str(e)[:300]], {}, str(usuario))
+    if n is None:
+        await _deuc(motor_id, fuente, nombre, {}, str(usuario), any(re.search(r"(?i)deuc|espd", d["nombre"]) for d in docs))
     return await listar(motor_id)
 
 
