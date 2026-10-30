@@ -959,3 +959,17 @@ test("los mensajes de la redacción explican qué hacer", () => {
   assert.match(mensajeRedaccion(503), /ERP|motor|cola/);
   assert.match(mensajeRedaccion(500), /Inténtalo de nuevo/);
 });
+
+import { agruparPorAnexo } from "../lib/licitaciones.js";
+
+test("los huecos de un documento se agrupan por anexo o modelo", () => {
+  const d = {
+    rellenados: [{ id: "t1", anexo: "ANEXO I. DECLARACIÓN" }, { id: "t2", anexo: "ANEXO I. DECLARACIÓN" }, { id: "t3", anexo: "ANEXO II. OFERTA" }, { id: "t4" }],
+    pendientes: [{ id: "c9", anexo: "ANEXO II. OFERTA" }, { id: "z1", anexo: "" }, { id: "t8", anexo: "ANEXO III" }],
+  };
+  const g = agruparPorAnexo(d);
+  assert.deepEqual(g.map((x) => x.anexo), ["ANEXO I. DECLARACIÓN", "ANEXO II. OFERTA", "", "ANEXO III"]);
+  assert.deepEqual(g.map((x) => [x.rellenados.length, x.pendientes.length]), [[2, 0], [1, 1], [1, 1], [0, 1]]);
+  assert.deepEqual(agruparPorAnexo({ rellenados: [], pendientes: [] }), []);
+  assert.deepEqual(agruparPorAnexo(null), []);
+});

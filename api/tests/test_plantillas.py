@@ -31,6 +31,16 @@ def ejecutar(c):
     return asyncio.run(c)
 
 
+CUERPO_SIMPLE = ('<w:p><w:r><w:t xml:space="preserve">Razón social: </w:t></w:r><w:r><w:t>__________</w:t></w:r></w:p>'
+                 '<w:p><w:r><w:t xml:space="preserve">con NIF </w:t></w:r><w:r><w:t>_________</w:t></w:r></w:p>')
+
+
+def docx_sin_huecos(carpeta):
+    ruta = carpeta / "sin_huecos.docx"
+    docx(ruta, "<w:p><w:r><w:t>Solo texto, sin huecos.</w:t></w:r></w:p>")
+    return ruta.read_bytes()
+
+
 EMPRESAS = [{"name": "101 Telecom S.L.", "company_name": "101 Telecomunicaciones & Seguridad, S.L.", "tax_id": "B12345678", "phone_no": "972 000 000", "email": "licitaciones@101.cat",
              "country": "Spain", "registration_details": "Registro Mercantil de Girona, tomo 1, folio 2"},
             {"name": "Ion Industry S.A.", "company_name": "Ion Industry, S.A.", "tax_id": "A87654321", "phone_no": "", "email": "", "country": "Spain"}]
@@ -278,6 +288,64 @@ class TestBaseDeDatos(unittest.TestCase):
         self.assertEqual([d["documento"] for d in r["documentos"]], [2])     # el roto no se presenta como plantilla
         r = self.preparar(n=1)
         self.assertEqual(next(d for d in r["documentos"] if d["documento"] == 1)["estado"], "error")
+
+    def zip_con(self, miembros):
+        def crear(ruta):
+            import zipfile
+            with zipfile.ZipFile(ruta, "w", zipfile.ZIP_DEFLATED) as z:
+                for nombre, datos in miembros:
+                    z.writestr(nombre, datos)
+        return crear
+
+    def test_un_zip_de_documentacion_se_abre_y_se_rellena_cada_anexo_y_se_avisa_del_resto(self):
+        d1, d2 = self.dir / "a.docx", self.dir / "b.pdf"
+        docx(d1)
+        pdf_con_formulario(d2, [("a", "Razón social"), ("b", "NIF/CIF")])
+        self.documento(1, "Documentación administrativa.zip", "zip", self.zip_con([("Sobre 1/Anexo I - Declaración.docx", d1.read_bytes()), ("Sobre 1/Anexo II - Modelo.pdf", d2.read_bytes()),
+                                                                                     ("Sobre 1/Anexo III.doc", b"binario antiguo"), ("Sobre 1/Pliego.docx", docx_sin_huecos(self.dir))]))
+        r = self.preparar(empresa="101 Telecom S.L.")
+        por = {d["miembro"]: d for d in r["documentos"]}
+        self.assertEqual(set(por), {"Sobre 1/Anexo I - Declaración.docx", "Sobre 1/Anexo II - Modelo.pdf", None})      # el Pliego sin huecos no es un modelo; el .doc deja constancia
+        w, pdf, resumen = por["Sobre 1/Anexo I - Declaración.docx"], por["Sobre 1/Anexo II - Modelo.pdf"], por[None]
+        self.assertEqual((w["estado"], pdf["estado"]), ("faltan_datos", "lista_para_firma"))
+        self.assertNotEqual(w["fichero"], pdf["fichero"])                         # cada anexo, su propio fichero rellenado
+        self.assertTrue(w["fichero"].startswith("01.01 - Anexo I - Declaración") and pdf["fichero"].startswith("01.02 - Anexo II - Modelo"))
+        self.assertEqual(w["nombre"], "Documentación administrativa.zip › Sobre 1/Anexo I - Declaración.docx")
+        self.assertEqual(resumen["estado"], "faltan_datos")
+        self.assertIn("Anexo III.doc", resumen["avisos"][0])
+        self.assertTrue(resumen["pendientes"][0]["bloquea"])
+        for d in (w, pdf):
+            ejecutar(PL.fichero(ID, d["id"]))                                    # se pueden descargar
+        # repetir no duplica las filas
+        self.assertEqual(len(self.preparar()["documentos"]), 3)
+
+    def test_un_hueco_dudoso_de_un_anexo_dentro_de_un_zip_se_elige_con_su_miembro(self):
+        d1 = self.dir / "a.docx"
+        docx(d1)
+        self.documento(1, "Paquete.zip", "zip", self.zip_con([("Anexo I.docx", d1.read_bytes()), ("Anexo II.docx", d1.read_bytes())]))
+        r = self.preparar(empresa="101 Telecom S.L.")
+        dudoso = next(p for p in r["documentos"][0]["pendientes"] if p["etiqueta"] == "dato raro")
+        with self.assertRaisesRegex(PL.ErrorPlantilla, "miembro"):
+            self.preparar(n=1, asignaciones={dudoso["id"]: "empresa.localidad"})        # los ids se repiten en cada anexo: hay que decir de cuál
+        with self.assertRaisesRegex(PL.ErrorPlantilla, "no tiene el fichero"):
+            self.preparar(n=1, asignaciones={dudoso["id"]: "empresa.localidad"}, miembro="Otro.docx")
+        r = self.preparar(n=1, asignaciones={dudoso["id"]: "empresa.localidad"}, miembro="Anexo II.docx")
+        por = {d["miembro"]: d for d in r["documentos"]}
+        self.assertTrue(any(x["valor"] == "Girona" for x in por["Anexo II.docx"]["rellenados"] if x["etiqueta"] == "dato raro"))
+        self.assertFalse(any(x["etiqueta"] == "dato raro" for x in por["Anexo I.docx"]["rellenados"]))        # el otro anexo no se toca
+
+    def test_un_modelo_en_odt_o_excel_deja_constancia_y_lo_demas_no(self):
+        self.documento(1, "Anexo II - Modelo de proposición.odt", "odt", lambda r: r.write_bytes(b"PK odt"))
+        self.documento(2, "Memoria descriptiva.xlsx", "xlsx", lambda r: r.write_bytes(b"PK xlsx"))
+        r = self.preparar(empresa="101 Telecom S.L.")
+        self.assertEqual([(d["documento"], d["estado"]) for d in r["documentos"]], [(1, "error")])      # solo el que parece un modelo
+        self.assertIn("odt", r["documentos"][0]["avisos"][0])
+        self.assertIn("Word", r["documentos"][0]["avisos"][0])
+
+    def test_los_huecos_se_agrupan_por_anexo(self):
+        self.documento(1, "Documentación administrativa.docx", "docx", lambda r: docx(r, "<w:p><w:r><w:t>ANEXO I. DECLARACIÓN</w:t></w:r></w:p>" + CUERPO_SIMPLE + "<w:p><w:r><w:t>ANEXO II. MODELO DE OFERTA</w:t></w:r></w:p>" + CUERPO_SIMPLE))
+        d = self.preparar(empresa="101 Telecom S.L.")["documentos"][0]
+        self.assertEqual({x["anexo"] for x in d["rellenados"]}, {"ANEXO I. DECLARACIÓN", "ANEXO II. MODELO DE OFERTA"})
 
 
 def O_leer():

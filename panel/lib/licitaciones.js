@@ -619,6 +619,15 @@ export function resumenPlantillas(r) {
     [x.sin_huecos, "sin huecos", "sin huecos"]].filter(([n]) => n > 0).map(([n, uno, varios]) => `${n} ${n === 1 ? uno : varios}`).join(" · ");
 }
 
+/** Los huecos de un documento agrupados por anexo o modelo, en el orden en que salen: [{anexo, rellenados, pendientes}]. El anexo vacío es lo que no cuelga de ningún título. */
+export function agruparPorAnexo(d) {
+  const grupos = new Map();
+  const grupo = (a) => { const k = String(a || ""); if (!grupos.has(k)) grupos.set(k, { anexo: k, rellenados: [], pendientes: [] }); return grupos.get(k); };
+  for (const r of d?.rellenados || []) grupo(r.anexo).rellenados.push(r);
+  for (const p of d?.pendientes || []) grupo(p.anexo).pendientes.push(p);
+  return [...grupos.values()];
+}
+
 /** De dónde sale un dato rellenado, en una frase corta («ERP · Company 101 S.L. · tax_id» → «ERP: tax_id de 101 S.L.»). */
 export function origenTexto(o) {
   const m = /^ERP · (\S+) (.+) · (\S+)$/.exec(String(o || ""));

@@ -473,7 +473,8 @@ CREATE TABLE IF NOT EXISTS ofertas_documentos (
   motor_id      uuid NOT NULL REFERENCES ofertas (motor_id) ON DELETE CASCADE,
   documento_id  bigint NOT NULL,                              -- el documento del pliego del que sale (pliegos_documentos.id; sin clave ajena para no atar este bloque al del pliego)
   n             integer NOT NULL,                              -- número del documento del pliego en la ficha
-  nombre        text NOT NULL,                                 -- nombre del documento original
+  nombre        text NOT NULL,                                 -- nombre del documento original (con «› fichero» si es un miembro de un ZIP)
+  miembro       text NOT NULL DEFAULT '',                      -- el fichero de dentro, si el documento del pliego es un ZIP de documentación
   formato       text NOT NULL,
   estado        text NOT NULL CHECK (estado IN ('lista_para_firma', 'faltan_datos', 'sin_huecos', 'error')),
   empresa       text,                                          -- la sociedad con cuyos datos se ha rellenado
@@ -486,7 +487,7 @@ CREATE TABLE IF NOT EXISTS ofertas_documentos (
   asignaciones  jsonb NOT NULL DEFAULT '{}',                   -- {hueco: clave de dato} que eligió un agente para los huecos dudosos
   por           text NOT NULL,
   creado        timestamptz NOT NULL DEFAULT now(),
-  UNIQUE (motor_id, documento_id)
+  UNIQUE (motor_id, documento_id, miembro)
 );
 
 -- Redacción de la oferta por los agentes (api/cerebro/licitaciones/redaccion.py): cada pulsación de «Preparar la oferta» es una ejecución con un paso por agente, para que el panel enseñe el progreso.

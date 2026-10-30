@@ -40,6 +40,7 @@ RE_P_VACIO = re.compile(r"<w:p(\s[^>]*?)?/>")
 RE_BLANCO = re.compile(r"_{3,}|(?:\.\s?){4,}|…{2,}|(?<![\w.])\.{4,}")
 RE_CASILLA = re.compile(r"☐|\[\s?\]")
 RE_FECHA = re.compile(r"(?i)\ba\b\s*[_.…\s]{2,}\s*de\s*[_.…\s]{3,}\s*de\s*(?:20)?[_.…\s\d]*")
+RE_ANEXO = re.compile(r"(?i)^\s*(anexo|annex|anexe|modelo|model|formulario|declaraci[oó]n responsable)\b.{0,110}$")
 RE_OPCIONAL = re.compile(r"(?i)\b(fax|opcional|en su caso|si procede|si lo hubiera|si lo tuviera|si existe)\b")
 
 
@@ -110,6 +111,8 @@ def emparejar(etiqueta: str, antes: str = "", en_tabla: bool = False) -> str | N
     for patron, clave in REGLAS:
         if re.search(patron, e):
             if clave == "nif":
+                if re.search(r"cif", e):
+                    return "empresa.nif"                                   # un CIF es siempre de una empresa (y «NIF/CIF» también)
                 if en_tabla:
                     return "representante.dni" if re.search(r"representante|firmante|apoderad", e) else "empresa.nif"
                 return "empresa.nif" if _REP.search(todo) else "representante.dni"      # «D. …, con NIF …, en representación de …, con NIF …»
@@ -136,20 +139,33 @@ def _leer_docx(ruta: Path) -> tuple[zipfile.ZipFile, str]:
     return z, z.read(info).decode("utf-8")
 
 
+def _subrayado(xml: str, pos_t: int) -> bool:
+    """¿El texto que empieza en `pos_t` está en un trozo (<w:r>) subrayado?"""
+    ini = max(xml.rfind("<w:r>", 0, pos_t), xml.rfind("<w:r ", 0, pos_t))
+    return ini >= 0 and re.search(r'<w:u\b(?![^>]*w:val="none")', xml[ini:pos_t]) is not None
+
+
 class _Parrafo:
     """Un párrafo: su texto continuo y los trozos <w:t> que lo forman (con su posición en el XML, para editarlos sin tocar nada más)."""
 
     def __init__(self, xml: str, inicio: int):
         self.inicio, self.trozos, partes, pos = inicio, [], [], 0
+        self.subrayados: list[tuple[int, int]] = []         # huecos hechos con espacios subrayados (lo más habitual en las plantillas de las administraciones)
         for m in RE_TOKEN.finditer(xml):
             if m.group(0).startswith("<w:t") and not m.group(0).startswith(("<w:tab", "<w:tbl")):
                 texto = _unesc(RE_T.match(m.group(0)).group(1))
                 self.trozos.append({"ini": inicio + m.start(), "fin": inicio + m.end(), "pos": pos, "texto": texto, "cambiado": False})
+                if len(texto) >= 2 and not texto.strip() and _subrayado(xml, m.start()):
+                    if self.subrayados and self.subrayados[-1][1] == pos:
+                        self.subrayados[-1] = (self.subrayados[-1][0], pos + len(texto))       # trozos subrayados seguidos: un solo hueco
+                    else:
+                        self.subrayados.append((pos, pos + len(texto)))
                 partes.append(texto)
                 pos += len(texto)
             else:
                 partes.append(" ")
                 pos += 1
+        self.subrayados = [(a, b) for a, b in self.subrayados if b - a >= 3]
         self.texto = "".join(partes)
 
     def sustituir(self, a: int, b: int, valor: str) -> None:
@@ -171,6 +187,7 @@ class _Parrafo:
 
 
 def _texto_xml(xml: str) -> str:
+    xml = re.sub(r"<w:instrText[^>]*>.*?</w:instrText>", " ", xml, flags=re.S)           # las instrucciones de campo (FORMTEXT…) no son texto que se lea
     return _norm(_unesc(re.sub(r"<[^>]+>", "", re.sub(r"<w:tab\s*/>|<w:br\s*/>|</w:p>|</w:tc>", " ", xml))))
 
 
@@ -242,13 +259,83 @@ def _rellenar_control(sdt_xml: str, valor: str) -> str:
     return re.sub(r"<w:showingPlcHdr\s*/>", "", sdt_xml[:inicio] + cuerpo + sdt_xml[fin:])
 
 
+RE_FF = re.compile(r"<w:ffData>.*?</w:ffData>", re.S)
+
+
+def _campos_antiguos(x: str) -> list[dict]:
+    """Campos de formulario antiguos de Word («Texto1», casillas): su resultado es lo que hay entre «separate» y «end». Las listas desplegables no se tocan."""
+    out = []
+    for m in RE_FF.finditer(x):
+        ff = m.group(0)
+        casilla = "<w:checkBox" in ff
+        if not casilla and "<w:textInput" not in ff:
+            continue
+        ayuda = re.search(r'<w:(?:statusText|helpText)[^>]*w:val="([^"]*)"', ff)
+        parrafo = max(x.rfind("<w:p>", 0, m.start()), x.rfind("<w:p ", 0, m.start()))
+        antes = _texto_xml(x[parrafo:m.start()]) if parrafo >= 0 else ""
+        etiqueta = (_unesc(ayuda.group(1)) if ayuda and ayuda.group(1).strip() else antes)[-90:]
+        if casilla:
+            out.append({"ini": m.start(), "fin": m.end(), "casilla": True, "etiqueta": etiqueta, "antes": antes})
+            continue
+        sep = x.find('w:fldCharType="separate"', m.end())
+        fin = x.find('w:fldCharType="end"', sep) if sep >= 0 else -1
+        if sep < 0 or fin < 0 or 'w:fldCharType="begin"' in x[m.end():fin]:
+            continue                                                  # sin resultado claro o campos anidados: no se toca
+        ini_region = x.find("</w:r>", sep)
+        ini_region = ini_region + 6 if ini_region >= 0 else -1
+        fin_region = max(x.rfind("<w:r>", 0, fin), x.rfind("<w:r ", 0, fin))
+        if ini_region < 0 or fin_region < ini_region:
+            continue
+        out.append({"ini": ini_region, "fin": fin_region, "casilla": False, "etiqueta": etiqueta, "antes": antes})
+    return out
+
+
+def _rellenar_campo_antiguo(region_xml: str, valor: str) -> str:
+    """Pone el valor como resultado del campo: en el primer texto que haya (conservando su formato) y vacía los demás; si no hay ninguno, añade un trozo con el valor."""
+    v = _valor_xml(valor)
+    if not RE_T_ELEMENTO.search(region_xml):
+        return region_xml + f'<w:r><w:t xml:space="preserve">{v}</w:t></w:r>'
+    puesto = []
+
+    def cambia(_m):
+        if puesto:
+            return '<w:t xml:space="preserve"></w:t>'
+        puesto.append(1)
+        return '<w:t xml:space="preserve">' + v + "</w:t>"
+
+    return RE_T_ELEMENTO.sub(cambia, region_xml)
+
+
+def _titulos_de_anexo(x: str) -> list[tuple[int, str]]:
+    """Los títulos de anexo o modelo («ANEXO II. Modelo de proposición económica») y dónde están: cada hueco pertenece al último que tiene delante."""
+    out = []
+    for m in RE_P.finditer(x):
+        t = re.sub(r"\s+", " ", _unesc(re.sub(r"<[^>]+>", "", re.sub(r"<w:tab\s*/>|<w:br\s*/>", " ", m.group(0))))).strip()
+        if 3 <= len(t) <= 120 and RE_ANEXO.match(t):
+            out.append((m.start(), t[:90]))
+    return out
+
+
+def _anexo_de(titulos: list[tuple[int, str]], pos: int) -> str:
+    anexo = ""
+    for ini, t in titulos:
+        if ini <= pos:
+            anexo = t
+        else:
+            break
+    return anexo
+
+
 def _campos_docx(x: str) -> list[dict]:
     """Todos los huecos del documento, en orden de aparición. Cada uno: id estable, tipo, etiqueta, la clave de dato propuesta y dónde está (para rellenarlo)."""
     campos: list[dict] = []
+    titulos = _titulos_de_anexo(x)
     controles = _controles(x)
     fuera = [(c["ini"], c["fin"]) for c in controles]
     celdas = _celdas_vacias(x, fuera)
     en_celda = [(c["ini"], c["fin"]) for c in celdas]
+    antiguos = _campos_antiguos(x)
+    en_campo = [(c["ini"], c["fin"]) for c in antiguos if not c["casilla"]]
     n = 0
 
     def nuevo(tipo, orden, **kw):
@@ -261,6 +348,11 @@ def _campos_docx(x: str) -> list[dict]:
             nuevo("casilla" if c["tipo"] == "casilla" else "control", c["ini"], etiqueta="", clave=None, ini=c["ini"], fin=c["fin"], fijo=True, opcional=False)
         else:
             nuevo("control", c["ini"], etiqueta=c["etiqueta"], clave=emparejar(c["etiqueta"], c["etiqueta"]), ini=c["ini"], fin=c["fin"], fijo=False, opcional=bool(RE_OPCIONAL.search(c["etiqueta"])))
+    for c in antiguos:
+        if c["casilla"]:
+            nuevo("casilla", c["ini"], etiqueta=c["etiqueta"], clave=None, ini=c["ini"], fin=c["fin"], fijo=True, opcional=False)
+        else:
+            nuevo("campo", c["ini"], etiqueta=c["etiqueta"], clave=emparejar(c["etiqueta"], c["antes"]), ini=c["ini"], fin=c["fin"], fijo=False, opcional=bool(RE_OPCIONAL.search(c["etiqueta"])))
     for c in celdas:
         nuevo("celda", c["ini"], etiqueta=c["etiqueta"], clave=emparejar(c["etiqueta"], c["etiqueta"], True), ini=c["ini"], fin=c["fin"], fijo=False, opcional=bool(RE_OPCIONAL.search(c["etiqueta"])))
     for m in RE_P.finditer(x):
@@ -270,26 +362,32 @@ def _campos_docx(x: str) -> list[dict]:
         if not p.texto.strip():
             continue
         fecha = [(f.start(), f.end()) for f in RE_FECHA.finditer(p.texto)]
-        for b in RE_BLANCO.finditer(p.texto):
-            etiqueta, antes = p.texto[max(0, b.start() - 90):b.start()], p.texto[:b.start()]
-            if any(a <= b.start() < z for a, z in fecha):
-                nuevo("texto", m.start() + b.start(), etiqueta=etiqueta.strip(), clave=SIN_DATO, ini=m.start(), fin=m.end(), a=b.start(), b=b.end(), fijo=False, opcional=False)
+        blancos = [(b.start(), b.end()) for b in RE_BLANCO.finditer(p.texto)]
+        blancos += [(a, z) for a, z in p.subrayados if not any(a < y and x_ < z for x_, y in blancos)]       # espacios subrayados que no sean ya un hueco de rayas o puntos
+        for ini_b, fin_b in sorted(blancos):
+            if any(a <= m.start() + ini_b < z for a, z in en_campo):
+                continue                                                  # lo rellena el campo de formulario, no el texto
+            etiqueta, antes = p.texto[max(0, ini_b - 90):ini_b], p.texto[:ini_b]
+            if any(a <= ini_b < z for a, z in fecha):
+                nuevo("texto", m.start() + ini_b, etiqueta=etiqueta.strip(), clave=SIN_DATO, ini=m.start(), fin=m.end(), a=ini_b, b=fin_b, fijo=False, opcional=False)
                 continue
             clave = emparejar(etiqueta, antes)
-            nuevo("texto", m.start() + b.start(), etiqueta=etiqueta.strip(), clave=clave, ini=m.start(), fin=m.end(), a=b.start(), b=b.end(), fijo=False,
-                  opcional=bool(RE_OPCIONAL.search(etiqueta + " " + p.texto[b.end():b.end() + 40])))
+            nuevo("texto", m.start() + ini_b, etiqueta=etiqueta.strip(), clave=clave, ini=m.start(), fin=m.end(), a=ini_b, b=fin_b, fijo=False,
+                  opcional=bool(RE_OPCIONAL.search(etiqueta + " " + p.texto[fin_b:fin_b + 40])))
         for k in RE_CASILLA.finditer(p.texto):
             nuevo("casilla", m.start() + k.start(), etiqueta=p.texto[k.end():k.end() + 80].strip(), clave=None, ini=m.start(), fin=m.end(), a=k.start(), b=k.end(), fijo=True, opcional=False)
     campos.sort(key=lambda c: c["orden"])
     for i, c in enumerate(campos[:MAX_CAMPOS], 1):          # el id sigue el orden del documento, no el de detección
         c["id"] = f"{c['tipo'][0]}{i}"
+        c["anexo"] = _anexo_de(titulos, c["orden"])
     if len(campos) > MAX_CAMPOS:
         raise ErrorFormulario(f"El documento tiene más de {MAX_CAMPOS} huecos: no parece una plantilla")
     return campos
 
 
 def _publico(c: dict) -> dict:
-    return {"id": c["id"], "tipo": c["tipo"], "etiqueta": re.sub(r"\s+", " ", c["etiqueta"]).strip()[-90:], "clave": c["clave"], "opcional": c["opcional"], "fijo": c["fijo"]}
+    return {"id": c["id"], "tipo": c["tipo"], "etiqueta": re.sub(r"\s+", " ", c["etiqueta"]).strip()[-90:], "clave": c["clave"], "opcional": c["opcional"], "fijo": c["fijo"],
+            "anexo": c.get("anexo", "")}
 
 
 def detectar_docx(ruta: Path) -> dict:
@@ -323,6 +421,8 @@ def rellenar_docx(ruta: Path, destino: Path, valores: dict[str, str]) -> dict:
             ediciones.append((c["ini"], c["fin"], _rellenar_celda(x[c["ini"]:c["fin"]], str(valor))))
         elif c["tipo"] == "control":
             ediciones.append((c["ini"], c["fin"], _rellenar_control(x[c["ini"]:c["fin"]], str(valor))))
+        elif c["tipo"] == "campo":
+            ediciones.append((c["ini"], c["fin"], _rellenar_campo_antiguo(x[c["ini"]:c["fin"]], str(valor))))
         hechos.append(fid)
     for par, cambios in por_parrafo.values():
         for a, b, v in sorted(cambios, reverse=True):                 # de derecha a izquierda, para que las posiciones anteriores no se muevan
@@ -428,6 +528,57 @@ def rellenar(ruta: Path, formato: str, destino: Path, valores: dict[str, str]) -
     raise ErrorFormulario(f"De momento solo se rellenan plantillas en Word (.docx) y PDF con formulario; este es {formato}: hay que rellenarlo a mano")
 
 
+MAX_MIEMBROS = 500
+MAX_MIEMBRO = 60 << 20
+RATIO_MAX = 200
+SIN_SOPORTE = (".doc", ".odt", ".ods", ".xls", ".xlsx", ".docm", ".rtf")
+
+
+def extraer_zip(ruta: Path, destino: Path) -> dict:
+    """Abre un paquete ZIP de documentación y deja en `destino` los documentos que se pueden rellenar (Word y PDF con formulario), sin salirse de esa carpeta. Devuelve
+    {"miembros": [{"miembro", "formato", "ruta", "bytes"}], "avisos": [...]}. Un ZIP es de terceros: se limita el número de ficheros, su tamaño y su razón de compresión, se descartan nombres con rutas
+    raras y no se abren ZIP dentro de ZIP."""
+    try:
+        z = zipfile.ZipFile(ruta)
+    except (zipfile.BadZipFile, OSError):
+        raise ErrorFormulario("El ZIP no se puede abrir (¿está dañado?)") from None
+    infos = [i for i in z.infolist() if not i.is_dir()]
+    if len(infos) > MAX_MIEMBROS:
+        raise ErrorFormulario(f"El ZIP tiene más de {MAX_MIEMBROS} ficheros: no parece un paquete de documentación")
+    if sum(i.file_size for i in z.infolist()) > MAX_TOTAL:
+        raise ErrorFormulario("El ZIP es demasiado grande al descomprimirlo")
+    destino.mkdir(parents=True, exist_ok=True, mode=0o700)
+    miembros, avisos = [], []
+    for k, info in enumerate(infos, 1):
+        nombre = info.filename
+        partes = nombre.replace("\\", "/").split("/")
+        if nombre.startswith(("/", "\\")) or ".." in partes or any(c in nombre for c in "\x00:"):
+            avisos.append(f"«{_CTRL.sub('', nombre)[:80]}» se ha ignorado: nombre no válido")
+            continue
+        ext = Path(nombre).suffix.lower()
+        if ext in SIN_SOPORTE:
+            avisos.append(f"«{nombre[:80]}» no se rellena solo (formato {ext[1:]}): hay que rellenarlo a mano o pedirlo en Word")
+            continue
+        if ext not in (".docx", ".pdf"):
+            continue
+        if info.file_size > MAX_MIEMBRO or (info.compress_size > 0 and info.file_size / info.compress_size > RATIO_MAX):
+            avisos.append(f"«{nombre[:80]}» se ha ignorado: demasiado grande o sospechoso")
+            continue
+        with z.open(info) as f:
+            datos = f.read(MAX_MIEMBRO + 1)
+        if len(datos) > MAX_MIEMBRO:
+            avisos.append(f"«{nombre[:80]}» se ha ignorado: demasiado grande")
+            continue
+        formato = "pdf" if datos[:5] == b"%PDF-" else ("docx" if datos[:2] == b"PK" else None)
+        if formato is None or (ext == ".docx") != (formato == "docx"):
+            avisos.append(f"«{nombre[:80]}» se ha ignorado: su contenido no es {ext[1:]}")
+            continue
+        salida = destino / f"{k:03d}.{formato}"
+        salida.write_bytes(datos)
+        miembros.append({"miembro": "/".join(partes)[:200], "formato": formato, "ruta": str(salida), "bytes": len(datos)})
+    return {"miembros": miembros, "avisos": avisos}
+
+
 def poner_limites() -> None:
     try:
         import resource
@@ -470,6 +621,8 @@ def main() -> int:
             res = detectar(ruta, formato)
         elif orden["accion"] == "rellenar":
             res = rellenar(ruta, formato, Path(orden["destino"]), {str(k): v for k, v in (orden.get("valores") or {}).items()})
+        elif orden["accion"] == "extraer_zip":
+            res = extraer_zip(ruta, Path(orden["destino"]))
         else:
             raise ErrorFormulario("acción desconocida")
     except ErrorFormulario as e:

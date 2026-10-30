@@ -1,6 +1,6 @@
 "use client";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { clasePaso, clasePlantilla, empresaParaEnviar, mensajeRedaccion, origenTexto, pasoEtiqueta, pendientesQueBloquean, plantillaEtiqueta, redaccionEnCurso, resumenPlantillas, resumenRedaccion } from "../../../../lib/licitaciones";
+import { agruparPorAnexo, clasePaso, clasePlantilla, empresaParaEnviar, mensajeRedaccion, origenTexto, pasoEtiqueta, pendientesQueBloquean, plantillaEtiqueta, redaccionEnCurso, resumenPlantillas, resumenRedaccion } from "../../../../lib/licitaciones";
 import { pedirCerebro } from "../../cliente";
 
 const enviar = (cuerpo) => ({ method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(cuerpo) });
@@ -126,15 +126,20 @@ export default function Redaccion({ id, o, alCambiar }) {
             <summary><strong>{d.nombre}</strong> <span className={`lic-etiqueta ${clasePlantilla(d.estado)}`}>{plantillaEtiqueta(d.estado)}</span></summary>
             <p className="meta">Documento {d.documento} del pliego{d.empresa ? ` · rellenado con los datos de ${d.empresa}` : ""} · {d.rellenados.length} {d.rellenados.length === 1 ? "hueco rellenado" : "huecos rellenados"}</p>
             {d.avisos.map((a, i) => <p key={i} className="meta lic-aviso">{a}</p>)}
-            {d.rellenados.length > 0 && (
-              <ul className="lic-historial">{d.rellenados.slice(0, 40).map((r) => <li key={r.id}><span className="meta">{r.etiqueta || r.tipo}</span> → {r.valor} <span className="meta">({origenTexto(r.origen)})</span></li>)}</ul>
-            )}
-            {d.pendientes.length > 0 && (
-              <>
-                <p><strong>{bloquean.length > 0 ? "Falta antes de firmar:" : "Se completa al firmar:"}</strong></p>
-                <ul className="lic-historial">{d.pendientes.map((p) => <li key={p.id}><span className="meta">{p.etiqueta || p.tipo}</span> — {p.motivo}{p.bloquea ? "" : " (no impide firmar)"}</li>)}</ul>
-              </>
-            )}
+            {agruparPorAnexo(d).map((g) => (
+              <div key={g.anexo || "_"}>
+                {(g.anexo || agruparPorAnexo(d).length > 1) && <p><strong>{g.anexo || "Resto del documento"}</strong> <span className="meta">· {g.rellenados.length} rellenados{g.pendientes.length > 0 ? ` · ${g.pendientes.filter((p) => p.bloquea).length} por completar` : ""}</span></p>}
+                {g.rellenados.length > 0 && (
+                  <ul className="lic-historial">{g.rellenados.slice(0, 40).map((r) => <li key={r.id}><span className="meta">{r.etiqueta || r.tipo}</span> → {r.valor} <span className="meta">({origenTexto(r.origen)})</span></li>)}</ul>
+                )}
+                {g.pendientes.length > 0 && (
+                  <>
+                    <p className="meta">{g.pendientes.some((p) => p.bloquea) ? "Falta antes de firmar:" : "Se completa al firmar:"}</p>
+                    <ul className="lic-historial">{g.pendientes.map((p) => <li key={p.id}><span className="meta">{p.etiqueta || p.tipo}</span> — {p.motivo}{p.bloquea ? "" : " (no impide firmar)"}</li>)}</ul>
+                  </>
+                )}
+              </div>
+            ))}
             {d.fichero && <div className="lic-fila"><button className="boton si" onClick={() => descargar(d)}>Descargar {d.formato.toUpperCase()} rellenado</button></div>}
           </details>
         );

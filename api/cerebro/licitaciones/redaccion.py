@@ -264,7 +264,7 @@ def texto_plantillas(resultado: dict | None, error: str = "") -> str:
     lineas = []
     for d in docs:
         pend = [p for p in d["pendientes"] if p["bloquea"]][:8]
-        lineas.append(f"- Documento {d['documento']} «{d['nombre']}»: {d['estado']}, {len(d['rellenados'])} huecos rellenados" + (
+        lineas.append(f"- Documento {d['documento']} «{d['nombre']}»" + (f" (miembro «{d['miembro']}»)" if d.get("miembro") else "") + f": {d['estado']}, {len(d['rellenados'])} huecos rellenados" + (
             ". Pendientes: " + "; ".join(f"{p['id']} «{p['etiqueta'][-50:]}» ({p['motivo']})" for p in pend) if pend else ""))
     return ("\nPlantillas del concurso (ya rellenadas por el sistema con los datos del ERP; el original no se toca):\n" + "\n".join(lineas) +
             "\nSi un hueco pendiente es dudoso y sabes qué dato le corresponde, elígelo con «plantillas», operación «rellenar» (documento y asignaciones {hueco: clave}); mira antes «datos_disponibles». "

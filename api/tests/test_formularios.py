@@ -215,6 +215,147 @@ def pdf_con_formulario(ruta: Path, campos):
         w.write(f)
 
 
+def sub(texto):
+    """Un hueco hecho con espacios subrayados, como lo dejan Word y LibreOffice en las plantillas de las administraciones."""
+    return f'<w:r><w:rPr><w:u w:val="single"/></w:rPr><w:t xml:space="preserve">{texto}</w:t></w:r>'
+
+
+def campo_antiguo(nombre="Texto1", ayuda="", resultado="\u2003\u2003\u2003"):
+    estado = f'<w:statusText w:type="text" w:val="{ayuda}"/>' if ayuda else ""
+    return (f'<w:r><w:fldChar w:fldCharType="begin"><w:ffData><w:name w:val="{nombre}"/><w:enabled/>{estado}<w:textInput/></w:ffData></w:fldChar></w:r>'
+            '<w:r><w:instrText xml:space="preserve"> FORMTEXT </w:instrText></w:r><w:r><w:fldChar w:fldCharType="separate"/></w:r>'
+            + (f'<w:r><w:rPr><w:noProof/></w:rPr><w:t>{resultado}</w:t></w:r>' if resultado else "") + '<w:r><w:fldChar w:fldCharType="end"/></w:r>')
+
+
+CASILLA_ANTIGUA = ('<w:r><w:fldChar w:fldCharType="begin"><w:ffData><w:name w:val="Casilla1"/><w:checkBox><w:sizeAuto/><w:default w:val="0"/></w:checkBox></w:ffData></w:fldChar></w:r>'
+                   '<w:r><w:instrText xml:space="preserve"> FORMCHECKBOX </w:instrText></w:r><w:r><w:fldChar w:fldCharType="separate"/></w:r><w:r><w:fldChar w:fldCharType="end"/></w:r>')
+
+
+class TestHuecosHabituales(unittest.TestCase):
+    """Los dos patrones más comunes en las plantillas reales de las administraciones: espacios subrayados y campos de formulario antiguos de Word."""
+
+    def setUp(self):
+        self.d = tempfile.TemporaryDirectory()
+        self.dir = Path(self.d.name)
+
+    def tearDown(self):
+        self.d.cleanup()
+
+    def test_espacios_subrayados_son_huecos_y_se_rellenan_conservando_el_formato(self):
+        ruta = self.dir / "a.docx"
+        docx(ruta, p(r("D./Dª "), sub("                    "), r(", con DNI nº "), sub("      "), sub("      "), r(", en representación de la empresa "), sub("                              "),
+                     r(" y un texto normal con  dos  espacios y "), r("   ", "<w:rPr><w:b/></w:rPr>"), r("sin subrayar.")))
+        det = F.detectar(ruta, "docx")["campos"]
+        self.assertEqual([c["clave"] for c in det], ["representante.nombre", "representante.dni", "empresa.razon_social"])    # los espacios normales no son huecos; dos trozos seguidos son uno
+        destino = self.dir / "o.docx"
+        F.rellenar(ruta, "docx", destino, {c["id"]: DATOS[c["clave"]] for c in det})
+        self.assertIn("d./da ana perez soler, con dni no 12345678z, en representacion de la empresa 101 telecomunicaciones & seguridad, s.l. y un texto normal", texto_original_n(destino))
+        with zipfile.ZipFile(destino) as z:
+            x = z.read("word/document.xml").decode()
+        self.assertGreaterEqual(x.count('<w:u w:val="single"/>'), 3)                      # el subrayado sigue: el dato queda sobre su línea
+
+    def test_campos_de_formulario_antiguos_texto_y_casilla(self):
+        ruta = self.dir / "b.docx"
+        docx(ruta, p(r("Razón social: "), campo_antiguo("Texto1")) + p(r("Datos del licitador "), campo_antiguo("Texto2", ayuda="NIF/CIF")) + p(r("Fax "), campo_antiguo("Texto3", resultado="")) +
+             p(r("Pequeña empresa "), CASILLA_ANTIGUA) + p(r("Lista: "), '<w:r><w:fldChar w:fldCharType="begin"><w:ffData><w:name w:val="Lista1"/><w:ddList/></w:ffData></w:fldChar></w:r>'))
+        det = F.detectar(ruta, "docx")["campos"]
+        self.assertEqual([(c["tipo"], c["clave"]) for c in det], [("campo", "empresa.razon_social"), ("campo", "empresa.nif"), ("campo", None), ("casilla", None)])    # la lista desplegable no se toca
+        self.assertTrue(det[2]["opcional"])
+        destino = self.dir / "o.docx"
+        res = F.rellenar(ruta, "docx", destino, {det[0]["id"]: "101 Telecom, S.L.", det[1]["id"]: "B12345678", det[2]["id"]: "972 000 000", det[3]["id"]: "x"})
+        self.assertEqual(res["rellenados"], [det[0]["id"], det[1]["id"], det[2]["id"]])
+        self.assertEqual(res["omitidos"], [det[3]["id"]])                                   # una casilla no se marca sola
+        with zipfile.ZipFile(destino) as z:
+            x = z.read("word/document.xml").decode()
+        F.ET.fromstring(x)
+        self.assertEqual(x.count("FORMTEXT"), 3)                                           # siguen siendo campos de formulario (se pueden volver a editar)
+        t = texto_original_n(destino)
+        for esperado in ("razon social: 101 telecom, s.l.", "datos del licitador b12345678", "fax 972 000 000"):
+            self.assertIn(esperado, t)
+        self.assertNotIn("\u2003", x.split("Razón social")[1].split("FORMTEXT")[1].split("</w:p>")[0])      # el resultado antiguo (espacios) ya no está
+
+    def test_un_campo_de_formulario_roto_no_estropea_el_documento(self):
+        ruta = self.dir / "c.docx"
+        # empieza y no termina: no se toca y no falla
+        docx(ruta, p(r("Nombre: "), campo_antiguo().replace('<w:r><w:fldChar w:fldCharType="end"/></w:r>', "")))
+        self.assertEqual(F.detectar(ruta, "docx")["campos"], [])
+
+
+def texto_original_n(ruta):
+    return " ".join(F._texto_xml(zipfile.ZipFile(ruta).read("word/document.xml").decode()).split())
+
+
+class TestAnexosYZip(unittest.TestCase):
+    def setUp(self):
+        self.d = tempfile.TemporaryDirectory()
+        self.dir = Path(self.d.name)
+
+    def tearDown(self):
+        self.d.cleanup()
+
+    def test_cada_hueco_sabe_a_que_anexo_pertenece(self):
+        ruta = self.dir / "doc.docx"
+        docx(ruta, p(r("Cláusula 1. El licitador presentará su oferta en tiempo y forma.")) + p(r("ANEXO I. DECLARACIÓN RESPONSABLE")) +
+              p(r("D./Dª "), r("__________"), r(", con DNI nº "), r("________")) + p(r("ANEXO II. MODELO DE PROPOSICIÓN ECONÓMICA")) +
+              p(r("En representación de la empresa "), r("____________________"), r(", con NIF "), r("_________")) + p(r("Modelo de declaración de grupo empresarial")) + p(r("Razón social: "), r("______")))
+        det = F.detectar(ruta, "docx")["campos"]
+        self.assertEqual([(c["clave"], c["anexo"]) for c in det], [("representante.nombre", "ANEXO I. DECLARACIÓN RESPONSABLE"), ("representante.dni", "ANEXO I. DECLARACIÓN RESPONSABLE"),
+                                                                    ("empresa.razon_social", "ANEXO II. MODELO DE PROPOSICIÓN ECONÓMICA"), ("empresa.nif", "ANEXO II. MODELO DE PROPOSICIÓN ECONÓMICA"),
+                                                                    ("empresa.razon_social", "Modelo de declaración de grupo empresarial")])
+
+    def test_una_frase_larga_que_empieza_por_modelo_no_es_un_titulo(self):
+        ruta = self.dir / "doc.docx"
+        docx(ruta, p(r("Modelo " + "muy largo " * 30)) + p(r("Razón social: "), r("______")))
+        self.assertEqual(F.detectar(ruta, "docx")["campos"][0]["anexo"], "")
+
+    def paquete(self, miembros):
+        ruta = self.dir / "paquete.zip"
+        with zipfile.ZipFile(ruta, "w", zipfile.ZIP_DEFLATED) as z:
+            for nombre, datos in miembros:
+                z.writestr(nombre, datos)
+        return ruta
+
+    def test_el_zip_deja_los_anexos_en_word_y_pdf_y_avisa_del_resto(self):
+        d1, d2 = self.dir / "a.docx", self.dir / "b.pdf"
+        docx(d1)
+        pdf_con_formulario(d2, [("a", "Razón social")])
+        zip_ = self.paquete([("Documentación administrativa/Anexo I.docx", d1.read_bytes()), ("Documentación administrativa/Anexo II.pdf", d2.read_bytes()),
+                             ("Documentación administrativa/Anexo III.doc", b"binario"), ("Sobre 1/Anexo IV.odt", b"x"), ("leeme.txt", b"hola"),
+                             ("../escapa.docx", d1.read_bytes()), ("/absoluta.docx", d1.read_bytes()), ("falso.docx", b"esto no es un word")])
+        r = F.extraer_zip(zip_, self.dir / "fuera")
+        self.assertEqual([(m["miembro"], m["formato"]) for m in r["miembros"]], [("Documentación administrativa/Anexo I.docx", "docx"), ("Documentación administrativa/Anexo II.pdf", "pdf")])
+        for m in r["miembros"]:
+            self.assertTrue(Path(m["ruta"]).resolve().parent == (self.dir / "fuera").resolve())          # nada se escribe fuera de la carpeta de destino
+            self.assertTrue(F.detectar(Path(m["ruta"]), m["formato"])["campos"])
+        avisos = " ".join(r["avisos"])
+        for esperado in ("Anexo III.doc", "Anexo IV.odt", "escapa.docx", "absoluta.docx", "falso.docx"):
+            self.assertIn(esperado, avisos)
+        self.assertEqual(sorted(x.name for x in (self.dir / "fuera").iterdir()), ["001.docx", "002.pdf"])
+        self.assertFalse((self.dir / "escapa.docx").exists())
+
+    def test_zip_roto_enorme_o_con_demasiados_ficheros(self):
+        mal = self.dir / "mal.zip"
+        mal.write_bytes(b"no es un zip")
+        with self.assertRaises(F.ErrorFormulario):
+            F.extraer_zip(mal, self.dir / "x")
+        muchos = self.paquete([(f"f{i}.txt", b"x") for i in range(6)])
+        with unittest.mock.patch.object(F, "MAX_MIEMBROS", 5), self.assertRaises(F.ErrorFormulario):
+            F.extraer_zip(muchos, self.dir / "x")
+        with unittest.mock.patch.object(F, "MAX_TOTAL", 3), self.assertRaises(F.ErrorFormulario):
+            F.extraer_zip(muchos, self.dir / "x")
+        bomba = self.paquete([("bomba.docx", b"PK" + b"\0" * 5_000_000)])
+        r = F.extraer_zip(bomba, self.dir / "y")
+        self.assertEqual(r["miembros"], [])
+        self.assertIn("sospechoso", r["avisos"][0])                                           # una razón de compresión enorme no se abre
+
+    def test_extraer_en_proceso_aparte(self):
+        d1 = self.dir / "a.docx"
+        docx(d1)
+        zip_ = self.paquete([("Anexo I.docx", d1.read_bytes())])
+        r = F.ejecutar_aislado({"accion": "extraer_zip", "ruta": str(zip_), "formato": "zip", "destino": str(self.dir / "o")})
+        self.assertEqual([m["miembro"] for m in r["miembros"]], ["Anexo I.docx"])
+
+
 class TestPdf(unittest.TestCase):
     def test_detecta_y_rellena_los_campos_del_formulario(self):
         from pypdf import PdfReader
