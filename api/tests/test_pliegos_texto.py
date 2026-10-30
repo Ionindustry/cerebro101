@@ -252,7 +252,8 @@ class TestProceso(unittest.TestCase):
     def test_el_entorno_del_extractor_no_lleva_secretos(self):
         with mock.patch.dict(os.environ, {"DATABASE_URL": "postgresql://secreto", "LICITACIONES_API_TOKEN": "t", "CEREBRO_APP_PASSWORD": "p"}):
             e = P._entorno_hijo()
-        self.assertEqual(set(e), {"PATH", "LANG", "PYTHONDONTWRITEBYTECODE", "PYTHONPATH"})
+        self.assertEqual(set(e), {"PATH", "LANG", "PYTHONDONTWRITEBYTECODE", "PYTHONPATH", "OPENBLAS_NUM_THREADS", "OMP_NUM_THREADS", "MKL_NUM_THREADS", "NUMEXPR_NUM_THREADS"})
+        self.assertEqual(e["OPENBLAS_NUM_THREADS"], "1")      # con el límite de memoria, OpenBLAS no puede reservar búferes por núcleo
 
     def test_un_plazo_agotado_es_un_error_comprensible(self):
         with tempfile.TemporaryDirectory() as d, mock.patch.object(P.subprocess, "run", side_effect=subprocess.TimeoutExpired("x", 1)):
