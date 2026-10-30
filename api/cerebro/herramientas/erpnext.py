@@ -322,6 +322,7 @@ AYUDA_DOCUMENTOS = (
     "Sales Invoice(customer, posting_date, due_date, items); Purchase Order(supplier, transaction_date, schedule_date, items); "
     "Purchase Invoice(supplier, bill_date, items); Project(project_name, status, expected_start_date, expected_end_date); "
     "Task(subject, status, project); Lead(lead_name, company_name, email_id, status); Employee(employee_name, department, status). "
+    "CRM: CRM Lead(first_name, email, status); CRM Deal(organization, status, lead); FCRM Note(title, content) y CRM Task(title, due_date, status) llevan reference_doctype y reference_docname del lead o trato. "
     "En «items» va una lista de {item_code, qty, rate}.")
 
 registrar(Herramienta(

@@ -29,6 +29,7 @@ Después, `docker compose up -d --force-recreate --no-deps api worker beat` (la 
 - **Leer:** Customer, Contact, Address, Lead, Opportunity, Prospect, Quotation, Sales Order, Item, Campaign, Territory, Customer Group, Project, CRM Lead, CRM Deal, CRM Organization, CRM Task, FCRM Note, CRM Call Log, CRM Lead Source, CRM Lead Status, CRM Deal Status, CRM Product, CRM Industry, CRM Territory, CRM Lost Reason
 - **Borrador (crear y modificar):** Lead, Opportunity, Prospect, Quotation, Contact, Address, CRM Lead, CRM Deal, CRM Organization, CRM Task, FCRM Note
 - **Preguntas para decidir:**
+  - Constancia de correos: cuando sale un correo aprobado de Comercial hacia la dirección de un CRM Lead, el sistema deja una nota (FCRM Note) en el lead y en sus tratos (`cerebro/crm_comercial.py`, `config/crm.yaml`).
   - ¿Deben los agentes comerciales dar de alta clientes (`Customer`)? Hoy no pueden: crean Lead, Oportunidad, Presupuesto, Contacto y los documentos del CRM.
   - ¿Necesitan ver el estado de cobro (`Sales Invoice`) para postventa? Hoy no.
 

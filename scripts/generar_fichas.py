@@ -65,10 +65,10 @@ AGENTES = {
         ("fiscal", "Fiscal", "Fiscalidad", "Calendario de modelos fiscales y documentación para la gestoría", "principal", K + ["erpnext"], "doble", "0 8 1 * *", "alta"),
     ],
     "comercial": [
-        ("director-comercial", "Director Comercial / CRM", "Gestión de clientes", "Mantiene fichas y pipeline al día y detecta oportunidades paradas", "principal", K + ["erpnext"], "libre", "0 8 * * 1-5", "media"),
+        ("director-comercial", "Director Comercial / CRM", "Gestión de clientes", "Mantiene fichas y pipeline al día en el CRM y detecta oportunidades paradas", "principal", K + ["erpnext"], "libre", "0 8 * * 1-5", "media"),
         ("prospector", "Prospector", "Prospección", "Construye listas de clientes potenciales según el perfil ideal y las puntúa", "rapido", K + ["erpnext", "jev"], "libre", None, "media"),
         ("detector-intencion", "Detector de Intención", "Prospección", "Busca señales públicas de interés (obras, aperturas, ofertas de empleo) y las convierte en leads", "rapido", K + ["scrapegraph", "grok", "jev"], "libre", "0 3 * * *", "baja"),
-        ("respuesta-leads", "Respuesta a Leads", "Prospección", "Contesta cada consulta entrante en minutos y propone fechas de reunión", "principal", K + ["correo", "calendario", "erpnext", "jev"], "simple", None, "media"),
+        ("respuesta-leads", "Respuesta a Leads", "Prospección", "Contesta cada consulta entrante en minutos, propone fechas de reunión y lo anota en el CRM", "principal", K + ["correo", "calendario", "erpnext", "jev"], "simple", None, "media"),
         ("orquestador-campanas", "Orquestador de Campañas", "Captación multicanal", "Diseña la secuencia por canal, reparte leads y detiene la secuencia cuando alguien responde", "principal", K + ["erpnext"], "simple", "0 9 * * 1-5", "media"),
         ("canal-email", "Email", "Captación multicanal", "Secuencias de email personalizadas respetando consentimientos y bajas", "principal", K + ["correo"], "simple", None, "media"),
         ("canal-linkedin", "LinkedIn", "Captación multicanal", "Prepara mensajes y contenido para que una persona los publique o envíe", "principal", K, "simple", None, "media"),

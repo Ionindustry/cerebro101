@@ -31,10 +31,10 @@
 
 | Agente | Subárea | Modelo | Aprobación | Horario | Tareas |
 | --- | --- | --- | --- | --- | --- |
-| **Director Comercial / CRM** | Gestión de clientes | principal | libre | 0 8 * * 1-5 | Mantiene fichas y pipeline al día y detecta oportunidades paradas |
+| **Director Comercial / CRM** | Gestión de clientes | principal | libre | 0 8 * * 1-5 | Mantiene fichas y pipeline al día en el CRM y detecta oportunidades paradas |
 | Prospector | Prospección | rapido | libre | bajo petición | Construye listas de clientes potenciales según el perfil ideal y las puntúa |
 | Detector de Intención | Prospección | rapido | libre | 0 3 * * * | Busca señales públicas de interés (obras, aperturas, ofertas de empleo) y las convierte en leads |
-| Respuesta a Leads | Prospección | principal | simple | bajo petición | Contesta cada consulta entrante en minutos y propone fechas de reunión |
+| Respuesta a Leads | Prospección | principal | simple | bajo petición | Contesta cada consulta entrante en minutos, propone fechas de reunión y lo anota en el CRM |
 | Orquestador de Campañas | Captación multicanal | principal | simple | 0 9 * * 1-5 | Diseña la secuencia por canal, reparte leads y detiene la secuencia cuando alguien responde |
 | Email | Captación multicanal | principal | simple | bajo petición | Secuencias de email personalizadas respetando consentimientos y bajas |
 | LinkedIn | Captación multicanal | principal | simple | bajo petición | Prepara mensajes y contenido para que una persona los publique o envíe |
