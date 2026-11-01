@@ -127,6 +127,10 @@ class TestRedaccion(unittest.TestCase):
         arq = por["arquitecto-solucion"]
         for esperado in (ID, "Videovigilancia", "descripcion-solucion", "[PENDIENTE", "No inventes", "guardar_seccion", "no escribas la proposición económica", "no firmes"):
             self.assertIn(esperado, arq)
+        for agente in ("arquitecto-solucion", "redactor-memoria", "administrativo-licitaciones", "costes-licitacion"):
+            self.assertIn("nadie va a contestar", por[agente], agente)                       # trabajan solos: no deben preguntar (un agente se quedó esperando una confirmación)
+            self.assertIn("guarda CADA sección", por[agente], agente)
+        self.assertIn("nadie va a contestar", por["precio-licitacion"])
         self.assertIn("descripcion-solucion", por["redactor-memoria"])                      # el Redactor sabe que la solución ya está escrita
         adm = por["administrativo-licitaciones"]
         self.assertIn("Plantillas del concurso", adm)

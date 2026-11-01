@@ -42,6 +42,11 @@ class TestPasos(unittest.TestCase):
         self.assertEqual(n, 5)
         self.assertIn("número máximo de pasos", r["respuesta"])
 
+    def test_los_agentes_de_la_cadena_de_la_oferta_tienen_margen_para_guardar_sus_secciones(self):
+        """Con 5 pasos (uno por llamada a herramienta) se quedaban sin guardar nada: plan, ficha, requisitos y cada sección son 10-15."""
+        for a in ("arquitecto-solucion", "redactor-memoria", "administrativo-licitaciones", "costes-licitacion", "precio-licitacion", "evaluador-ofertas"):
+            self.assertGreaterEqual(nodos.MAX_PASOS_AGENTE[a], 20, a)
+
     def test_el_analista_de_pliegos_tiene_mas(self):
         r, n = correr("analista-pliegos")
         self.assertEqual(n, nodos.MAX_PASOS_AGENTE["analista-pliegos"])

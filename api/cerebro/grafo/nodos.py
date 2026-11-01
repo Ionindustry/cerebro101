@@ -24,7 +24,10 @@ log = logging.getLogger("cerebro.grafo")
 MAX_PASOS = 5
 # Los agentes que trabajan sobre un documento largo necesitan más vueltas: el Analista de Pliegos busca la licitación, lista y baja los documentos, busca y lee páginas
 # y anota cada requisito con una llamada. Con 5 pasos no pasaba de buscar. Lo que anota queda guardado aunque la tarea se corte.
-MAX_PASOS_AGENTE = {"analista-pliegos": 25}
+# Los agentes de la cadena «Preparar la oferta» (cerebro/licitaciones/redaccion.py) cada vez dan una vuelta por llamada a herramienta: leer el plan, la ficha y los requisitos y guardar cada sección son
+# unas 10-15; con 5 pasos se quedaban sin guardar nada («No he podido terminar la tarea en el número máximo de pasos»).
+MAX_PASOS_AGENTE = {"analista-pliegos": 25, "arquitecto-solucion": 25, "redactor-memoria": 25, "administrativo-licitaciones": 25, "costes-licitacion": 25, "precio-licitacion": 20,
+                    "evaluador-ofertas": 20}
 INYECTAR_DEPARTAMENTO = {"erpnext", "conocimiento", "correo", "calendario", "cuaderno", "listas_precios"}
 PIDE_CUADERNO = re.compile(r"\bcuadern|\bquadern|notebook\s*lm", re.I)
 
