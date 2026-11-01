@@ -205,6 +205,9 @@ def peticion_escritor(paso: dict, motor_id: str, titulo: str, secciones: list[di
         f"{lista}\n"
         "3. En «citas» pon los ids de los requisitos confirmados del pliego en los que te apoyas.\n\n"
         "Reglas:\n"
+        "- Trabajas SOLO y de forma automática: nadie va a contestar a una pregunta. NO pidas confirmación ni permiso y no preguntes si debes seguir: haz el trabajo con las herramientas. "
+        "Sé eficiente (pocas lecturas) y guarda CADA sección en cuanto la tengas escrita, no al final.\n"
+        "- Si no hay requisitos confirmados o te falta información, guarda igualmente el borrador (sin citas si no las hay) y marca lo que falta con [PENDIENTE: …].\n"
         "- Escribe en castellano, con la estructura y el detalle que pide el pliego, sin mezclar lo de un sobre con lo de otro.\n"
         "- No inventes certificados, referencias, cifras, plazos ni precios. Si falta un dato, escribe en el texto [PENDIENTE: qué hace falta] para que una persona lo complete.\n"
         "- Solo borradores: no revises ni apruebes secciones, no fijes ni propongas el precio, no escribas la proposición económica y no firmes ni presentes nada.\n"
@@ -219,6 +222,7 @@ def peticion_precio(motor_id: str, titulo: str) -> str:
         "el simulador («licitaciones», operación «simular») para ver con qué baja se ha ganado en concursos parecidos y el riesgo de baja anormal, y el desglose de costes de la oferta "
         "(«ofertas», operación «seccion», sobre economico, clave justificacion-precio) si ya está escrito.\n"
         "No fijes el precio ni escribas la proposición económica: lo decide una persona.\n"
+        "Trabajas SOLO y de forma automática: nadie va a contestar a una pregunta; no pidas confirmación, haz el informe con lo que tengas y di qué falta.\n"
         "Responde SOLO con el informe, de 12 líneas como máximo: precio sin IVA recomendado y su rango, baja respecto al presupuesto, riesgo de baja anormal, probabilidad estimada de ganar y los supuestos "
         "que falta confirmar."
     )
@@ -230,7 +234,7 @@ def peticion_evaluacion(motor_id: str, titulo: str, ficha: dict, secciones: list
         f"Actúa como la mesa de contratación y evalúa el borrador de la oferta de 101.cat a la licitación «{titulo}» (identificador {motor_id}).\n\n"
         f"Criterios de adjudicación:\n{_criterios_texto(ficha)}\n\nBorrador actual de la oferta (cada sección, recortada):\n{borrador}\n\n"
         "Responde SOLO con un informe de 15 líneas como máximo: la puntuación estimada de cada criterio de juicio de valor (sobre sus puntos), los incumplimientos excluyentes o riesgos de exclusión, "
-        "las secciones con [PENDIENTE] y qué mejorar primero. No modifiques nada."
+        "las secciones con [PENDIENTE] y qué mejorar primero. No modifiques nada. Trabajas SOLO y de forma automática: nadie va a contestar a una pregunta, no pidas confirmación."
     )
 
 
