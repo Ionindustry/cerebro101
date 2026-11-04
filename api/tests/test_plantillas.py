@@ -421,13 +421,22 @@ class TestBaseDeDatos(unittest.TestCase):
         self.assertTrue(any(x["valor"] == "Girona" for x in por["Anexo II.docx"]["rellenados"] if x["etiqueta"] == "dato raro"))
         self.assertFalse(any(x["etiqueta"] == "dato raro" for x in por["Anexo I.docx"]["rellenados"]))        # el otro anexo no se toca
 
-    def test_un_modelo_en_excel_deja_constancia_y_lo_demas_no(self):
-        self.documento(1, "Anexo II - Modelo de oferta.xlsx", "xlsx", lambda r: r.write_bytes(b"PK xlsx"))
-        self.documento(2, "Memoria descriptiva.xlsx", "xlsx", lambda r: r.write_bytes(b"PK xlsx memoria"))
+    def test_un_modelo_en_excel_se_rellena_y_uno_en_ods_deja_constancia(self):
+        import openpyxl
+
+        def excel(ruta):
+            wb = openpyxl.Workbook()
+            wb.active["A1"], wb.active["A2"] = "Razón social", "NIF/CIF"
+            wb.save(ruta)
+        self.documento(1, "Anexo II - Modelo de oferta.xlsx", "xlsx", excel)
+        self.documento(2, "Memoria descriptiva.ods", "ods", lambda r: r.write_bytes(b"PK ods memoria"))
+        self.documento(3, "Anexo IV - Declaración.ods", "ods", lambda r: r.write_bytes(b"PK ods"))
         r = self.preparar(empresa="101 Telecom S.L.")
-        self.assertEqual([(d["documento"], d["estado"]) for d in r["documentos"]], [(1, "error")])      # solo el que parece un modelo
-        self.assertIn("xlsx", r["documentos"][0]["avisos"][0])
-        self.assertIn("Word", r["documentos"][0]["avisos"][0])
+        self.assertEqual([(d["documento"], d["formato"], d["estado"]) for d in r["documentos"]][0][:2], (1, "xlsx"))
+        self.assertTrue(r["documentos"][0]["rellenados"])
+        self.assertEqual([d["documento"] for d in r["documentos"]], [1, 3])      # la memoria en ods no parece un modelo: no sale
+        self.assertEqual(r["documentos"][1]["estado"], "error")
+        self.assertIn("ods", r["documentos"][1]["avisos"][0])
 
     def test_un_modelo_en_odt_se_convierte_a_word_se_rellena_y_lo_dice(self):
         self.documento(1, "Anexo I - Declaración.odt", "odt", lambda r: r.write_bytes(b"PK odt"))
