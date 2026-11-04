@@ -112,6 +112,13 @@ func WorkWith(ctx context.Context, deps ingest.Deps, d events.Drainer, publish e
 				continue
 			}
 			pending = pending || stats.Pending
+			if m, ok := d.(interface {
+				MarcarAlDia(context.Context, string, bool) error
+			}); ok {
+				if err := m.MarcarAlDia(ctx, source, stats.CaughtUp); err != nil {
+					log.Warn("no se ha podido anotar si la fuente está al día", "fuente", source, "error", err)
+				}
+			}
 			log.Info("ingesta completada", "fuente", source, "duracion", time.Since(start).Round(time.Millisecond).String(),
 				"paginas", stats.Pages, "paginas_saltadas", stats.Skipped, "pendiente", stats.Pending,
 				"nuevas", stats.New, "modificadas", stats.Modified, "sin_cambios", stats.Unchanged, "bajas", stats.Removed,

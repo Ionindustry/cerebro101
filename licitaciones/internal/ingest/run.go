@@ -102,5 +102,30 @@ func Run(ctx context.Context, d Deps, source, startURL string, opt RunOptions) (
 		}
 		url, validators = feed.Next, fetch.Validators{}
 	}
+	total.CaughtUp = AlDia(done, cp.Next)
 	return total, nil
+}
+
+// AlDia dice si las páginas de archivo ya ingeridas (done: dirección → enlace siguiente) forman una cadena continua desde `siguiente` (el enlace que sigue a la cabecera). Al día, TODAS las
+// ingeridas se alcanzan siguiendo la cadena desde la cabecera. Tras una parada (el equipo apagado unos días) las páginas nuevas del principio no están ingeridas y las que ya estaban quedan
+// «sueltas» (no se llega a ellas desde la cabecera) hasta que se rellena el hueco: entonces vuelve a haber una sola cadena. Sin páginas de archivo ingeridas, solo está al día si no hay
+// ninguna que seguir. Pura.
+func AlDia(done map[string]string, siguiente string) bool {
+	if siguiente != "" {
+		if _, ok := done[siguiente]; !ok {
+			return false // la primera página de archivo aún no está ingerida
+		}
+	}
+	vistas := 0
+	visitado := map[string]bool{}
+	for url := siguiente; url != ""; {
+		next, ok := done[url]
+		if !ok || visitado[url] {
+			break
+		}
+		visitado[url] = true
+		vistas++
+		url = next
+	}
+	return vistas == len(done)
 }

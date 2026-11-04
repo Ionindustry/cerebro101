@@ -230,6 +230,9 @@ export function antiguedadTexto(s) {
 
 /** Lo que enseña el aviso de arriba según la respuesta de la comprobación; null si no hay nada que decir (al día, o respuesta que no se entiende). */
 export function avisoActualizacion(d) {
+  if (d?.estado === "actualizando" && d.poniendose_al_dia) {
+    return { clase: "aviso", texto: "Poniéndose al día: el sistema estuvo parado y está cargando las licitaciones que faltan, de las más nuevas a las más antiguas. Las cifras pueden estar incompletas unos minutos." };
+  }
   if (d?.estado === "actualizando") {
     const cuando = d.antiguedad_s === null || d.antiguedad_s === undefined ? "todavía no ha completado ninguna actualización" : `lo último que tenía el motor es de ${antiguedadTexto(d.antiguedad_s)}`;
     return { clase: "aviso", texto: `Actualizando las licitaciones… ${cuando}.` };

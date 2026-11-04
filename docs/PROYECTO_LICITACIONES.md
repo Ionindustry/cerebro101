@@ -609,3 +609,7 @@ Cada vez que se abre la aplicación (el panel), el navegador lanza una comprobac
 - Si el motor no responde, el aviso lo dice.
 
 Cómo se atiende la petición: la API del motor la anota (tabla `ingest_solicitudes`, como mucho una por minuto) y **el ingestor la mira cada 10 segundos mientras espera a su siguiente vuelta**; si hay una, empieza la vuelta enseguida en vez de esperar al intervalo (`LIC_INTERVALO`, 15 min). Lo pedido mientras trabaja se atiende al terminar la vuelta. La API del motor no ingiere nada ni sale a la fuente. Una cabecera sin cambios cuesta un 304, así que comprobar a menudo no castiga a la plataforma.
+
+### Poniéndose al día tras una parada
+
+Si el equipo estuvo apagado (o Docker parado) unos días, al volver a arrancar el ingestor empieza **al momento** y recupera lo atrasado de **lo más nuevo a lo más antiguo** (así lo de hoy entra primero). Mientras tanto, la cabecera de la fuente ya se ha mirado y la «última ingesta» parece reciente, así que se usa otra señal: las páginas de archivo ya ingeridas forman **una cadena continua desde la cabecera** cuando está al día; tras una parada, las páginas nuevas no están y las antiguas quedan «sueltas» hasta que se rellena el hueco (`ingest.AlDia`). El ingestor anota el resultado tras cada vuelta (`puntos_control.al_dia`), `/ops/status` lo da en cada fuente (`al_dia`) y el panel enseña **«Poniéndose al día…»** hasta que vuelve a ser `true`.

@@ -27,6 +27,7 @@ type estadoFuente struct {
 	AntiguedadS           *int64     `json:"antiguedad_s"`
 	ObjetivoFrescuraS     int64      `json:"objetivo_frescura_s"`
 	Documentos            int        `json:"expedientes"`
+	AlDia                 bool       `json:"al_dia"` // false: el ingestor se está poniendo al día de días atrasados (tras una parada)
 }
 
 type estadoComponente struct {
@@ -79,7 +80,7 @@ func (s *Server) estado(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		for _, f := range fs {
-			ef := estadoFuente{Fuente: fuenteExterna(f.Fuente), Estado: "ok", UltimaIngestaCorrecta: f.UltimaOK, ObjetivoFrescuraS: int64(frescuraObjetivo.Seconds()), Documentos: f.Expediente}
+			ef := estadoFuente{Fuente: fuenteExterna(f.Fuente), Estado: "ok", UltimaIngestaCorrecta: f.UltimaOK, ObjetivoFrescuraS: int64(frescuraObjetivo.Seconds()), Documentos: f.Expediente, AlDia: f.AlDia}
 			if f.UltimaOK == nil {
 				ef.Estado = "degradado"
 				motivos = append(motivos, motivo{Componente: ef.Fuente, Codigo: "fuente_sin_ingesta", Severidad: "degradado", Mensaje: "La fuente no tiene todavía una ingesta completa."})
