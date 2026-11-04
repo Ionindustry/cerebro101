@@ -26,6 +26,7 @@ from ..herramientas.licitaciones import MotorNoDisponible
 from ..licitaciones import alertas as alertas_licitaciones
 from ..licitaciones import calendario_plazos
 from ..licitaciones import crm as crm_licitaciones
+from ..licitaciones import frescura as frescura_licitaciones
 from ..licitaciones import pliegos as pliegos_licitaciones
 from ..licitaciones import ofertas as ofertas_licitaciones
 from ..licitaciones import empresa as empresa_erp
@@ -293,6 +294,13 @@ class CambioEstadoEntrada(BaseModel):
 def _exige_licitaciones(usuario: Usuario) -> None:
     if not _ve_licitaciones(usuario):
         raise HTTPException(403, "El embudo de licitaciones es para Dirección y el departamento de Licitaciones")
+
+
+@app.post("/licitaciones/motor/comprobar")
+async def comprobar_actualizacion_de_licitaciones(usuario: Usuario = Depends(usuario_actual)):
+    """Lo lanza el panel cada vez que se abre la aplicación: si lo último ingerido es viejo, pide al motor que actualice YA (el ingestor empieza en segundos, no espera a su intervalo).
+    Para cualquier persona con sesión (es lo mismo que mirar el estado del motor): solo pide una vuelta, nunca ingiere nada ni cambia datos. Devuelve {estado, antiguedad_s, solicitada}."""
+    return await frescura_licitaciones.comprobar(usuario.id)
 
 
 @app.get("/licitaciones/embudo/resumen")

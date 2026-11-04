@@ -97,6 +97,7 @@ func WorkWith(ctx context.Context, deps ingest.Deps, d events.Drainer, publish e
 	defer wg.Wait()
 
 	for ctx.Err() == nil {
+		vuelta := time.Now()            // una petición de «actualiza ya» posterior a esto se atiende al terminar la vuelta
 		pending, failed := false, false // quedan páginas por cargar / una fuente falló: no se espera la hora entera para seguir
 		for _, source := range c.Sources {
 			if ctx.Err() != nil {
@@ -135,7 +136,7 @@ func WorkWith(ctx context.Context, deps ingest.Deps, d events.Drainer, publish e
 		case pending:
 			wait = min(wait, time.Minute) // la carga avanza bien: seguir enseguida
 		}
-		if err := startup.Sleep(ctx, wait); err != nil {
+		if err := esperar(ctx, d, vuelta, wait, log); err != nil {
 			break
 		}
 	}

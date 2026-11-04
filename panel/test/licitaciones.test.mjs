@@ -994,3 +994,19 @@ test("CRM: mensajes de error", () => {
   assert.match(mensajeCrm(503), /CRM/);
   assert.match(mensajeCrm(422), /estudiarla/);
 });
+
+import { avisoActualizacion } from "../lib/licitaciones.js";
+
+test("avisoActualizacion: qué se dice al abrir la aplicación según el estado de las licitaciones", () => {
+  assert.equal(avisoActualizacion({ estado: "al_dia", antiguedad_s: 60 }), null);
+  assert.equal(avisoActualizacion(null), null);
+  assert.equal(avisoActualizacion({ estado: "raro" }), null);
+  const a = avisoActualizacion({ estado: "actualizando", antiguedad_s: 7200 });
+  assert.equal(a.clase, "aviso");
+  assert.match(a.texto, /Actualizando las licitaciones/);
+  assert.match(a.texto, /hace 2 h/);
+  assert.match(avisoActualizacion({ estado: "actualizando", antiguedad_s: null }).texto, /todavía no ha completado/);
+  const e = avisoActualizacion({ estado: "motor_no_responde" });
+  assert.equal(e.clase, "error");
+  assert.match(e.texto, /no responde/);
+});

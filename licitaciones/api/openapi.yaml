@@ -780,8 +780,31 @@ paths:
         '403': {$ref: '#/components/responses/Prohibido'}
         '429': {$ref: '#/components/responses/DemasiadasPeticiones'}
 
-components:
-  securitySchemes:
+  /ops/actualizar:
+    post:
+      tags: [operaciones]
+      operationId: pedirActualizacion
+      summary: Pide al ingestor una vuelta inmediata (sin esperar al intervalo)
+      description: |
+        La anota en la tabla `ingest_solicitudes`; el ingestor, que la mira cada 10 s mientras espera, empieza su vuelta enseguida (o al terminar la que está haciendo).
+        **No ingiere nada aquí**: la API no tiene salida a la fuente. Como mucho una petición por minuto: si ya hay una de hace menos de un minuto responde
+        `{"solicitada": false}` (el ingestor la está atendiendo). La cabecera opcional `X-Pedido-Por` (la pone el Cerebro: el usuario del panel) solo queda en el rastro.
+        La usa el panel al abrirse, cuando lo último ingerido es viejo.
+      x-permisos: cuenta servicio (el Cerebro la llama con su token)
+      responses:
+        '202':
+          description: Petición recibida
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [solicitada]
+                properties:
+                  solicitada: {type: boolean, description: '`true` si se ha anotado una petición nueva; `false` si ya había una reciente.'}
+        '401': {$ref: '#/components/responses/NoAutenticado'}
+        '501':
+          description: El almacén no admite pedir una actualización
+
     bearer:
       type: http
       scheme: bearer

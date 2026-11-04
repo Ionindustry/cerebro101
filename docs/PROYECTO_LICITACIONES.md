@@ -600,3 +600,12 @@ El DEUC (documento europeo único de contratación) se adjunta **ya rellenado co
 La plataforma de contratación (PLACSP) **publica una sola tanda al día, hacia las 20:15** (hora de Madrid): la cabecera de la fuente lleva `<updated>` de esa hora y cada día se archiva un fichero `…_AAAAMMDD_2015xx.atom`. Por eso **lo de hoy no existe hasta esa publicación** y lo de ayer llega, como pronto, anoche. El ingestor consulta la fuente cada 15 minutos (`LIC_INTERVALO`): mientras la cabecera no cambia, la respuesta es un «304 sin cambios» que no cuesta nada, y en cuanto la plataforma publica, la tanda entra en minutos. Cada pasada descarga como mucho 10 páginas (`LIC_MAX_PAGINAS`, ≈1 min cada una) y la cabecera se mira al empezar cada pasada: así lo de hoy no espera a que acabe el relleno del histórico, que sigue por donde lo dejó. Tras una caída (Docker, apagón) se recupera sola: recorre hacia atrás hasta encontrar lo ya ingerido.
 
 El vigilante lo comprueba de dos maneras: antigüedad de la última ingesta correcta (más de 3 h) y, en día laborable pasadas las 22:00, que haya entrado alguna licitación nueva o actualizada ese día.
+
+## Comprobar y actualizar al abrir la aplicación
+
+Cada vez que se abre la aplicación (el panel), el navegador lanza una comprobación (`POST /licitaciones/motor/comprobar`, `cerebro/licitaciones/frescura.py`):
+- Mira cuánto hace de la última ingesta correcta de cada fuente. Si es de menos de 20 minutos (`actualizacion.umbral_min` en `config/licitaciones.yaml`), está **al día** y no se hace nada.
+- Si es más vieja, o la fuente no ha completado ninguna, **pide al motor una actualización inmediata** (`POST /api/v1/ops/actualizar`) y el panel enseña «Actualizando las licitaciones…» arriba, que se quita solo con «Licitaciones al día» cuando termina (mira cada 20 s, hasta 5 minutos).
+- Si el motor no responde, el aviso lo dice.
+
+Cómo se atiende la petición: la API del motor la anota (tabla `ingest_solicitudes`, como mucho una por minuto) y **el ingestor la mira cada 10 segundos mientras espera a su siguiente vuelta**; si hay una, empieza la vuelta enseguida en vez de esperar al intervalo (`LIC_INTERVALO`, 15 min). Lo pedido mientras trabaja se atiende al terminar la vuelta. La API del motor no ingiere nada ni sale a la fuente. Una cabecera sin cambios cuesta un 304, así que comprobar a menudo no castiga a la plataforma.

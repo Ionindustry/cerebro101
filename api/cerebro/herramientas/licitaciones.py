@@ -448,6 +448,25 @@ async def simular(licitacion: str, coste: float | None = None, presupuesto_erp: 
         raise ValueError(str(e)) from None
 
 
+async def pedir_actualizacion(por: str) -> bool:
+    """Pide al motor que el ingestor empiece una vuelta YA (POST /ops/actualizar). Devuelve si se anotó una petición nueva (False: ya había una de hace menos de un minuto).
+    No es una operación de los agentes: la usa el panel al abrirse (cerebro/licitaciones/frescura.py). MotorNoDisponible si el motor no responde o no acepta la credencial."""
+    token = os.environ.get("LICITACIONES_API_TOKEN", "")
+    if not token:
+        raise MotorNoDisponible("El Cerebro no tiene configurada la credencial del motor de licitaciones (LICITACIONES_API_TOKEN): avisa a Tecnología")
+    try:
+        async with httpx.AsyncClient(timeout=httpx.Timeout(10.0, connect=2.0)) as c:
+            r = await c.post(f"{_base()}/api/v1/ops/actualizar", headers={"Authorization": f"Bearer {token}", "X-Pedido-Por": _corto(por, 100)})
+    except httpx.HTTPError:
+        raise MotorNoDisponible("El motor de licitaciones no responde ahora") from None
+    if r.status_code != 202:
+        raise MotorNoDisponible("El motor de licitaciones no ha aceptado la petición de actualizar")
+    try:
+        return bool(r.json().get("solicitada"))
+    except ValueError:
+        return False
+
+
 async def estado_motor() -> dict:
     r = await _get("/ops/status")
     return {
