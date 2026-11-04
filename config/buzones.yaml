@@ -35,6 +35,9 @@ pie_comercial: >-
 avisos:
   buzon: notificaciones
   dominios: [101.cat]
+  # Todo aviso de una alerta de licitaciones sale ADEMÁS con copia a estas direcciones (concursos@: el equipo que lleva las licitaciones; notificaciones@: el archivo de lo enviado).
+  # Los fallos del SISTEMA (motor atascado, nada de hoy…) no van aquí: van a soporte@ (config/licitaciones.yaml → vigilante.destinatarios).
+  copia: [concursos@101.cat, notificaciones@101.cat]
   max_por_correo: 20            # avisos que caben en un correo (si hay más, salen en el siguiente)
   max_intentos: 5               # envíos fallidos antes de darlo por perdido
   max_antiguedad_horas: 48      # un aviso que no se ha podido enviar en este tiempo ya no se envía

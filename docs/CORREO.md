@@ -102,3 +102,13 @@ por las del Plan General Contable** de la empresa). Requiere que el departamento
 - ¿Qué buzones empiezan en modo «solo leer y preparar borradores»? Mientras no pongas su contraseña, un buzón no hace nada.
 - ¿Firma de cada buzón (campo `firma`) y texto del pie comercial? Los revisa la persona responsable de protección de datos.
 - Los agentes que atienden estos buzones y su frecuencia de revisión (tareas programadas) se ajustan en sus fichas.
+
+
+## A quién llegan los avisos automáticos
+
+Los avisos automáticos salen del buzón `notificaciones@101.cat` (sin aprobación: es correo interno) y solo a direcciones del dominio de la empresa. Hay dos rutas:
+
+- **Fallos del sistema** (el motor de licitaciones se atasca, lleva horas sin traer nada, o en un día laborable no ha entrado nada de ese día) → **`soporte@101.cat`**. Se configura en `config/licitaciones.yaml` → `vigilante.destinatarios`.
+- **Lo relacionado con licitaciones** (los avisos de las alertas con canal «correo») → a quien creó la alerta **y con copia a `concursos@101.cat` y `notificaciones@101.cat`**. Se configura en `config/buzones.yaml` → `avisos.copia`.
+
+Para que salgan, `notificaciones` tiene que tener su contraseña dada de alta (`python3 scripts/buzon_alta.py --id notificaciones`) y la prueba `docker compose exec api python /app/scripts/probar_buzones.py` debe decir «IMAP ok · SMTP ok». Si el buzón no está disponible, el registro del worker lo dice («el buzón «notificaciones» no está disponible: no se envía el correo»).

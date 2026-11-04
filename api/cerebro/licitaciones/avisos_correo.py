@@ -74,10 +74,27 @@ def redactar(alerta: dict, avisos: list[dict], zona: str = "Europe/Madrid") -> t
     return asunto, "\n".join(lineas)
 
 
-def construir_mensaje(remitente: str, para: str, asunto: str, cuerpo: str) -> EmailMessage:
+def copia_de(cfg: dict, destino: str) -> list[str]:
+    """Las direcciones que reciben COPIA de todo aviso de licitaciones (`avisos.copia` de config/buzones.yaml: p. ej. concursos@ y notificaciones@), además de quien creó la alerta.
+    Se validan como cualquier destino (solo del dominio de la empresa); una que no vale se ignora con un aviso en el registro. Sin repetir ni incluir el propio destino."""
+    out: list[str] = []
+    for c in cfg.get("copia") or []:
+        try:
+            limpia = alertas_mod.limpiar_correo(c, cfg["dominios"])
+        except alertas_mod.ErrorAlerta as e:
+            log.error("avisos por correo: la dirección de copia «%s» no vale: %s", _una_linea(c, 80), e)
+            continue
+        if limpia != destino and limpia not in out:
+            out.append(limpia)
+    return out
+
+
+def construir_mensaje(remitente: str, para: str, asunto: str, cuerpo: str, copia: list[str] | tuple = ()) -> EmailMessage:
     m = EmailMessage()
     m["From"] = remitente
     m["To"] = para
+    if copia:
+        m["Cc"] = ", ".join(copia)
     m["Subject"] = asunto
     m["Message-ID"] = make_msgid(domain=remitente.split("@")[-1])
     m["Auto-Submitted"] = "auto-generated"            # que ningún buzón conteste en bucle a un aviso automático
@@ -139,6 +156,7 @@ async def enviar_pendientes(enviar=None, ahora: datetime | None = None) -> dict:
     for alerta, avisos in grupos:
         try:
             destino = alertas_mod.limpiar_correo(alerta["correo_destino"], cfg["dominios"])        # otra vez, justo antes de enviar
+            copia = copia_de(cfg, destino)
         except alertas_mod.ErrorAlerta as e:
             log.error("avisos por correo: la alerta %s tiene un destino que ya no vale: %s", alerta["id"], e)
             await _marcar([a["id"] for a in avisos], False, str(e), ahora)
@@ -149,7 +167,7 @@ async def enviar_pendientes(enviar=None, ahora: datetime | None = None) -> dict:
             asunto, cuerpo = redactar(alerta, lote, ajustes.zona_horaria)
             ids = [a["id"] for a in lote]
             try:
-                await asyncio.to_thread(enviar, buzon, construir_mensaje(remitente, destino, asunto, cuerpo))
+                await asyncio.to_thread(enviar, buzon, construir_mensaje(remitente, destino, asunto, cuerpo, copia))
             except Exception as e:      # noqa: BLE001 — el servidor de correo falla de muchas maneras: se anota y se reintenta
                 log.warning("avisos por correo: no se ha podido enviar a la alerta %s: %s: %s", alerta["id"], type(e).__name__, e)
                 await _marcar(ids, False, f"{type(e).__name__}: {e}", ahora)
