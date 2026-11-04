@@ -32,6 +32,20 @@ INYECTAR_DEPARTAMENTO = {"erpnext", "conocimiento", "correo", "calendario", "cua
 PIDE_CUADERNO = re.compile(r"\bcuadern|\bquadern|notebook\s*lm", re.I)
 
 
+PIDE_DEUC = re.compile(r"\bDEUC\b|documento europeo [uú]nico de contrataci[oó]n", re.I)
+
+
+def corregir_por_deuc(peticion: str, departamento: str, agente: str | None = None) -> tuple[str, str | None]:
+    """El DEUC (el de la sociedad, que se sube al chat para guardarlo como base) es cosa del Administrativo de Licitaciones, que es quien tiene la herramienta «plantillas»
+    para proponer guardarlo. El modelo rápido que enruta lo mandaba a Legal o a Conocimiento (que solo tienen «ficheros») y ahí no se podía guardar. Lo decide el sistema."""
+    if not PIDE_DEUC.search(peticion):
+        return departamento, agente
+    r = registro()
+    if "administrativo-licitaciones" not in r.fichas:
+        return departamento, agente
+    return "licitaciones", "administrativo-licitaciones"
+
+
 def con_cuadernos(fichas) -> list:
     return [f for f in fichas if "cuaderno" in f.herramientas]
 
@@ -95,7 +109,8 @@ async def enrutar(estado: Estado) -> Estado:
                            esquema=esquema, temperatura=0, max_tokens=400)
     finally:
         await actividad.reposo(ficha.id)
-    return {"departamento": corregir_por_cuaderno(estado["peticion"], d["departamento"])[0]}
+    dep = corregir_por_cuaderno(estado["peticion"], d["departamento"])[0]
+    return {"departamento": corregir_por_deuc(estado["peticion"], dep)[0]}
 
 
 async def elegir_agente(estado: Estado) -> Estado:
@@ -116,7 +131,8 @@ async def elegir_agente(estado: Estado) -> Estado:
                        esquema=esquema, temperatura=0, max_tokens=400)
     finally:
         await actividad.reposo(director.id)
-    return {"agente": corregir_por_cuaderno(estado["peticion"], dep, d["agente"])[1]}
+    dep, agente = corregir_por_cuaderno(estado["peticion"], dep, d["agente"])
+    return {"agente": corregir_por_deuc(estado["peticion"], dep, agente)[1]}
 
 
 PASO_MAX_TOKENS = 1500          # un paso del agente es una llamada a herramienta o una respuesta: no necesita más
