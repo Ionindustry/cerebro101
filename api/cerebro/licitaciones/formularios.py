@@ -636,6 +636,7 @@ def rellenar_xlsx(ruta: Path, destino: Path, valores: dict[str, str]) -> dict:
             omitidos.append(fid)
             continue
         celda.value = re.sub(r"\s+", " ", _CTRL.sub("", str(valor))).strip()
+        celda.data_type = "s"           # SIEMPRE texto: un dato que empieza por «=», «+», «-» o «@» (el título de una licitación es de terceros) no se ejecuta como fórmula al abrir el Excel
         hechos.append(fid)
     destino.parent.mkdir(parents=True, exist_ok=True)
     tmp = destino.with_suffix(destino.suffix + ".tmp")

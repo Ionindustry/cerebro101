@@ -65,6 +65,17 @@ class TestXlsx(unittest.TestCase):
         ws = openpyxl.load_workbook(destino).active
         self.assertEqual((ws["B1"].value, ws["B2"].value, ws["B3"].value), ("101 Servicios S.L.", "B12345678", "Calle Mayor 1"))
 
+    def test_un_dato_que_parece_formula_se_escribe_como_texto(self):
+        origen = libro(self.dir / "f.xlsx", datos_empresa)
+        campos = {c["etiqueta"]: c["id"] for c in F.detectar(origen, "xlsx")["campos"]}
+        destino = self.dir / "f_out.xlsx"
+        F.rellenar(origen, "xlsx", destino, {campos["Razón social"]: "=HYPERLINK(\"http://malo\",\"x\")", campos["NIF/CIF"]: "+1+1"})
+        with zipfile.ZipFile(destino) as z:
+            hoja = z.read("xl/worksheets/sheet1.xml").decode()
+        self.assertNotIn("<f>", hoja)                                                  # ninguna fórmula en el libro
+        ws = openpyxl.load_workbook(destino).active
+        self.assertEqual((ws["B1"].data_type, ws["B1"].value), ("s", '=HYPERLINK("http://malo","x")'))
+
     def test_fila_de_cabeceras_rellena_la_celda_de_debajo_y_las_combinadas_su_esquina(self):
         def cabeceras(wb):
             ws = wb.active

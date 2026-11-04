@@ -11,7 +11,9 @@
 #
 # Variables (o en el .env): COPIA_CONSERVAR=7  COPIA_EXTRA=  COPIA_BASE=copias/auto   (para pruebas: COPIA_COMANDO, COPIA_AVISAR)
 set -uo pipefail
+umask 077          # las copias llevan datos sensibles: solo las lee quien las hace
 cd "$(dirname "$0")/.."
+REGISTRO="$(mktemp "${TMPDIR:-/tmp}/copia_automatica.XXXXXX")"; trap 'rm -f "$REGISTRO"' EXIT
 
 CONSERVAR="${COPIA_CONSERVAR:-7}"
 BASE="${COPIA_BASE:-copias/auto}"
@@ -37,7 +39,7 @@ fallar() {
 
 rm -rf -- "$CARPETA"            # una repetición en el mismo minuto rehace la copia entera, no mezcla ficheros de dos intentos
 echo "→ Copia automática en $CARPETA"
-COPIA_SIN_TRAZAS=1 $COMANDO "$CARPETA" >/tmp/copia_automatica.log 2>&1 || { tail -5 /tmp/copia_automatica.log >&2; fallar "el script de copia terminó con error (últimas líneas: $(tail -2 /tmp/copia_automatica.log | tr '\n' ' '))"; }
+COPIA_SIN_TRAZAS=1 $COMANDO "$CARPETA" >"$REGISTRO" 2>&1 || { tail -5 "$REGISTRO" >&2; fallar "el script de copia terminó con error (últimas líneas: $(tail -2 "$REGISTRO" | tr '\n' ' '))"; }
 [ -d "$CARPETA" ] || fallar "no se ha creado la carpeta de la copia"
 
 echo "→ Comprobando la copia"
