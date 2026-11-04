@@ -105,6 +105,13 @@ func WorkWith(ctx context.Context, deps ingest.Deps, d events.Drainer, publish e
 			}
 			start := time.Now()
 			stats, err := ingest.Run(ctx, deps, source, Catalog[source], ingest.RunOptions{MaxPages: c.MaxPages})
+			if m, ok := d.(interface {
+				MarcarAlDia(context.Context, string, bool) error
+			}); ok && (err == nil || stats.Pages > 0 || stats.Skipped > 0) { // también tras un error: lo reciente puede estar completo aunque falle una página antigua
+				if merr := m.MarcarAlDia(ctx, source, stats.CaughtUp); merr != nil {
+					log.Warn("no se ha podido anotar si la fuente está al día", "fuente", source, "error", merr)
+				}
+			}
 			if err != nil {
 				// Lo ingerido hasta aquí queda anotado: la siguiente vuelta retoma en la página que falló, sin repetir lo hecho.
 				log.Error("ingesta fallida", "fuente", source, "error", err, "paginas", stats.Pages, "paginas_saltadas", stats.Skipped)

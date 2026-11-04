@@ -275,12 +275,13 @@ type EstadoFuente struct {
 	Fuente     string
 	UltimaOK   *time.Time // nil si la última ejecución no terminó o nunca hubo una
 	Expediente int        // expedientes proyectados de la fuente
+	AlDia      bool       // las páginas ingeridas forman una cadena sin huecos desde la cabecera; false = poniéndose al día tras una parada
 }
 
 // Fuentes devuelve el estado de las fuentes conocidas: las que tienen punto de control o expedientes.
 func (s *Store) Fuentes(ctx context.Context) ([]EstadoFuente, error) {
 	rows, err := s.pool.Query(ctx, `
-SELECT f.fuente, CASE WHEN p.ultima_ejecucion > '2000-01-01' THEN p.ultima_ejecucion END, coalesce(c.n, 0)
+SELECT f.fuente, CASE WHEN p.ultima_ejecucion > '2000-01-01' THEN p.ultima_ejecucion END, coalesce(c.n, 0), coalesce(p.al_dia, true)
 FROM (SELECT fuente FROM puntos_control UNION SELECT fuente FROM expedientes) f
 LEFT JOIN puntos_control p ON p.fuente = f.fuente
 LEFT JOIN (SELECT fuente, count(*) AS n FROM expedientes GROUP BY fuente) c ON c.fuente = f.fuente
@@ -292,7 +293,7 @@ ORDER BY f.fuente`)
 	var out []EstadoFuente
 	for rows.Next() {
 		var e EstadoFuente
-		if err := rows.Scan(&e.Fuente, &e.UltimaOK, &e.Expediente); err != nil {
+		if err := rows.Scan(&e.Fuente, &e.UltimaOK, &e.Expediente, &e.AlDia); err != nil {
 			return nil, fmt.Errorf("pg: leer una fuente: %w", err)
 		}
 		out = append(out, e)

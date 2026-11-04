@@ -1006,6 +1006,9 @@ test("avisoActualizacion: qué se dice al abrir la aplicación según el estado 
   assert.match(a.texto, /Actualizando las licitaciones/);
   assert.match(a.texto, /hace 2 h/);
   assert.match(avisoActualizacion({ estado: "actualizando", antiguedad_s: null }).texto, /todavía no ha completado/);
+  const p = avisoActualizacion({ estado: "actualizando", antiguedad_s: 30, poniendose_al_dia: true });
+  assert.equal(p.clase, "aviso");
+  assert.match(p.texto, /Poniéndose al día/);
   const e = avisoActualizacion({ estado: "motor_no_responde" });
   assert.equal(e.clase, "error");
   assert.match(e.texto, /no responde/);

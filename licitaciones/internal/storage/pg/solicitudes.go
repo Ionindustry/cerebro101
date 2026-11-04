@@ -24,6 +24,14 @@ SELECT $1 WHERE NOT EXISTS (SELECT 1 FROM ingest_solicitudes WHERE pedido_en > n
 	return tag.RowsAffected() > 0, nil
 }
 
+// MarcarAlDia anota si la fuente está al día (ingest.AlDia) tras una vuelta del ingestor. El punto de control de la fuente ya existe (lo crea la cabecera).
+func (s *Store) MarcarAlDia(ctx context.Context, fuente string, alDia bool) error {
+	if _, err := s.pool.Exec(ctx, `UPDATE puntos_control SET al_dia = $2 WHERE fuente = $1`, fuente, alDia); err != nil {
+		return fmt.Errorf("pg: anotar si la fuente está al día: %w", err)
+	}
+	return nil
+}
+
 // IngestaSolicitadaDesde dice si alguien ha pedido una ingesta después de desde (el comienzo de la vuelta en curso del ingestor).
 func (s *Store) IngestaSolicitadaDesde(ctx context.Context, desde time.Time) (bool, error) {
 	var hay bool

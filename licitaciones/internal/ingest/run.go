@@ -33,8 +33,7 @@ var ErrNoStartURL = errors.New("ingest: falta la dirección de la primera págin
 //
 // Por eso un fallo a mitad de camino (una página lenta, la red) no se paga dos veces: lo hecho no se repite y la siguiente ejecución retoma en la
 // página que falló. La cabeza se anota (punto de control) en cuanto se ingiere: es lo que dice cuándo se comprobó la fuente por última vez.
-func Run(ctx context.Context, d Deps, source, startURL string, opt RunOptions) (Stats, error) {
-	var total Stats
+func Run(ctx context.Context, d Deps, source, startURL string, opt RunOptions) (total Stats, runErr error) {
 	if startURL == "" {
 		return total, ErrNoStartURL
 	}
@@ -49,6 +48,9 @@ func Run(ctx context.Context, d Deps, source, startURL string, opt RunOptions) (
 	if err != nil {
 		return total, fmt.Errorf("ingest: leer las páginas ya ingeridas: %w", err)
 	}
+
+	// Al día o no se calcula SIEMPRE, también si la vuelta acaba en error (p. ej. falla una página antigua del relleno del histórico): lo reciente puede estar completo.
+	defer func() { total.CaughtUp = AlDia(done, cp.Next) }()
 
 	url, validators := startURL, cp.Validators
 	downloads := 0
@@ -103,4 +105,28 @@ func Run(ctx context.Context, d Deps, source, startURL string, opt RunOptions) (
 		url, validators = feed.Next, fetch.Validators{}
 	}
 	return total, nil
+}
+
+// AlDia dice si las páginas de archivo ya ingeridas (done: dirección → enlace siguiente) forman una cadena continua desde `siguiente` (el enlace que sigue a la cabecera). Al día, TODAS las
+// ingeridas se alcanzan siguiendo la cadena desde la cabecera. Tras una parada (el equipo apagado unos días) las páginas nuevas del principio no están ingeridas y las que ya estaban quedan
+// «sueltas» (no se llega a ellas desde la cabecera) hasta que se rellena el hueco: entonces vuelve a haber una sola cadena. Sin páginas de archivo ingeridas, solo está al día si no hay
+// ninguna que seguir. Pura.
+func AlDia(done map[string]string, siguiente string) bool {
+	if siguiente != "" {
+		if _, ok := done[siguiente]; !ok {
+			return false // la primera página de archivo aún no está ingerida
+		}
+	}
+	vistas := 0
+	visitado := map[string]bool{}
+	for url := siguiente; url != ""; {
+		next, ok := done[url]
+		if !ok || visitado[url] {
+			break
+		}
+		visitado[url] = true
+		vistas++
+		url = next
+	}
+	return vistas == len(done)
 }

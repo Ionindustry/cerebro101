@@ -1,6 +1,6 @@
 """Comprobación de que las licitaciones están al día, que el panel lanza cada vez que se abre la aplicación.
 
-Mira cuánto hace de la última ingesta correcta de cada fuente (`/ops/status` del motor). Si es reciente, dice «al día». Si es vieja (más de `umbral_min`, por defecto 20 minutos: el ingestor
+Mira cuánto hace de la última ingesta correcta de cada fuente (`/ops/status` del motor). Si es reciente Y el ingestor no se está poniendo al día de días atrasados (`al_dia` de cada fuente, tras una parada: el equipo apagado), dice «al día». Si es vieja (más de `umbral_min`, por defecto 20 minutos: el ingestor
 mira la fuente cada 15) o el motor aún no ha completado ninguna, PIDE al motor una actualización inmediata (`POST /ops/actualizar`: el ingestor empieza su vuelta en como mucho 10 segundos
 en vez de esperar al intervalo) y dice «actualizando». Si el motor no responde, lo dice. Nunca lanza: el panel solo enseña el estado.
 """
@@ -48,7 +48,8 @@ async def comprobar(usuario: str, consulta=None, pedir=None, cfg: dict | None = 
     except (motor.MotorNoDisponible, ValueError):
         return {"estado": "motor_no_responde", "antiguedad_s": None, "solicitada": False}
     edad, sin_ingesta = edad_maxima(estado)
-    if not sin_ingesta and edad is not None and edad <= cfg["umbral_min"] * 60:
+    atrasada = any(f.get("al_dia") is False for f in (estado.get("fuentes") or []))      # el ingestor se está poniendo al día de días atrasados (tras una parada)
+    if not sin_ingesta and not atrasada and edad is not None and edad <= cfg["umbral_min"] * 60:
         return {"estado": "al_dia", "antiguedad_s": edad, "solicitada": False}
     try:
         solicitada = await pedir(usuario)
@@ -56,4 +57,4 @@ async def comprobar(usuario: str, consulta=None, pedir=None, cfg: dict | None = 
         log.warning("frescura: no se ha podido pedir la actualización: %s", e)
         return {"estado": "motor_no_responde", "antiguedad_s": edad, "solicitada": False}
     log.info("frescura: %s abre la aplicación con lo último ingerido de hace %s s: se pide actualizar (nueva=%s)", usuario, edad, solicitada)
-    return {"estado": "actualizando", "antiguedad_s": edad, "solicitada": solicitada}
+    return {"estado": "actualizando", "antiguedad_s": edad, "solicitada": solicitada, "poniendose_al_dia": atrasada}

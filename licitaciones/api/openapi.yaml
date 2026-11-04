@@ -1834,6 +1834,7 @@ paths:
         fuente: {$ref: '#/components/schemas/Fuente'}
         estado: {$ref: '#/components/schemas/EstadoGlobal'}
         ultima_ingesta_correcta: {type: [string, 'null'], format: date-time}
+        al_dia: {type: boolean, description: 'false: el ingestor se está poniendo al día de días atrasados tras una parada (las páginas ingeridas no forman aún una cadena sin huecos desde la cabecera); el panel lo enseña como «poniéndose al día».'}
         antiguedad_s: {type: [integer, 'null'], description: Segundos desde la última ingesta correcta.}
         ultima_ingesta:
           type: [object, 'null']

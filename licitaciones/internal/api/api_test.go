@@ -29,6 +29,7 @@ type fakeRepo struct {
 	vistoVence pg.FiltroVencimientos
 	vistaOrg   pg.FiltroOrganizacion
 	sinOrg     bool
+	fuentes    []pg.EstadoFuente
 }
 
 func (f *fakeRepo) BuscarAdjudicaciones(_ context.Context, fl pg.FiltroAdjudicaciones) ([]pg.Adjudicacion, int, bool, error) {
@@ -62,7 +63,7 @@ func (f *fakeRepo) Estadisticas(_ context.Context, fl pg.Filtro) (pg.Estadistica
 	f.visto = fl
 	return f.estad, f.estadErr
 }
-func (f *fakeRepo) Fuentes(context.Context) ([]pg.EstadoFuente, error) { return nil, nil }
+func (f *fakeRepo) Fuentes(context.Context) ([]pg.EstadoFuente, error) { return f.fuentes, nil }
 func (f *fakeRepo) Ping(context.Context) (time.Duration, error)        { return time.Millisecond, f.pingEr }
 
 func servidor(t *testing.T, repo Repo) (*Server, *httptest.Server) {

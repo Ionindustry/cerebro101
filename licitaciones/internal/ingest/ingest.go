@@ -57,6 +57,7 @@ type Stats struct {
 	NotModified bool
 	Skipped     int  // páginas de archivo ya ingeridas que no hizo falta descargar
 	Pending     bool // quedan páginas por ingerir (se alcanzó el tope de la ejecución): seguir pronto
+	CaughtUp    bool // al terminar la ejecución, las páginas ingeridas forman una cadena SIN HUECOS desde la cabecera: no falta ningún día reciente (ver AlDia)
 	// Dónde se va el tiempo de una página: guardar los originales en el almacén y anotar cada observación en el estado (el resto es leer y normalizar el XML).
 	// Solo sirve para diagnosticar una ingesta lenta; sale en el registro de cada página.
 	TiempoAlmacen time.Duration
@@ -178,6 +179,10 @@ func ingestPage(ctx context.Context, d Deps, source string, page fetch.Result) (
 		}
 		return nil
 	})
+	for _, id := range feed.Oversized { // una licitación enorme no tumba la página: se salta y queda a la vista
+		st.Warnings++
+		d.log().Warn("entrada demasiado grande: se salta y la página sigue", "fuente", source, "id", id, "tope_bytes", placsp.DefaultMaxEntryBytes)
+	}
 	return feed, st, err
 }
 

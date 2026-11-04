@@ -52,6 +52,15 @@ class TestFrescura(unittest.TestCase):
         self.assertEqual((r["estado"], r["antiguedad_s"], r["solicitada"]), ("actualizando", 21 * 60 + 1, True))
         self.assertEqual(m.pedidos, ["albert"])
 
+    def test_aunque_la_cabecera_sea_reciente_si_se_esta_poniendo_al_dia_no_esta_al_dia(self):
+        """Tras apagar el equipo, el ingestor mira la cabecera enseguida (parece reciente) pero aún baja los días atrasados."""
+        m = Motor({"fuentes": [{"fuente": "f", "antiguedad_s": 30, "al_dia": False}]})
+        r = self.comprobar(m)
+        self.assertEqual((r["estado"], r["poniendose_al_dia"]), ("actualizando", True))
+        self.assertEqual(m.pedidos, ["albert"])
+        self.assertEqual(self.comprobar(Motor({"fuentes": [{"fuente": "f", "antiguedad_s": 30, "al_dia": True}]}))["estado"], "al_dia")
+        self.assertEqual(self.comprobar(Motor(estado(30)))["estado"], "al_dia")                  # un motor antiguo sin el campo: se ignora
+
     def test_justo_en_el_umbral_sigue_al_dia(self):
         self.assertEqual(self.comprobar(Motor(estado(20 * 60)))["estado"], "al_dia")
 

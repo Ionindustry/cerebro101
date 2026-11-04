@@ -4,6 +4,8 @@ import (
 	"context"
 	"testing"
 	"time"
+
+	"github.com/ionindustry/cerebro101/licitaciones/internal/ingest"
 )
 
 func TestSolicitudesDeIngestaSeAgrupanYSeVen(t *testing.T) {
@@ -43,5 +45,29 @@ func TestSolicitudesViejasSeBorran(t *testing.T) {
 	var n int
 	if err := pool.QueryRow(ctx, `SELECT count(*) FROM ingest_solicitudes WHERE por = 'vieja'`).Scan(&n); err != nil || n != 0 {
 		t.Fatalf("la de hace 8 días debe haberse borrado: n=%d err=%v", n, err)
+	}
+}
+
+func TestMarcarAlDiaSeVeEnLasFuentes(t *testing.T) {
+	_, st := conectar(t)
+	ctx := context.Background()
+	if err := st.SaveCheckpoint(ctx, "placsp-643", ingest.Checkpoint{LastRun: t0}); err != nil {
+		t.Fatal(err)
+	}
+	fs, err := st.Fuentes(ctx)
+	if err != nil || len(fs) != 1 || !fs[0].AlDia {
+		t.Fatalf("lo que ya existía se da por al día: %+v err=%v", fs, err)
+	}
+	if err := st.MarcarAlDia(ctx, "placsp-643", false); err != nil {
+		t.Fatal(err)
+	}
+	if fs, _ := st.Fuentes(ctx); fs[0].AlDia {
+		t.Fatalf("debe verse que se está poniendo al día: %+v", fs)
+	}
+	if err := st.MarcarAlDia(ctx, "placsp-643", true); err != nil {
+		t.Fatal(err)
+	}
+	if fs, _ := st.Fuentes(ctx); !fs[0].AlDia {
+		t.Fatalf("debe volver a estar al día: %+v", fs)
 	}
 }
