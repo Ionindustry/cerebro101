@@ -552,7 +552,7 @@ class TestBaseDeDatos(unittest.TestCase):
         cm = mock.MagicMock()
         cm.__aenter__ = mock.AsyncMock(return_value=cm)
         cm.__aexit__ = mock.AsyncMock(return_value=False)
-        ficha = {"id": "abc", "nombre": nombre, "formato": formato, "estado": estado, "bytes": ruta.stat().st_size, "paginas": 1, "aviso": None}
+        ficha = {"id": "abc", "usuario": "albert", "nombre": nombre, "formato": formato, "estado": estado, "bytes": ruta.stat().st_size, "paginas": 1, "aviso": None}
         for p in (mock.patch.object(D.S, "_id", lambda x: x), mock.patch.object(D.S, "_carpeta", lambda e: limpio), mock.patch.object(D.S, "_disponible", mock.AsyncMock(return_value=ficha)),
                   mock.patch.object(D.S, "_conectar", mock.AsyncMock(return_value=cm)), mock.patch.object(D, "DIR", self.dir / "deuc")):
             p.start()
@@ -561,8 +561,8 @@ class TestBaseDeDatos(unittest.TestCase):
 
     def test_un_deuc_subido_desde_jarvis_se_guarda_se_usa_y_gana_al_del_erp(self):
         self.subido()
-        self.assertIn("101 Telecom S.L.", ejecutar(D.vista("abc", "101 Telecom S.L.", departamento="licitaciones"))["campos"][0])
-        r = ejecutar(D.guardar("abc", "101 Telecom S.L.", "agente:administrativo-licitaciones"))
+        self.assertIn("101 Telecom S.L.", ejecutar(D.vista("abc", "101 Telecom S.L.", usuario="albert", departamento="licitaciones"))["campos"][0])
+        r = ejecutar(D.guardar("abc", "101 Telecom S.L.", "agente:administrativo-licitaciones", "albert"))
         self.assertEqual((r["guardado"], r["sociedad"], r["formato"]), (True, "101 Telecom S.L.", "docx"))
         self.assertEqual(len(list((self.dir / "deuc").rglob("*.docx"))), 1)
         # hay además uno más reciente adjunto en el ERP: lo subido desde Jarvis tiene prioridad
@@ -573,17 +573,17 @@ class TestBaseDeDatos(unittest.TestCase):
         # una versión nueva sustituye a la anterior y la anterior se conserva
         self.subido(contenido=b"PK\x03\x04")                                                  # no es un Word válido: no se guarda
         with self.assertRaisesRegex(D.ErrorDeuc, "no es un Word"):
-            ejecutar(D.guardar("abc", "101 Telecom S.L."))
+            ejecutar(D.guardar("abc", "101 Telecom S.L.", usuario="albert"))
 
     def test_lo_que_no_sirve_como_deuc_se_rechaza_antes_de_pedir_aprobacion(self):
         self.subido(estado="con_macros")
         with self.assertRaisesRegex(D.ErrorDeuc, "macros"):
-            ejecutar(D.vista("abc", "101 Telecom S.L."))
+            ejecutar(D.vista("abc", "101 Telecom S.L.", usuario="albert"))
         self.subido(formato="docx", estado="limpio")
         with self.assertRaisesRegex(D.ErrorDeuc, "sociedades|no existe"):
-            ejecutar(D.vista("abc", "Inventada S.A."))
+            ejecutar(D.vista("abc", "Inventada S.A.", usuario="albert"))
         with self.assertRaisesRegex(D.ErrorDeuc, "varias sociedades"):
-            ejecutar(D.vista("abc", None))                                                   # hay dos sociedades y no se dice cuál
+            ejecutar(D.vista("abc", None, usuario="albert"))                                                   # hay dos sociedades y no se dice cuál
         from pypdf import PdfWriter
         plano = self.dir / "plano.pdf"
         w = PdfWriter()
@@ -592,17 +592,38 @@ class TestBaseDeDatos(unittest.TestCase):
             w.write(f)
         self.subido(formato="pdf", contenido=plano.read_bytes())
         with self.assertRaisesRegex(D.ErrorDeuc, "sin campos|no tiene campos"):
-            ejecutar(D.vista("abc", "101 Telecom S.L."))
+            ejecutar(D.vista("abc", "101 Telecom S.L.", usuario="albert"))
+
+    def test_solo_se_guarda_un_documento_que_ha_subido_quien_lo_pide(self):
+        self.subido()
+        for otro in ("otra.persona", "", None):
+            with self.assertRaisesRegex(D.ErrorDeuc, "no lo has subido tú"):
+                ejecutar(D.vista("abc", "101 Telecom S.L.", usuario=otro))
+            with self.assertRaisesRegex(D.ErrorDeuc, "no lo has subido tú"):
+                ejecutar(D.guardar("abc", "101 Telecom S.L.", usuario=otro))
+        self.assertFalse(list((self.dir / "deuc").rglob("*.docx")))                       # no se guardó nada
+        self.assertTrue(ejecutar(D.guardar("abc", "101 Telecom S.L.", usuario="albert"))["guardado"])
+
+    def test_el_usuario_lo_pone_el_sistema_no_el_modelo(self):
+        from cerebro.herramientas import base as HB, esquemas
+        import inspect
+        self.assertIn("usuario", esquemas.OCULTOS)
+        h = HB._REGISTRO["plantillas"]
+        self.assertIn("usuario", inspect.signature(h.operaciones["guardar_deuc"]).parameters)
+        self.assertIn("usuario", inspect.signature(h.vistas["guardar_deuc"]).parameters)
+        from cerebro.grafo.nodos import inyectar
+        ficha = mock.MagicMock(departamento="licitaciones")
+        self.assertNotIn("usuario", inyectar(ficha, {}, "plantillas", {"usuario": "otra.persona", "documento": "x"}))
 
     def test_un_pdf_con_formulario_subido_desde_jarvis_vale(self):
         self.subido(formato="pdf", nombre="DEUC 101.pdf")
-        r = ejecutar(D.guardar("abc", "101 Telecom S.L."))
+        r = ejecutar(D.guardar("abc", "101 Telecom S.L.", usuario="albert"))
         self.assertEqual(r["formato"], "pdf")
         self.assertEqual(ejecutar(D.base_local("101 Telecom S.L."))[2], "pdf")
 
     def test_si_el_fichero_guardado_cambia_en_el_disco_no_se_usa(self):
         self.subido()
-        ejecutar(D.guardar("abc", "101 Telecom S.L."))
+        ejecutar(D.guardar("abc", "101 Telecom S.L.", usuario="albert"))
         next((self.dir / "deuc").rglob("*.docx")).write_bytes(b"PK manipulado")
         with self.assertRaisesRegex(D.ErrorDeuc, "ha cambiado"):
             ejecutar(D.base_local("101 Telecom S.L."))

@@ -28,6 +28,7 @@ app.conf.task_routes = {"cerebro.tareas.celery_app.ejecutar_programada": {"queue
                         "cerebro.tareas.celery_app.vigilar_motor": {"queue": "lote"},
                         "cerebro.tareas.celery_app.purgar_subidas": {"queue": "lote"},
                         "cerebro.tareas.celery_app.pedir_viabilidad": {"queue": "peticiones"},
+                        "cerebro.tareas.celery_app.analizar_pliegos": {"queue": "peticiones"},
                         "cerebro.tareas.celery_app.volcar_constancia": {"queue": "peticiones"}}
 
 
@@ -149,6 +150,19 @@ def pedir_viabilidad(self, lid: int) -> dict:
         asyncio.run(embudo.cerrar_peticion_viabilidad(lid, "No se ha podido generar el informe: inténtalo de nuevo"))
         return {"estado": "error", "motivo": type(e).__name__}
     return {"estado": "ok", "recomendacion": informe["recomendacion"]}
+
+
+@app.task(name="cerebro.tareas.celery_app.analizar_pliegos", bind=True, max_retries=3)
+def analizar_pliegos(self, lid: int, forzar: bool = False) -> dict:
+    """Una licitación ha pasado a «en estudio» (o una persona pide repetirlo): se descargan sus pliegos y el Analista de Pliegos anota los requisitos en borrador
+    (cerebro/licitaciones/analisis_pliego.py). Si el modelo no está disponible se reintenta con espera creciente; los requisitos ya anotados se conservan."""
+    from ..licitaciones import analisis_pliego
+    try:
+        return asyncio.run(analisis_pliego.analizar(lid, _ejecutar, forzar=forzar, reintento=self.request.retries > 0))
+    except analisis_pliego.FALLOS_DEL_MODELO:
+        if self.request.retries < self.max_retries:
+            raise self.retry(countdown=min(120 * 2 ** self.request.retries, 1800))
+        return {"estado": "error", "motivo": "modelo no disponible"}
 
 
 @app.task(name="cerebro.tareas.celery_app.redactar_oferta", bind=True, max_retries=4)

@@ -291,6 +291,14 @@ módulos con pruebas, y si un pliego trae una fórmula nueva, se añade como mó
 - **Resumen diario: sección «Seguimiento»**: además de las novedades (oportunidades, adjudicaciones, anuladas, alertas), el resumen de las 16:00 lista las licitaciones **en estudio** y **presentadas**
   con el plazo (urgente si quedan ≤ 7 días, vencido si ya pasó), los requisitos del pliego por revisar y cuántos bloquean a 101.cat según su perfil (`aptitud.py`). Sale de la base de datos del Cerebro,
   no del motor, así que aparece aunque el motor no responda; si no se puede leer lo dice. `resumen.seguimiento_max` (config/licitaciones.yaml) limita las que se detallan.
+- **DEUC desde Jarvis: solo lo subido por quien lo pide.** «Guardar DEUC» comprueba que el documento lo subió la misma persona que hizo la petición. Esa persona la pone el sistema (`usuario` en `herramientas/base.usar`,
+  oculto al modelo como `agente` y `sensibilidad`), no el agente: un agente no puede guardar como DEUC base un documento de otra persona aunque conozca su identificador. Además, una persona aprueba la acción viendo el fichero.
+- **Análisis automático de los pliegos** (`analisis_pliego.py`, tarea de Celery `analizar_pliegos`): al pasar una licitación a «en estudio» (desde Jarvis, con «Estudiar» o cambiando el estado) se encola el análisis: se
+  descargan sus pliegos (los que por su nombre son pliegos o condiciones, hasta `max_documentos`; cuarentena y antivirus como siempre) y el **Analista de Pliegos** anota los requisitos con su **cita literal**
+  (comprobada contra la página), **en borrador**: una persona los confirma. Con ellos, la sugerencia de aptitud (`aptitud.py`) y el «Seguimiento» del resumen diario dicen cuántos requisitos hay por revisar y cuántos
+  bloquean. Acotado (config/licitaciones.yaml → `analisis_pliegos`: `max_por_dia` licitaciones nuevas al día, `max_documentos`); una fila por licitación (`licitaciones_analisis_pliego`) evita repetirlo; un fallo
+  del modelo se reintenta y otro fallo queda como «error» con su motivo. En la ficha del expediente, la tarjeta «Pliegos» muestra el estado y el botón «Analizar los pliegos / Repetir el análisis» (lo pedido a mano no
+  cuenta para el tope diario). Nada se confirma, firma ni presenta solo.
 - **Aviso de plazos urgentes** (`plazos.py`, tarea de Celery cada hora, sin IA): una licitación **en estudio** a la que le quedan 3 días, 1 día o el mismo día del plazo de presentación se avisa **una vez por umbral**
   por correo a `concursos@101.cat` con copia a `notificaciones@101.cat` (config/buzones.yaml → `avisos.copia`), con cuántos requisitos hay por revisar y cuántos bloquean según el perfil. Solo entre las 07:00 y las 21:00;
   si el servidor de correo falla, no se anota y se reintenta a la hora siguiente. Se configura en config/licitaciones.yaml → `plazos`.

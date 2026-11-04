@@ -446,6 +446,18 @@ export function resumenRequisitos(rs) {
 export const CUMPLIMIENTOS = { pendiente: "Pendiente de valorar", cumple: "Cumple", parcial: "Cumple en parte", no_cumple: "No cumple", no_aplica: "No aplica" };
 const CLASE_CUMPLIMIENTO = { pendiente: "aviso", cumple: "abierta", parcial: "aviso", no_cumple: "anulada", no_aplica: "" };
 export const cumplimientoEtiqueta = (c) => ({ texto: CUMPLIMIENTOS[c] || c || "—", clase: CLASE_CUMPLIMIENTO[c] ?? "" });
+/** El análisis automático de los pliegos (al pasar la licitación a «en estudio»): {texto, clase, error?}; null si nunca se ha lanzado. Los requisitos que saca quedan EN BORRADOR hasta que una persona los confirma. */
+export function analisisPliegosTexto(a) {
+  if (!a || !a.estado) return null;
+  const d = a.detalle || {};
+  if (a.estado === "en_curso") return { texto: "Analizando los pliegos: el Analista está leyendo los documentos y anotando requisitos (tarda unos minutos).", clase: "aviso", enCurso: true };
+  if (a.estado === "error") return { texto: `El análisis automático no se ha podido completar: ${d.motivo || "error desconocido"}.`, clase: "anulada", enCurso: false };
+  const n = d.requisitos || 0, b = d.borradores || 0;
+  const partes = [n === 0 ? "El análisis automático no ha anotado ningún requisito" : `El análisis automático ha anotado ${n} ${n === 1 ? "requisito" : "requisitos"}`];
+  if (b > 0) partes.push(`${b} por revisar (están en borrador hasta que los confirmes)`);
+  if (d.bloqueos > 0) partes.push(`${d.bloqueos} ${d.bloqueos === 1 ? "bloqueo" : "bloqueos"} según el perfil de la empresa`);
+  return { texto: partes.join(" · ") + ".", clase: n === 0 ? "aviso" : "abierta", enCurso: false };
+}
 /** Una línea del «Seguimiento» del resumen: plazo (con aviso si es urgente o ya venció), requisitos por revisar y bloqueos según el perfil de la empresa. */
 export function seguimientoTexto(i) {
   if (!i) return "";

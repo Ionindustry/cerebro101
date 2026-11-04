@@ -333,6 +333,17 @@ CREATE TABLE IF NOT EXISTS licitaciones_plazos_avisados (
   PRIMARY KEY (licitacion_id, umbral)
 );
 
+-- Análisis automático de los pliegos de una licitación en estudio (api/cerebro/licitaciones/analisis_pliego.py): se descargan los pliegos y el Analista anota los requisitos (en borrador, con su cita).
+-- Una fila por licitación: evita repetir el trabajo y deja el resultado para el panel. Sin clave ajena (el esquema se aplica por trozos en las pruebas).
+CREATE TABLE IF NOT EXISTS licitaciones_analisis_pliego (
+  licitacion_id bigint PRIMARY KEY,                 -- licitaciones.id
+  motor_id      uuid NOT NULL,
+  estado        text NOT NULL CHECK (estado IN ('en_curso', 'hecho', 'error')),
+  detalle       jsonb NOT NULL DEFAULT '{}',        -- documentos analizados, requisitos anotados, bloqueos, avisos o el motivo del error
+  creado        timestamptz NOT NULL DEFAULT now(),
+  actualizado   timestamptz NOT NULL DEFAULT now()
+);
+
 -- Resumen diario de licitaciones (a las 16:00, para Dirección; ver api/cerebro/licitaciones/resumen.py). El contenido es un documento completo:
 -- lo que se vio ese día no cambia aunque después cambien las licitaciones.
 CREATE TABLE IF NOT EXISTS licitaciones_resumenes (

@@ -60,13 +60,16 @@ def es_externa(nombre: str, operacion: str) -> bool:
     return bool(h and operacion in h.externas)
 
 
-async def vista_previa(ficha: Ficha, nombre: str, operacion: str, argumentos: dict, sensibilidad: str | None = None) -> dict | None:
+async def vista_previa(ficha: Ficha, nombre: str, operacion: str, argumentos: dict, sensibilidad: str | None = None, usuario: str | None = None) -> dict | None:
     """Lo que debe ver la persona que aprueba (destinatario, texto exacto…), o None si la operación no tiene vista.
     Si la vista falla (p. ej. el mensaje que se quería contestar ya no existe) el error sube y la acción no llega a aprobarse."""
     h = _REGISTRO.get(herramienta_efectiva(ficha, nombre, sensibilidad))
     if h is None or operacion not in h.vistas:
         return None
-    return await h.vistas[operacion](**{**argumentos, "departamento": ficha.departamento})
+    args = {**{k: v for k, v in argumentos.items() if k != "usuario"}, "departamento": ficha.departamento}
+    if "usuario" in inspect.signature(h.vistas[operacion]).parameters:
+        args["usuario"] = usuario          # la persona que hizo la petición, la pone el sistema (como en `usar`)
+    return await h.vistas[operacion](**args)
 
 
 def disponibles_para(ficha: Ficha) -> dict[str, Herramienta]:
@@ -78,7 +81,7 @@ class OperacionRequiereAprobacion(PermissionError):
 
 
 async def usar(ficha: Ficha, nombre: str, operacion: str, sensibilidad: str | None = None,
-               aprobada: bool = False, **argumentos: Any) -> Any:
+               aprobada: bool = False, usuario: str | None = None, **argumentos: Any) -> Any:
     efectiva = herramienta_efectiva(ficha, nombre, sensibilidad)
     # Cada intento de usar una herramienta queda en la traza, también los rechazados (evidencia ISO 27001:
     # qué hizo o intentó hacer el agente, con qué autorización y qué control lo frenó)
@@ -94,6 +97,9 @@ async def usar(ficha: Ficha, nombre: str, operacion: str, sensibilidad: str | No
             raise OperacionRequiereAprobacion(f"{efectiva}.{operacion} tiene impacto externo y necesita aprobación: "
                                               "no la llames, propónla en «acciones» para que una persona la apruebe")
         validar(h, operacion, argumentos)
+        if "usuario" in inspect.signature(h.operaciones[operacion]).parameters:
+            # la persona que hizo la petición la pone el sistema: el modelo no puede decir que es otra (p. ej. para usar un documento subido por otra persona)
+            argumentos = {**argumentos, "usuario": usuario}
         if "agente" in inspect.signature(h.operaciones[operacion]).parameters:
             # quién escribe lo pone el sistema: el modelo no puede hacerse pasar por otro agente (ni por una persona)
             argumentos = {**argumentos, "agente": ficha.id}

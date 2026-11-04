@@ -50,17 +50,17 @@ async def rellenar(licitacion: str, documento: int, asignaciones: dict[str, str]
     return await _tal_cual(P.preparar(licitacion, await _ficha(licitacion), f"agente:{agente or 'agente'}", o.get("empresa"), documento, asignaciones, miembro))
 
 
-async def guardar_deuc(documento: str, empresa: str | None = None, agente: str | None = None) -> dict:
+async def guardar_deuc(documento: str, empresa: str | None = None, agente: str | None = None, usuario: str | None = None) -> dict:
     """Guarda un documento que la persona ha subido al chat como DEUC base de una sociedad. Operación con aprobación: solo se ejecuta tras aprobarla una persona."""
     try:
-        return await D.guardar(documento, empresa, f"agente:{agente or 'agente'}")
+        return await D.guardar(documento, empresa, f"agente:{agente or 'agente'}", usuario)
     except (D.ErrorDeuc, E.ErrorEmpresa) as e:
         raise ValueError(str(e)) from None
 
 
-async def vista_guardar_deuc(documento: str, empresa: str | None = None, **_) -> dict:
+async def vista_guardar_deuc(documento: str, empresa: str | None = None, usuario: str | None = None, **_) -> dict:
     try:
-        return await D.vista(documento, empresa)
+        return await D.vista(documento, empresa, usuario=usuario)
     except (D.ErrorDeuc, E.ErrorEmpresa) as e:
         raise ValueError(str(e)) from None
 

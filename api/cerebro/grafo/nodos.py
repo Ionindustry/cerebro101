@@ -64,7 +64,7 @@ def corregir_por_cuaderno(peticion: str, departamento: str, agente: str | None =
 
 def inyectar(ficha, estado: dict, herramienta: str, args: dict) -> dict:
     """Lo que decide el sistema (no el modelo): el departamento y la sensibilidad. Si el modelo los pasa, se pisan."""
-    args = {k: v for k, v in args.items() if k not in ("sensibilidad", "agente")}    # la sensibilidad y el agente que llama los fija `usar()`
+    args = {k: v for k, v in args.items() if k not in ("sensibilidad", "agente", "usuario")}    # la sensibilidad y el agente que llama los fija `usar()`
     if herramienta in INYECTAR_DEPARTAMENTO:
         args["departamento"] = ficha.departamento
     return args
@@ -194,7 +194,7 @@ async def _ejecutar_agente(estado: Estado, ficha) -> Estado:
         await actividad.marcar(ficha.id, f"Usando {d.get('herramienta', '?')} · {d.get('operacion', '?')}")
         try:
             resultado = await H.usar(ficha, d.get("herramienta", ""), d.get("operacion", ""),
-                                     sensibilidad=estado.get("sensibilidad"), **args)
+                                     sensibilidad=estado.get("sensibilidad"), usuario=estado.get("usuario"), **args)
         except Exception as e:  # el error vuelve al modelo para que corrija o cambie de plan
             resultado = {"error": str(e)}
         clave = f"{d.get('herramienta', '?')}.{d.get('operacion', '?')}"
@@ -265,7 +265,7 @@ async def registrar_aprobaciones(estado: Estado, config) -> Estado:
         datos = {"resumen": a["resumen"], "argumentos": a.get("argumentos", {})}
         if herramienta and operacion:
             try:
-                vista = await H.vista_previa(ficha, herramienta, operacion, a.get("argumentos") or {}, estado.get("sensibilidad"))
+                vista = await H.vista_previa(ficha, herramienta, operacion, a.get("argumentos") or {}, estado.get("sensibilidad"), estado.get("usuario"))
             except Exception as e:  # noqa: BLE001
                 acciones.append({**a, "estado": "error", "resultado": f"No se puede preparar para aprobación: {e}"})
                 continue
@@ -337,7 +337,7 @@ async def ejecutar_acciones(estado: Estado, config) -> Estado:
         await actividad.marcar(ficha.id, f"Ejecuta {a['herramienta']} · {a['operacion']} (aprobada)", hilo)
         try:
             r = await H.usar(ficha, a["herramienta"], a["operacion"], sensibilidad=estado.get("sensibilidad"),
-                             aprobada=True, **args)
+                             aprobada=True, usuario=estado.get("usuario"), **args)
             aviso = await _dejar_constancia(hilo, ficha, a, "OK: " + json.dumps(r, ensure_ascii=False, default=str))
             resultado.append({**a, "estado": "ejecutada", "resultado": r, **aviso})
         except Exception as e:

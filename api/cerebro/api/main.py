@@ -27,7 +27,7 @@ from ..licitaciones import alertas as alertas_licitaciones
 from ..licitaciones import calendario_plazos
 from ..licitaciones import crm as crm_licitaciones
 from ..licitaciones import frescura as frescura_licitaciones
-from ..licitaciones import aptitud
+from ..licitaciones import analisis_pliego, aptitud
 from ..licitaciones import pliegos as pliegos_licitaciones
 from ..licitaciones import ofertas as ofertas_licitaciones
 from ..licitaciones import empresa as empresa_erp
@@ -341,7 +341,20 @@ async def estudiar_licitacion(entrada: EstudiarEntrada, usuario: Usuario = Depen
     log.info("embudo: %s estudia %s (estado %s)", usuario.id, fila["motor_id"], fila["estado"])
     if fila.get("id"):
         await crm_licitaciones.anotar(fila["id"], "")      # el trato del CRM (si procede); nunca falla
+        if fila.get("estado") == "en_estudio":
+            _encolar_analisis_pliegos(fila["id"])          # los pliegos se descargan y se extraen sus requisitos solos (en borrador)
     return fila
+
+
+def _encolar_analisis_pliegos(lid: int, forzar: bool = False) -> bool:
+    """Encola el análisis automático de los pliegos de una licitación en estudio (cerebro/licitaciones/analisis_pliego.py). Es comodidad: si no hay cola, lo que hizo la persona ya está guardado."""
+    try:
+        from ..tareas.celery_app import app as celery
+        celery.send_task("cerebro.tareas.celery_app.analizar_pliegos", args=[lid, forzar], queue="peticiones")
+        return True
+    except Exception as e:      # noqa: BLE001
+        log.warning("embudo: no se ha podido encolar el análisis de los pliegos de %s: %s: %s", lid, type(e).__name__, e)
+        return False
 
 
 class ViabilidadEntrada(BaseModel):
@@ -452,9 +465,37 @@ async def pliegos_de_la_licitacion(motor_id: str, usuario: Usuario = Depends(usu
     _exige_licitaciones(usuario)
     try:
         reqs = aptitud.con_sugerencias((await pliegos_licitaciones.requisitos(motor_id))["requisitos"])      # + una orientación por requisito con el perfil de la empresa (no es el cumplimiento)
-        return {**await pliegos_licitaciones.documentos(motor_id), "requisitos": reqs, "aptitud": aptitud.resumen(reqs)}
+        return {**await pliegos_licitaciones.documentos(motor_id), "requisitos": reqs, "aptitud": aptitud.resumen(reqs), "analisis": await _analisis_de(motor_id)}
     except (pliegos_licitaciones.ErrorPliego, LookupError, MotorNoDisponible) as e:
         raise _error_pliegos(e) from None
+
+
+async def _analisis_de(motor_id: str) -> dict | None:
+    """El estado del análisis automático de los pliegos de esa licitación (si está en el embudo y se ha lanzado); nunca rompe la consulta."""
+    try:
+        filas = await embudo_licitaciones.listar(motor_id=motor_id, limite=1)
+        return await analisis_pliego.leer(filas[0]["id"]) if filas else None
+    except Exception as e:      # noqa: BLE001
+        log.warning("pliegos: no se ha podido leer el análisis de %s: %s: %s", motor_id, type(e).__name__, e)
+        return None
+
+
+@app.post("/licitaciones/pliegos/{motor_id}/analizar", status_code=202)
+async def analizar_pliegos_de_la_licitacion(motor_id: str, usuario: Usuario = Depends(usuario_actual)):
+    """«Analizar los pliegos»: repite (o lanza) el análisis automático: se descargan los pliegos y el Analista anota los requisitos en borrador. Solo licitaciones en estudio. Tarda: es un modelo de IA."""
+    _exige_licitaciones(usuario)
+    try:
+        filas = await embudo_licitaciones.listar(motor_id=motor_id, limite=1)
+    except embudo_licitaciones.ErrorEmbudo as e:
+        raise HTTPException(422, str(e)) from None
+    if not filas:
+        raise HTTPException(404, "Esa licitación no está en el embudo: pásala primero a «en estudio»")
+    if filas[0]["estado"] != "en_estudio":
+        raise HTTPException(422, "Solo se analizan los pliegos de las licitaciones en estudio")
+    if not _encolar_analisis_pliegos(filas[0]["id"], forzar=True):
+        raise HTTPException(503, "No se ha podido encolar el análisis")
+    log.info("pliegos: %s pide analizar los pliegos de %s", usuario.id, motor_id)
+    return {"licitacion": motor_id, "encolado": True}
 
 
 @app.post("/licitaciones/pliegos/{motor_id}/descargar")
@@ -817,6 +858,8 @@ async def cambiar_estado_licitacion(lid: int, entrada: CambioEstadoEntrada, usua
         raise HTTPException(422, str(e)) from None
     log.info("embudo: %s pasa la licitación %s a %s", usuario.id, lid, fila["estado"])
     await crm_licitaciones.anotar(lid, *crm_licitaciones.nota_de_estado(fila["estado"], fila.get("motivo_perdida_texto"), usuario.id))
+    if fila["estado"] == "en_estudio":
+        _encolar_analisis_pliegos(lid)
     return fila
 
 
