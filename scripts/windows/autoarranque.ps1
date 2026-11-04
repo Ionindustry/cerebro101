@@ -3,8 +3,10 @@
   Arranque automatico y vigilancia del Cerebro 101.cat en Windows (Docker Desktop + WSL2).
 
 .DESCRIPTION
-  Registra dos tareas programadas del usuario actual:
+  Registra tres tareas programadas del usuario actual:
     "Cerebro - arranque"   al iniciar sesion (con 1 minuto de espera): abre Docker Desktop, espera a que responda y levanta el Cerebro y el ERP
+    "Cerebro - copia"      cada dia a las 14:00 (si el PC estaba apagado, en cuanto se enciende): copia de seguridad automatica (scripts/copia_automatica.sh:
+                           comprueba la copia, conserva las ultimas 7 y avisa a soporte@ si falla)
     "Cerebro - vigilante"  cada 5 minutos: si Docker no responde durante dos comprobaciones seguidas lo reinicia (maximo 3 veces por hora);
                            si Docker responde pero la API o el panel no, vuelve a levantar los servicios (recreando api y panel si sus puertos se perdieron)
   Todo queda en %USERPROFILE%\cerebro-autoarranque\autoarranque.log
@@ -19,14 +21,14 @@
   (o activar el inicio de sesion automatico). Si el equipo se suspende, todo se para: desactiva la suspension.
 #>
 param(
-  [switch]$Instalar, [switch]$Quitar, [switch]$Arrancar, [switch]$Vigilar, [switch]$Estado,
+  [switch]$Instalar, [switch]$Quitar, [switch]$Arrancar, [switch]$Vigilar, [switch]$Copiar, [switch]$Estado,
   [string]$Distro = "Ubuntu", [string]$Carpeta = "~/cerebro101"
 )
 $ErrorActionPreference = "Continue"
 $Base   = Join-Path $env:USERPROFILE "cerebro-autoarranque"
 $Log    = Join-Path $Base "autoarranque.log"
 $Fichero = Join-Path $Base "estado.json"
-$Tareas = @("Cerebro - arranque", "Cerebro - vigilante")
+$Tareas = @("Cerebro - arranque", "Cerebro - vigilante", "Cerebro - copia")
 $DockerDesktop = Join-Path $env:ProgramFiles "Docker\Docker\Docker Desktop.exe"
 if (-not (Test-Path $Base)) { New-Item -ItemType Directory -Path $Base | Out-Null }
 
@@ -123,6 +125,11 @@ if ($Instalar) {
   Register-ScheduledTask -TaskName $Tareas[1] -Action (New-ScheduledTaskAction -Execute $powershell -Argument "$comun -Vigilar") `
     -Trigger $t2 -Settings $ajustes -Principal $principal -Force | Out-Null
 
+  # Copia de seguridad diaria a las 14:00 (horario de oficina: el PC suele estar encendido); con StartWhenAvailable, si estaba apagado se hace en cuanto se enciende
+  $t3 = New-ScheduledTaskTrigger -Daily -At "14:00"
+  Register-ScheduledTask -TaskName $Tareas[2] -Action (New-ScheduledTaskAction -Execute $powershell -Argument "$comun -Copiar") `
+    -Trigger $t3 -Settings $ajustes -Principal $principal -Force | Out-Null
+
   Escribir-Log "Tareas instaladas para $usuario (distribucion $Distro, carpeta $Carpeta)"
   Write-Host "Instalado. Tareas: $($Tareas -join ' y ')."
   Write-Host "Registro: $Log"
@@ -147,6 +154,15 @@ if ($Estado) {
   Write-Host ("Docker: " + $(if (Docker-Responde) { "responde" } else { "NO responde" }))
   Write-Host ("API del Cerebro: " + $(if (Api-Responde) { "responde" } else { "NO responde" }))
   if (Test-Path $Log) { Write-Host "--- ultimas lineas del registro ($Log):"; Get-Content $Log -Tail 15 }
+  return
+}
+
+if ($Copiar) {
+  if (-not (Tomar-Turno)) { return }
+  Escribir-Log "== Copia de seguridad automatica =="
+  if (-not (Esperar-Docker 120)) { Escribir-Log "Docker no responde: no se puede hacer la copia ahora (la tarea lo reintentara en cuanto sea posible)"; return }
+  $lineas = & wsl.exe -d $Distro -- bash -lc "cd $Carpeta && ./scripts/copia_automatica.sh" 2>&1
+  foreach ($l in $lineas) { Escribir-Log ("    " + ($l -replace "`0", "")) }
   return
 }
 

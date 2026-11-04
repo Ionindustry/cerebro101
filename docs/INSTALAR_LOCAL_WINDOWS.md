@@ -105,6 +105,14 @@ Windows real desde el entorno donde se escribió**: la parte de WSL (`arrancar.s
 
 ## Copias de seguridad
 
+**Automática (recomendado):** `autoarranque.ps1 -Instalar` registra la tarea **«Cerebro - copia»**: cada día a las 14:00 (o en cuanto se enciende el PC si estaba apagado) lanza
+`scripts/copia_automatica.sh`. Hace la copia de las bases de datos (Cerebro, Langfuse, motor de licitaciones y ERPNext) sin las trazas pesadas, la **comprueba** (cada fichero se descomprime de prueba,
+ninguno vacío, `SHA256SUMS` coincide), conserva las **7 últimas** en `copias/auto/`, deja el resultado en `copias/estado.json` y, **si falla, avisa por correo a `soporte@101.cat`**.
+Para tener además una copia **fuera de este disco** (una copia en el mismo disco no te salva de que falle): `COPIA_EXTRA=/mnt/d/Copias101 ./scripts/copia_automatica.sh` (otro disco, USB o unidad de red); para que
+la tarea la haga siempre, añade la línea `COPIA_EXTRA=/mnt/d/Copias101` al `.env`. Prueba la restauración de vez en cuando (docs/SEGURIDAD.md) y guarda una copia del `.env` en un gestor de contraseñas.
+
+**A mano**
+
 Haz una copia **antes de cada actualización** y, mientras el PC se cuelgue de vez en cuando, una vez por semana. Desde la raíz del repositorio, en Ubuntu:
 
 ```
