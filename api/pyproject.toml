@@ -17,6 +17,7 @@ dependencies = [
   "caldav>=1.3",
   "pypdf>=5.0",
   "openpyxl>=3.1",
+  "defusedxml>=0.7",          # openpyxl lo usa solo si está: protege la lectura de Excel de terceros (entidades XML malintencionadas)
   "pillow>=10.1",
   "nats-py>=2.9",
 ]

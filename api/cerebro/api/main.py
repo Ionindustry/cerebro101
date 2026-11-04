@@ -27,6 +27,7 @@ from ..licitaciones import alertas as alertas_licitaciones
 from ..licitaciones import calendario_plazos
 from ..licitaciones import crm as crm_licitaciones
 from ..licitaciones import frescura as frescura_licitaciones
+from ..licitaciones import aptitud
 from ..licitaciones import pliegos as pliegos_licitaciones
 from ..licitaciones import ofertas as ofertas_licitaciones
 from ..licitaciones import empresa as empresa_erp
@@ -450,7 +451,8 @@ async def pliegos_de_la_licitacion(motor_id: str, usuario: Usuario = Depends(usu
     """Los documentos de la licitación (con su estado de descarga y antivirus) y los requisitos anotados."""
     _exige_licitaciones(usuario)
     try:
-        return {**await pliegos_licitaciones.documentos(motor_id), **{"requisitos": (await pliegos_licitaciones.requisitos(motor_id))["requisitos"]}}
+        reqs = aptitud.con_sugerencias((await pliegos_licitaciones.requisitos(motor_id))["requisitos"])      # + una orientación por requisito con el perfil de la empresa (no es el cumplimiento)
+        return {**await pliegos_licitaciones.documentos(motor_id), "requisitos": reqs, "aptitud": aptitud.resumen(reqs)}
     except (pliegos_licitaciones.ErrorPliego, LookupError, MotorNoDisponible) as e:
         raise _error_pliegos(e) from None
 

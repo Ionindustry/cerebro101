@@ -85,10 +85,11 @@ class TestZip(unittest.TestCase):
                 z.writestr("Anexo III.rtf", b"{\\rtf1 hola}")
                 z.writestr("Falso.odt", b"esto es texto")
                 z.writestr("Hoja.xlsx", b"PK\x03\x04")
+                z.writestr("Antigua.xls", b"\xd0\xcf\x11\xe0xx")
             r = F.extraer_zip(t / "p.zip", t / "x")
-        self.assertEqual(sorted((m["miembro"], m["formato"]) for m in r["miembros"]), [("Anexo I.odt", "odt"), ("Anexo II.doc", "doc"), ("Anexo III.rtf", "rtf")])
+        self.assertEqual(sorted((m["miembro"], m["formato"]) for m in r["miembros"]), [("Anexo I.odt", "odt"), ("Anexo II.doc", "doc"), ("Anexo III.rtf", "rtf"), ("Hoja.xlsx", "xlsx")])        # el Excel se rellena solo (formularios.py)
         self.assertTrue(any("Falso.odt" in a and "no es odt" in a for a in r["avisos"]))
-        self.assertTrue(any("Hoja.xlsx" in a for a in r["avisos"]))
+        self.assertTrue(any("Antigua.xls" in a for a in r["avisos"]))          # el Excel antiguo sigue sin rellenarse solo
 
 
 @unittest.skipUnless(L.disponible(), "sin LibreOffice")

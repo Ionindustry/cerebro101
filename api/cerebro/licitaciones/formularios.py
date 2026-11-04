@@ -3,6 +3,7 @@
 Los concursos traen sus propias plantillas y hay que rellenarlas tal cual: mismo texto, mismo formato, mismos anexos. Aquí se edita una COPIA del documento original, tocando solo el texto de
 los huecos (el original no se modifica), de modo que lo que sale está listo para revisar y firmar con certificado digital.
 
+  Excel (.xlsx) etiquetas reconocidas con su celda vacía al lado (o debajo, en una fila de cabeceras); nunca se sobrescribe una celda con contenido. El libro se guarda de nuevo (se avisa).
   Word (.docx)  huecos de texto (___, …, ....), celdas vacías junto a su etiqueta, controles de contenido de texto. Se edita el XML con cambios quirúrgicos (no se vuelve a generar el fichero)
                 para no perder estilos, tablas, cabeceras ni nada de lo que lleve.
   PDF           campos de formulario (AcroForm). Un PDF sin campos no se puede rellenar así: se dice, y se pide la versión en Word.
@@ -26,7 +27,7 @@ MAX_XML = 30 << 20               # lo que se admite descomprimir de word/documen
 MAX_TOTAL = 300 << 20            # y de todo el fichero
 MAX_ENTRADAS = 3000
 MAX_CAMPOS = 400
-FORMATOS = ("docx", "pdf")
+FORMATOS = ("docx", "xlsx", "pdf")
 SIN_DATO = "al_firmar"           # clave especial: lo completa quien firma (la fecha)
 
 RE_P = re.compile(r"<w:p(?:\s[^>]*?)?(?<!/)>.*?</w:p>", re.S)
@@ -522,35 +523,166 @@ def rellenar_pdf(ruta: Path, destino: Path, valores: dict[str, str]) -> dict:
     return {"rellenados": hechos, "omitidos": omitidos}
 
 
+# ---- Excel (.xlsx) ----
+# Los modelos de proposición económica y los cuadros de datos del licitador vienen a menudo en Excel: «etiqueta | celda vacía». Se detecta una etiqueta que se reconoce («Razón social»,
+# «NIF», «Importe sin IVA»…) con la celda vacía a su derecha (o, en una fila de cabeceras, la de debajo), y también cualquier etiqueta que acabe en «:» con su celda vacía (queda pendiente
+# para una persona). NUNCA se sobrescribe una celda que ya tiene algo. Al rellenar, el libro se guarda de nuevo con openpyxl: se avisa de que hay que comprobar fórmulas y formatos.
+MAX_HOJAS, MAX_FILAS, MAX_COLUMNAS = 15, 400, 30
+RATIO_XLSX = 300
+
+
+def _abrir_xlsx(ruta: Path):
+    """El libro de Excel, tras comprobar lo que descomprime (es de terceros) y que no lleva macros. openpyxl no ejecuta nada ni sigue enlaces externos."""
+    try:
+        z = zipfile.ZipFile(ruta)
+    except (zipfile.BadZipFile, OSError):
+        raise ErrorFormulario("El Excel no se puede abrir (¿está dañado?)") from None
+    with z:
+        infos = z.infolist()
+        if len(infos) > MAX_ENTRADAS or sum(i.file_size for i in infos) > MAX_TOTAL:
+            raise ErrorFormulario("El Excel es demasiado grande al descomprimirlo")
+        if any(i.compress_size > 0 and i.file_size > (1 << 20) and i.file_size / i.compress_size > RATIO_XLSX for i in infos):
+            raise ErrorFormulario("El Excel parece sospechoso (razón de compresión desmedida)")
+        if any(i.filename.lower().startswith("xl/vbaproject") for i in infos):
+            raise ErrorFormulario("El Excel lleva macros: no se rellena")
+    try:
+        import openpyxl
+        with open(ruta, "rb") as f:         # por el fichero abierto: openpyxl exige la extensión .xlsx en el nombre y el temporal no la lleva
+            return openpyxl.load_workbook(f, data_only=False, keep_vba=False, keep_links=True)
+    except ErrorFormulario:
+        raise
+    except Exception as e:      # noqa: BLE001 — un libro hostil puede romper el lector de muchas maneras
+        raise ErrorFormulario(f"El Excel no se puede leer ({type(e).__name__})") from None
+
+
+def _vacia(c) -> bool:
+    return c.value is None or (isinstance(c.value, str) and not c.value.strip())
+
+
+def _escribible(ws, fila: int, col: int):
+    """La celda en la que se puede escribir en esa posición: si cae dentro de una combinada, su esquina superior izquierda."""
+    for r in ws.merged_cells.ranges:
+        if r.min_row <= fila <= r.max_row and r.min_col <= col <= r.max_col:
+            return ws.cell(r.min_row, r.min_col)
+    return ws.cell(fila, col)
+
+
+def _campos_xlsx(wb) -> list[dict]:
+    campos, usados = [], set()
+    for h, ws in enumerate(wb.worksheets[:MAX_HOJAS], 1):
+        if getattr(ws, "sheet_state", "visible") != "visible":
+            continue
+        for fila in ws.iter_rows(min_row=1, max_row=min(ws.max_row or 1, MAX_FILAS), max_col=min(ws.max_column or 1, MAX_COLUMNAS)):
+            for c in fila:
+                t = c.value.strip() if isinstance(c.value, str) else ""
+                if not t or len(t) > 90 or t.startswith("="):
+                    continue
+                clave = emparejar(t.rstrip(), "", True)
+                con_dos_puntos = t.rstrip().endswith(":")
+                if clave is None and not con_dos_puntos:
+                    continue
+                fin_col = c.column
+                for r in ws.merged_cells.ranges:                    # una etiqueta combinada ocupa varias columnas: el hueco está después
+                    if r.min_row <= c.row <= r.max_row and r.min_col <= c.column <= r.max_col:
+                        fin_col = r.max_col
+                if fin_col + 1 > MAX_COLUMNAS + 1:
+                    continue
+                destino = _escribible(ws, c.row, fin_col + 1)
+                if not _vacia(destino):
+                    derecha = destino.value
+                    if not (isinstance(derecha, str) and emparejar(derecha.strip(), "", True)):
+                        continue                                    # a su derecha hay un dato, no un hueco ni otra cabecera
+                    destino = _escribible(ws, c.row + 1, c.column)  # fila de cabeceras: el hueco es la celda de debajo
+                    if not _vacia(destino):
+                        continue
+                if destino.coordinate in usados or (h, destino.coordinate) in usados:
+                    continue
+                usados.add((h, destino.coordinate))
+                campos.append({"id": f"h{h}!{destino.coordinate}", "tipo": "celda", "etiqueta": t.rstrip(": ").strip(), "clave": clave, "opcional": bool(RE_OPCIONAL.search(t)),
+                               "fijo": False, "anexo": ws.title[:80]})
+                if len(campos) >= MAX_CAMPOS:
+                    return campos
+    return campos
+
+
+def detectar_xlsx(ruta: Path) -> dict:
+    wb = _abrir_xlsx(ruta)
+    campos = _campos_xlsx(wb)
+    avisos = []
+    if campos:
+        avisos.append("Es un Excel: al rellenarlo se vuelve a guardar el libro; comprueba antes de firmar que las fórmulas, los formatos y los gráficos se han conservado")
+        protegidas = [ws.title for ws in wb.worksheets if ws.protection.sheet]
+        if protegidas:
+            avisos.append(f"Hoja protegida ({', '.join(protegidas[:3])}): se rellena igualmente; vuelve a protegerla si hace falta")
+    else:
+        avisos.append("No se han encontrado huecos que rellenar en este Excel")
+    return {"formato": "xlsx", "campos": [_publico(c) for c in campos], "avisos": avisos}
+
+
+def rellenar_xlsx(ruta: Path, destino: Path, valores: dict[str, str]) -> dict:
+    """Escribe en `destino` una copia del Excel con las celdas de `valores` ({id del hueco: texto}) rellenas. No sobrescribe ninguna celda que ya tenga algo."""
+    wb = _abrir_xlsx(ruta)
+    campos = {c["id"]: c for c in _campos_xlsx(wb)}
+    hechos, omitidos = [], []
+    hojas = wb.worksheets[:MAX_HOJAS]
+    for fid, valor in valores.items():
+        c = campos.get(fid)
+        if c is None or valor is None or not str(valor).strip():
+            omitidos.append(fid)
+            continue
+        h, coord = fid[1:].split("!", 1)
+        celda = hojas[int(h) - 1][coord]
+        if not _vacia(celda):
+            omitidos.append(fid)
+            continue
+        celda.value = re.sub(r"\s+", " ", _CTRL.sub("", str(valor))).strip()
+        celda.data_type = "s"           # SIEMPRE texto: un dato que empieza por «=», «+», «-» o «@» (el título de una licitación es de terceros) no se ejecuta como fórmula al abrir el Excel
+        hechos.append(fid)
+    destino.parent.mkdir(parents=True, exist_ok=True)
+    tmp = destino.with_suffix(destino.suffix + ".tmp")
+    wb.save(tmp)
+    try:
+        _abrir_xlsx(tmp)
+    except ErrorFormulario:
+        tmp.unlink(missing_ok=True)
+        raise ErrorFormulario("El resultado no es un Excel válido: no se entrega") from None
+    tmp.replace(destino)
+    return {"rellenados": hechos, "omitidos": omitidos}
+
+
 # ---- Entrada común y ejecución aislada ----
 
 def detectar(ruta: Path, formato: str) -> dict:
     if formato == "docx":
         return detectar_docx(ruta)
+    if formato == "xlsx":
+        return detectar_xlsx(ruta)
     if formato == "pdf":
         r = detectar_pdf(ruta)
         r.pop("_nombres", None)
         return r
-    raise ErrorFormulario(f"De momento solo se rellenan plantillas en Word (.docx) y PDF con formulario; este es {formato}: hay que rellenarlo a mano")
+    raise ErrorFormulario(f"De momento solo se rellenan plantillas en Word (.docx), Excel (.xlsx) y PDF con formulario; este es {formato}: hay que rellenarlo a mano")
 
 
 def rellenar(ruta: Path, formato: str, destino: Path, valores: dict[str, str]) -> dict:
     if formato == "docx":
         return rellenar_docx(ruta, destino, valores)
+    if formato == "xlsx":
+        return rellenar_xlsx(ruta, destino, valores)
     if formato == "pdf":
         return rellenar_pdf(ruta, destino, valores)
-    raise ErrorFormulario(f"De momento solo se rellenan plantillas en Word (.docx) y PDF con formulario; este es {formato}: hay que rellenarlo a mano")
+    raise ErrorFormulario(f"De momento solo se rellenan plantillas en Word (.docx), Excel (.xlsx) y PDF con formulario; este es {formato}: hay que rellenarlo a mano")
 
 
 MAX_MIEMBROS = 500
 MAX_MIEMBRO = 60 << 20
 RATIO_MAX = 200
-SIN_SOPORTE = (".ods", ".xls", ".xlsx", ".docm")
+SIN_SOPORTE = (".ods", ".xls", ".docm", ".xlsm")
 CONVERTIBLES = {".doc": b"\xd0\xcf\x11\xe0", ".odt": b"PK", ".rtf": b"{\\rtf"}      # se convierten a Word antes de rellenarlos (conversion.py)
 
 
 def extraer_zip(ruta: Path, destino: Path) -> dict:
-    """Abre un paquete ZIP de documentación y deja en `destino` los documentos que se pueden rellenar (Word y PDF con formulario), sin salirse de esa carpeta. Devuelve
+    """Abre un paquete ZIP de documentación y deja en `destino` los documentos que se pueden rellenar (Word, Excel y PDF con formulario), sin salirse de esa carpeta. Devuelve
     {"miembros": [{"miembro", "formato", "ruta", "bytes"}], "avisos": [...]}. Un ZIP es de terceros: se limita el número de ficheros, su tamaño y su razón de compresión, se descartan nombres con rutas
     raras y no se abren ZIP dentro de ZIP."""
     try:
@@ -574,7 +706,7 @@ def extraer_zip(ruta: Path, destino: Path) -> dict:
         if ext in SIN_SOPORTE:
             avisos.append(f"«{nombre[:80]}» no se rellena solo (formato {ext[1:]}): hay que rellenarlo a mano o pedirlo en Word")
             continue
-        if ext not in (".docx", ".pdf") and ext not in CONVERTIBLES:
+        if ext not in (".docx", ".xlsx", ".pdf") and ext not in CONVERTIBLES:
             continue
         if info.file_size > MAX_MIEMBRO or (info.compress_size > 0 and info.file_size / info.compress_size > RATIO_MAX):
             avisos.append(f"«{nombre[:80]}» se ha ignorado: demasiado grande o sospechoso")
@@ -592,8 +724,8 @@ def extraer_zip(ruta: Path, destino: Path) -> dict:
             salida.write_bytes(datos)
             miembros.append({"miembro": "/".join(partes)[:200], "formato": ext[1:], "ruta": str(salida), "bytes": len(datos)})
             continue
-        formato = "pdf" if datos[:5] == b"%PDF-" else ("docx" if datos[:2] == b"PK" else None)
-        if formato is None or (ext == ".docx") != (formato == "docx"):
+        formato = "pdf" if datos[:5] == b"%PDF-" else (("xlsx" if ext == ".xlsx" else "docx") if datos[:2] == b"PK" else None)
+        if formato is None or ext != f".{formato}":
             avisos.append(f"«{nombre[:80]}» se ha ignorado: su contenido no es {ext[1:]}")
             continue
         salida = destino / f"{k:03d}.{formato}"

@@ -641,7 +641,7 @@ test("mensajePliegos: el motivo según el código", () => {
   assert.match(mensajePliegos(500), /No se ha podido completar/);
 });
 
-import { celdaCsv, cumplimientoEtiqueta, cumplimientoNecesitaNota, matrizCsv, matrizDe, resumenMatriz } from "../lib/licitaciones.js";
+import { seguimientoTexto, aptitudTexto, sugerenciaDe, celdaCsv, cumplimientoEtiqueta, cumplimientoNecesitaNota, matrizCsv, matrizDe, resumenMatriz } from "../lib/licitaciones.js";
 
 test("matriz de cumplimiento: solo los confirmados, con su resumen", () => {
   const rs = [
@@ -1012,4 +1012,26 @@ test("avisoActualizacion: qué se dice al abrir la aplicación según el estado 
   const e = avisoActualizacion({ estado: "motor_no_responde" });
   assert.equal(e.clase, "error");
   assert.match(e.texto, /no responde/);
+});
+
+test("sugerencias de aptitud: orientan pero no son el cumplimiento", () => {
+  assert.equal(sugerenciaDe({}), null);
+  assert.equal(sugerenciaDe({ sugerencia: null }), null);
+  const n = sugerenciaDe({ sugerencia: { sugerencia: "no_cumple", motivo: "Empresa nueva", vias: ["UTE"] } });
+  assert.deepEqual([n.propone, n.texto, n.vias], ["no_cumple", "No cumple", ["UTE"]]);
+  const r = sugerenciaDe({ sugerencia: { sugerencia: "revisar", motivo: "No consta" } });
+  assert.deepEqual([r.propone, r.texto], [null, "Hay que revisarlo"]);
+  assert.equal(aptitudTexto(null), null);
+  assert.equal(aptitudTexto({ no_cumple: 0, parcial: 0, cumple: 0 }), null);
+  assert.equal(aptitudTexto({ no_cumple: 2, parcial: 1, cumple: 0 }), "Según el perfil de la empresa: 2 requisitos no se cumplen, 1 requisito se cumple en parte.");
+});
+
+test("seguimiento del resumen: plazo, requisitos por revisar y bloqueos", () => {
+  assert.equal(seguimientoTexto(null), "");
+  assert.equal(seguimientoTexto({ estado: "presentada" }), "Presentada: pendiente de resolución");
+  assert.equal(seguimientoTexto({ estado: "en_estudio", vencido: true, dias_plazo: -2 }), "El plazo de presentación ya ha vencido");
+  assert.equal(seguimientoTexto({ estado: "en_estudio", dias_plazo: 0, urgente: true }), "El plazo termina hoy");
+  assert.equal(seguimientoTexto({ estado: "en_estudio", dias_plazo: 1, urgente: true, requisitos: { borrador: 2 }, bloqueos: 1 }),
+    "Urgente: quedan 1 día para presentar · 2 requisitos por revisar · 1 bloqueo según el perfil de la empresa");
+  assert.equal(seguimientoTexto({ estado: "en_estudio", dias_plazo: null }), "Sin plazo de presentación indicado");
 });

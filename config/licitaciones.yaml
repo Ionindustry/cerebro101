@@ -5,6 +5,7 @@ resumen:
   oportunidades_max: 20       # cuántas oportunidades se detallan (las demás se cuentan)
   otras_max: 10               # adjudicaciones y anulaciones que se detallan
   paginas_max: 5              # páginas de 100 que se leen del motor como máximo (si hay más, el resumen lo dice)
+  seguimiento_max: 15         # cuántas licitaciones en estudio o presentadas se detallan en «Seguimiento» (con su plazo, requisitos por revisar y bloqueos según el perfil)
   avisos_por_alerta: 5        # cuántos avisos de cada alerta de departamento (canal resumen_diario) se detallan en el resumen; los demás se cuentan
 
 # CPV de interés (§12.1). Cada código cubre también sus descendientes («jerarquía», propuesta por validar): 72000000 cubre toda la división 72.
@@ -43,6 +44,20 @@ pesos:
   importe: 15
   plazo: 15
   procedimiento: 10
+
+# PERFIL DE LA EMPRESA COMO LICITADOR (lo que Viabilidad sabe de 101.cat al valorar si merece la pena presentarse). Rellénalo con datos REALES; lo que no se rellene se le dice al agente como «no consta»
+# (nunca inventa). 101.cat es una empresa de NUEVA CREACIÓN: no tiene histórico de volumen de negocio ni de contratos, y casi nunca podrá acreditar la solvencia por cuentas anuales; Viabilidad mira
+# entonces si el pliego exige solvencia o clasificación y si hay otra vía (medios personales o externos, UTE, umbrales sin exigencia). Es una ayuda: lo decide una persona y la validez legal de cada vía
+# la confirma el asesor.
+perfil_licitador:
+  nueva_creacion: true
+  constitucion: "2026-11-04"            # fecha de constitución, aaaa-mm-dd
+  capital_social: "20.000 €"          # p. ej. «3.000 €»
+  rolece: "en trámite"                  # inscripción en el Registro Oficial de Licitadores: «sí», «no» o «en trámite»
+  seguro_rc: "300.000 €"               # seguro de responsabilidad civil: cobertura, p. ej. «600.000 €»
+  certificaciones: ["ISO 9001", "ISO 14001", "ISO 27001", "ENS nivel alto (en proceso de certificación)"]         # p. ej. [ISO 9001, ISO 27001]
+  experiencia: "El equipo tiene 20 años de experiencia en videovigilancia (a título personal de sus miembros: la empresa en sí no tiene histórico de contratos)"             # experiencia del equipo o del administrador en trabajos parecidos (texto libre y breve)
+  notas: ""                   # cualquier otra cosa que deba saber Viabilidad (aliados para una UTE, subcontratistas con solvencia…)
 
 # Embudo propio: el consumidor de eventos mete en el embudo (estado «detectada») las licitaciones NUEVAS, abiertas y con un encaje igual o superior
 # a este umbral (0–100). Propuesta POR VALIDAR con Dirección: se vigila cuántas entran al día (si son más de 50, subirlo antes de que Viabilidad se
@@ -113,6 +128,13 @@ vigilante:
                               # al día, hacia las 20:15: lo de hoy no existe antes; con 22 hay margen para que la ingesta (cada 15 min) lo recoja
   repetir_cada_horas: 24      # mientras siga atascado, recordarlo cada tanto
   destinatarios: [soporte@101.cat]   # FALLOS DEL SISTEMA (motor atascado, nada de hoy…): a soporte@. Los avisos de licitaciones salen aparte, con copia a concursos@ y notificaciones@ (config/buzones.yaml → avisos.copia). Direcciones de la empresa (dominios de config/buzones.yaml → avisos); vacío = sin correo
+
+# Aviso de plazos urgentes: cada hora se miran las licitaciones EN ESTUDIO y, cuando a una le quedan los días indicados para presentar, se avisa UNA vez por umbral por correo a concursos@
+# (con copia a notificaciones@: config/buzones.yaml → avisos.copia). Solo entre las 07:00 y las 21:00 (hora local). Sin copia configurada no se envía nada.
+plazos:
+  avisar_dias: [3, 1, 0]      # a 3 días, a 1 día y el mismo día del plazo
+  desde_hora: 7
+  hasta_hora: 21
 
 # Datos de la empresa para rellenar la documentación administrativa de una oferta (cerebro/licitaciones/empresa.py). SALEN DEL ERP (Company, Address y Contact): así toda la información está
 # en el mismo sitio y no hay otro fichero que mantener. Aquí solo se dice DÓNDE está cada cosa. Si falta un dato, la plantilla queda con ese hueco y el panel dice qué hay que completar en el ERP.

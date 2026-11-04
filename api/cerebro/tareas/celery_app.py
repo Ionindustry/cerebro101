@@ -24,6 +24,7 @@ app.conf.task_routes = {"cerebro.tareas.celery_app.ejecutar_programada": {"queue
                         "cerebro.tareas.celery_app.resumen_licitaciones": {"queue": "lote"},
                         "cerebro.tareas.celery_app.rastreo_embudo": {"queue": "lote"},
                         "cerebro.tareas.celery_app.enviar_avisos_correo": {"queue": "lote"},
+                        "cerebro.tareas.celery_app.avisar_plazos": {"queue": "lote"},
                         "cerebro.tareas.celery_app.vigilar_motor": {"queue": "lote"},
                         "cerebro.tareas.celery_app.purgar_subidas": {"queue": "lote"},
                         "cerebro.tareas.celery_app.pedir_viabilidad": {"queue": "peticiones"},
@@ -66,6 +67,7 @@ def _rastreo_embudo() -> dict:
 
 app.conf.beat_schedule = {**_calendario(), **_resumen_licitaciones(), **_rastreo_embudo(),
                           "avisos-por-correo": {"task": "cerebro.tareas.celery_app.enviar_avisos_correo", "schedule": 300.0},
+                          "plazos-urgentes": {"task": "cerebro.tareas.celery_app.avisar_plazos", "schedule": 3600.0},
                           "vigilante-motor": {"task": "cerebro.tareas.celery_app.vigilar_motor", "schedule": 900.0},
                           "purgar-subidas": {"task": "cerebro.tareas.celery_app.purgar_subidas", "schedule": crontab(minute="17", hour="3")},
                           "constancia-pendiente": {"task": "cerebro.tareas.celery_app.volcar_constancia", "schedule": 300.0}}
@@ -179,6 +181,14 @@ def vigilar_motor() -> dict:
     (cerebro/licitaciones/vigilante.py). No usa el modelo de IA."""
     from ..licitaciones.vigilante import vigilar
     return asyncio.run(vigilar())
+
+
+@app.task(name="cerebro.tareas.celery_app.avisar_plazos")
+def avisar_plazos() -> dict:
+    """Cada hora avisa por correo (concursos@, con copia a notificaciones@) de las licitaciones EN ESTUDIO a las que se les acaba el plazo: a 3 días, a 1 y el mismo día, una vez por umbral
+    y solo en horario de oficina (cerebro/licitaciones/plazos.py). No usa el modelo de IA."""
+    from ..licitaciones.plazos import avisar
+    return asyncio.run(avisar())
 
 
 @app.task(name="cerebro.tareas.celery_app.enviar_avisos_correo")

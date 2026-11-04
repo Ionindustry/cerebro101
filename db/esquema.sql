@@ -325,6 +325,14 @@ ALTER TABLE licitaciones_avisos ADD COLUMN IF NOT EXISTS correo_error text;
 CREATE INDEX IF NOT EXISTS licitaciones_avisos_correo_pendiente ON licitaciones_avisos (alerta_id, creado) WHERE correo_enviado IS NULL;
 CREATE INDEX IF NOT EXISTS licitaciones_avisos_no_leidos ON licitaciones_avisos (creado DESC) WHERE NOT leido;
 
+-- Avisos de plazos urgentes (api/cerebro/licitaciones/plazos.py): cada licitación en estudio se avisa UNA vez por umbral de días (3, 1 y 0 por defecto), aunque la tarea corra cada hora.
+CREATE TABLE IF NOT EXISTS licitaciones_plazos_avisados (
+  licitacion_id bigint NOT NULL,                    -- licitaciones.id (sin clave ajena: una fila huérfana no hace daño y el esquema se aplica por trozos en las pruebas)
+  umbral        integer NOT NULL,                   -- días que faltaban cuando se avisó: 3, 1, 0…
+  avisado_en    timestamptz NOT NULL DEFAULT now(),
+  PRIMARY KEY (licitacion_id, umbral)
+);
+
 -- Resumen diario de licitaciones (a las 16:00, para Dirección; ver api/cerebro/licitaciones/resumen.py). El contenido es un documento completo:
 -- lo que se vio ese día no cambia aunque después cambien las licitaciones.
 CREATE TABLE IF NOT EXISTS licitaciones_resumenes (

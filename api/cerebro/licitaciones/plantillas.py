@@ -1,6 +1,6 @@
 """Documentación administrativa de una oferta: rellena las PLANTILLAS del concurso (declaración responsable, anexos, modelos…) con los datos de la sociedad que se presenta.
 
-Los concursos traen sus propias plantillas y hay que rellenarlas tal cual. Aquí se toman los documentos del pliego que ya han pasado el antivirus (Word y PDF con formulario), se detectan sus huecos
+Los concursos traen sus propias plantillas y hay que rellenarlas tal cual. Aquí se toman los documentos del pliego que ya han pasado el antivirus (Word, Excel y PDF con formulario), se detectan sus huecos
 (formularios.py) y se rellenan en una COPIA que mantiene el documento original, con datos que salen del ERP (empresa.py) y de la ficha de la licitación. Nada se inventa: cada dato rellenado lleva su
 origen y lo que no se sabe queda como hueco, con el motivo, para que una persona lo complete (en el ERP, si es un dato de la empresa) antes de firmar.
 
@@ -46,8 +46,9 @@ CLAVES_OFERTA = {
 CLAVES_VALIDAS = set(E.CLAVES) | set(CLAVES_LICITACION) | set(CLAVES_OFERTA) | {F.SIN_DATO}
 MAX_PLANTILLAS = 40
 RE_MODELO = re.compile(r"(?i)anexo|annex|anexe|modelo|model|declaraci|deuc|formulari|plantilla")
-FORMATOS_SIN_SOPORTE = ("ods", "xlsx")
-MIME = {"docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document", "pdf": "application/pdf"}
+FORMATOS_SIN_SOPORTE = ("ods",)
+MIME = {"docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document", "pdf": "application/pdf",
+        "xlsx": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"}
 NOTA_FIRMA = ("Revisa cada documento y fírmalo con tu certificado digital (por ejemplo con AutoFirma). Los huecos de fecha se completan al firmar. "
               "Nada se firma ni se presenta desde aquí.")
 COLS = "id, n, nombre, miembro, formato, estado, empresa, nombre_salida, sha256, bytes, campos, pendientes, avisos, asignaciones, por, creado"
@@ -240,8 +241,8 @@ async def _como_word(motor_id: str, doc: dict) -> dict:
 
 async def _tratar(motor_id: str, doc: dict, fuente: dict, empresa: str, asignaciones: dict, usuario: str, explicito: bool, miembro: str | None = None) -> None:
     """Un documento del pliego: si es Word o PDF se rellena; si es un ZIP de documentación se abre y se rellena cada anexo/modelo de dentro; si es un modelo en un formato que no se rellena solo
-    (odt, xlsx…) se deja constancia para que nadie lo pase por alto."""
-    if doc["formato"] in ("docx", "pdf") + C.CONVERTIBLES:
+    (ods…) se deja constancia para que nadie lo pase por alto."""
+    if doc["formato"] in ("docx", "pdf", "xlsx") + C.CONVERTIBLES:
         await _procesar(motor_id, await _como_word(motor_id, doc), fuente, empresa, asignaciones, usuario, explicito)
     elif doc["formato"] == "zip":
         origen = P.carpeta(motor_id, "limpio") / f"{doc['sha256']}.zip"

@@ -85,7 +85,7 @@ Dos piezas, ya incluidas en el proyecto:
   (`./scripts/arrancar.sh`) o solo para comprobar (`./scripts/arrancar.sh estado`). Si Docker se ha caído y has vuelto a abrirlo, es lo único que necesitas.
 - `scripts/windows/autoarranque.ps1` (en Windows): registra dos tareas programadas. **Arranque**: al iniciar sesión abre Docker Desktop y lanza `arrancar.sh`.
   **Vigilante**: cada 5 minutos comprueba Docker y la API; si Docker no responde dos veces seguidas (10 minutos) lo cierra, reinicia WSL y lo vuelve a abrir
-  (máximo 3 veces por hora, para no entrar en bucle); si Docker responde pero la API no, vuelve a levantar los servicios.
+  (máximo 3 veces por hora, para no entrar en bucle); si Docker responde pero la API o el panel no (`localhost:8000` o `:3000`), vuelve a levantar los servicios y, si los contenedores están en marcha pero sin puertos (pasa al reiniciar Docker), recrea `api` y `panel` solo. `arrancar.sh` levanta también el motor de licitaciones y repara el ERP.
 
 Instalarlo (una vez). Desde Ubuntu, copia el script a Windows:
 ```
@@ -104,6 +104,14 @@ sesión automático); si el PC se suspende, todo se para (`powercfg /change stan
 Windows real desde el entorno donde se escribió**: la parte de WSL (`arrancar.sh`) sí está probada.
 
 ## Copias de seguridad
+
+**Automática (recomendado):** `autoarranque.ps1 -Instalar` registra la tarea **«Cerebro - copia»**: cada día a las 14:00 (o en cuanto se enciende el PC si estaba apagado) lanza
+`scripts/copia_automatica.sh`. Hace la copia de las bases de datos (Cerebro, Langfuse, motor de licitaciones y ERPNext) sin las trazas pesadas, la **comprueba** (cada fichero se descomprime de prueba,
+ninguno vacío, `SHA256SUMS` coincide), conserva las **7 últimas** en `copias/auto/`, deja el resultado en `copias/estado.json` y, **si falla, avisa por correo a `soporte@101.cat`**.
+Para tener además una copia **fuera de este disco** (una copia en el mismo disco no te salva de que falle): `COPIA_EXTRA=/mnt/d/Copias101 ./scripts/copia_automatica.sh` (otro disco, USB o unidad de red); para que
+la tarea la haga siempre, añade la línea `COPIA_EXTRA=/mnt/d/Copias101` al `.env`. Prueba la restauración de vez en cuando (docs/SEGURIDAD.md) y guarda una copia del `.env` en un gestor de contraseñas.
+
+**A mano**
 
 Haz una copia **antes de cada actualización** y, mientras el PC se cuelgue de vez en cuando, una vez por semana. Desde la raíz del repositorio, en Ubuntu:
 

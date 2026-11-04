@@ -446,6 +446,36 @@ export function resumenRequisitos(rs) {
 export const CUMPLIMIENTOS = { pendiente: "Pendiente de valorar", cumple: "Cumple", parcial: "Cumple en parte", no_cumple: "No cumple", no_aplica: "No aplica" };
 const CLASE_CUMPLIMIENTO = { pendiente: "aviso", cumple: "abierta", parcial: "aviso", no_cumple: "anulada", no_aplica: "" };
 export const cumplimientoEtiqueta = (c) => ({ texto: CUMPLIMIENTOS[c] || c || "—", clase: CLASE_CUMPLIMIENTO[c] ?? "" });
+/** Una línea del «Seguimiento» del resumen: plazo (con aviso si es urgente o ya venció), requisitos por revisar y bloqueos según el perfil de la empresa. */
+export function seguimientoTexto(i) {
+  if (!i) return "";
+  const partes = [];
+  if (i.estado === "presentada") partes.push("Presentada: pendiente de resolución");
+  else if (i.vencido) partes.push("El plazo de presentación ya ha vencido");
+  else if (i.dias_plazo === 0) partes.push("El plazo termina hoy");
+  else if (i.dias_plazo != null) partes.push(`${i.urgente ? "Urgente: " : ""}quedan ${i.dias_plazo} ${i.dias_plazo === 1 ? "día" : "días"} para presentar`);
+  else partes.push("Sin plazo de presentación indicado");
+  const b = i.requisitos?.borrador || 0;
+  if (b > 0) partes.push(`${b} ${b === 1 ? "requisito" : "requisitos"} por revisar`);
+  if (i.bloqueos > 0) partes.push(`${i.bloqueos} ${i.bloqueos === 1 ? "bloqueo" : "bloqueos"} según el perfil de la empresa`);
+  return partes.join(" · ");
+}
+/** La sugerencia del sistema para un requisito (a partir del perfil de la empresa): etiqueta, motivo y vías. Solo orienta: la valoración la guarda una persona. «revisar» no propone nada. */
+const SUGERENCIA_A_CUMPLIMIENTO = { cumple: "cumple", parcial: "parcial", no_cumple: "no_cumple" };
+export function sugerenciaDe(r) {
+  const s = r?.sugerencia;
+  if (!s || !s.sugerencia) return null;
+  const e = cumplimientoEtiqueta(SUGERENCIA_A_CUMPLIMIENTO[s.sugerencia] || "pendiente");
+  const propone = SUGERENCIA_A_CUMPLIMIENTO[s.sugerencia] ?? null;
+  return { texto: propone ? e.texto : "Hay que revisarlo", clase: propone ? e.clase : "aviso", propone, motivo: String(s.motivo || ""), vias: Array.isArray(s.vias) ? s.vias.map(String) : [] };
+}
+/** «Según el perfil de la empresa: 2 requisitos no se cumplen, 1 se cumple en parte.» o null si no hay sugerencias que contar. */
+export function aptitudTexto(a) {
+  if (!a) return null;
+  const partes = [[a.no_cumple, "no se cumple", "no se cumplen"], [a.parcial, "se cumple en parte", "se cumplen en parte"], [a.cumple, "se cumple", "se cumplen"]]
+    .filter(([k]) => k > 0).map(([k, uno, varios]) => `${k} ${k === 1 ? "requisito " + uno : "requisitos " + varios}`);
+  return partes.length ? `Según el perfil de la empresa: ${partes.join(", ")}.` : null;
+}
 /** «Parcial» y «no cumple» exigen decir por qué (el servidor también lo comprueba). */
 export const cumplimientoNecesitaNota = (c) => c === "parcial" || c === "no_cumple";
 /** Resumen de la matriz: «5 requisitos: 3 cumplen, 1 en parte, 1 pendiente». */

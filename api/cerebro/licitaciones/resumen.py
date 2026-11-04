@@ -108,7 +108,52 @@ async def _alertas(avisos, cfg: dict, desde: datetime, hasta: datetime) -> dict:
     return {"estado": "ok", "total": r["total"], "items": r["items"], "aviso": None}
 
 
-async def construir(ahora: datetime | None = None, consulta=None, cfg: dict | None = None, avisos=None) -> dict:
+URGENTE_DIAS = 7        # un plazo de presentación a menos de estos días se marca como urgente
+
+
+async def seguimiento_del_embudo(ahora: datetime, cfg: dict, listar=None, requisitos=None) -> dict:
+    """La sección «Seguimiento»: las licitaciones que se están estudiando o ya se han presentado, con su plazo, los requisitos del pliego pendientes de revisar y cuántos
+    bloquean a 101.cat según su perfil (aptitud.py). Lee de la base de datos, no del motor: sale aunque el motor no responda; y si no se puede leer lo dice, sin tumbar el resumen."""
+    from . import aptitud, embudo, pliegos          # al usarlo: embudo importa este módulo
+    listar = listar or embudo.listar
+    requisitos = requisitos or pliegos.requisitos
+    try:
+        filas = [f for e in ("en_estudio", "presentada") for f in await listar(e, None, 200)]
+    except Exception as e:      # noqa: BLE001 — sin base de datos el resumen sale igual
+        log.warning("resumen: no se ha podido leer el seguimiento del embudo: %s: %s", type(e).__name__, e)
+        return {"estado": "error", "total": 0, "urgentes": 0, "items": [], "aviso": "No se ha podido leer el seguimiento de las licitaciones en estudio: este resumen no lo incluye."}
+    items = []
+    for f in filas:
+        limite = f.get("fecha_limite")
+        if isinstance(limite, str):
+            try:
+                limite = datetime.fromisoformat(limite)
+            except ValueError:
+                limite = None
+        dias = None
+        if f["estado"] == "en_estudio" and limite is not None:
+            dias = (limite.astimezone(timezone.utc) - ahora.astimezone(timezone.utc)).days if limite.tzinfo else (limite - ahora.replace(tzinfo=None)).days
+        reqs = {"borrador": 0, "confirmado": 0}
+        bloqueos = 0
+        if f["estado"] == "en_estudio":
+            try:
+                lista = (await requisitos(str(f["motor_id"])))["requisitos"]
+                for r in lista:
+                    if r.get("estado") in reqs:
+                        reqs[r["estado"]] += 1
+                bloqueos = aptitud.resumen(aptitud.con_sugerencias([r for r in lista if r.get("estado") != "rechazado"]))["bloqueos"]
+            except Exception as e:      # noqa: BLE001 — esa licitación sale sin datos de requisitos
+                log.warning("resumen: requisitos de %s no disponibles: %s: %s", f.get("motor_id"), type(e).__name__, e)
+        items.append({"id": f["id"], "motor_id": str(f["motor_id"]), "titulo": motor._corto(f.get("titulo")), "organismo": motor._corto(f.get("organismo"), 120) or None,
+                      "estado": f["estado"], "fecha_limite": limite.isoformat() if limite is not None else None, "dias_plazo": dias,
+                      "urgente": dias is not None and 0 <= dias <= URGENTE_DIAS, "vencido": dias is not None and dias < 0,
+                      "requisitos": reqs, "bloqueos": bloqueos})
+    items.sort(key=lambda i: (i["estado"] != "en_estudio", i["dias_plazo"] is None, i["dias_plazo"] if i["dias_plazo"] is not None else 0, i["id"]))
+    tope = int(cfg["resumen"].get("seguimiento_max", 15))
+    return {"estado": "ok", "total": len(items), "urgentes": sum(1 for i in items if i["urgente"]), "items": items[:tope], "aviso": None}
+
+
+async def construir(ahora: datetime | None = None, consulta=None, cfg: dict | None = None, avisos=None, seguimiento=None) -> dict:
     """El resumen del día como documento (ver los campos abajo). Lee del motor (`consulta`) y de los avisos de las alertas de departamento (`avisos`, la base de datos)."""
     ahora = ahora or datetime.now(timezone.utc)
     cfg = cfg or config()
@@ -119,9 +164,12 @@ async def construir(ahora: datetime | None = None, consulta=None, cfg: dict | No
         "generado": ahora.astimezone(timezone.utc).isoformat(), "motor": {"estado": "desconocido", "antiguedad_h": None},
         "totales": {"novedades": 0, "oportunidades": 0, "adjudicaciones": 0, "anuladas": 0, "fuera_de_importe": 0, "otras": 0, "truncado": False},
         "oportunidades": [], "adjudicaciones": [], "anuladas": [], "alertas": {"estado": "ok", "total": 0, "items": [], "aviso": None},
+        "seguimiento": {"estado": "ok", "total": 0, "urgentes": 0, "items": [], "aviso": None},
     }
     out["alertas"] = await _alertas(avisos or alertas_mod.avisos_para_resumen, cfg, desde, hasta)
     out["totales"]["alertas"] = out["alertas"]["total"]
+    out["seguimiento"] = await (seguimiento or seguimiento_del_embudo)(ahora, cfg)
+    out["totales"]["seguimiento"], out["totales"]["urgentes"] = out["seguimiento"]["total"], out["seguimiento"]["urgentes"]
     try:
         items, truncado = await _leer(consulta, cfg, desde)
     except (motor.MotorNoDisponible, ValueError) as e:
