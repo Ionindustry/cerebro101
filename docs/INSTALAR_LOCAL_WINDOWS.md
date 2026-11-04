@@ -111,6 +111,11 @@ ninguno vacío, `SHA256SUMS` coincide), conserva las **7 últimas** en `copias/a
 Para tener además una copia **fuera de este disco** (una copia en el mismo disco no te salva de que falle): `COPIA_EXTRA=/mnt/d/Copias101 ./scripts/copia_automatica.sh` (otro disco, USB o unidad de red); para que
 la tarea la haga siempre, añade la línea `COPIA_EXTRA=/mnt/d/Copias101` al `.env`. Prueba la restauración de vez en cuando (docs/SEGURIDAD.md) y guarda una copia del `.env` en un gestor de contraseñas.
 
+**Comprobar que la copia se puede restaurar:** `./scripts/probar_restauracion.sh` (en Ubuntu, desde la raíz) restaura la última copia en una base de datos **temporal** (que se borra al terminar; tus datos no se tocan),
+cuenta tablas y filas y comprueba `SHA256SUMS`; el volcado de ERPNext no se restaura (pisaría el ERP): se comprueba que está completo. Hazlo de vez en cuando. **En Jarvis**, en la pantalla «Agentes», la tarjeta
+**«Copias de seguridad»** muestra la fecha y el tamaño de la última copia, si salió bien y si la restauración se ha probado. Y un vigilante (cada 6 horas) **avisa por correo a `soporte@101.cat` si pasan más de 3 días
+sin una copia correcta** (por ejemplo, si el PC estuvo apagado); no repite el aviso hasta pasadas 24 horas.
+
 **A mano**
 
 Haz una copia **antes de cada actualización** y, mientras el PC se cuelgue de vez en cuando, una vez por semana. Desde la raíz del repositorio, en Ubuntu:

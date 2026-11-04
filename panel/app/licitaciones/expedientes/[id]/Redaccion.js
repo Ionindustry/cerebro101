@@ -2,6 +2,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { agruparPorAnexo, clasePaso, clasePlantilla, empresaParaEnviar, mensajeRedaccion, origenTexto, pasoEtiqueta, pendientesQueBloquean, plantillaEtiqueta, redaccionEnCurso, resumenPlantillas, resumenRedaccion } from "../../../../lib/licitaciones";
 import { pedirCerebro } from "../../cliente";
+import { MARCA_REVISION, revisionTitular } from "../../../../lib/licitaciones";
 
 const enviar = (cuerpo) => ({ method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(cuerpo) });
 const SONDEO_MS = 4000;
@@ -79,10 +80,34 @@ export default function Redaccion({ id, o, alCambiar }) {
     } catch (e) { setMsg(mensajeRedaccion(e.status, e.detalle)); }
   };
 
+  const [revision, setRevision] = useState(null);
+  const [revisando, setRevisando] = useState(false);
+  const revisar = async () => {
+    setRevisando(true);
+    try { setRevision(await pedirCerebro(`licitaciones/ofertas/${id}/revision`)); }
+    catch { setRevision({ resultado: "bloqueada", bloqueos: 1, avisos: 0, secciones: [{ id: "x", titulo: "Revisión", items: [{ nivel: "bloqueo", texto: "No se ha podido hacer la revisión: inténtalo de nuevo." }] }] }); }
+    finally { setRevisando(false); }
+  };
+  const titular = revisionTitular(revision);
   return (
     <div className="lic-redaccion">
       <h3>Preparar la oferta con los agentes</h3>
       <p className="meta">Los agentes trabajan uno detrás de otro (Arquitecto de Solución, Redactor de Memoria, Administrativo, Costes, Precio y Evaluador) a partir del pliego. Solo dejan <strong>borradores</strong>: tú los revisas, fijas el precio y firmas. Puede tardar varios minutos.</p>
+      <div className="lic-fila">
+        <button className="boton no" onClick={revisar} disabled={revisando} title="Comprueba qué hay y qué falta (sociedad, DEUC, pliegos, requisitos…) sin gastar una pasada de los agentes">{revisando ? "Revisando…" : "Revisar antes de preparar la oferta"}</button>
+      </div>
+      {revision && (
+        <section className="tarjeta" aria-label="Revisión previa" role="status">
+          <p className="lic-fila"><span className={`lic-etiqueta ${titular.clase}`}>{titular.texto}</span></p>
+          {revision.secciones.map((sec) => (
+            <div key={sec.id}>
+              <h4>{sec.titulo}</h4>
+              <ul className="lic-lista">{sec.items.map((i, k) => <li key={k} className="meta"><strong aria-hidden="true">{MARCA_REVISION[i.nivel]}</strong> <span className="sr-only">{i.nivel}: </span>{i.texto}</li>)}</ul>
+            </div>
+          ))}
+          <p className="meta">Es una revisión de solo lectura: no llama a ningún modelo ni cambia nada.</p>
+        </section>
+      )}
       <div className="lic-fila">
         {hayVarias && (
           <label>Sociedad con la que se presenta

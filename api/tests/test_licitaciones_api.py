@@ -340,6 +340,16 @@ class TestRutasDelEmbudo(unittest.TestCase):
                 c.post("/licitaciones/embudo/7/estado", json={"estado": "en_estudio"})
             enc.assert_called_once_with(7)
 
+    def test_revision_previa_de_la_oferta_solo_licitaciones_y_con_id_valido(self):
+        ID = "0b1f7a3e-1111-4222-8333-444444444444"
+        with mock.patch.object(main.revision_previa, "revisar", mock.AsyncMock(return_value={"resultado": "lista", "secciones": []})) as rev:
+            self.assertEqual(como(("usuario", "responsable"), ("finanzas",)).get(f"/licitaciones/ofertas/{ID}/revision").status_code, 403)
+            rev.assert_not_called()
+            c = como(("direccion",))
+            self.assertEqual(c.get(f"/licitaciones/ofertas/{ID}/revision").json()["resultado"], "lista")
+            rev.assert_awaited_with(ID)
+            self.assertEqual(c.get("/licitaciones/ofertas/no-es-un-uuid/revision").status_code, 422)
+
     def test_estudiar_sin_motor_o_con_un_expediente_que_no_existe(self):
         e = main.embudo_licitaciones
         c = como(("direccion",))

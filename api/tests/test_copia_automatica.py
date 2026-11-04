@@ -43,7 +43,10 @@ class TestCopiaAutomatica(unittest.TestCase):
             (base / f"2026-10-{10 + i:02d}_0300").mkdir(parents=True)
             (base / f"2026-10-{10 + i:02d}_0300" / "x").write_text("x")
         (base / "otra-cosa").mkdir(parents=True, exist_ok=True)          # nada que no sea una copia se borra
-        env = {**os.environ, "COPIA_BASE": str(base), "COPIA_COMANDO": str(cmd), "COPIA_AVISAR": str(self.aviso_cmd), "COPIA_CONSERVAR": str(conservar), "COPIA_EXTRA": extra}
+        reg = self.dir / "registrar.sh"
+        reg.write_text(f'#!/usr/bin/env bash\necho "$@" >> "{self.dir / "registro.txt"}"\n')
+        reg.chmod(0o755)
+        env = {**os.environ, "COPIA_REGISTRAR": str(reg), "COPIA_BASE": str(base), "COPIA_COMANDO": str(cmd), "COPIA_AVISAR": str(self.aviso_cmd), "COPIA_CONSERVAR": str(conservar), "COPIA_EXTRA": extra}
         r = subprocess.run(["bash", str(SCRIPT)], env=env, capture_output=True, text=True, timeout=60)
         estado = json.loads((self.dir / "estado.json").read_text())
         return r, estado, base
@@ -54,6 +57,9 @@ class TestCopiaAutomatica(unittest.TestCase):
         self.assertTrue(estado["ok"])
         self.assertGreater(estado["bytes"], 0)
         self.assertFalse(self.avisos.exists())
+        anotado = (self.dir / "registro.txt").read_text()
+        self.assertIn("true", anotado)                                                     # lo anota para la tarjeta de Jarvis
+        self.assertRegex(anotado, r"copia correcta \d+")
 
     def test_rota_las_antiguas_y_solo_las_que_son_copias(self):
         r, estado, base = self.ejecutar(COPIA_BUENA, conservar=3, previas=5)
@@ -71,6 +77,7 @@ class TestCopiaAutomatica(unittest.TestCase):
         self.assertFalse(estado["ok"])
         self.assertIn("error", estado["mensaje"])
         self.assertIn("Copia de seguridad fallida", self.avisos.read_text())
+        self.assertTrue((self.dir / "registro.txt").read_text().startswith("false"))       # el fallo también se anota
 
     def test_una_copia_dañada_o_incompleta_se_detecta(self):
         for copia, texto in ((COPIA_ROTA, "dañado"), (COPIA_SIN_CEREBRO, "falta cerebro.sql.gz")):

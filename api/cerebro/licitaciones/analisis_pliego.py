@@ -22,13 +22,13 @@ from psycopg.types.json import Jsonb
 
 from ..ajustes import ajustes
 from ..llm import ModeloNoDisponible, ModeloOcupado, ModeloTimeout
-from . import aptitud, embudo, pliegos
+from . import aptitud, embudo, pliegos, rastreo
 from . import resumen as resumen_mod
 
 log = logging.getLogger("cerebro.licitaciones.analisis_pliego")
 
 AGENTE = "analista-pliegos"
-DEFECTO = {"activo": True, "max_por_dia": 8, "max_documentos": 4, "ventana_min": 45}
+DEFECTO = {"activo": True, "max_por_dia": 8, "max_documentos": 4, "ventana_min": 45, "viabilidad_despues": True}
 FALLOS_DEL_MODELO = (ModeloNoDisponible, ModeloOcupado, ModeloTimeout)
 # Los documentos que contienen las condiciones: pliegos de cláusulas y de prescripciones, cuadro de características… (sin esto se toman los primeros de la ficha)
 RE_PLIEGO = re.compile(r"(?i)pliego|pcap|pcp\b|ppt\b|ppta|cl[aá]usulas|prescripciones|cuadro de caracter|condiciones|bases\b|memoria justificativa")
@@ -45,6 +45,7 @@ def configuracion(cfg: dict | None = None) -> dict:
     c["max_por_dia"] = min(max(int(c["max_por_dia"]), 0), 200)
     c["max_documentos"] = min(max(int(c["max_documentos"]), 1), 10)
     c["ventana_min"] = min(max(int(c["ventana_min"]), 5), 600)
+    c["viabilidad_despues"] = bool(c["viabilidad_despues"])
     return c
 
 
@@ -171,6 +172,15 @@ async def analizar(lid: int, invocar, ahora: datetime | None = None, cfg: dict |
             detalle["avisos"].append("El Analista no ha anotado ningún requisito: pídeselo a mano en el chat o revisa los pliegos")
         await cerrar(lid, "hecho", detalle)
         log.info("análisis de pliegos: licitación %s → %d requisitos (%d por revisar, %d bloqueos)", lid, len(reqs), len(borradores), r["bloqueos"])
+        if reqs and c["viabilidad_despues"]:
+            # Viabilidad opina DESPUÉS de leer el pliego: el informe ir/no ir anterior (hecho solo con la ficha) se sustituye por uno con los requisitos y la aptitud. Es consultivo, y si falla no estropea el análisis.
+            try:
+                informe = await rastreo.valorar(lid, invocar, ahora, reemplazar=True, requisitos=aptitud.con_sugerencias([x for x in reqs if x.get("estado") != "rechazado"]))
+                detalle["viabilidad"] = informe["recomendacion"]
+            except Exception as e:      # noqa: BLE001 — incluye los fallos del modelo: el informe de Viabilidad se puede pedir a mano
+                log.warning("análisis de pliegos: Viabilidad no ha podido valorar la licitación %s con los requisitos: %s: %s", lid, type(e).__name__, e)
+                detalle["viabilidad"] = "no_disponible"
+            await cerrar(lid, "hecho", detalle)
         return {"estado": "hecho", "requisitos": len(reqs)}
     except FALLOS_DEL_MODELO:
         await cerrar(lid, "error", {**detalle, "motivo": "El modelo de IA no estaba disponible: se reintenta"})

@@ -82,7 +82,7 @@ class TestEnBase(unittest.TestCase):
     def estudiar(self):
         ejecutar(embudo.cambiar_estado(self.lid, "en_estudio", ahora=AHORA))
 
-    def lanzar(self, docs=None, requisitos=None, falla_agente=None, descarga=None, ahora=AHORA, **kw):
+    def lanzar(self, docs=None, requisitos=None, falla_agente=None, descarga=None, ahora=AHORA, falla_viabilidad=None, config=None, **kw):
         docs = [{"n": 1, "nombre": "PCAP.pdf"}, {"n": 2, "nombre": "Anuncio"}] if docs is None else docs
 
         async def documentos(motor_id):
@@ -99,10 +99,14 @@ class TestEnBase(unittest.TestCase):
 
         async def invocar(agente, peticion):
             self.peticiones.append((agente, peticion))
+            if agente == "viabilidad":
+                if falla_viabilidad:
+                    raise falla_viabilidad
+                return {"respuesta": "Informe.\nRECOMENDACIÓN: NO IR\nMOTIVO: solvencia económica imposible para una empresa nueva"}
             if falla_agente:
                 raise falla_agente
             return {"respuesta": "He anotado 2 requisitos."}
-        return ejecutar(A.analizar(self.lid, invocar, ahora, {"analisis_pliegos": {"max_por_dia": 2}}, documentos=documentos, obtener=obtener, requisitos=reqs, **kw))
+        return ejecutar(A.analizar(self.lid, invocar, ahora, {"analisis_pliegos": {"max_por_dia": 2, **(config or {})}}, documentos=documentos, obtener=obtener, requisitos=reqs, **kw))
 
     def test_solo_las_licitaciones_en_estudio_y_una_sola_vez(self):
         self.assertEqual(self.lanzar()["motivo"], "no_esta_en_estudio")          # detectada
@@ -110,14 +114,33 @@ class TestEnBase(unittest.TestCase):
         r = self.lanzar(requisitos=[{"estado": "borrador", "tipo": "solvencia_economica", "resumen": "Volumen anual de negocios de 500.000 €", "valor": "", "cita": ""}])
         self.assertEqual(r["estado"], "hecho")
         self.assertEqual(self.llamadas, [1])                                      # solo el pliego, no el anuncio
-        self.assertEqual(self.peticiones[0][0], "analista-pliegos")
+        self.assertEqual([a for a, _ in self.peticiones], ["analista-pliegos", "viabilidad"])      # tras leer el pliego, Viabilidad vuelve a opinar
         a = ejecutar(A.leer(self.lid))
         self.assertEqual((a["estado"], a["detalle"]["requisitos"], a["detalle"]["borradores"]), ("hecho", 1, 1))
         self.assertGreaterEqual(a["detalle"]["bloqueos"], 0)
         self.assertEqual(self.lanzar()["motivo"], "ya_hecho")                    # no se repite
-        self.assertEqual(len(self.peticiones), 1)
-        self.assertEqual(self.lanzar(forzar=True)["estado"], "hecho")             # una persona sí puede repetirlo
         self.assertEqual(len(self.peticiones), 2)
+        self.assertEqual(self.lanzar(forzar=True)["estado"], "hecho")             # una persona sí puede repetirlo
+        self.assertEqual(len(self.peticiones), 3)                                 # el Analista otra vez; Viabilidad no, porque esta vez no hay requisitos
+
+    def test_viabilidad_vuelve_a_valorar_con_los_requisitos_y_su_fallo_no_estropea_el_analisis(self):
+        self.estudiar()
+        reqs = [{"estado": "borrador", "tipo": "solvencia_economica", "resumen": "Volumen anual de negocios de 500.000 €", "valor": "", "cita": ""}]
+        self.lanzar(requisitos=reqs)
+        peticion = next(p for a, p in self.peticiones if a == "viabilidad")
+        self.assertIn("Volumen anual de negocios de 500.000 €", peticion)
+        self.assertIn("NO cumple", peticion)
+        self.assertEqual(ejecutar(A.leer(self.lid))["detalle"]["viabilidad"], "no_ir")
+        self.assertEqual(ejecutar(embudo.obtener(self.lid))["viabilidad"]["recomendacion"], "no_ir")
+        # si Viabilidad falla (aquí, el modelo no está disponible) el análisis sigue «hecho»
+        self.lanzar(requisitos=reqs, forzar=True, falla_viabilidad=A.ModeloNoDisponible("caído"))
+        a = ejecutar(A.leer(self.lid))
+        self.assertEqual((a["estado"], a["detalle"]["viabilidad"]), ("hecho", "no_disponible"))
+        # sin requisitos anotados no se vuelve a valorar, y se puede desactivar
+        self.peticiones.clear()
+        self.lanzar(requisitos=[], forzar=True)
+        self.lanzar(requisitos=reqs, forzar=True, config={"viabilidad_despues": False})
+        self.assertNotIn("viabilidad", [a for a, _ in self.peticiones])
 
     def test_sin_documentos_o_sin_ninguno_legible_queda_en_error_con_su_motivo(self):
         self.estudiar()

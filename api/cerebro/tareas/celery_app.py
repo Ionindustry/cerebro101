@@ -25,6 +25,7 @@ app.conf.task_routes = {"cerebro.tareas.celery_app.ejecutar_programada": {"queue
                         "cerebro.tareas.celery_app.rastreo_embudo": {"queue": "lote"},
                         "cerebro.tareas.celery_app.enviar_avisos_correo": {"queue": "lote"},
                         "cerebro.tareas.celery_app.avisar_plazos": {"queue": "lote"},
+                        "cerebro.tareas.celery_app.vigilar_copias": {"queue": "lote"},
                         "cerebro.tareas.celery_app.vigilar_motor": {"queue": "lote"},
                         "cerebro.tareas.celery_app.purgar_subidas": {"queue": "lote"},
                         "cerebro.tareas.celery_app.pedir_viabilidad": {"queue": "peticiones"},
@@ -68,6 +69,7 @@ def _rastreo_embudo() -> dict:
 
 app.conf.beat_schedule = {**_calendario(), **_resumen_licitaciones(), **_rastreo_embudo(),
                           "avisos-por-correo": {"task": "cerebro.tareas.celery_app.enviar_avisos_correo", "schedule": 300.0},
+                          "vigilar-copias": {"task": "cerebro.tareas.celery_app.vigilar_copias", "schedule": 21600.0},
                           "plazos-urgentes": {"task": "cerebro.tareas.celery_app.avisar_plazos", "schedule": 3600.0},
                           "vigilante-motor": {"task": "cerebro.tareas.celery_app.vigilar_motor", "schedule": 900.0},
                           "purgar-subidas": {"task": "cerebro.tareas.celery_app.purgar_subidas", "schedule": crontab(minute="17", hour="3")},
@@ -195,6 +197,13 @@ def vigilar_motor() -> dict:
     (cerebro/licitaciones/vigilante.py). No usa el modelo de IA."""
     from ..licitaciones.vigilante import vigilar
     return asyncio.run(vigilar())
+
+
+@app.task(name="cerebro.tareas.celery_app.vigilar_copias")
+def vigilar_copias() -> dict:
+    """Cada 6 horas mira si hay una copia de seguridad correcta reciente y, si pasan más de 3 días sin ella, avisa a soporte@ (una vez cada 24 h) (cerebro/copias.py). Sin IA."""
+    from .. import copias
+    return asyncio.run(copias.vigilar())
 
 
 @app.task(name="cerebro.tareas.celery_app.avisar_plazos")

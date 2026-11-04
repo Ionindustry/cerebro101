@@ -451,3 +451,6 @@ ul.lic-fila, ol.lic-fila { list-style: none; margin: 0; padding: 0; }
 .aviso-actualizacion.aviso { background: var(--senal-suave); color: #7a5206; }
 .aviso-actualizacion.error { background: #fbe8e6; color: #8c2118; }
 .aviso-actualizacion.ok { background: #e8f3ec; color: #1f5a37; }
+
+/* Texto solo para lectores de pantalla (p. ej. «aviso:» junto a una marca ! en la revisión previa de la oferta) */
+.sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }

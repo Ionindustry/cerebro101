@@ -344,6 +344,19 @@ CREATE TABLE IF NOT EXISTS licitaciones_analisis_pliego (
   actualizado   timestamptz NOT NULL DEFAULT now()
 );
 
+-- Copias de seguridad (api/cerebro/copias.py): lo que anotan scripts/copia_automatica.sh y scripts/probar_restauracion.sh para la tarjeta «Copias de seguridad» de Jarvis y para avisar a soporte@ si pasan
+-- días sin una copia correcta. `aviso` = aviso enviado a soporte@ (para no repetirlo cada hora); `inicio` = desde cuándo se vigila (sin copias anotadas aún).
+CREATE TABLE IF NOT EXISTS copias_registro (
+  id      bigserial PRIMARY KEY,
+  tipo    text NOT NULL CHECK (tipo IN ('copia', 'restauracion', 'aviso', 'inicio')),
+  ok      boolean NOT NULL DEFAULT true,
+  carpeta text NOT NULL DEFAULT '',
+  bytes   bigint,
+  mensaje text NOT NULL DEFAULT '',
+  creado  timestamptz NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS copias_registro_tipo ON copias_registro (tipo, creado DESC);
+
 -- Resumen diario de licitaciones (a las 16:00, para Dirección; ver api/cerebro/licitaciones/resumen.py). El contenido es un documento completo:
 -- lo que se vio ese día no cambia aunque después cambien las licitaciones.
 CREATE TABLE IF NOT EXISTS licitaciones_resumenes (

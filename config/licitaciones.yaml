@@ -142,6 +142,7 @@ analisis_pliegos:
   activo: true
   max_por_dia: 8
   max_documentos: 4
+  viabilidad_despues: true    # al terminar, Viabilidad vuelve a valorar la licitación YA con los requisitos leídos y la aptitud (sustituye al informe hecho solo con la ficha; consultivo)
   ventana_min: 45             # un análisis «en curso» más antiguo se da por perdido (el trabajador se cayó) y se puede repetir
 
 # Datos de la empresa para rellenar la documentación administrativa de una oferta (cerebro/licitaciones/empresa.py). SALEN DEL ERP (Company, Address y Contact): así toda la información está
