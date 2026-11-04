@@ -7,7 +7,7 @@
 #   ./scripts/arrancar.sh reparar-erp  reinicia los servicios del ERP en el orden correcto (backend y websocket, luego el frontend)
 #
 # Variables: ARRANCAR_ESPERA=300 (segundos máximos esperando a la API), ARRANCAR_SERVICIOS="api postgres ..." (solo esos del Cerebro),
-#            ARRANCAR_SIN_ERP=1 (no toca ERPNext).
+#            ARRANCAR_SIN_ERP=1 (no toca ERPNext), ARRANCAR_SIN_MOTOR=1 (no toca el motor de licitaciones).
 set -uo pipefail
 cd "$(dirname "$0")/.."
 ESPERA="${ARRANCAR_ESPERA:-300}"
@@ -16,10 +16,13 @@ ERP=(docker compose -f erpnext/docker-compose.yml --env-file .env)
 SERVICIOS=(${ARRANCAR_SERVICIOS:-})
 marca() { date '+%F %T'; }
 api_ok() { curl -fsS -m 5 http://127.0.0.1:8000/salud >/dev/null 2>&1 && return 0 || return 1; }
+panel_ok() { curl -sS -m 5 -o /dev/null http://127.0.0.1:3000/ >/dev/null 2>&1; }       # basta que el puerto responda (con cualquier código): lo que falla tras reiniciar Docker es que el puerto no esté publicado
+MOTOR=(docker compose -f licitaciones/compose.yaml -f licitaciones/compose.cerebro.yaml --env-file .env)
 erp_ok() { curl -fsS -m 5 http://127.0.0.1:8081/api/method/ping >/dev/null 2>&1 && return 0 || return 1; }
 
 resumen() {
   echo "[$(marca)] API:  $(api_ok && echo responde || echo 'NO responde')"
+  echo "[$(marca)] Panel: $(panel_ok && echo responde || echo 'NO responde')"
   if [ -f erpnext/docker-compose.yml ] && [ "${ARRANCAR_SIN_ERP:-0}" != 1 ]; then echo "[$(marca)] ERP:  $(erp_ok && echo responde || echo 'NO responde')"; fi
   local parados="" p
   for p in cerebro-101 erpnext; do        # solo los contenedores de estos dos proyectos, no restos de otros
@@ -42,7 +45,14 @@ reparar_erp() {
   return 1
 }
 
-if [ "${1:-}" = "estado" ]; then resumen; api_ok; exit $?; fi
+# Tras reiniciar Docker puede pasar que los contenedores de la API o del panel estén «Up» pero con sus puertos sin publicar en este equipo
+# (localhost:3000 y :8000 caídos). Recrearlos (sin tocar datos ni dependencias) lo arregla.
+reparar_puertos() {
+  echo "[$(marca)] La API o el panel no responden en este equipo aunque estén en marcha: se recrean api y panel (los datos no se tocan)..."
+  docker compose --progress quiet up -d --no-build --force-recreate --no-deps api panel >/dev/null 2>&1 || echo "[$(marca)] AVISO: no se pudieron recrear api y panel"
+}
+
+if [ "${1:-}" = "estado" ]; then resumen; api_ok && panel_ok; exit $?; fi
 if [ "${1:-}" = "reparar-erp" ]; then reparar_erp && echo "[$(marca)] ERP: responde" || echo "[$(marca)] ERP: sigue sin responder"; exit 0; fi
 
 [ -f .env ] || { echo "Falta .env: este equipo no tiene el Cerebro instalado (scripts/iniciar.sh)"; exit 2; }
@@ -57,21 +67,30 @@ if [ -f erpnext/docker-compose.yml ] && [ "${ARRANCAR_SIN_ERP:-0}" != 1 ] && [ -
   "${ERP[@]}" --progress quiet up -d --no-build || echo "[$(marca)] AVISO: ERPNext no arrancó (mira docker compose -f erpnext/docker-compose.yml ps)"
 fi
 
+# El motor de licitaciones es otro proyecto de Docker (licitaciones/compose.yaml): se levanta aparte, sin reconstruir (la imagen la construye actualizar.sh)
+if [ -f licitaciones/compose.yaml ] && [ -f licitaciones/compose.cerebro.yaml ] && [ "${ARRANCAR_SIN_MOTOR:-0}" != 1 ] && [ -n "$("${MOTOR[@]}" ps -a -q 2>/dev/null)" ]; then
+  echo "[$(marca)] Arrancando el motor de licitaciones..."
+  "${MOTOR[@]}" --progress quiet up -d --no-build || echo "[$(marca)] AVISO: el motor de licitaciones no arrancó (mira docker compose -f licitaciones/compose.yaml -f licitaciones/compose.cerebro.yaml --env-file .env ps)"
+fi
+
 usa_erp=0; if [ -f erpnext/docker-compose.yml ] && [ "${ARRANCAR_SIN_ERP:-0}" != 1 ] && [ -n "$("${ERP[@]}" ps -a -q 2>/dev/null)" ]; then usa_erp=1; fi
 echo "[$(marca)] Esperando a la API$([ "$usa_erp" = 1 ] && echo ' y al ERP') (hasta ${ESPERA} s)..."
 espera_servicios() {   # segundos maximos
   local i; for i in $(seq 1 $(($1 / 5))); do
-    if api_ok && { [ "$usa_erp" = 0 ] || erp_ok; }; then return 0; fi
+    if api_ok && panel_ok && { [ "$usa_erp" = 0 ] || erp_ok; }; then return 0; fi
     sleep 5
   done
   return 1
 }
 PRIMERA=$(( ESPERA < 90 ? ESPERA : 90 ))
 if ! espera_servicios "$PRIMERA"; then
-  if [ "$usa_erp" = 1 ] && api_ok && ! erp_ok; then
+  if ! api_ok || ! panel_ok; then
+    reparar_puertos
+  fi
+  if [ "$usa_erp" = 1 ] && ! erp_ok; then
     reparar_erp || true
   fi
   espera_servicios $(( ESPERA - PRIMERA > 30 ? ESPERA - PRIMERA : 30 )) || true
 fi
 resumen
-api_ok
+api_ok && panel_ok

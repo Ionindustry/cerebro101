@@ -6,7 +6,7 @@
   Registra dos tareas programadas del usuario actual:
     "Cerebro - arranque"   al iniciar sesion (con 1 minuto de espera): abre Docker Desktop, espera a que responda y levanta el Cerebro y el ERP
     "Cerebro - vigilante"  cada 5 minutos: si Docker no responde durante dos comprobaciones seguidas lo reinicia (maximo 3 veces por hora);
-                           si Docker responde pero la API no, vuelve a levantar los servicios
+                           si Docker responde pero la API o el panel no, vuelve a levantar los servicios (recreando api y panel si sus puertos se perdieron)
   Todo queda en %USERPROFILE%\cerebro-autoarranque\autoarranque.log
 
   Uso (PowerShell; -Instalar hay que lanzarlo como ADMINISTRADOR, las tareas luego se ejecutan con tu usuario, sin privilegios):
@@ -60,6 +60,11 @@ function Docker-Responde {
 function Api-Responde {
   try { $r = Invoke-WebRequest -Uri "http://127.0.0.1:8000/salud" -UseBasicParsing -TimeoutSec 5; return ($r.StatusCode -eq 200) }
   catch { return $false }
+}
+
+function Panel-Responde {       # cualquier respuesta HTTP vale (incluso una redireccion): lo que se comprueba es que el puerto este publicado
+  try { $null = Invoke-WebRequest -Uri "http://127.0.0.1:3000/" -UseBasicParsing -TimeoutSec 5 -MaximumRedirection 0; return $true }
+  catch { return ($null -ne $_.Exception.Response) }
 }
 
 function Abrir-DockerDesktop {
@@ -160,10 +165,10 @@ if ($Vigilar) {
   # Si la API del Cerebro responde, el motor de Docker esta vivo aunque la comprobacion de "docker info" falle
   if ((Docker-Responde) -or (Api-Responde)) {
     if ($e.fallos -ne 0) { Escribir-Log "Docker vuelve a responder"; $e.fallos = 0; Guardar-Estado $e }
-    if (-not (Api-Responde)) {
-      Escribir-Log "Docker responde pero la API no: se vuelven a levantar los servicios"
+    if ((-not (Api-Responde)) -or (-not (Panel-Responde))) {
+      Escribir-Log "Docker responde pero la API o el panel no: se vuelven a levantar los servicios (y, si hace falta, se recrean api y panel)"
       Levantar-Cerebro
-      if (Api-Responde) { Escribir-Log "La API responde otra vez" } else { Escribir-Log "La API sigue sin responder (puede estar cargando; se reintentara en 5 minutos)" }
+      if ((Api-Responde) -and (Panel-Responde)) { Escribir-Log "La API y el panel responden otra vez" } else { Escribir-Log "La API o el panel siguen sin responder (puede estar cargando; se reintentara en 5 minutos)" }
     }
     return
   }

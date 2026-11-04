@@ -85,7 +85,7 @@ Dos piezas, ya incluidas en el proyecto:
   (`./scripts/arrancar.sh`) o solo para comprobar (`./scripts/arrancar.sh estado`). Si Docker se ha caído y has vuelto a abrirlo, es lo único que necesitas.
 - `scripts/windows/autoarranque.ps1` (en Windows): registra dos tareas programadas. **Arranque**: al iniciar sesión abre Docker Desktop y lanza `arrancar.sh`.
   **Vigilante**: cada 5 minutos comprueba Docker y la API; si Docker no responde dos veces seguidas (10 minutos) lo cierra, reinicia WSL y lo vuelve a abrir
-  (máximo 3 veces por hora, para no entrar en bucle); si Docker responde pero la API no, vuelve a levantar los servicios.
+  (máximo 3 veces por hora, para no entrar en bucle); si Docker responde pero la API o el panel no (`localhost:8000` o `:3000`), vuelve a levantar los servicios y, si los contenedores están en marcha pero sin puertos (pasa al reiniciar Docker), recrea `api` y `panel` solo. `arrancar.sh` levanta también el motor de licitaciones y repara el ERP.
 
 Instalarlo (una vez). Desde Ubuntu, copia el script a Windows:
 ```
