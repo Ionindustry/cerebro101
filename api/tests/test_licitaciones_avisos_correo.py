@@ -116,6 +116,32 @@ class TestEnvioEnBase(unittest.TestCase):
         self.assertEqual(ejecutar(ac.enviar_pendientes(self.enviar, AHORA))["correos"], 0)     # idempotente
         self.assertEqual(len(self.enviados), 2)
 
+    def test_todo_aviso_de_licitaciones_sale_con_copia_a_concursos_y_notificaciones(self):
+        """Lo relacionado con licitaciones va, además de a quien creó la alerta, a concursos@ y notificaciones@ (avisos.copia); los fallos del sistema van a soporte@ (vigilante)."""
+        b = {**BUZONES, "avisos": {**BUZONES["avisos"], "copia": ["concursos@101.cat", "NOTIFICACIONES@101.cat", "albert@101.cat", "concursos@101.cat", "fuera@gmail.com"]}}
+        with mock.patch.object(B, "cargar", lambda: b):
+            a = self.alerta()
+            self.aviso(a, 1)
+            r = ejecutar(ac.enviar_pendientes(self.enviar, AHORA))
+        self.assertEqual(r["correos"], 1)
+        m = self.enviados[0][1]
+        self.assertEqual((m["To"], m["Cc"]), ("albert@101.cat", "concursos@101.cat, notificaciones@101.cat"))      # sin repetir, sin el propio destino y sin direcciones de fuera de la empresa
+
+    def test_sin_copia_configurada_no_hay_cabecera_cc(self):
+        a = self.alerta()
+        self.aviso(a, 1)
+        ejecutar(ac.enviar_pendientes(self.enviar, AHORA))
+        self.assertIsNone(self.enviados[0][1]["Cc"])
+
+    def test_la_configuracion_real_manda_copia_a_concursos_y_notificaciones(self):
+        import yaml
+        from pathlib import Path
+        real = yaml.safe_load((Path(__file__).resolve().parents[2] / "config" / "buzones.yaml").read_text(encoding="utf-8"))
+        self.assertEqual(real["avisos"]["copia"], ["concursos@101.cat", "notificaciones@101.cat"])
+        self.assertEqual(ac.copia_de({**real["avisos"]}, "albert@101.cat"), ["concursos@101.cat", "notificaciones@101.cat"])
+        vig = yaml.safe_load((Path(__file__).resolve().parents[2] / "config" / "licitaciones.yaml").read_text(encoding="utf-8"))["vigilante"]
+        self.assertEqual(vig["destinatarios"], ["soporte@101.cat"])                     # los fallos del sistema, a soporte
+
     def test_un_fallo_se_anota_se_reintenta_y_al_agotar_los_intentos_se_deja(self):
         a = self.alerta()
         self.aviso(a, 1)
