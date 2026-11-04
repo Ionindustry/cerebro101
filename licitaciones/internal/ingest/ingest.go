@@ -179,6 +179,10 @@ func ingestPage(ctx context.Context, d Deps, source string, page fetch.Result) (
 		}
 		return nil
 	})
+	for _, id := range feed.Oversized { // una licitación enorme no tumba la página: se salta y queda a la vista
+		st.Warnings++
+		d.log().Warn("entrada demasiado grande: se salta y la página sigue", "fuente", source, "id", id, "tope_bytes", placsp.DefaultMaxEntryBytes)
+	}
 	return feed, st, err
 }
 

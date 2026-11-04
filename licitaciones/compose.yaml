@@ -84,7 +84,7 @@ services:
       LIC_HISTORICO_DIR: /scratch
       LIC_TIMEOUT_ZIP: "${LIC_TIMEOUT_ZIP:-30m}"
     volumes: ["historico-tmp:/scratch"]                    # aquí se baja cada ZIP (hasta unos GB) y se borra al terminarlo
-    mem_limit: 256m
+    mem_limit: 512m                                        # una entrada de hasta 16 MiB (licitaciones con miles de lotes) se lee entera: con 256m había poco margen
     cpus: 0.5
 
   proyector:

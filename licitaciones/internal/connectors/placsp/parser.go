@@ -21,23 +21,25 @@ import (
 
 // Límites por defecto.
 const (
-	DefaultMaxEntryBytes = 4 << 20   // una entrada sola, con todos sus lotes y resultados
-	DefaultMaxFeedBytes  = 256 << 20 // una página de la sindicación
+	DefaultMaxEntryBytes  = 16 << 20  // una entrada sola, con todos sus lotes y resultados (igual que s3.MaxRawBytes: lo que se guarda se puede volver a leer). Una MAYOR se SALTA con aviso: no tumba la página
+	DefaultHardEntryBytes = 64 << 20  // tope duro de memoria para una entrada: por encima el documento se rechaza entero (hostil o roto)
+	DefaultMaxFeedBytes   = 256 << 20 // una página de la sindicación
 )
 
 // Errores que identifican la causa de un rechazo.
 var (
 	ErrDTD           = errors.New("placsp: el documento lleva DTD o entidades; no se admite")
-	ErrEntryTooLarge = errors.New("placsp: entrada demasiado grande")
+	ErrEntryTooLarge = errors.New("placsp: entrada demasiado grande") // por encima del tope duro de memoria
 	ErrFeedTooLarge  = errors.New("placsp: página demasiado grande")
 	ErrNoFeed        = errors.New("placsp: el documento no es una sindicación Atom (falta <feed>)")
 )
 
 // Options configura la lectura. Source es obligatorio (domain.SourcePLACSP643, 1044 o 1143).
 type Options struct {
-	Source        string
-	MaxEntryBytes int
-	MaxFeedBytes  int64
+	Source            string
+	MaxEntryBytes     int // una entrada mayor se salta (Feed.Oversized) en vez de rechazar la página; 0 = DefaultMaxEntryBytes
+	HardMaxEntryBytes int // tope duro: una entrada mayor rechaza el documento (ErrEntryTooLarge); 0 = DefaultHardEntryBytes
+	MaxFeedBytes      int64
 }
 
 // Feed son los metadatos de la página.
@@ -46,6 +48,9 @@ type Feed struct {
 	Self    string
 	Next    string // página anterior en el tiempo (la sindicación va en orden descendente)
 	Updated time.Time
+	// Oversized: identificadores de las entradas saltadas por pasarse de MaxEntryBytes (una licitación enorme, p. ej. con miles de lotes). No se guardan ni se proyectan;
+	// quien llama debe dejar constancia, pero el resto de la página sigue su camino.
+	Oversized []string
 }
 
 // Record es una entrada de la página: una licitación o una baja, con su fragmento original.
@@ -66,6 +71,12 @@ func ParseFeed(r io.Reader, opt Options, fn func(Record) error) (Feed, error) {
 	if opt.MaxEntryBytes <= 0 {
 		opt.MaxEntryBytes = DefaultMaxEntryBytes
 	}
+	if opt.HardMaxEntryBytes <= 0 {
+		opt.HardMaxEntryBytes = DefaultHardEntryBytes
+	}
+	if opt.HardMaxEntryBytes < opt.MaxEntryBytes {
+		opt.HardMaxEntryBytes = opt.MaxEntryBytes
+	}
 	if opt.MaxFeedBytes <= 0 {
 		opt.MaxFeedBytes = DefaultMaxFeedBytes
 	}
@@ -74,7 +85,7 @@ func ParseFeed(r io.Reader, opt Options, fn func(Record) error) (Feed, error) {
 		return Feed{}, fmt.Errorf("placsp: zona horaria: %w", err)
 	}
 
-	rec := &recorder{r: &limitReader{r: r, left: opt.MaxFeedBytes}, max: opt.MaxEntryBytes}
+	rec := &recorder{r: &limitReader{r: r, left: opt.MaxFeedBytes}, max: opt.HardMaxEntryBytes}
 	dec := xml.NewDecoder(rec)
 	dec.Strict = true // sin CharsetReader: solo UTF-8
 
@@ -141,6 +152,10 @@ func ParseFeed(r io.Reader, opt Options, fn func(Record) error) (Feed, error) {
 				var e xmlEntry
 				if err := dec.DecodeElement(&e, &t); err != nil {
 					return feed, readError(err)
+				}
+				if dec.InputOffset()-start > int64(opt.MaxEntryBytes) {
+					feed.Oversized = append(feed.Oversized, e.ID) // demasiado grande para guardarla y volver a leerla: se salta y la página sigue
+					continue
 				}
 				raw := rec.slice(start, dec.InputOffset())
 				out := Record{Raw: raw, RawSHA256: hashHex(raw), Licitacion: e.toDomain(opt.Source, madrid)}

@@ -33,8 +33,7 @@ var ErrNoStartURL = errors.New("ingest: falta la dirección de la primera págin
 //
 // Por eso un fallo a mitad de camino (una página lenta, la red) no se paga dos veces: lo hecho no se repite y la siguiente ejecución retoma en la
 // página que falló. La cabeza se anota (punto de control) en cuanto se ingiere: es lo que dice cuándo se comprobó la fuente por última vez.
-func Run(ctx context.Context, d Deps, source, startURL string, opt RunOptions) (Stats, error) {
-	var total Stats
+func Run(ctx context.Context, d Deps, source, startURL string, opt RunOptions) (total Stats, runErr error) {
 	if startURL == "" {
 		return total, ErrNoStartURL
 	}
@@ -49,6 +48,9 @@ func Run(ctx context.Context, d Deps, source, startURL string, opt RunOptions) (
 	if err != nil {
 		return total, fmt.Errorf("ingest: leer las páginas ya ingeridas: %w", err)
 	}
+
+	// Al día o no se calcula SIEMPRE, también si la vuelta acaba en error (p. ej. falla una página antigua del relleno del histórico): lo reciente puede estar completo.
+	defer func() { total.CaughtUp = AlDia(done, cp.Next) }()
 
 	url, validators := startURL, cp.Validators
 	downloads := 0
@@ -102,7 +104,6 @@ func Run(ctx context.Context, d Deps, source, startURL string, opt RunOptions) (
 		}
 		url, validators = feed.Next, fetch.Validators{}
 	}
-	total.CaughtUp = AlDia(done, cp.Next)
 	return total, nil
 }
 

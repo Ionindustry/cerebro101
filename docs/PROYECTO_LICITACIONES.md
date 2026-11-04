@@ -613,3 +613,7 @@ Cómo se atiende la petición: la API del motor la anota (tabla `ingest_solicitu
 ### Poniéndose al día tras una parada
 
 Si el equipo estuvo apagado (o Docker parado) unos días, al volver a arrancar el ingestor empieza **al momento** y recupera lo atrasado de **lo más nuevo a lo más antiguo** (así lo de hoy entra primero). Mientras tanto, la cabecera de la fuente ya se ha mirado y la «última ingesta» parece reciente, así que se usa otra señal: las páginas de archivo ya ingeridas forman **una cadena continua desde la cabecera** cuando está al día; tras una parada, las páginas nuevas no están y las antiguas quedan «sueltas» hasta que se rellena el hueco (`ingest.AlDia`). El ingestor anota el resultado tras cada vuelta (`puntos_control.al_dia`), `/ops/status` lo da en cada fuente (`al_dia`) y el panel enseña **«Poniéndose al día…»** hasta que vuelve a ser `true`.
+
+### Entradas enormes
+
+Alguna licitación de la plataforma es gigantesca (miles de lotes). El lector de la sindicación admite entradas de hasta **16 MiB** (lo que se guarda en el almacén se puede volver a leer) y, por encima, **la SALTA con un aviso** en el registro (`entrada demasiado grande: se salta y la página sigue`) en lugar de rechazar la página entera: una sola entrada enorme llegó a bloquear el relleno del histórico y a dejar cada vuelta del ingestor en error («ingesta fallida … entrada demasiado grande»). Por encima de 64 MiB el documento se rechaza (hostil o roto). Además, si una vuelta acaba en error por una página antigua, el estado «al día» de lo reciente se anota igualmente.

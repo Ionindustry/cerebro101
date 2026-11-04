@@ -300,8 +300,8 @@ func TestDocumentosHostilesSeRechazan(t *testing.T) {
 		"DTD con entidad": {`<?xml version="1.0"?><!DOCTYPE feed [<!ENTITY x SYSTEM "file:///etc/passwd">]><feed xmlns="http://www.w3.org/2005/Atom"></feed>`, Options{}, ErrDTD},
 		"no es un feed":   {`<html><body/></html>`, Options{}, ErrNoFeed},
 		"vacío":           {``, Options{}, ErrNoFeed},
-		"entrada enorme": {cabeceraMinima + entradaMinima(`<cbc:Note>`+strings.Repeat("a", 4000)+`</cbc:Note>`) + `</feed>`,
-			Options{MaxEntryBytes: 2048}, ErrEntryTooLarge},
+		"entrada por encima del tope duro": {cabeceraMinima + entradaMinima(`<cbc:Note>`+strings.Repeat("a", 4000)+`</cbc:Note>`) + `</feed>`,
+			Options{MaxEntryBytes: 1024, HardMaxEntryBytes: 2048}, ErrEntryTooLarge},
 		"página enorme": {cabeceraMinima + entradaMinima(``) + `</feed>`, Options{MaxFeedBytes: 100}, ErrFeedTooLarge},
 	}
 	for nombre, c := range casos {
@@ -358,5 +358,33 @@ func TestMemoriaConstanteEnPaginasGrandes(t *testing.T) {
 	}
 	if n != 2000 {
 		t.Fatalf("entradas = %d, quería 2000", n)
+	}
+}
+
+// Una licitación enorme (p. ej. con miles de lotes) no debe tumbar la página entera: se salta con aviso y las demás entradas se leen.
+func TestUnaEntradaEnormeSeSaltaYLaPaginaSigue(t *testing.T) {
+	grande := entradaMinima(`<cbc:Note>` + strings.Repeat("a", 5000) + `</cbc:Note>`)
+	doc := cabeceraMinima + entradaMinima(``) + grande + entradaMinima(``) + `</feed>`
+	var leidas []Record
+	feed, err := ParseFeed(strings.NewReader(doc), Options{Source: domain.SourcePLACSP643, MaxEntryBytes: 2048}, func(r Record) error {
+		leidas = append(leidas, r)
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("no debe fallar: %v", err)
+	}
+	if len(feed.Oversized) != 1 || len(leidas) != 2 {
+		t.Fatalf("debe saltar 1 y leer las otras 2: oversized=%v leidas=%d", feed.Oversized, len(leidas))
+	}
+	for _, r := range leidas { // la entrada siguiente a la saltada se lee entera (la lectura por adelantado no la corrompe)
+		if len(r.Raw) == 0 || !strings.HasPrefix(string(r.Raw), "<entry") || !strings.HasSuffix(string(r.Raw), "</entry>") {
+			t.Fatalf("original corrupto: %q", r.Raw)
+		}
+	}
+}
+
+func TestElTopePorDefectoEsElDeLoQueSeGuardaYSeVuelveALeer(t *testing.T) {
+	if DefaultMaxEntryBytes != 16<<20 || DefaultHardEntryBytes <= DefaultMaxEntryBytes {
+		t.Fatalf("los topes por defecto no cuadran con s3.MaxRawBytes: %d / %d", DefaultMaxEntryBytes, DefaultHardEntryBytes)
 	}
 }
