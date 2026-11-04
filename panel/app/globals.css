@@ -445,3 +445,9 @@ ul.lic-fila, ol.lic-fila { list-style: none; margin: 0; padding: 0; }
 .lic-pasos li { display: grid; gap: 2px; }
 .lic-pasos details p { margin: 6px 0 0; }
 .lic-etiqueta.aviso { background: var(--senal-suave); color: #7a5206; }
+
+/* Aviso de actualización de las licitaciones al abrir la aplicación */
+.aviso-actualizacion { position: sticky; top: 0; z-index: 50; padding: 8px 16px; font-size: 14px; font-weight: 600; text-align: center; }
+.aviso-actualizacion.aviso { background: var(--senal-suave); color: #7a5206; }
+.aviso-actualizacion.error { background: #fbe8e6; color: #8c2118; }
+.aviso-actualizacion.ok { background: #e8f3ec; color: #1f5a37; }

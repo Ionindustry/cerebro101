@@ -226,6 +226,20 @@ export function antiguedadTexto(s) {
   return `hace ${Math.round(s / 86400)} días`;
 }
 
+// ---- Comprobación de que las licitaciones están al día al abrir la aplicación (API del Cerebro: POST /licitaciones/motor/comprobar) ----
+
+/** Lo que enseña el aviso de arriba según la respuesta de la comprobación; null si no hay nada que decir (al día, o respuesta que no se entiende). */
+export function avisoActualizacion(d) {
+  if (d?.estado === "actualizando") {
+    const cuando = d.antiguedad_s === null || d.antiguedad_s === undefined ? "todavía no ha completado ninguna actualización" : `lo último que tenía el motor es de ${antiguedadTexto(d.antiguedad_s)}`;
+    return { clase: "aviso", texto: `Actualizando las licitaciones… ${cuando}.` };
+  }
+  if (d?.estado === "motor_no_responde") {
+    return { clase: "error", texto: "El motor de licitaciones no responde: las licitaciones no se están actualizando. Si sigue así, avisa a Tecnología." };
+  }
+  return null;
+}
+
 export const ESTADO_MOTOR = {
   ok: { texto: "Al día", clase: "ok" },
   degradado: { texto: "Con retraso", clase: "aviso" },

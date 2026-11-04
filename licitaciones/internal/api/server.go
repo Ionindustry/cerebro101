@@ -71,6 +71,7 @@ func (s *Server) Register(mux *http.ServeMux) {
 	mux.Handle("GET /api/v1/expiring-contracts", s.wrap(s.contratosQueVencen))
 	mux.Handle("GET /api/v1/organizations/{id}", s.wrap(s.organizacion))
 	mux.Handle("GET /api/v1/ops/status", s.wrap(s.estado))
+	mux.Handle("POST /api/v1/ops/actualizar", s.wrap(s.actualizar))
 	mux.Handle("/api/", s.wrap(func(w http.ResponseWriter, r *http.Request) {
 		writeProblem(w, r, newProblem(http.StatusNotFound, codNoEncontrado, "No encontrado", "La ruta no existe."))
 	}))

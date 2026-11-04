@@ -71,6 +71,11 @@ crm:
     perdida: Lost
     descartada: Lost
 
+# Al abrir la aplicación se comprueba si las licitaciones están al día (cerebro/licitaciones/frescura.py): si lo último ingerido es más viejo que esto, se pide al motor que actualice
+# YA (el ingestor empieza en unos segundos, sin esperar a su intervalo de LIC_INTERVALO).
+actualizacion:
+  umbral_min: 20
+
 # Alertas guardadas: un evento (nueva, adjudicada…) solo genera aviso si el expediente se ha actualizado en los últimos días. Así la carga del histórico y la
 # primera lectura del flujo no inundan a nadie de avisos de licitaciones de hace meses.
 alertas:
