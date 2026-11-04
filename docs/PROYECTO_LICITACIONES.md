@@ -291,6 +291,9 @@ módulos con pruebas, y si un pliego trae una fórmula nueva, se añade como mó
 - **Resumen diario: sección «Seguimiento»**: además de las novedades (oportunidades, adjudicaciones, anuladas, alertas), el resumen de las 16:00 lista las licitaciones **en estudio** y **presentadas**
   con el plazo (urgente si quedan ≤ 7 días, vencido si ya pasó), los requisitos del pliego por revisar y cuántos bloquean a 101.cat según su perfil (`aptitud.py`). Sale de la base de datos del Cerebro,
   no del motor, así que aparece aunque el motor no responda; si no se puede leer lo dice. `resumen.seguimiento_max` (config/licitaciones.yaml) limita las que se detallan.
+- **Aviso de plazos urgentes** (`plazos.py`, tarea de Celery cada hora, sin IA): una licitación **en estudio** a la que le quedan 3 días, 1 día o el mismo día del plazo de presentación se avisa **una vez por umbral**
+  por correo a `concursos@101.cat` con copia a `notificaciones@101.cat` (config/buzones.yaml → `avisos.copia`), con cuántos requisitos hay por revisar y cuántos bloquean según el perfil. Solo entre las 07:00 y las 21:00;
+  si el servidor de correo falla, no se anota y se reintenta a la hora siguiente. Se configura en config/licitaciones.yaml → `plazos`.
 - **Revisión previa de una oferta** (`scripts/probar_oferta.py`, de solo lectura): antes de lanzar «Preparar la oferta con los agentes» comprueba la ficha del motor, la sociedad y sus datos en el ERP, el DEUC base,
   los pliegos descargados, los requisitos (y su aptitud según el perfil), las plantillas y la última pasada de los agentes, y dice qué falta. `docker compose exec api python /app/scripts/probar_oferta.py [id del motor]`.
 - **Perfil de la empresa como licitador** (`perfil_licitador` en `config/licitaciones.yaml`): 101.cat es de nueva creación (sin histórico de facturación ni de contratos). Ese perfil

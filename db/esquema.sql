@@ -426,6 +426,14 @@ CREATE TABLE IF NOT EXISTS licitaciones_vigilante (
   detalle     text NOT NULL DEFAULT ''
 );
 
+-- Avisos de plazos urgentes (api/cerebro/licitaciones/plazos.py): cada licitación en estudio se avisa UNA vez por umbral de días (3, 1 y 0 por defecto), aunque la tarea corra cada hora.
+CREATE TABLE IF NOT EXISTS licitaciones_plazos_avisados (
+  licitacion_id bigint NOT NULL REFERENCES licitaciones (id) ON DELETE CASCADE,
+  umbral        integer NOT NULL,                   -- días que faltaban cuando se avisó: 3, 1, 0…
+  avisado_en    timestamptz NOT NULL DEFAULT now(),
+  PRIMARY KEY (licitacion_id, umbral)
+);
+
 -- Ofertas de licitación (api/cerebro/licitaciones/ofertas.py): el borrador de la oferta de cada licitación, en sus tres sobres (administrativo, técnico, económico), dividido en secciones.
 -- Los agentes (Redactor de Memoria, Arquitecto de Solución, Administrativo, Costes, Precio…) solo escriben BORRADORES de las secciones; revisar, aprobar y fijar el precio lo hace una PERSONA.
 CREATE TABLE IF NOT EXISTS ofertas (
