@@ -288,6 +288,9 @@ módulos con pruebas, y si un pliego trae una fórmula nueva, se añade como mó
   no decide). `plataformas_contratacion` conserva `preparar_paquete` (ya no baja documentos: ver «Pliegos» más abajo).
 - **Eventos → Cerebro**: un consumidor en el Cerebro recibe `licitacion.nueva` con encaje alto y la registra en el embudo; el
   **Rastreador** (6:00) pide a **Viabilidad** el informe ir/no ir; el **Director de Licitaciones** prepara el resumen que Dirección recibe a las 16:00 en el panel.
+- **Perfil de la empresa como licitador** (`perfil_licitador` en `config/licitaciones.yaml`): 101.cat es de nueva creación (sin histórico de facturación ni de contratos). Ese perfil
+  (constitución, capital, ROLECE, seguro de RC, certificaciones, experiencia, notas) se añade a lo que se pide a Viabilidad, que lo contrasta con la solvencia, clasificación y garantías
+  del pliego y dice si hay otra vía (medios externos, UTE, umbrales sin exigencia) o NO IR. Lo que está en blanco se le dice como «no consta»: no lo inventa. La validez final la confirma el asesor.
 - **Panel**: pantalla «Licitaciones» (buscador con facetas, ficha, alertas guardadas, panel operativo), a través de la pasarela del panel.
 - **Seguridad**: tokens de Keycloak validados en la API Go; la API no se publica fuera (como la del Cerebro); registro de accesos.
 - Las aprobaciones no cambian: presentarse y firmar siguen siendo decisiones humanas.
