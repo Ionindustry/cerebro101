@@ -291,6 +291,8 @@ módulos con pruebas, y si un pliego trae una fórmula nueva, se añade como mó
 - **Resumen diario: sección «Seguimiento»**: además de las novedades (oportunidades, adjudicaciones, anuladas, alertas), el resumen de las 16:00 lista las licitaciones **en estudio** y **presentadas**
   con el plazo (urgente si quedan ≤ 7 días, vencido si ya pasó), los requisitos del pliego por revisar y cuántos bloquean a 101.cat según su perfil (`aptitud.py`). Sale de la base de datos del Cerebro,
   no del motor, así que aparece aunque el motor no responda; si no se puede leer lo dice. `resumen.seguimiento_max` (config/licitaciones.yaml) limita las que se detallan.
+- **Revisión previa de una oferta** (`scripts/probar_oferta.py`, de solo lectura): antes de lanzar «Preparar la oferta con los agentes» comprueba la ficha del motor, la sociedad y sus datos en el ERP, el DEUC base,
+  los pliegos descargados, los requisitos (y su aptitud según el perfil), las plantillas y la última pasada de los agentes, y dice qué falta. `docker compose exec api python /app/scripts/probar_oferta.py [id del motor]`.
 - **Perfil de la empresa como licitador** (`perfil_licitador` en `config/licitaciones.yaml`): 101.cat es de nueva creación (sin histórico de facturación ni de contratos). Ese perfil
   (constitución, capital, ROLECE, seguro de RC, certificaciones, experiencia, notas) se añade a lo que se pide a Viabilidad, que lo contrasta con la solvencia, clasificación y garantías
   del pliego y dice si hay otra vía (medios externos, UTE, umbrales sin exigencia) o NO IR. Lo que está en blanco se le dice como «no consta»: no lo inventa. La validez final la confirma el asesor.
