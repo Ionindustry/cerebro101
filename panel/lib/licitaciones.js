@@ -446,6 +446,22 @@ export function resumenRequisitos(rs) {
 export const CUMPLIMIENTOS = { pendiente: "Pendiente de valorar", cumple: "Cumple", parcial: "Cumple en parte", no_cumple: "No cumple", no_aplica: "No aplica" };
 const CLASE_CUMPLIMIENTO = { pendiente: "aviso", cumple: "abierta", parcial: "aviso", no_cumple: "anulada", no_aplica: "" };
 export const cumplimientoEtiqueta = (c) => ({ texto: CUMPLIMIENTOS[c] || c || "—", clase: CLASE_CUMPLIMIENTO[c] ?? "" });
+/** La sugerencia del sistema para un requisito (a partir del perfil de la empresa): etiqueta, motivo y vías. Solo orienta: la valoración la guarda una persona. «revisar» no propone nada. */
+const SUGERENCIA_A_CUMPLIMIENTO = { cumple: "cumple", parcial: "parcial", no_cumple: "no_cumple" };
+export function sugerenciaDe(r) {
+  const s = r?.sugerencia;
+  if (!s || !s.sugerencia) return null;
+  const e = cumplimientoEtiqueta(SUGERENCIA_A_CUMPLIMIENTO[s.sugerencia] || "pendiente");
+  const propone = SUGERENCIA_A_CUMPLIMIENTO[s.sugerencia] ?? null;
+  return { texto: propone ? e.texto : "Hay que revisarlo", clase: propone ? e.clase : "aviso", propone, motivo: String(s.motivo || ""), vias: Array.isArray(s.vias) ? s.vias.map(String) : [] };
+}
+/** «Según el perfil de la empresa: 2 requisitos no se cumplen, 1 se cumple en parte.» o null si no hay sugerencias que contar. */
+export function aptitudTexto(a) {
+  if (!a) return null;
+  const partes = [[a.no_cumple, "no se cumple", "no se cumplen"], [a.parcial, "se cumple en parte", "se cumplen en parte"], [a.cumple, "se cumple", "se cumplen"]]
+    .filter(([k]) => k > 0).map(([k, uno, varios]) => `${k} ${k === 1 ? "requisito " + uno : "requisitos " + varios}`);
+  return partes.length ? `Según el perfil de la empresa: ${partes.join(", ")}.` : null;
+}
 /** «Parcial» y «no cumple» exigen decir por qué (el servidor también lo comprueba). */
 export const cumplimientoNecesitaNota = (c) => c === "parcial" || c === "no_cumple";
 /** Resumen de la matriz: «5 requisitos: 3 cumplen, 1 en parte, 1 pendiente». */

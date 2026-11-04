@@ -293,7 +293,9 @@ class TestRutasDelEmbudo(unittest.TestCase):
         with mock.patch.multiple(pl, documentos=mock.AsyncMock(return_value={"licitacion": "x", "documentos": [{"n": 1}]}),
                                  requisitos=mock.AsyncMock(return_value={"requisitos": [{"id": 4}]}), obtener=mock.AsyncMock(return_value={"estado": "limpio"}),
                                  leer=mock.AsyncMock(return_value={"texto": "t"}), revisar_requisito=mock.AsyncMock(return_value={"id": 3, "estado": "confirmado"})) as _:
-            self.assertEqual(c.get("/licitaciones/pliegos/x").json(), {"licitacion": "x", "documentos": [{"n": 1}], "requisitos": [{"id": 4}]})
+            j = c.get("/licitaciones/pliegos/x").json()
+            self.assertEqual((j["licitacion"], j["documentos"], j["requisitos"]), ("x", [{"n": 1}], [{"id": 4, "sugerencia": None}]))       # + la sugerencia de aptitud (sin nada que decir de este requisito)
+            self.assertEqual(j["aptitud"]["bloqueos"], 0)
             self.assertEqual(c.post("/licitaciones/pliegos/x/descargar", json={"n": 1}).json(), {"estado": "limpio"})
             self.assertEqual(c.get("/licitaciones/pliegos/x/documentos/1/paginas/2").json(), {"texto": "t"})
             self.assertEqual(c.post("/licitaciones/pliegos/requisitos/3/revisar", json={"estado": "confirmado"}).json()["estado"], "confirmado")

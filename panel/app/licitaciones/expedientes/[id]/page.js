@@ -3,7 +3,7 @@ import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useEffect, useState } from "react";
 import Redaccion from "./Redaccion";
-import { SOBRES_OFERTA, autorSeccionTexto, claseSeccion, estadoSeccionEtiqueta, mensajeOferta, pendientesOferta, precioAEnvio, resumenOfertaTexto, FORMULAS_PRECIO, costeErpTexto, mensajeReglas, reglasAEnvio, reglasAFormulario, cercaniaTexto, mensajeParecidas, motivosTexto, aptitudSimulacion, costeDeTexto, filasDeCurva, mensajeSimulador, probabilidadConRango, porcentaje, CUMPLIMIENTOS, cumplimientoEtiqueta, cumplimientoNecesitaNota, estadoEtiqueta, estadoPliego, estadoRequisito, etiquetaEmbudo, fechaTexto, fichaOrgHref, importeTexto, lecturaPliego, lugarCita, matrizCsv, matrizDe, mensajeEmbudo, mensajePliegos, resumenMatriz, nombreFuente, puedeDescargarPliego, resumenRequisitos, tipoRequisito, urlSegura } from "../../../../lib/licitaciones";
+import { SOBRES_OFERTA, autorSeccionTexto, claseSeccion, estadoSeccionEtiqueta, mensajeOferta, pendientesOferta, precioAEnvio, resumenOfertaTexto, FORMULAS_PRECIO, costeErpTexto, mensajeReglas, reglasAEnvio, reglasAFormulario, cercaniaTexto, mensajeParecidas, motivosTexto, aptitudSimulacion, costeDeTexto, filasDeCurva, mensajeSimulador, probabilidadConRango, porcentaje, CUMPLIMIENTOS, cumplimientoEtiqueta, cumplimientoNecesitaNota, estadoEtiqueta, estadoPliego, estadoRequisito, sugerenciaDe, aptitudTexto, etiquetaEmbudo, fechaTexto, fichaOrgHref, importeTexto, lecturaPliego, lugarCita, matrizCsv, matrizDe, mensajeEmbudo, mensajePliegos, resumenMatriz, nombreFuente, puedeDescargarPliego, resumenRequisitos, tipoRequisito, urlSegura } from "../../../../lib/licitaciones";
 import { Fallo, Item, pedir, pedirCerebro } from "../../cliente";
 
 const Dato = ({ t, children }) => <div><dt>{t}</dt><dd>{children ?? "—"}</dd></div>;
@@ -54,8 +54,18 @@ function Cumplimiento({ r, onCumplir, trabajando }) {
   const necesita = cumplimientoNecesitaNota(estado);
   const e = cumplimientoEtiqueta(r.cumplimiento || "pendiente");
   const sinCambios = estado === (r.cumplimiento || "pendiente") && nota === (r.cumplimiento_nota || "");
+  const sug = sugerenciaDe(r);
   return (
     <span className="lic-fila" role="group" aria-label="Cumplimiento">
+      {sug && (
+        <span className="meta" role="note">
+          Sugerencia del sistema (orientativa): <span className={`lic-etiqueta ${sug.clase}`}>{sug.texto}</span> {sug.motivo}
+          {sug.vias.map((v) => <span key={v} className="meta"> · {v}</span>)}
+          {sug.propone && (r.cumplimiento || "pendiente") === "pendiente" && estado === "pendiente" && (
+            <button className="boton no" onClick={() => { setEstado(sug.propone); if (sug.propone !== "cumple") setNota(sug.motivo.slice(0, 500)); }}>Usar la sugerencia</button>
+          )}
+        </span>
+      )}
       <span className={`lic-etiqueta ${e.clase}`}>{e.texto}</span>
       <select value={estado} onChange={(x) => setEstado(x.target.value)} aria-label="¿Cumple 101.cat este requisito?">
         {Object.entries(CUMPLIMIENTOS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
@@ -169,6 +179,7 @@ function Pliegos({ id }) {
           <>
             <h3>Matriz de cumplimiento <span className="meta">· {resumenMatriz(m)}</span></h3>
             {m.borradores > 0 && <p className="meta">Quedan {m.borradores} {m.borradores === 1 ? "requisito" : "requisitos"} en borrador sin revisar: la matriz está incompleta.</p>}
+            {aptitudTexto(d?.aptitud) && <p className="meta">{aptitudTexto(d.aptitud)} Es una orientación: la valoración la guarda una persona.</p>}
             <p className="meta">La matriz son los requisitos confirmados, cada uno con su cita. Quien prepare la oferta valora aquí si 101.cat los cumple; «parcial» y «no cumple» llevan su motivo.</p>
             <span className="lic-fila"><button className="boton no" onClick={descargarMatriz}>Descargar la matriz (CSV)</button></span>
           </>
