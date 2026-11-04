@@ -20,7 +20,7 @@ from .. import subidas
 from ..ajustes import ajustes
 from ..aprobaciones import bandeja, objetivos
 from ..aprobaciones.logica import DecisionNoValida
-from .. import actividad, constancia, kpis, modelos_externos, oficina
+from .. import actividad, constancia, copias, kpis, modelos_externos, oficina
 from ..herramientas import licitaciones as motor_lic
 from ..herramientas.licitaciones import MotorNoDisponible
 from ..licitaciones import alertas as alertas_licitaciones
@@ -151,6 +151,13 @@ class Interruptor(BaseModel):
 def _exigir_direccion(usuario: Usuario) -> None:
     if "direccion" not in usuario.roles:
         raise HTTPException(403, "Solo Dirección puede conectar o desconectar los modelos externos")
+
+
+@app.get("/salud/copias")
+async def salud_copias(usuario: Usuario = Depends(usuario_actual)):
+    """La tarjeta «Copias de seguridad» de Jarvis: la última copia (fecha, tamaño, si salió bien), la última correcta, si se ha probado la restauración y si hay que preocuparse (más de 3 días sin una buena).
+    Sin rutas del servidor."""
+    return await copias.estado()
 
 
 @app.post("/modelos-externos/{proveedor}")
