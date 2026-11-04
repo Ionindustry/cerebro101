@@ -50,11 +50,11 @@ pesos:
 # la confirma el asesor.
 perfil_licitador:
   nueva_creacion: true
-  constitucion: ""            # fecha de constitución, aaaa-mm-dd
-  capital_social: ""          # p. ej. «3.000 €»
-  rolece: ""                  # inscripción en el Registro Oficial de Licitadores: «sí», «no» o «en trámite»
-  seguro_rc: ""               # seguro de responsabilidad civil: cobertura, p. ej. «600.000 €»
-  certificaciones: []         # p. ej. [ISO 9001, ISO 27001]
+  constitucion: "2026-11-04"            # fecha de constitución, aaaa-mm-dd
+  capital_social: "20.000 €"          # p. ej. «3.000 €»
+  rolece: "en trámite"                  # inscripción en el Registro Oficial de Licitadores: «sí», «no» o «en trámite»
+  seguro_rc: "300.000 €"               # seguro de responsabilidad civil: cobertura, p. ej. «600.000 €»
+  certificaciones: ["ISO 9001", "ISO 14001", "ISO 27001", "ENS nivel alto (en proceso de certificación)"]         # p. ej. [ISO 9001, ISO 27001]
   experiencia: ""             # experiencia del equipo o del administrador en trabajos parecidos (texto libre y breve)
   notas: ""                   # cualquier otra cosa que deba saber Viabilidad (aliados para una UTE, subcontratistas con solvencia…)
 
