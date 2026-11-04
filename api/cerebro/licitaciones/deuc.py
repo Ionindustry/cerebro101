@@ -37,7 +37,7 @@ def _carpeta(empresa: str) -> Path:
     return DIR / (re.sub(r"[^\w.\-]+", "_", empresa, flags=re.UNICODE).strip("._")[:80] or "sociedad")
 
 
-async def _revisar(documento: str, empresa: str | None) -> tuple[str, dict, Path]:
+async def _revisar(documento: str, empresa: str | None, usuario: str | None = None) -> tuple[str, dict, Path]:
     """Comprueba el documento subido y la sociedad. Devuelve (sociedad, ficha del documento, ruta del fichero limpio). ErrorDeuc con un mensaje para la persona si no sirve."""
     try:
         nombre_empresa = await E.elegir(empresa)
@@ -51,6 +51,8 @@ async def _revisar(documento: str, empresa: str | None) -> tuple[str, dict, Path
             f = await S._disponible(conn, did)
     except (S.ErrorSubida, S.NoExiste) as e:
         raise ErrorDeuc(str(e)) from None
+    if not usuario or f["usuario"] != usuario:         # solo se guarda un documento que la persona que lo pide ha subido ella (el sistema pone `usuario`, no el modelo)
+        raise ErrorDeuc("Ese documento no lo has subido tú: súbelo tú mismo desde Jarvis para guardarlo como DEUC base")
     if f["estado"] != "limpio":
         raise ErrorDeuc("Ese documento lleva macros: no se admite como DEUC (guárdalo sin macros)")
     if f["formato"] not in FORMATOS:
@@ -70,9 +72,9 @@ async def _revisar(documento: str, empresa: str | None) -> tuple[str, dict, Path
     return nombre_empresa, f, ruta
 
 
-async def vista(documento: str, empresa: str | None = None, **_) -> dict:
+async def vista(documento: str, empresa: str | None = None, usuario: str | None = None, **_) -> dict:
     """Lo que ve quien aprueba: qué fichero se guarda y para qué sociedad. Falla antes de pedir aprobación si el documento no sirve."""
-    sociedad, f, _ruta = await _revisar(documento, empresa)
+    sociedad, f, _ruta = await _revisar(documento, empresa, usuario)
     actual = await actual_de(sociedad)
     return {"titulo": f"Guardar el DEUC base de «{sociedad}»",
             "campos": [["Sociedad", sociedad], ["Fichero", f["nombre"]], ["Formato", "Word (.docx)" if f["formato"] == "docx" else "PDF con formulario"],
@@ -81,9 +83,9 @@ async def vista(documento: str, empresa: str | None = None, **_) -> dict:
                        ["Para qué", "Es el DEUC que se copiará a cada oferta de esta sociedad; en cada concurso solo se rellenan los campos propios del concurso. Se conservan las versiones anteriores."]]}
 
 
-async def guardar(documento: str, empresa: str | None = None, por: str = "agente") -> dict:
+async def guardar(documento: str, empresa: str | None = None, por: str = "agente", usuario: str | None = None) -> dict:
     """Guarda el documento subido como DEUC base de la sociedad. Lo llama la herramienta SOLO tras la aprobación de una persona."""
-    sociedad, f, ruta = await _revisar(documento, empresa)
+    sociedad, f, ruta = await _revisar(documento, empresa, usuario)
     datos = ruta.read_bytes()
     sha = hashlib.sha256(datos).hexdigest()
     destino = _carpeta(sociedad) / f"{sha}.{f['formato']}"

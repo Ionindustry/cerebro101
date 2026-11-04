@@ -12,8 +12,8 @@ import re
 from dataclasses import dataclass
 from typing import Any
 
-# Los pone el sistema, no el modelo: el departamento, la sensibilidad y el agente que llama salen de la ficha del agente y de la petición
-OCULTOS = frozenset({"departamento", "sensibilidad", "agente"})
+# Los pone el sistema, no el modelo: el departamento, la sensibilidad y el agente que llama salen de la ficha del agente y de la petición; el usuario es la persona que hizo la petición
+OCULTOS = frozenset({"departamento", "sensibilidad", "agente", "usuario"})
 
 
 class ArgumentosNoValidos(ValueError):

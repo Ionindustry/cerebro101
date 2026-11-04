@@ -291,6 +291,8 @@ módulos con pruebas, y si un pliego trae una fórmula nueva, se añade como mó
 - **Resumen diario: sección «Seguimiento»**: además de las novedades (oportunidades, adjudicaciones, anuladas, alertas), el resumen de las 16:00 lista las licitaciones **en estudio** y **presentadas**
   con el plazo (urgente si quedan ≤ 7 días, vencido si ya pasó), los requisitos del pliego por revisar y cuántos bloquean a 101.cat según su perfil (`aptitud.py`). Sale de la base de datos del Cerebro,
   no del motor, así que aparece aunque el motor no responda; si no se puede leer lo dice. `resumen.seguimiento_max` (config/licitaciones.yaml) limita las que se detallan.
+- **DEUC desde Jarvis: solo lo subido por quien lo pide.** «Guardar DEUC» comprueba que el documento lo subió la misma persona que hizo la petición. Esa persona la pone el sistema (`usuario` en `herramientas/base.usar`,
+  oculto al modelo como `agente` y `sensibilidad`), no el agente: un agente no puede guardar como DEUC base un documento de otra persona aunque conozca su identificador. Además, una persona aprueba la acción viendo el fichero.
 - **Aviso de plazos urgentes** (`plazos.py`, tarea de Celery cada hora, sin IA): una licitación **en estudio** a la que le quedan 3 días, 1 día o el mismo día del plazo de presentación se avisa **una vez por umbral**
   por correo a `concursos@101.cat` con copia a `notificaciones@101.cat` (config/buzones.yaml → `avisos.copia`), con cuántos requisitos hay por revisar y cuántos bloquean según el perfil. Solo entre las 07:00 y las 21:00;
   si el servidor de correo falla, no se anota y se reintenta a la hora siguiente. Se configura en config/licitaciones.yaml → `plazos`.
