@@ -112,7 +112,6 @@ class TestEnBase(unittest.TestCase):
             c.execute(f"SET search_path = {self.schema}")
             t = ESQUEMA.read_text(encoding="utf-8")
             c.execute(t[t.index("-- Licitaciones\nCREATE TABLE IF NOT EXISTS licitaciones"):t.index("-- Resumen diario de licitaciones")])
-            c.execute(t[t.index("-- Avisos de plazos urgentes"):t.index("-- Ofertas de licitación (api/")])
             c.execute("INSERT INTO licitaciones (motor_id, motor_version, expediente, titulo, organismo, estado) VALUES ('0b1f7a3e-1111-4222-8333-444444444441',1,'X','T','O','en_estudio')")
         sep = "&" if "?" in URL else "?"
         self.parche = mock.patch.object(P, "ajustes", SimpleNamespace(database_url=f"{URL}{sep}options=-csearch_path%3D{self.schema}", zona_horaria="Europe/Madrid"))
