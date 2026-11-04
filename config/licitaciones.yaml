@@ -136,6 +136,14 @@ plazos:
   desde_hora: 7
   hasta_hora: 21
 
+# Análisis automático de los pliegos: al pasar una licitación a «en estudio», se descargan sus pliegos (cuarentena y antivirus) y el Analista de Pliegos anota los requisitos, con su cita literal, EN BORRADOR:
+# una persona los confirma. Acota el trabajo con modelos: como mucho `max_por_dia` licitaciones nuevas al día (las que se piden a mano no cuentan) y `max_documentos` documentos por licitación.
+analisis_pliegos:
+  activo: true
+  max_por_dia: 8
+  max_documentos: 4
+  ventana_min: 45             # un análisis «en curso» más antiguo se da por perdido (el trabajador se cayó) y se puede repetir
+
 # Datos de la empresa para rellenar la documentación administrativa de una oferta (cerebro/licitaciones/empresa.py). SALEN DEL ERP (Company, Address y Contact): así toda la información está
 # en el mismo sitio y no hay otro fichero que mantener. Aquí solo se dice DÓNDE está cada cosa. Si falta un dato, la plantilla queda con ese hueco y el panel dice qué hay que completar en el ERP.
 # Si hay varias empresas en el ERP, se elige con cuál se presenta cada oferta. El representante es el contacto de la empresa (Contact enlazado a la Company) cuyo cargo (designation) es uno de estos.

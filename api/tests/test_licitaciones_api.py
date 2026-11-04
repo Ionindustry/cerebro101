@@ -309,6 +309,37 @@ class TestRutasDelEmbudo(unittest.TestCase):
             self.assertEqual(c.post("/licitaciones/pliegos/requisitos/9/revisar", json={"estado": "raro"}).status_code, 422)
         self.assertEqual(c.post("/licitaciones/pliegos/x/descargar", json={}).status_code, 422)             # falta n
 
+    def test_analisis_de_pliegos_a_mano_y_automatico_al_pasar_a_en_estudio(self):
+        e = main.embudo_licitaciones
+        fila = {"id": 7, "motor_id": "0b1f7a3e-1111-4222-8333-444444444444", "estado": "en_estudio"}
+        with mock.patch.object(main, "_encolar_analisis_pliegos", return_value=True) as enc, mock.patch.object(main.crm_licitaciones, "anotar", mock.AsyncMock()):
+            c = como(("usuario", "responsable"), ("finanzas",))
+            self.assertEqual(c.post("/licitaciones/pliegos/x/analizar").status_code, 403)
+            c = como(("direccion",))
+            with mock.patch.object(e, "listar", mock.AsyncMock(return_value=[fila])):
+                r = c.post("/licitaciones/pliegos/0b1f7a3e-1111-4222-8333-444444444444/analizar")
+                self.assertEqual((r.status_code, r.json()["encolado"]), (202, True))
+                enc.assert_called_with(7, forzar=True)                                      # lo pedido a mano repite aunque ya estuviera hecho
+            with mock.patch.object(e, "listar", mock.AsyncMock(return_value=[])):
+                self.assertEqual(c.post("/licitaciones/pliegos/x/analizar").status_code, 404)
+            with mock.patch.object(e, "listar", mock.AsyncMock(return_value=[{**fila, "estado": "detectada"}])):
+                self.assertEqual(c.post("/licitaciones/pliegos/x/analizar").status_code, 422)
+            enc.return_value = False
+            with mock.patch.object(e, "listar", mock.AsyncMock(return_value=[fila])):
+                self.assertEqual(c.post("/licitaciones/pliegos/x/analizar").status_code, 503)
+            enc.reset_mock()
+            enc.return_value = True
+            with mock.patch.object(e, "estudiar", mock.AsyncMock(return_value=fila)):
+                c.post("/licitaciones/embudo/estudiar", json={"motor_id": fila["motor_id"]})
+            enc.assert_called_once_with(7)                                                  # al estudiarla, el análisis sale solo
+            enc.reset_mock()
+            with mock.patch.object(e, "cambiar_estado", mock.AsyncMock(return_value={**fila, "estado": "presentada"})):
+                c.post("/licitaciones/embudo/7/estado", json={"estado": "presentada"})
+            enc.assert_not_called()                                                         # otros cambios de estado no analizan nada
+            with mock.patch.object(e, "cambiar_estado", mock.AsyncMock(return_value=fila)):
+                c.post("/licitaciones/embudo/7/estado", json={"estado": "en_estudio"})
+            enc.assert_called_once_with(7)
+
     def test_estudiar_sin_motor_o_con_un_expediente_que_no_existe(self):
         e = main.embudo_licitaciones
         c = como(("direccion",))

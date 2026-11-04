@@ -3,7 +3,7 @@ import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useEffect, useState } from "react";
 import Redaccion from "./Redaccion";
-import { SOBRES_OFERTA, autorSeccionTexto, claseSeccion, estadoSeccionEtiqueta, mensajeOferta, pendientesOferta, precioAEnvio, resumenOfertaTexto, FORMULAS_PRECIO, costeErpTexto, mensajeReglas, reglasAEnvio, reglasAFormulario, cercaniaTexto, mensajeParecidas, motivosTexto, aptitudSimulacion, costeDeTexto, filasDeCurva, mensajeSimulador, probabilidadConRango, porcentaje, CUMPLIMIENTOS, cumplimientoEtiqueta, cumplimientoNecesitaNota, estadoEtiqueta, estadoPliego, estadoRequisito, sugerenciaDe, aptitudTexto, etiquetaEmbudo, fechaTexto, fichaOrgHref, importeTexto, lecturaPliego, lugarCita, matrizCsv, matrizDe, mensajeEmbudo, mensajePliegos, resumenMatriz, nombreFuente, puedeDescargarPliego, resumenRequisitos, tipoRequisito, urlSegura } from "../../../../lib/licitaciones";
+import { SOBRES_OFERTA, autorSeccionTexto, claseSeccion, estadoSeccionEtiqueta, mensajeOferta, pendientesOferta, precioAEnvio, resumenOfertaTexto, FORMULAS_PRECIO, costeErpTexto, mensajeReglas, reglasAEnvio, reglasAFormulario, cercaniaTexto, mensajeParecidas, motivosTexto, aptitudSimulacion, costeDeTexto, filasDeCurva, mensajeSimulador, probabilidadConRango, porcentaje, CUMPLIMIENTOS, cumplimientoEtiqueta, cumplimientoNecesitaNota, estadoEtiqueta, estadoPliego, estadoRequisito, sugerenciaDe, aptitudTexto, analisisPliegosTexto, etiquetaEmbudo, fechaTexto, fichaOrgHref, importeTexto, lecturaPliego, lugarCita, matrizCsv, matrizDe, mensajeEmbudo, mensajePliegos, resumenMatriz, nombreFuente, puedeDescargarPliego, resumenRequisitos, tipoRequisito, urlSegura } from "../../../../lib/licitaciones";
 import { Fallo, Item, pedir, pedirCerebro } from "../../cliente";
 
 const Dato = ({ t, children }) => <div><dt>{t}</dt><dd>{children ?? "—"}</dd></div>;
@@ -132,6 +132,12 @@ function Pliegos({ id }) {
     catch (e) { setError(e); await cargar(); }
     finally { setTrabajando(null); }
   };
+  const analizar = async () => {
+    setTrabajando("analizando"); setError(null);
+    try { await pedirCerebro(`licitaciones/pliegos/${encodeURIComponent(id)}/analizar`, { method: "POST" }); await cargar(); }
+    catch (e) { setError(e); }
+    finally { setTrabajando(null); }
+  };
   const revisar = async (rid, estado) => {
     setTrabajando("revisando"); setError(null);
     try { await pedirCerebro(`licitaciones/pliegos/requisitos/${rid}/revisar`, enviar({ estado })); await cargar(); }
@@ -156,6 +162,17 @@ function Pliegos({ id }) {
       <h2>Pliegos</h2>
       <p className="meta">Los documentos se bajan a cuarentena y pasan por el antivirus antes de leerse; nadie recibe el fichero original, solo su texto. Los requisitos los anota un agente de IA con su cita literal y una persona los confirma o rechaza.</p>
       {error && <p role="alert" className="lic-error">{mensajePliegos(error.status)}</p>}
+      {(() => {
+        const an = analisisPliegosTexto(d?.analisis);
+        return (
+          <p className="lic-fila" role="status">
+            {an && <span className={`lic-etiqueta ${an.clase}`}>{an.texto}</span>}
+            <button className="boton no" disabled={trabajando !== null || an?.enCurso} onClick={analizar} title="Descarga los pliegos y el Analista anota los requisitos en borrador (solo licitaciones en estudio)">
+              {trabajando === "analizando" ? "Encolando…" : an ? "Repetir el análisis de los pliegos" : "Analizar los pliegos con el Analista"}
+            </button>
+          </p>
+        );
+      })()}
       {docs.length === 0 && d && <p className="meta">Esta licitación no tiene documentos publicados.</p>}
       <ul className="lic-lista">
         {docs.map((x) => {

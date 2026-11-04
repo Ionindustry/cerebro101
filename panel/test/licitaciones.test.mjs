@@ -641,7 +641,7 @@ test("mensajePliegos: el motivo según el código", () => {
   assert.match(mensajePliegos(500), /No se ha podido completar/);
 });
 
-import { seguimientoTexto, aptitudTexto, sugerenciaDe, celdaCsv, cumplimientoEtiqueta, cumplimientoNecesitaNota, matrizCsv, matrizDe, resumenMatriz } from "../lib/licitaciones.js";
+import { analisisPliegosTexto, seguimientoTexto, aptitudTexto, sugerenciaDe, celdaCsv, cumplimientoEtiqueta, cumplimientoNecesitaNota, matrizCsv, matrizDe, resumenMatriz } from "../lib/licitaciones.js";
 
 test("matriz de cumplimiento: solo los confirmados, con su resumen", () => {
   const rs = [
@@ -1034,4 +1034,18 @@ test("seguimiento del resumen: plazo, requisitos por revisar y bloqueos", () => 
   assert.equal(seguimientoTexto({ estado: "en_estudio", dias_plazo: 1, urgente: true, requisitos: { borrador: 2 }, bloqueos: 1 }),
     "Urgente: quedan 1 día para presentar · 2 requisitos por revisar · 1 bloqueo según el perfil de la empresa");
   assert.equal(seguimientoTexto({ estado: "en_estudio", dias_plazo: null }), "Sin plazo de presentación indicado");
+});
+
+test("análisis automático de pliegos: estados y lo que dice cada uno", () => {
+  assert.equal(analisisPliegosTexto(null), null);
+  assert.equal(analisisPliegosTexto({}), null);
+  const c = analisisPliegosTexto({ estado: "en_curso", detalle: {} });
+  assert.deepEqual([c.enCurso, c.clase], [true, "aviso"]);
+  const e = analisisPliegosTexto({ estado: "error", detalle: { motivo: "El modelo de IA no estaba disponible" } });
+  assert.match(e.texto, /no se ha podido completar: El modelo de IA no estaba disponible/);
+  assert.equal(e.clase, "anulada");
+  const h = analisisPliegosTexto({ estado: "hecho", detalle: { requisitos: 12, borradores: 12, bloqueos: 2 } });
+  assert.equal(h.texto, "El análisis automático ha anotado 12 requisitos · 12 por revisar (están en borrador hasta que los confirmes) · 2 bloqueos según el perfil de la empresa.");
+  assert.match(analisisPliegosTexto({ estado: "hecho", detalle: { requisitos: 0 } }).texto, /no ha anotado ningún requisito/);
+  assert.equal(analisisPliegosTexto({ estado: "hecho", detalle: { requisitos: 1, borradores: 0, bloqueos: 1 } }).texto, "El análisis automático ha anotado 1 requisito · 1 bloqueo según el perfil de la empresa.");
 });
