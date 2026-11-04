@@ -304,8 +304,9 @@ módulos con pruebas, y si un pliego trae una fórmula nueva, se añade como mó
 - **Aviso de plazos urgentes** (`plazos.py`, tarea de Celery cada hora, sin IA): una licitación **en estudio** a la que le quedan 3 días, 1 día o el mismo día del plazo de presentación se avisa **una vez por umbral**
   por correo a `concursos@101.cat` con copia a `notificaciones@101.cat` (config/buzones.yaml → `avisos.copia`), con cuántos requisitos hay por revisar y cuántos bloquean según el perfil. Solo entre las 07:00 y las 21:00;
   si el servidor de correo falla, no se anota y se reintenta a la hora siguiente. Se configura en config/licitaciones.yaml → `plazos`.
-- **Revisión previa de una oferta** (`scripts/probar_oferta.py`, de solo lectura): antes de lanzar «Preparar la oferta con los agentes» comprueba la ficha del motor, la sociedad y sus datos en el ERP, el DEUC base,
-  los pliegos descargados, los requisitos (y su aptitud según el perfil), las plantillas y la última pasada de los agentes, y dice qué falta. `docker compose exec api python /app/scripts/probar_oferta.py [id del motor]`.
+- **Revisión previa de una oferta** (`revision_previa.py`, de solo lectura, sin IA): el botón **«Revisar antes de preparar la oferta»** de la ficha del expediente (y `scripts/probar_oferta.py` en el terminal:
+  `docker compose exec api python /app/scripts/probar_oferta.py [id del motor]`) comprueba la ficha del motor, la sociedad y sus datos en el ERP, el DEUC base, los pliegos descargados, los requisitos (y su aptitud según el perfil),
+  la oferta y la última pasada de los agentes, y dice qué falta con ✔ / ! / ✘. «Bloqueo» (sin ficha o sin sociedad) = no tiene sentido lanzar; «aviso» = se puede lanzar, pero los agentes trabajarán con huecos.
 - **Perfil de la empresa como licitador** (`perfil_licitador` en `config/licitaciones.yaml`): 101.cat es de nueva creación (sin histórico de facturación ni de contratos). Ese perfil
   (constitución, capital, ROLECE, seguro de RC, certificaciones, experiencia, notas) se añade a lo que se pide a Viabilidad, que lo contrasta con la solvencia, clasificación y garantías
   del pliego y dice si hay otra vía (medios externos, UTE, umbrales sin exigencia) o NO IR. Lo que está en blanco se le dice como «no consta»: no lo inventa. La validez final la confirma el asesor.

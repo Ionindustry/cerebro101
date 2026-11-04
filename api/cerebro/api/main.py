@@ -27,7 +27,7 @@ from ..licitaciones import alertas as alertas_licitaciones
 from ..licitaciones import calendario_plazos
 from ..licitaciones import crm as crm_licitaciones
 from ..licitaciones import frescura as frescura_licitaciones
-from ..licitaciones import analisis_pliego, aptitud
+from ..licitaciones import analisis_pliego, aptitud, revision_previa
 from ..licitaciones import pliegos as pliegos_licitaciones
 from ..licitaciones import ofertas as ofertas_licitaciones
 from ..licitaciones import empresa as empresa_erp
@@ -777,6 +777,17 @@ async def redactar_oferta_con_agentes(motor_id: str, entrada: RedactarEntrada | 
         await redaccion_ofertas.cerrar(ejecucion["id"], "No se ha podido encolar el trabajo: inténtalo de nuevo")
         raise HTTPException(503, "No se ha podido encolar el trabajo") from None
     return {"ejecucion": ejecucion, "oferta": oferta}
+
+
+@app.get("/licitaciones/ofertas/{motor_id}/revision")
+async def revision_previa_de_la_oferta(motor_id: str, usuario: Usuario = Depends(usuario_actual)):
+    """«Revisar antes de preparar la oferta»: qué hay y qué falta (ficha, sociedad y sus datos en el ERP, DEUC, pliegos, requisitos, oferta y última pasada de los agentes) SIN llamar a ningún modelo ni cambiar nada."""
+    _exige_licitaciones(usuario)
+    try:
+        ofertas_licitaciones._id(motor_id)           # un identificador válido (UUID)
+    except ofertas_licitaciones.ErrorOferta as e:
+        raise HTTPException(422, str(e)) from None
+    return await revision_previa.revisar(motor_id)
 
 
 @app.get("/licitaciones/ofertas/{motor_id}/ejecucion")

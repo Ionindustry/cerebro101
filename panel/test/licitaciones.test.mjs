@@ -641,7 +641,7 @@ test("mensajePliegos: el motivo según el código", () => {
   assert.match(mensajePliegos(500), /No se ha podido completar/);
 });
 
-import { analisisPliegosTexto, seguimientoTexto, aptitudTexto, sugerenciaDe, celdaCsv, cumplimientoEtiqueta, cumplimientoNecesitaNota, matrizCsv, matrizDe, resumenMatriz } from "../lib/licitaciones.js";
+import { MARCA_REVISION, revisionTitular, analisisPliegosTexto, seguimientoTexto, aptitudTexto, sugerenciaDe, celdaCsv, cumplimientoEtiqueta, cumplimientoNecesitaNota, matrizCsv, matrizDe, resumenMatriz } from "../lib/licitaciones.js";
 
 test("matriz de cumplimiento: solo los confirmados, con su resumen", () => {
   const rs = [
@@ -1048,4 +1048,14 @@ test("análisis automático de pliegos: estados y lo que dice cada uno", () => {
   assert.equal(h.texto, "El análisis automático ha anotado 12 requisitos · 12 por revisar (están en borrador hasta que los confirmes) · 2 bloqueos según el perfil de la empresa.");
   assert.match(analisisPliegosTexto({ estado: "hecho", detalle: { requisitos: 0 } }).texto, /no ha anotado ningún requisito/);
   assert.equal(analisisPliegosTexto({ estado: "hecho", detalle: { requisitos: 1, borradores: 0, bloqueos: 1 } }).texto, "El análisis automático ha anotado 1 requisito · 1 bloqueo según el perfil de la empresa.");
+});
+
+test("revisión previa de la oferta: titular según el resultado", () => {
+  assert.equal(revisionTitular(null), null);
+  assert.deepEqual(revisionTitular({ resultado: "bloqueada", bloqueos: 1 }), { texto: "Hay 1 cosa que bloquea: arréglalas antes de lanzar a los agentes.", clase: "anulada" });
+  assert.match(revisionTitular({ resultado: "bloqueada", bloqueos: 2 }).texto, /2 cosas que bloquean/);
+  assert.match(revisionTitular({ resultado: "con_avisos", avisos: 17 }).texto, /17 avisos/);
+  assert.equal(revisionTitular({ resultado: "con_avisos", avisos: 1 }).clase, "aviso");
+  assert.equal(revisionTitular({ resultado: "lista" }).clase, "abierta");
+  assert.deepEqual(MARCA_REVISION, { ok: "✔", aviso: "!", bloqueo: "✘" });
 });

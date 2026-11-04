@@ -446,6 +446,14 @@ export function resumenRequisitos(rs) {
 export const CUMPLIMIENTOS = { pendiente: "Pendiente de valorar", cumple: "Cumple", parcial: "Cumple en parte", no_cumple: "No cumple", no_aplica: "No aplica" };
 const CLASE_CUMPLIMIENTO = { pendiente: "aviso", cumple: "abierta", parcial: "aviso", no_cumple: "anulada", no_aplica: "" };
 export const cumplimientoEtiqueta = (c) => ({ texto: CUMPLIMIENTOS[c] || c || "—", clase: CLASE_CUMPLIMIENTO[c] ?? "" });
+/** La revisión previa de «Preparar la oferta» (GET licitaciones/ofertas/<id>/revision): el titular y la marca de cada comprobación. */
+export const MARCA_REVISION = { ok: "✔", aviso: "!", bloqueo: "✘" };
+export function revisionTitular(r) {
+  if (!r) return null;
+  if (r.resultado === "bloqueada") return { texto: `Hay ${r.bloqueos} ${r.bloqueos === 1 ? "cosa que bloquea" : "cosas que bloquean"}: arréglalas antes de lanzar a los agentes.`, clase: "anulada" };
+  if (r.resultado === "con_avisos") return { texto: `Se puede lanzar, pero hay ${r.avisos} ${r.avisos === 1 ? "aviso" : "avisos"}: los agentes trabajarán con huecos o con menos información.`, clase: "aviso" };
+  return { texto: "Todo listo para lanzar «Preparar la oferta con los agentes».", clase: "abierta" };
+}
 /** El análisis automático de los pliegos (al pasar la licitación a «en estudio»): {texto, clase, error?}; null si nunca se ha lanzado. Los requisitos que saca quedan EN BORRADOR hasta que una persona los confirma. */
 export function analisisPliegosTexto(a) {
   if (!a || !a.estado) return null;
