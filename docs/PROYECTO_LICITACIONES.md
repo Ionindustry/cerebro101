@@ -288,6 +288,9 @@ módulos con pruebas, y si un pliego trae una fórmula nueva, se añade como mó
   no decide). `plataformas_contratacion` conserva `preparar_paquete` (ya no baja documentos: ver «Pliegos» más abajo).
 - **Eventos → Cerebro**: un consumidor en el Cerebro recibe `licitacion.nueva` con encaje alto y la registra en el embudo; el
   **Rastreador** (6:00) pide a **Viabilidad** el informe ir/no ir; el **Director de Licitaciones** prepara el resumen que Dirección recibe a las 16:00 en el panel.
+- **Resumen diario: sección «Seguimiento»**: además de las novedades (oportunidades, adjudicaciones, anuladas, alertas), el resumen de las 16:00 lista las licitaciones **en estudio** y **presentadas**
+  con el plazo (urgente si quedan ≤ 7 días, vencido si ya pasó), los requisitos del pliego por revisar y cuántos bloquean a 101.cat según su perfil (`aptitud.py`). Sale de la base de datos del Cerebro,
+  no del motor, así que aparece aunque el motor no responda; si no se puede leer lo dice. `resumen.seguimiento_max` (config/licitaciones.yaml) limita las que se detallan.
 - **Perfil de la empresa como licitador** (`perfil_licitador` en `config/licitaciones.yaml`): 101.cat es de nueva creación (sin histórico de facturación ni de contratos). Ese perfil
   (constitución, capital, ROLECE, seguro de RC, certificaciones, experiencia, notas) se añade a lo que se pide a Viabilidad, que lo contrasta con la solvencia, clasificación y garantías
   del pliego y dice si hay otra vía (medios externos, UTE, umbrales sin exigencia) o NO IR. Lo que está en blanco se le dice como «no consta»: no lo inventa. La validez final la confirma el asesor.

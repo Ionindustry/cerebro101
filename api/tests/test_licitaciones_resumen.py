@@ -1,7 +1,7 @@
 """Resumen diario de licitaciones de las 16:00: ventana, clasificación, orden por encaje, y lo que dice cuando no sabe."""
 import asyncio
 import unittest
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from unittest import mock
 
 import _sin_servicios  # noqa: F401
@@ -62,9 +62,68 @@ async def sin_avisos(desde, hasta, por_alerta):
     return {"total": 0, "items": []}
 
 
+async def sin_seguimiento(ahora, cfg):
+    return {"estado": "ok", "total": 0, "urgentes": 0, "items": [], "aviso": None}
+
+
+class TestSeguimiento(unittest.TestCase):
+    """La sección «Seguimiento»: lo que se estudia o se ha presentado, con su plazo, requisitos por revisar y bloqueos según el perfil de la empresa."""
+    CFG = {"resumen": {"seguimiento_max": 15}}
+
+    def seg(self, filas, reqs=None, falla=False):
+        async def listar(estado, motor_id, limite):
+            if falla:
+                raise OSError("sin base de datos")
+            return [f for f in filas if f["estado"] == estado]
+
+        async def requisitos(motor_id):
+            if reqs is None:
+                raise LookupError("sin requisitos")
+            return {"requisitos": reqs}
+        return ejecutar(resumen.seguimiento_del_embudo(AHORA, self.CFG, listar, requisitos))
+
+    def fila(self, i, estado="en_estudio", dias=10, **kw):
+        lim = (AHORA + timedelta(days=dias, hours=1)).isoformat() if dias is not None else None
+        return {"id": i, "motor_id": f"0b1f7a3e-1111-4222-8333-44444444444{i}", "titulo": f"Lic {i}", "organismo": "Ayto", "estado": estado, "fecha_limite": lim, **kw}
+
+    def test_ordena_por_plazo_marca_urgentes_y_cuenta_requisitos_y_bloqueos(self):
+        reqs = [{"estado": "confirmado", "tipo": "solvencia_economica", "resumen": "Volumen anual de negocios de 500.000 €", "valor": "", "cita": ""},
+                {"estado": "borrador", "tipo": "plazo", "resumen": "Entrega en 30 días", "valor": "", "cita": ""},
+                {"estado": "rechazado", "tipo": "solvencia_economica", "resumen": "Volumen anual de negocios", "valor": "", "cita": ""}]
+        r = self.seg([self.fila(1, dias=20), self.fila(2, dias=3), self.fila(3, "presentada", dias=None)], reqs)
+        self.assertEqual([i["id"] for i in r["items"]], [2, 1, 3])                  # primero lo urgente, las presentadas al final
+        self.assertEqual((r["total"], r["urgentes"]), (3, 1))
+        self.assertTrue(r["items"][0]["urgente"])
+        self.assertEqual(r["items"][0]["requisitos"], {"borrador": 1, "confirmado": 1})
+        self.assertEqual(r["items"][0]["bloqueos"], 1)                              # el rechazado no cuenta
+        self.assertEqual(r["items"][2]["requisitos"], {"borrador": 0, "confirmado": 0})
+
+    def test_plazo_vencido_y_sin_requisitos_anotados(self):
+        r = self.seg([self.fila(1, dias=-2)])
+        self.assertTrue(r["items"][0]["vencido"] and not r["items"][0]["urgente"])
+        self.assertEqual(r["items"][0]["bloqueos"], 0)
+
+    def test_sin_base_de_datos_lo_dice_y_no_rompe(self):
+        r = self.seg([], falla=True)
+        self.assertEqual((r["estado"], r["total"]), ("error", 0))
+        self.assertIn("seguimiento", r["aviso"])
+
+    def test_el_tope_limita_lo_que_se_detalla_pero_no_lo_que_se_cuenta(self):
+        r = ejecutar(resumen.seguimiento_del_embudo(AHORA, {"resumen": {"seguimiento_max": 2}}, self.seg_listar([self.fila(i, dias=i) for i in range(1, 5)]), self.sin_requisitos))
+        self.assertEqual((r["total"], len(r["items"])), (4, 2))
+
+    async def sin_requisitos(self, motor_id):
+        raise LookupError("sin requisitos")
+
+    def seg_listar(self, filas):
+        async def listar(estado, motor_id, limite):
+            return [f for f in filas if f["estado"] == estado]
+        return listar
+
+
 class TestConstruir(unittest.TestCase):
     def construir(self, motor_sim, avisos=sin_avisos):
-        return ejecutar(resumen.construir(AHORA, motor_sim, avisos=avisos))
+        return ejecutar(resumen.construir(AHORA, motor_sim, avisos=avisos, seguimiento=sin_seguimiento))
 
     def test_consulta_con_la_ventana_y_los_cpv_de_interes(self):
         m = Motor([lic(1)])
@@ -89,7 +148,7 @@ class TestConstruir(unittest.TestCase):
         self.assertEqual([o["encaje"] for o in r["oportunidades"]], sorted((o["encaje"] for o in r["oportunidades"]), reverse=True))
         self.assertEqual({a["id"] for a in r["adjudicaciones"]}, {"id-4", "id-5"})
         self.assertEqual([a["id"] for a in r["anuladas"]], ["id-6"])
-        self.assertEqual(r["totales"], {"novedades": 7, "oportunidades": 3, "adjudicaciones": 2, "anuladas": 1, "fuera_de_importe": 0, "otras": 1, "truncado": False, "alertas": 0})
+        self.assertEqual(r["totales"], {"novedades": 7, "oportunidades": 3, "adjudicaciones": 2, "anuladas": 1, "fuera_de_importe": 0, "otras": 1, "truncado": False, "alertas": 0, "seguimiento": 0, "urgentes": 0})
         self.assertEqual(r["estado"], "ok")
         self.assertIsNone(r["aviso"])
 
@@ -153,7 +212,7 @@ class TestAlertasEnElResumen(unittest.TestCase):
                                      "avisos": [{"motor_id": "0b1f7a3e-1111-4222-8333-444444444444", "tipo": "licitacion.nueva", "titulo": "Videovigilancia", "encaje": 82.0}]}]}
 
     def construir(self, motor_sim, avisos):
-        return ejecutar(resumen.construir(AHORA, motor_sim, avisos=avisos))
+        return ejecutar(resumen.construir(AHORA, motor_sim, avisos=avisos, seguimiento=sin_seguimiento))
 
     def test_la_seccion_lleva_los_avisos_y_el_total_en_las_cifras(self):
         llamadas = []

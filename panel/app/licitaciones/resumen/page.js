@@ -1,7 +1,7 @@
 "use client";
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
-import { avisosDeAlertaTexto, encajeClase, eventoEtiqueta, fechaCivilTexto, fechaTexto, mensajeResumen, ORIGEN_RESUMEN, totalesTexto, urlSegura, ventanaTexto } from "../../../lib/licitaciones";
+import { avisosDeAlertaTexto, encajeClase, eventoEtiqueta, fechaCivilTexto, fechaTexto, mensajeResumen, ORIGEN_RESUMEN, seguimientoTexto, totalesTexto, urlSegura, ventanaTexto } from "../../../lib/licitaciones";
 import { Item, Oportunidad, pedirCerebro } from "../cliente";
 
 const Aviso = ({ children }) => <p role="status" className="lic-aviso">{children}</p>;
@@ -45,6 +45,28 @@ function AlertasDelResumen({ a }) {
           </ul>
         </div>
       ))}
+    </section>
+  );
+}
+
+// Lo que se está estudiando o ya se presentó (de la base de datos: sale aunque el motor no responda). Los resúmenes anteriores a esta sección no la traen.
+function Seguimiento({ s }) {
+  if (!s) return null;
+  if (s.estado === "error") return <Aviso>{s.aviso}</Aviso>;
+  if (s.items.length === 0) return null;
+  return (
+    <section className="lic" aria-label="Seguimiento">
+      <h2>Seguimiento <span className="meta">· {s.total} {s.total === 1 ? "licitación" : "licitaciones"}{s.urgentes > 0 ? ` · ${s.urgentes} con plazo urgente` : ""}</span></h2>
+      <ul className="lic-lista">
+        {s.items.map((i) => (
+          <li key={i.id}>
+            <Link href={`/licitaciones/expedientes/${i.motor_id}`} className="tarjeta tarjeta-enlace lic-item">
+              <span className="lic-fila"><span className="titulo">{i.titulo}</span>{(i.urgente || i.vencido) && <span className="lic-etiqueta anulada">{i.vencido ? "Vencido" : "Urgente"}</span>}</span>
+              <span className="meta">{[i.organismo, seguimientoTexto(i)].filter(Boolean).join(" · ")}</span>
+            </Link>
+          </li>
+        ))}
+      </ul>
     </section>
   );
 }
@@ -102,6 +124,7 @@ export default function Resumen() {
             {c.aviso && <Aviso>{c.aviso}</Aviso>}
           </section>
 
+          <Seguimiento s={c.seguimiento} />
           {c.estado === "ok" && (
             <>
               <section className="lic" aria-label="Oportunidades">
