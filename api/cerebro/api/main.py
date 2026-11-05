@@ -20,7 +20,7 @@ from .. import subidas
 from ..ajustes import ajustes
 from ..aprobaciones import bandeja, objetivos
 from ..aprobaciones.logica import DecisionNoValida
-from .. import actividad, antivirus, constancia, copias, kpis, modelos_externos, oficina
+from .. import actividad, antivirus, constancia, copias, hoy, kpis, modelos_externos, oficina
 from ..herramientas import licitaciones as motor_lic
 from ..herramientas.licitaciones import MotorNoDisponible
 from ..licitaciones import alertas as alertas_licitaciones
@@ -151,6 +151,13 @@ class Interruptor(BaseModel):
 def _exigir_direccion(usuario: Usuario) -> None:
     if "direccion" not in usuario.roles:
         raise HTTPException(403, "Solo Dirección puede conectar o desconectar los modelos externos")
+
+
+@app.get("/hoy")
+async def que_hacer_hoy(usuario: Usuario = Depends(usuario_actual)):
+    """«Qué hacer hoy»: lo que necesita atención de quien abre Jarvis, ordenado por urgencia: aprobaciones pendientes de sus departamentos, plazos de licitaciones y requisitos por revisar (Dirección y Licitaciones) y el estado
+    del sistema (Dirección y Tecnología). Solo lee."""
+    return await hoy.construir(set(usuario.roles), set(usuario.departamentos))
 
 
 @app.get("/salud/antivirus")

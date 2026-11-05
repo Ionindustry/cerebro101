@@ -37,7 +37,7 @@ async def pendientes(departamentos: set[str] | None = None) -> list[dict]:
     async with await psycopg.AsyncConnection.connect(ajustes.database_url, row_factory=dict_row) as conn:
         cur = await conn.execute("SELECT * FROM aprobaciones WHERE estado='pendiente' ORDER BY creado")
         filas = await cur.fetchall()
-    return [f for f in filas if not departamentos or f["departamento"] in departamentos]
+    return [f for f in filas if departamentos is None or f["departamento"] in departamentos]        # None = todas (Dirección); un conjunto VACÍO = ninguna (antes se confundía con «todas»)
 
 
 async def historial(departamentos: set[str] | None = None, decision: str | None = None, texto: str | None = None,

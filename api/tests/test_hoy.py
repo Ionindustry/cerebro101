@@ -1,0 +1,164 @@
+"""«Qué hacer hoy»: una lista por persona, ordenada por urgencia, con lo que ve cada una según sus permisos; una fuente rota no la tumba."""
+import asyncio
+import os
+import time
+import unittest
+from datetime import datetime, timedelta, timezone
+from pathlib import Path
+from types import SimpleNamespace
+from unittest import mock
+
+import _sin_servicios  # noqa: F401
+
+try:
+    import psycopg
+    from cerebro import hoy as H
+    from cerebro.aprobaciones import bandeja
+except ImportError as e:      # pragma: no cover
+    raise unittest.SkipTest(str(e))
+
+URL = os.environ.get("CEREBRO_TEST_PG")
+ESQUEMA = Path(__file__).resolve().parents[2] / "db" / "esquema.sql"
+AHORA = datetime(2026, 11, 5, 8, 0, tzinfo=timezone.utc)
+
+
+def ejecutar(c):
+    return asyncio.run(c)
+
+
+def fuente(valor):
+    async def f(*a):
+        return valor
+    return f
+
+
+def lic(i, estado="en_estudio", dias=10, urgente=False, vencido=False, borradores=0, bloqueos=0):
+    return {"id": i, "motor_id": f"0b1f7a3e-1111-4222-8333-44444444444{i}", "titulo": f"Licitación {i}", "organismo": "Ayto", "estado": estado, "dias_plazo": dias, "urgente": urgente,
+            "vencido": vencido, "requisitos": {"borrador": borradores, "confirmado": 0}, "bloqueos": bloqueos}
+
+
+SEG = {"estado": "ok", "items": [lic(1, dias=1, urgente=True, borradores=3, bloqueos=1), lic(2, dias=-2, vencido=True), lic(3, "presentada", None), lic(4, dias=20, borradores=2)]}
+APROB = [{"creado": AHORA - timedelta(hours=30), "accion": "correo.enviar", "datos": {"resumen": "Enviar el presupuesto a X"}}, {"creado": AHORA - timedelta(hours=1), "accion": "otra", "datos": {}}]
+AV_MAL = {"estado": "viejas", "edad_horas": 53.5, "limite_horas": 48, "motivo": "Las firmas del antivirus tienen 53 horas"}
+COP_MAL = {"alerta": True, "motivo": "Hace 4 días de la última copia de seguridad correcta", "ultima": {"ok": True}}
+MOTOR_OK = {"estado": "ok", "edad_h": 0.2, "poniendose_al_dia": False}
+
+
+class TestPuros(unittest.TestCase):
+    def test_aprobaciones_pendientes_urgentes_si_alguna_espera_mas_de_24_horas(self):
+        r = H.de_aprobaciones(APROB, AHORA)
+        self.assertEqual((r[0]["nivel"], r[0]["titulo"], r[0]["href"]), ("urgente", "2 aprobaciones pendientes", "/aprobaciones"))
+        self.assertIn("30 h", r[0]["detalle"])
+        self.assertEqual(H.de_aprobaciones(APROB[1:], AHORA)[0]["nivel"], "aviso")
+        self.assertEqual(H.de_aprobaciones([], AHORA), [])
+
+    def test_licitaciones_plazos_urgentes_vencidos_y_requisitos_por_revisar(self):
+        r = H.de_licitaciones(SEG)
+        titulos = [i["titulo"] for i in r]
+        self.assertIn("Plazo mañana: Licitación 1", titulos)
+        self.assertIn("Plazo vencido: Licitación 2", titulos)
+        self.assertIn("5 requisitos del pliego por revisar", titulos)                 # 3 + 2; las presentadas no cuentan
+        self.assertEqual(len(r), 3)
+        self.assertIn("1 probablemente no se cumplen", next(i["detalle"] for i in r if "requisitos" in i["titulo"]))
+        self.assertEqual(H.de_licitaciones({"estado": "error"}), [])
+        self.assertEqual(H.de_licitaciones(None), [])
+
+    def test_novedades_del_ultimo_resumen(self):
+        r = H.de_novedades({"fecha": "2026-11-04", "contenido": {"totales": {"oportunidades": 7}, "oportunidades": [{"encaje": 92, "titulo": "Renting de cámaras"}]}})
+        self.assertEqual((r[0]["nivel"], r[0]["titulo"]), ("info", "7 oportunidades nuevas en el último resumen (2026-11-04)"))
+        self.assertIn("Renting de cámaras", r[0]["detalle"])
+        self.assertEqual(H.de_novedades({"contenido": {"oportunidades": []}}), [])
+        self.assertEqual(H.de_novedades(None), [])
+
+    def test_sistema_antivirus_copias_y_motor(self):
+        r = H.del_sistema(AV_MAL, COP_MAL, {"estado": "no_responde"})
+        self.assertEqual([(i["nivel"], i["titulo"].split(":")[0]) for i in r], [("urgente", "Antivirus"), ("urgente", "Copias de seguridad"), ("urgente", "El motor de licitaciones no responde")])
+        self.assertEqual(H.del_sistema({**AV_MAL, "edad_horas": 40}, None, None)[0]["nivel"], "aviso")                 # aún se aceptan documentos
+        self.assertEqual(H.del_sistema({"estado": "ok"}, {"alerta": False, "ultima": {"ok": False, "mensaje": "pg_dump falló"}}, MOTOR_OK)[0]["titulo"], "La última copia de seguridad falló")
+        self.assertEqual(H.del_sistema(None, None, {"estado": "ok", "edad_h": 5.4})[0]["titulo"], "El motor lleva 5 h sin ingesta correcta")
+        self.assertEqual(H.del_sistema(None, None, {"estado": "ok", "edad_h": 0.1, "poniendose_al_dia": True})[0]["nivel"], "info")
+        self.assertEqual(H.del_sistema({"estado": "ok"}, {"alerta": False, "ultima": {"ok": True}}, MOTOR_OK), [])
+
+
+class TestConstruir(unittest.TestCase):
+    def lista(self, roles, deps, **kw):
+        base = {"aprobaciones": fuente(APROB), "seguimiento": fuente(SEG), "ultimo_resumen": fuente(None), "antivirus": fuente(AV_MAL), "copias": fuente(COP_MAL), "motor": fuente(MOTOR_OK)}
+        return ejecutar(H.construir(roles, deps, AHORA, **{**base, **kw}))
+
+    def test_direccion_lo_ve_todo_ordenado_por_urgencia(self):
+        r = self.lista({"direccion"}, set())
+        niveles = [i["nivel"] for i in r["items"]]
+        self.assertEqual(niveles, sorted(niveles, key={"urgente": 0, "aviso": 1, "info": 2}.get))
+        self.assertEqual(niveles[0], "urgente")
+        cats = {i["categoria"] for i in r["items"]}
+        self.assertEqual(cats, {"aprobaciones", "licitaciones", "sistema"})
+        self.assertEqual((r["urgentes"], r["secciones"]), (sum(1 for n in niveles if n == "urgente"), {"licitaciones": True, "sistema": True}))
+
+    def test_cada_persona_solo_ve_lo_de_sus_departamentos(self):
+        r = self.lista({"usuario"}, {"licitaciones"})
+        self.assertEqual({i["categoria"] for i in r["items"]}, {"aprobaciones", "licitaciones"})        # sin Tecnología no se ven los avisos del sistema
+        self.assertEqual(r["secciones"], {"licitaciones": True, "sistema": False})
+        r = self.lista({"usuario"}, {"tecnologia"})
+        self.assertEqual({i["categoria"] for i in r["items"]}, {"aprobaciones", "sistema"})
+        r = self.lista({"usuario"}, {"marketing"}, aprobaciones=fuente([]))
+        self.assertEqual((r["items"], r["secciones"]), ([], {"licitaciones": False, "sistema": False}))
+
+    def test_a_las_aprobaciones_se_les_pasan_los_departamentos_de_la_persona(self):
+        vistos = []
+
+        async def aprob(deps):
+            vistos.append(deps)
+            return []
+        self.lista({"direccion"}, {"a"}, aprobaciones=aprob)
+        self.lista({"usuario"}, {"a", "b"}, aprobaciones=aprob)
+        self.lista({"usuario"}, set(), aprobaciones=aprob)
+        self.assertEqual(vistos, [None, {"a", "b"}, set()])                                  # Dirección: todas; sin departamentos: un conjunto vacío (ninguna)
+
+    def test_una_fuente_rota_se_omite_con_aviso_y_el_resto_sigue(self):
+        async def rota(*a):
+            raise RuntimeError("sin base de datos")
+        r = self.lista({"direccion"}, set(), aprobaciones=rota, antivirus=rota)
+        self.assertEqual(sorted(r["avisos"]), ["No se ha podido leer: antivirus", "No se ha podido leer: aprobaciones"])
+        self.assertTrue(any(i["categoria"] == "licitaciones" for i in r["items"]))
+
+
+@unittest.skipUnless(URL and hasattr(psycopg, "AsyncConnection"), "sin CEREBRO_TEST_PG")
+class TestBandeja(unittest.TestCase):
+    def setUp(self):
+        self.schema = f"t_hoy_{time.time_ns()}"
+        with psycopg.connect(URL, autocommit=True) as c:
+            c.execute(f"CREATE SCHEMA {self.schema}")
+            c.execute(f"SET search_path = {self.schema}")
+            t = ESQUEMA.read_text(encoding="utf-8")
+            c.execute(t[t.index("CREATE TABLE IF NOT EXISTS aprobaciones ("):t.index("CREATE INDEX IF NOT EXISTS aprobaciones_estado_idx")])
+            for i, dep in enumerate(("licitaciones", "finanzas")):
+                c.execute("INSERT INTO aprobaciones (id, hilo, agente, departamento, accion, nivel, aprobadores, datos) VALUES (gen_random_uuid(), %s, 'x', %s, 'a', 'simple', '{}', '{}')", [f"h{i}", dep])
+        sep = "&" if "?" in URL else "?"
+        self.parche = mock.patch.object(bandeja, "ajustes", SimpleNamespace(database_url=f"{URL}{sep}options=-csearch_path%3D{self.schema}"))
+        self.parche.start()
+
+    def tearDown(self):
+        self.parche.stop()
+        with psycopg.connect(URL, autocommit=True) as c:
+            c.execute(f"DROP SCHEMA {self.schema} CASCADE")
+
+    def test_pendientes_none_es_todas_y_un_conjunto_vacio_es_ninguna(self):
+        self.assertEqual(len(ejecutar(bandeja.pendientes(None))), 2)
+        self.assertEqual([f["departamento"] for f in ejecutar(bandeja.pendientes({"licitaciones"}))], ["licitaciones"])
+        self.assertEqual(ejecutar(bandeja.pendientes(set())), [])                         # antes devolvía las dos: una persona sin departamentos veía todo
+
+    def test_el_endpoint_responde_a_una_persona_identificada(self):
+        from cerebro.api import main
+        from cerebro.api.main import Usuario, usuario_actual
+        from fastapi.testclient import TestClient
+        main.app.dependency_overrides[usuario_actual] = lambda: Usuario("albert", {"usuario"}, {"finanzas"})
+        try:
+            r = TestClient(main.app).get("/hoy")
+        finally:
+            main.app.dependency_overrides.clear()
+        self.assertEqual(r.status_code, 200)
+        self.assertEqual([i["categoria"] for i in r.json()["items"]], ["aprobaciones"])      # solo la de Finanzas
+
+
+if __name__ == "__main__":
+    unittest.main()

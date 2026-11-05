@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 
 const SECCIONES = [
   { ruta: "/", nombre: "Jarvis" },
+  { ruta: "/hoy", nombre: "Hoy" },
   { ruta: "/oficina", nombre: "Oficina" },
   { ruta: "/licitaciones", nombre: "Licitaciones" },
   { ruta: "/aprobaciones", nombre: "Aprobaciones" },
@@ -14,6 +15,7 @@ const SECCIONES = [
 export default function Rail() {
   const ruta = usePathname();
   const [pendientes, setPendientes] = useState(0);
+  const [urgentes, setUrgentes] = useState(0);
   const [usuario, setUsuario] = useState("");
   useEffect(() => {
     fetch("/auth/yo").then((r) => (r.ok ? r.json() : null)).then((d) => d && setUsuario(d.usuario)).catch(() => {});
@@ -26,12 +28,19 @@ export default function Rail() {
     const t = setInterval(cargar, 30000);
     return () => clearInterval(t);
   }, []);
+  useEffect(() => {
+    const cargar = () => fetch("/cerebro/hoy").then((r) => (r.ok ? r.json() : null)).then((d) => d && setUrgentes(d.urgentes || 0)).catch(() => {});
+    cargar();
+    const t = setInterval(cargar, 60000);
+    return () => clearInterval(t);
+  }, []);
   return (
     <nav className="rail" aria-label="Secciones">
       <div className="marca">101<span>.cat</span></div>
       {SECCIONES.map((s) => (
         <Link key={s.ruta} href={s.ruta} aria-current={ruta === s.ruta || (s.ruta !== "/" && ruta.startsWith(s.ruta + "/")) ? "page" : undefined}>
           {s.nombre}
+          {s.ruta === "/hoy" && urgentes > 0 && <span className="contador" aria-label={`${urgentes} urgentes`}>{urgentes}</span>}
           {s.ruta === "/aprobaciones" && pendientes > 0 && <span className="contador" aria-label={`${pendientes} pendientes`}>{pendientes}</span>}
         </Link>
       ))}
