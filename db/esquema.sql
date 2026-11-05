@@ -357,6 +357,13 @@ CREATE TABLE IF NOT EXISTS copias_registro (
 );
 CREATE INDEX IF NOT EXISTS copias_registro_tipo ON copias_registro (tipo, creado DESC);
 
+-- Avisos de vigilancia del sistema (api/cerebro/antivirus.py): cuándo se avisó por última vez de cada problema, para no repetirlo cada pasada (una fila por clave).
+CREATE TABLE IF NOT EXISTS vigilancia_avisos (
+  clave      text PRIMARY KEY,
+  avisado_en timestamptz NOT NULL,
+  detalle    text NOT NULL DEFAULT ''
+);
+
 -- Resumen diario de licitaciones (a las 16:00, para Dirección; ver api/cerebro/licitaciones/resumen.py). El contenido es un documento completo:
 -- lo que se vio ese día no cambia aunque después cambien las licitaciones.
 CREATE TABLE IF NOT EXISTS licitaciones_resumenes (

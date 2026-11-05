@@ -26,6 +26,7 @@ app.conf.task_routes = {"cerebro.tareas.celery_app.ejecutar_programada": {"queue
                         "cerebro.tareas.celery_app.enviar_avisos_correo": {"queue": "lote"},
                         "cerebro.tareas.celery_app.avisar_plazos": {"queue": "lote"},
                         "cerebro.tareas.celery_app.vigilar_copias": {"queue": "lote"},
+                        "cerebro.tareas.celery_app.vigilar_antivirus": {"queue": "lote"},
                         "cerebro.tareas.celery_app.vigilar_motor": {"queue": "lote"},
                         "cerebro.tareas.celery_app.purgar_subidas": {"queue": "lote"},
                         "cerebro.tareas.celery_app.pedir_viabilidad": {"queue": "peticiones"},
@@ -69,6 +70,7 @@ def _rastreo_embudo() -> dict:
 
 app.conf.beat_schedule = {**_calendario(), **_resumen_licitaciones(), **_rastreo_embudo(),
                           "avisos-por-correo": {"task": "cerebro.tareas.celery_app.enviar_avisos_correo", "schedule": 300.0},
+                          "vigilar-antivirus": {"task": "cerebro.tareas.celery_app.vigilar_antivirus", "schedule": 10800.0},
                           "vigilar-copias": {"task": "cerebro.tareas.celery_app.vigilar_copias", "schedule": 21600.0},
                           "plazos-urgentes": {"task": "cerebro.tareas.celery_app.avisar_plazos", "schedule": 3600.0},
                           "vigilante-motor": {"task": "cerebro.tareas.celery_app.vigilar_motor", "schedule": 900.0},
@@ -197,6 +199,13 @@ def vigilar_motor() -> dict:
     (cerebro/licitaciones/vigilante.py). No usa el modelo de IA."""
     from ..licitaciones.vigilante import vigilar
     return asyncio.run(vigilar())
+
+
+@app.task(name="cerebro.tareas.celery_app.vigilar_antivirus")
+def vigilar_antivirus() -> dict:
+    """Cada 3 horas mira si el antivirus responde y si sus firmas son recientes; si no, avisa a soporte@ (una vez cada 24 h) antes de que se empiecen a rechazar documentos (cerebro/antivirus.py). Sin IA."""
+    from .. import antivirus
+    return asyncio.run(antivirus.vigilar())
 
 
 @app.task(name="cerebro.tareas.celery_app.vigilar_copias")
