@@ -301,6 +301,10 @@ módulos con pruebas, y si un pliego trae una fórmula nueva, se añade como mó
   cuenta para el tope diario). Nada se confirma, firma ni presenta solo.
 - **Viabilidad opina después de leer el pliego**: al terminar el análisis automático, si hay requisitos anotados, se vuelve a pedir a Viabilidad el informe ir/no ir **con los requisitos y la aptitud** (los que probablemente no se
   cumplen, primero), y ese informe sustituye al que se hizo solo con la ficha (`analisis_pliegos.viabilidad_despues`). Sigue siendo consultivo, y si falla (p. ej. el modelo no está disponible) el análisis queda hecho igualmente.
+- **«Qué hacer hoy»** (`hoy.py`, `GET /hoy`, pantalla **Hoy** de Jarvis con contador de urgentes en el menú): una sola lista, ordenada por urgencia, de lo que necesita atención de quien abre Jarvis, **según sus permisos**: las aprobaciones
+  pendientes de sus departamentos (urgente si alguna espera más de 24 h), las licitaciones en estudio con plazo próximo o vencido y los requisitos del pliego por revisar (Dirección y Licitaciones), lo nuevo del último resumen y el
+  estado del sistema —antivirus, copias de seguridad y motor de licitaciones— (Dirección y Tecnología). Solo lee, sin IA; cada elemento enlaza a la pantalla donde se resuelve y una fuente que falla se omite con un aviso.
+  Corrige de paso un fallo de permisos: `bandeja.pendientes` trataba un conjunto vacío de departamentos como «todos» (una persona sin departamentos veía todas las aprobaciones).
 - **Vigilancia del antivirus** (`antivirus.py`, tarea de Celery cada 3 h, sin IA): los pliegos y los documentos que se suben a Jarvis solo se aceptan con firmas de ClamAV de menos de 48 h (falla cerrado). Si `freshclam` deja de actualizar
   (p. ej. el DNS de Docker falló al encender el PC), se avisa **por correo a `soporte@`** cuando las firmas pasan de **36 h** (antes de que se empiecen a rechazar documentos) o si clamd no responde, una vez cada 24 h, con los comandos
   para arreglarlo. La tarjeta **«Antivirus»** de la pantalla Agentes de Jarvis enseña la fecha de las firmas y su edad.
