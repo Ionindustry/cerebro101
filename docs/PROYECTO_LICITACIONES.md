@@ -301,6 +301,10 @@ módulos con pruebas, y si un pliego trae una fórmula nueva, se añade como mó
   cuenta para el tope diario). Nada se confirma, firma ni presenta solo.
 - **Viabilidad opina después de leer el pliego**: al terminar el análisis automático, si hay requisitos anotados, se vuelve a pedir a Viabilidad el informe ir/no ir **con los requisitos y la aptitud** (los que probablemente no se
   cumplen, primero), y ese informe sustituye al que se hizo solo con la ficha (`analisis_pliegos.viabilidad_despues`). Sigue siendo consultivo, y si falla (p. ej. el modelo no está disponible) el análisis queda hecho igualmente.
+- **Resumen de «Hoy» por correo** (`hoy_correo.py`, tarea de Celery cada hora, sin IA): cada día laborable, desde las 08:30 hasta las 12:00 (`resumen_hoy` en config/licitaciones.yaml), **una vez**, se envía a `concursos@101.cat` con copia a
+  `notificaciones@101.cat` la lista de «Hoy» vista como el departamento de Licitaciones (sus aprobaciones, plazos, requisitos por revisar y novedades; el estado del sistema va a `soporte@`), **solo si hay algo urgente o por mirar**. Si el equipo
+  estaba apagado a las 08:30, sale en cuanto se enciende dentro de la ventana.
+- **Datos de la sociedad en el ERP**: guía y hoja para reunirlos y cargarlos (Company, Dirección, Contacto del representante y los dos campos personalizados DNI y Poder): [DATOS_SOCIEDAD_ERP.md](DATOS_SOCIEDAD_ERP.md).
 - **«Qué hacer hoy»** (`hoy.py`, `GET /hoy`, pantalla **Hoy** de Jarvis con contador de urgentes en el menú): una sola lista, ordenada por urgencia, de lo que necesita atención de quien abre Jarvis, **según sus permisos**: las aprobaciones
   pendientes de sus departamentos (urgente si alguna espera más de 24 h), las licitaciones en estudio con plazo próximo o vencido y los requisitos del pliego por revisar (Dirección y Licitaciones), lo nuevo del último resumen y el
   estado del sistema —antivirus, copias de seguridad y motor de licitaciones— (Dirección y Tecnología). Solo lee, sin IA; cada elemento enlaza a la pantalla donde se resuelve y una fuente que falla se omite con un aviso.

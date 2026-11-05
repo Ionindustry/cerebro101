@@ -27,6 +27,7 @@ app.conf.task_routes = {"cerebro.tareas.celery_app.ejecutar_programada": {"queue
                         "cerebro.tareas.celery_app.avisar_plazos": {"queue": "lote"},
                         "cerebro.tareas.celery_app.vigilar_copias": {"queue": "lote"},
                         "cerebro.tareas.celery_app.vigilar_antivirus": {"queue": "lote"},
+                        "cerebro.tareas.celery_app.enviar_hoy_por_correo": {"queue": "lote"},
                         "cerebro.tareas.celery_app.vigilar_motor": {"queue": "lote"},
                         "cerebro.tareas.celery_app.purgar_subidas": {"queue": "lote"},
                         "cerebro.tareas.celery_app.pedir_viabilidad": {"queue": "peticiones"},
@@ -70,6 +71,7 @@ def _rastreo_embudo() -> dict:
 
 app.conf.beat_schedule = {**_calendario(), **_resumen_licitaciones(), **_rastreo_embudo(),
                           "avisos-por-correo": {"task": "cerebro.tareas.celery_app.enviar_avisos_correo", "schedule": 300.0},
+                          "hoy-por-correo": {"task": "cerebro.tareas.celery_app.enviar_hoy_por_correo", "schedule": 3600.0},
                           "vigilar-antivirus": {"task": "cerebro.tareas.celery_app.vigilar_antivirus", "schedule": 10800.0},
                           "vigilar-copias": {"task": "cerebro.tareas.celery_app.vigilar_copias", "schedule": 21600.0},
                           "plazos-urgentes": {"task": "cerebro.tareas.celery_app.avisar_plazos", "schedule": 3600.0},
@@ -199,6 +201,14 @@ def vigilar_motor() -> dict:
     (cerebro/licitaciones/vigilante.py). No usa el modelo de IA."""
     from ..licitaciones.vigilante import vigilar
     return asyncio.run(vigilar())
+
+
+@app.task(name="cerebro.tareas.celery_app.enviar_hoy_por_correo")
+def enviar_hoy_por_correo() -> dict:
+    """Cada hora mira si toca el resumen de «Hoy» por correo (días laborables, desde las 08:30 hasta las 12:00, una vez al día) y, si hay algo urgente o por mirar, lo envía a concursos@ con copia a
+    notificaciones@ (cerebro/hoy_correo.py). Sin IA."""
+    from .. import hoy_correo
+    return asyncio.run(hoy_correo.enviar())
 
 
 @app.task(name="cerebro.tareas.celery_app.vigilar_antivirus")

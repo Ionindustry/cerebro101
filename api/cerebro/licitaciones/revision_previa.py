@@ -38,7 +38,7 @@ async def _sociedad(motor_id: str, ficha: dict, deps: dict) -> list[dict]:
         faltan = {k: v for k, v in d["faltan"].items() if not k.startswith("oferta.")}
         items.append(_it("ok", f"{len(d['disponibles'])} datos disponibles para las plantillas"))
         if faltan:
-            items.append(_it("aviso", f"Faltan {len(faltan)} datos de la sociedad en el ERP: las plantillas saldrán con esos huecos (Company, Dirección y Contacto de «{nombre}»). Faltan: " + ", ".join(f"{k} ({v})" for k, v in list(faltan.items())[:12]) + ("…" if len(faltan) > 12 else "")))
+            items.append(_it("aviso", f"Faltan {len(faltan)} datos de la sociedad en el ERP: las plantillas saldrán con esos huecos (Company, Dirección y Contacto de «{nombre}»; guía paso a paso: docs/DATOS_SOCIEDAD_ERP.md). Faltan: " + ", ".join(f"{k} ({v})" for k, v in list(faltan.items())[:12]) + ("…" if len(faltan) > 12 else "")))
     except Exception as e:      # noqa: BLE001
         items.append(_it("aviso", f"No se han podido comprobar los datos de la sociedad: {type(e).__name__}"))
     try:
