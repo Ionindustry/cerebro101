@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"regexp"
 	"time"
 
 	"github.com/ionindustry/cerebro101/licitaciones/internal/connectors/fetch"
@@ -50,7 +51,7 @@ func Run(ctx context.Context, d Deps, source, startURL string, opt RunOptions) (
 	}
 
 	// Al día o no se calcula SIEMPRE, también si la vuelta acaba en error (p. ej. falla una página antigua del relleno del histórico): lo reciente puede estar completo.
-	defer func() { total.CaughtUp = AlDia(done, cp.Next) }()
+	defer func() { total.CaughtUp = AlDiaReciente(done, cp.Next, d.now(), VentanaAlDia) }()
 
 	url, validators := startURL, cp.Validators
 	downloads := 0
@@ -105,6 +106,45 @@ func Run(ctx context.Context, d Deps, source, startURL string, opt RunOptions) (
 		url, validators = feed.Next, fetch.Validators{}
 	}
 	return total, nil
+}
+
+// VentanaAlDia es hasta dónde hacia atrás tiene que estar completo lo ingerido para decir que la fuente está «al día»: lo de las últimas semanas. Los huecos más antiguos (el relleno del histórico, que
+// puede tardar horas o días) NO cuentan: lo reciente se publica y se consulta desde que se ingiere, y no hay que esperar a que acabe el pasado.
+const VentanaAlDia = 30 * 24 * time.Hour
+
+var reFechaPagina = regexp.MustCompile(`_(\d{8})_(\d{6})`)
+
+// fechaDePagina saca la fecha de una página de archivo de la sindicación (…_20250926_183504_4.atom). ok=false si el nombre no lleva fecha.
+func fechaDePagina(url string) (t time.Time, ok bool) {
+	m := reFechaPagina.FindStringSubmatch(url)
+	if m == nil {
+		return time.Time{}, false
+	}
+	t, err := time.Parse("20060102150405", m[1]+m[2])
+	return t, err == nil
+}
+
+// AlDiaReciente es AlDia pero solo exige que esté completo lo RECIENTE: si la cadena desde la cabecera llega hasta una página aún sin ingerir cuya fecha es anterior a `ahora - ventana`, todo lo de
+// los últimos días está ingerido (lo que falta es histórico) y la fuente está al día. Si el primer hueco es reciente, o su nombre no lleva fecha, se exige lo mismo que AlDia (falla hacia «no al día»). Pura.
+func AlDiaReciente(done map[string]string, siguiente string, ahora time.Time, ventana time.Duration) bool {
+	if AlDia(done, siguiente) {
+		return true
+	}
+	hueco := siguiente
+	visitado := map[string]bool{}
+	for hueco != "" {
+		next, ok := done[hueco]
+		if !ok || visitado[hueco] {
+			break
+		}
+		visitado[hueco] = true
+		hueco = next
+	}
+	if hueco == "" || visitado[hueco] {
+		return false // la cadena termina o da vueltas: no hay un hueco que datar
+	}
+	t, ok := fechaDePagina(hueco)
+	return ok && t.Before(ahora.Add(-ventana))
 }
 
 // AlDia dice si las páginas de archivo ya ingeridas (done: dirección → enlace siguiente) forman una cadena continua desde `siguiente` (el enlace que sigue a la cabecera). Al día, TODAS las
