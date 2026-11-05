@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"testing"
+	"time"
 )
 
 func TestAlDia(t *testing.T) {
@@ -90,5 +91,46 @@ func TestAlDiaSeCalculaAunqueLaVueltaAcabeEnError(t *testing.T) {
 	}
 	if !s.CaughtUp || s.Pages == 0 {
 		t.Fatalf("lo reciente (cabeza y p2) está ingerido y encadenado: debe contar como al día aunque falle p3: %+v", s)
+	}
+}
+
+// Lo que importa es lo RECIENTE: si el primer hueco de la cadena es de hace meses (relleno del histórico), la fuente está al día aunque falte pasado; si el hueco es reciente (el equipo estuvo apagado),
+// no; y sin fecha en el nombre se exige lo mismo que AlDia.
+func TestAlDiaRecienteIgnoraLosHuecosDelHistorico(t *testing.T) {
+	base := "https://contrataciondelestado.es/sindicacion/sindicacion_643/licitacionesPerfilesContratanteCompleto3_"
+	pag := func(fecha string, n int) string { // 20251114_224748 + sufijo
+		u := base + fecha
+		if n > 0 {
+			u += "_" + string(rune('0'+n))
+		}
+		return u + ".atom"
+	}
+	ahora := time.Date(2026, 11, 5, 10, 0, 0, 0, time.UTC)
+	reciente1, reciente2 := pag("20261104_190734", 0), pag("20261103_190511", 0)
+	viejo1, hueco, viejoSuelto := pag("20260101_120000", 0), pag("20250926_183504", 4), pag("20250920_100000", 0)
+
+	casos := []struct {
+		nombre    string
+		done      map[string]string
+		siguiente string
+		quiero    bool
+	}{
+		{"hueco antiguo (histórico): lo reciente está completo", map[string]string{reciente1: reciente2, reciente2: viejo1, viejo1: hueco, viejoSuelto: ""}, reciente1, true},
+		{"hueco de hace 2 días: el equipo estuvo apagado, no está al día", map[string]string{reciente2: viejo1}, reciente1, false},
+		{"hueco reciente en medio de la cadena", map[string]string{reciente1: reciente2, viejoSuelto: ""}, reciente1, false},
+		{"sin fecha en el nombre se exige lo estricto", map[string]string{"a": "b", "z": ""}, "a", false},
+		{"todo ingerido: al día", map[string]string{reciente1: reciente2, reciente2: ""}, reciente1, true},
+		{"la cabecera apunta a una página aún sin ingerir y es antigua (instalación nueva con histórico por llenar)", map[string]string{}, hueco, true},
+	}
+	for _, c := range casos {
+		if got := AlDiaReciente(c.done, c.siguiente, ahora, VentanaAlDia); got != c.quiero {
+			t.Errorf("%s: AlDiaReciente = %v, quiero %v", c.nombre, got, c.quiero)
+		}
+	}
+	if _, ok := fechaDePagina(pag("20250926_183504", 4)); !ok {
+		t.Error("la fecha de una página de archivo se tiene que poder leer")
+	}
+	if _, ok := fechaDePagina("https://x/inicio.atom"); ok {
+		t.Error("una dirección sin fecha no tiene fecha")
 	}
 }
