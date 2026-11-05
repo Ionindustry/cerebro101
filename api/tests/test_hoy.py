@@ -122,6 +122,32 @@ class TestConstruir(unittest.TestCase):
         self.assertTrue(any(i["categoria"] == "licitaciones" for i in r["items"]))
 
 
+class TestCacheDelEndpoint(unittest.TestCase):
+    def test_la_misma_lista_se_reutiliza_30_segundos_y_depende_solo_de_los_permisos(self):
+        from cerebro.api import main
+        from cerebro.api.main import Usuario, usuario_actual
+        from fastapi.testclient import TestClient
+        llamadas = []
+
+        async def construir(roles, deps, ahora=None, **kw):
+            llamadas.append((frozenset(roles), frozenset(deps)))
+            return {"items": [], "urgentes": 0, "avisos": [], "secciones": {}}
+        main._CACHE_HOY.clear()
+        try:
+            with mock.patch.object(main.hoy, "construir", construir):
+                for quien, roles, deps in (("a", {"usuario"}, {"licitaciones"}), ("b", {"usuario"}, {"licitaciones"}), ("c", {"direccion"}, set())):
+                    main.app.dependency_overrides[usuario_actual] = lambda q=quien, r=roles, d=deps: Usuario(q, r, d)
+                    self.assertEqual(TestClient(main.app).get("/hoy").status_code, 200)
+                self.assertEqual(len(llamadas), 2)                                  # a y b (mismos permisos) comparten la lista; Dirección tiene la suya
+                with mock.patch.object(main.time, "monotonic", lambda: 10_000_000.0):
+                    main.app.dependency_overrides[usuario_actual] = lambda: Usuario("a", {"usuario"}, {"licitaciones"})
+                    TestClient(main.app).get("/hoy")
+                self.assertEqual(len(llamadas), 3)                                  # pasados los 30 s se vuelve a construir
+        finally:
+            main.app.dependency_overrides.clear()
+            main._CACHE_HOY.clear()
+
+
 @unittest.skipUnless(URL and hasattr(psycopg, "AsyncConnection"), "sin CEREBRO_TEST_PG")
 class TestBandeja(unittest.TestCase):
     def setUp(self):

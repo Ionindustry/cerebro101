@@ -6,6 +6,7 @@ import base64
 import logging
 import os
 import re
+import time
 import uuid
 from contextlib import asynccontextmanager
 
@@ -153,11 +154,24 @@ def _exigir_direccion(usuario: Usuario) -> None:
         raise HTTPException(403, "Solo Dirección puede conectar o desconectar los modelos externos")
 
 
+_CACHE_HOY: dict = {}
+CACHE_HOY_S = 30         # Jarvis pide «Hoy» cada minuto desde cada pestaña abierta: la misma lista (mismos permisos) se reutiliza 30 s para no repetir las consultas al ERP, al motor y al antivirus
+
+
 @app.get("/hoy")
 async def que_hacer_hoy(usuario: Usuario = Depends(usuario_actual)):
     """«Qué hacer hoy»: lo que necesita atención de quien abre Jarvis, ordenado por urgencia: aprobaciones pendientes de sus departamentos, plazos de licitaciones y requisitos por revisar (Dirección y Licitaciones) y el estado
-    del sistema (Dirección y Tecnología). Solo lee."""
-    return await hoy.construir(set(usuario.roles), set(usuario.departamentos))
+    del sistema (Dirección y Tecnología). Solo lee. La lista depende SOLO de los permisos (roles y departamentos), no de quién eres: por eso se puede reutilizar entre pestañas con los mismos permisos."""
+    clave = (frozenset(usuario.roles), frozenset(usuario.departamentos))
+    ahora = time.monotonic()
+    guardada = _CACHE_HOY.get(clave)
+    if guardada and ahora - guardada[0] < CACHE_HOY_S:
+        return guardada[1]
+    datos = await hoy.construir(set(usuario.roles), set(usuario.departamentos))
+    if len(_CACHE_HOY) > 200:
+        _CACHE_HOY.clear()
+    _CACHE_HOY[clave] = (ahora, datos)
+    return datos
 
 
 @app.get("/salud/antivirus")

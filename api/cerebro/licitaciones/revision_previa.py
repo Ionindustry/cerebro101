@@ -31,8 +31,10 @@ async def _sociedad(motor_id: str, ficha: dict, deps: dict) -> list[dict]:
     except empresa.VariasEmpresas as e:
         items.append(_it("aviso", "Hay varias empresas en el ERP: hay que elegir con cuál se presenta en la tarjeta «Documentación administrativa» de la oferta (" + ", ".join(x["razon_social"] for x in e.empresas) + ")"))
         nombre = e.empresas[0]["nombre"]
-    except Exception as e:      # noqa: BLE001
-        return [_it("bloqueo", f"El ERP no da la sociedad: {type(e).__name__}: {str(e)[:200]}")]
+    except empresa.ErrorEmpresa as e:      # mensajes pensados para la persona (qué falta y cómo arreglarlo)
+        return [_it("bloqueo", f"El ERP no da la sociedad: {str(e)[:300]}")]
+    except Exception as e:      # noqa: BLE001 — de un fallo inesperado solo se enseña su tipo: el texto puede llevar direcciones internas
+        return [_it("bloqueo", f"El ERP no da la sociedad ({type(e).__name__}): mira el registro de la API")]
     try:
         d = await deps["claves"](nombre, ficha, motor_id)
         faltan = {k: v for k, v in d["faltan"].items() if not k.startswith("oferta.")}

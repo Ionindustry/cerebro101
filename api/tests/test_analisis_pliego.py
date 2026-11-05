@@ -120,7 +120,8 @@ class TestEnBase(unittest.TestCase):
         self.assertGreaterEqual(a["detalle"]["bloqueos"], 0)
         self.assertEqual(self.lanzar()["motivo"], "ya_hecho")                    # no se repite
         self.assertEqual(len(self.peticiones), 2)
-        self.assertEqual(self.lanzar(forzar=True)["estado"], "hecho")             # una persona sí puede repetirlo
+        self.assertEqual(self.lanzar(forzar=True)["motivo"], "reciente")          # pero no al instante: hay un enfriamiento de 5 minutos
+        self.assertEqual(self.lanzar(forzar=True, ahora=AHORA + timedelta(minutes=10))["estado"], "hecho")             # una persona sí puede repetirlo
         self.assertEqual(len(self.peticiones), 3)                                 # el Analista otra vez; Viabilidad no, porque esta vez no hay requisitos
 
     def test_viabilidad_vuelve_a_valorar_con_los_requisitos_y_su_fallo_no_estropea_el_analisis(self):
@@ -133,20 +134,20 @@ class TestEnBase(unittest.TestCase):
         self.assertEqual(ejecutar(A.leer(self.lid))["detalle"]["viabilidad"], "no_ir")
         self.assertEqual(ejecutar(embudo.obtener(self.lid))["viabilidad"]["recomendacion"], "no_ir")
         # si Viabilidad falla (aquí, el modelo no está disponible) el análisis sigue «hecho»
-        self.lanzar(requisitos=reqs, forzar=True, falla_viabilidad=A.ModeloNoDisponible("caído"))
+        self.lanzar(requisitos=reqs, forzar=True, ahora=AHORA + timedelta(minutes=10), falla_viabilidad=A.ModeloNoDisponible("caído"))
         a = ejecutar(A.leer(self.lid))
         self.assertEqual((a["estado"], a["detalle"]["viabilidad"]), ("hecho", "no_disponible"))
         # sin requisitos anotados no se vuelve a valorar, y se puede desactivar
         self.peticiones.clear()
-        self.lanzar(requisitos=[], forzar=True)
-        self.lanzar(requisitos=reqs, forzar=True, config={"viabilidad_despues": False})
+        self.lanzar(requisitos=[], forzar=True, ahora=AHORA + timedelta(minutes=20))
+        self.lanzar(requisitos=reqs, forzar=True, ahora=AHORA + timedelta(minutes=30), config={"viabilidad_despues": False})
         self.assertNotIn("viabilidad", [a for a, _ in self.peticiones])
 
     def test_sin_documentos_o_sin_ninguno_legible_queda_en_error_con_su_motivo(self):
         self.estudiar()
         self.assertEqual(self.lanzar(docs=[])["motivo"], "sin_documentos")
         self.assertIn("no tiene documentos", ejecutar(A.leer(self.lid))["detalle"]["motivo"])
-        self.assertEqual(self.lanzar(forzar=True, descarga=lambda n: {"disponible": False, "estado": "cuarentena"})["motivo"], "sin_documentos_legibles")
+        self.assertEqual(self.lanzar(forzar=True, ahora=AHORA + timedelta(minutes=10), descarga=lambda n: {"disponible": False, "estado": "cuarentena"})["motivo"], "sin_documentos_legibles")
         self.assertEqual(self.peticiones, [])                                      # sin texto que leer no se molesta al agente
 
     def test_el_error_no_se_repite_solo_pero_si_por_fallo_del_modelo(self):

@@ -29,6 +29,7 @@ log = logging.getLogger("cerebro.licitaciones.analisis_pliego")
 
 AGENTE = "analista-pliegos"
 DEFECTO = {"activo": True, "max_por_dia": 8, "max_documentos": 4, "ventana_min": 45, "viabilidad_despues": True}
+ENFRIAMIENTO_MIN = 5          # una repetición pedida a mano no puede llegar antes de que pasen estos minutos desde el último análisis de esa licitación (evita lanzar trabajos con modelos en bucle)
 FALLOS_DEL_MODELO = (ModeloNoDisponible, ModeloOcupado, ModeloTimeout)
 # Los documentos que contienen las condiciones: pliegos de cláusulas y de prescripciones, cuadro de características… (sin esto se toman los primeros de la ficha)
 RE_PLIEGO = re.compile(r"(?i)pliego|pcap|pcp\b|ppt\b|ppta|cl[aá]usulas|prescripciones|cuadro de caracter|condiciones|bases\b|memoria justificativa")
@@ -94,7 +95,7 @@ async def leer(lid: int) -> dict | None:
 
 
 async def reservar(lid: int, motor_id: str, cfg: dict, ahora: datetime, forzar: bool = False, reintento: bool = False) -> str | None:
-    """Toma el análisis de esta licitación: None si se ha reservado, o el motivo por el que no toca («desactivado», «ya_hecho», «en_curso», «error», «tope_diario»). Con la fila bloqueada: dos
+    """Toma el análisis de esta licitación: None si se ha reservado, o el motivo por el que no toca («desactivado», «ya_hecho», «en_curso», «error», «tope_diario», «reciente»). Con la fila bloqueada: dos
     llamadas a la vez no lo hacen dos veces. `forzar` (lo pide una persona) repite aunque esté hecho o en error y no cuenta para el tope diario; `reintento` repite un error por fallo del modelo."""
     if not cfg["activo"] and not forzar:
         return "desactivado"
@@ -106,6 +107,8 @@ async def reservar(lid: int, motor_id: str, cfg: dict, ahora: datetime, forzar: 
             if f:
                 if f["estado"] == "en_curso" and ahora - f["actualizado"] < timedelta(minutes=cfg["ventana_min"]):
                     return "en_curso"
+                if forzar and f["estado"] != "en_curso" and ahora - f["actualizado"] < timedelta(minutes=ENFRIAMIENTO_MIN):
+                    return "reciente"
                 if f["estado"] == "hecho" and not forzar:
                     return "ya_hecho"
                 if f["estado"] == "error" and not (forzar or reintento):
@@ -144,7 +147,7 @@ async def analizar(lid: int, invocar, ahora: datetime | None = None, cfg: dict |
     try:
         docs = (await (documentos or pliegos.documentos)(motor_id))["documentos"]
         if not docs:
-            await cerrar(lid, "error", {**detalle, "motivo": "La licitación no tiene documentos publicados en la ficha"})
+            await cerrar(lid, "error", {**detalle, "motivo": "La licitación no tiene documentos publicados en la ficha"}, ahora)
             return {"estado": "error", "motivo": "sin_documentos"}
         listos = []
         for n in elegir_documentos(docs, c["max_documentos"]):
@@ -159,7 +162,7 @@ async def analizar(lid: int, invocar, ahora: datetime | None = None, cfg: dict |
                 detalle["avisos"].append(f"Documento {n}: no se ha podido leer ({d.get('estado') or 'sin texto'})")
         detalle["documentos"] = [{"n": d["n"], "nombre": d["nombre"][:120]} for d in listos]
         if not listos:
-            await cerrar(lid, "error", {**detalle, "motivo": "No se ha podido descargar y leer ningún documento del pliego"})
+            await cerrar(lid, "error", {**detalle, "motivo": "No se ha podido descargar y leer ningún documento del pliego"}, ahora)
             return {"estado": "error", "motivo": "sin_documentos_legibles"}
         estado = await invocar(AGENTE, construir_peticion(fila, listos))
         reqs = (await (requisitos or pliegos.requisitos)(motor_id))["requisitos"]
@@ -170,7 +173,7 @@ async def analizar(lid: int, invocar, ahora: datetime | None = None, cfg: dict |
             detalle["avisos"].append("El agente terminó con un aviso: " + str(estado["error"])[:200])
         if not reqs:
             detalle["avisos"].append("El Analista no ha anotado ningún requisito: pídeselo a mano en el chat o revisa los pliegos")
-        await cerrar(lid, "hecho", detalle)
+        await cerrar(lid, "hecho", detalle, ahora)
         log.info("análisis de pliegos: licitación %s → %d requisitos (%d por revisar, %d bloqueos)", lid, len(reqs), len(borradores), r["bloqueos"])
         if reqs and c["viabilidad_despues"]:
             # Viabilidad opina DESPUÉS de leer el pliego: el informe ir/no ir anterior (hecho solo con la ficha) se sustituye por uno con los requisitos y la aptitud. Es consultivo, y si falla no estropea el análisis.
@@ -180,12 +183,12 @@ async def analizar(lid: int, invocar, ahora: datetime | None = None, cfg: dict |
             except Exception as e:      # noqa: BLE001 — incluye los fallos del modelo: el informe de Viabilidad se puede pedir a mano
                 log.warning("análisis de pliegos: Viabilidad no ha podido valorar la licitación %s con los requisitos: %s: %s", lid, type(e).__name__, e)
                 detalle["viabilidad"] = "no_disponible"
-            await cerrar(lid, "hecho", detalle)
+            await cerrar(lid, "hecho", detalle, ahora)
         return {"estado": "hecho", "requisitos": len(reqs)}
     except FALLOS_DEL_MODELO:
-        await cerrar(lid, "error", {**detalle, "motivo": "El modelo de IA no estaba disponible: se reintenta"})
+        await cerrar(lid, "error", {**detalle, "motivo": "El modelo de IA no estaba disponible: se reintenta"}, ahora)
         raise
     except Exception as e:      # noqa: BLE001 — no puede quedarse «en curso» para siempre
         log.warning("análisis de pliegos: licitación %s: %s: %s", lid, type(e).__name__, e)
-        await cerrar(lid, "error", {**detalle, "motivo": f"No se ha podido terminar el análisis ({type(e).__name__})"})
+        await cerrar(lid, "error", {**detalle, "motivo": f"No se ha podido terminar el análisis ({type(e).__name__})"}, ahora)
         return {"estado": "error", "motivo": type(e).__name__}
