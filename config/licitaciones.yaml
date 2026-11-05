@@ -136,6 +136,14 @@ plazos:
   desde_hora: 7
   hasta_hora: 21
 
+# Resumen de «Hoy» por correo (api/cerebro/hoy_correo.py): cada día laborable, desde `desde` hasta `hasta_hora` (hora local), UNA vez, a concursos@ con copia a notificaciones@ (config/buzones.yaml → avisos.copia),
+# solo si hay algo urgente o por mirar (aprobaciones de Licitaciones, plazos, requisitos por revisar). Si el equipo estaba apagado a la hora, sale en cuanto se enciende dentro de la ventana.
+resumen_hoy:
+  activo: true
+  desde: "08:30"
+  hasta_hora: 12
+  url_panel: "http://localhost:3000"   # a dónde apuntan los enlaces del correo
+
 # Análisis automático de los pliegos: al pasar una licitación a «en estudio», se descargan sus pliegos (cuarentena y antivirus) y el Analista de Pliegos anota los requisitos, con su cita literal, EN BORRADOR:
 # una persona los confirma. Acota el trabajo con modelos: como mucho `max_por_dia` licitaciones nuevas al día (las que se piden a mano no cuentan) y `max_documentos` documentos por licitación.
 analisis_pliegos:

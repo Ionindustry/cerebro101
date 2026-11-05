@@ -179,3 +179,22 @@ etc.). Para afinar más, sustituid `env_file` por una lista explícita de variab
   `NO SE PUDO REGISTRAR…` en el log de la API. Conviene alertar sobre ese texto.
 - Si Langfuse está parado, el Cerebro sigue funcionando pero sin trazas; vigilad su disponibilidad
   (agente Tecnología).
+
+## Revisión de seguridad de noviembre de 2026 (licitaciones, copias y «Hoy»)
+
+Revisión del trabajo de los últimos días: documentos de terceros, permisos, lo que sale por correo y los scripts del servidor. Lo encontrado y lo que se hizo:
+
+| Hallazgo | Riesgo | Qué se hizo |
+|----------|--------|-------------|
+| `bandeja.pendientes` trataba un conjunto vacío de departamentos como «todos» | Una persona sin departamentos habría visto todas las aprobaciones pendientes | Corregido: `None` = todas (Dirección), vacío = ninguna. Prueba contra PostgreSQL |
+| «Guardar DEUC» no comprobaba quién había subido el documento | Un agente podía guardar como DEUC base un documento de otra persona (si conocía su identificador) | El usuario lo pone el sistema (no el modelo) y se comprueba contra quien subió el documento |
+| Un dato de terceros escrito en un Excel podía ejecutarse como fórmula al abrirlo | Inyección de fórmulas (p. ej. el título de una licitación que empieza por `=`) | Todo valor se escribe como texto; `defusedxml` declarado para leer Excel de terceros |
+| Lectura de Excel y ZIP de terceros | Bombas de compresión, entidades XML | Límites de tamaño, ratio y entradas; proceso aislado con límites de memoria y CPU; un Excel con macros se rechaza |
+| La copia automática dejaba un registro temporal con nombre predecible y ficheros legibles por otros usuarios | Lectura o suplantación del registro; datos sensibles legibles | Fichero temporal seguro y `umask 077` |
+| Repetir a mano el análisis de pliegos no tenía freno | Lanzar trabajos con modelos en bucle (coste) | Enfriamiento de 5 minutos por licitación, además del tope diario de los automáticos |
+| «Hoy» se pide cada minuto desde cada pestaña | Carga repetida sobre el ERP, el motor y el antivirus | La lista (que solo depende de los permisos) se reutiliza 30 s |
+| La revisión previa de la oferta devolvía el texto de un fallo inesperado del ERP | Fuga de direcciones internas | De un fallo inesperado solo se enseña su tipo; los mensajes pensados para la persona se conservan |
+
+Comprobado y sin hallazgos: ningún secreto en el repositorio (`scripts/comprobar_secretos.py`), ningún `shell=True`, `eval`, `pickle` ni `yaml.load` inseguro; las consultas SQL con texto interpolado solo usan constantes (los valores van siempre como parámetros); el panel no usa `innerHTML` y solo enlaza rutas internas; los correos solo salen a direcciones de la empresa y los textos de terceros van en una línea y recortados; todo lo nuevo de «Licitaciones» exige Dirección o ese departamento, y lo de «Hoy» se filtra por los permisos de cada persona.
+
+**Queda a vuestro cargo:** instalar las tareas de Windows (arranque, vigilante y copia), revisar de vez en cuando las dependencias (`pip-audit` y `npm audit`: no se han podido ejecutar desde el entorno de desarrollo) y probar la restauración de una copia (`scripts/probar_restauracion.sh`).

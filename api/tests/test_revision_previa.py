@@ -72,6 +72,15 @@ class TestRevision(unittest.TestCase):
         self.assertEqual(r["resultado"], "bloqueada")
         self.assertIn("El ERP no da la sociedad", textos(r, "bloqueo")[0])
 
+    def test_de_un_fallo_inesperado_del_erp_no_se_ensena_su_texto(self):
+        async def roto(e):
+            raise RuntimeError("fallo con http://erpnext-backend:8000 y el token abc123")
+        r = ejecutar(R.revisar(ID, **dobles(elegir=roto)))
+        texto = textos(r, "bloqueo")[0]
+        self.assertIn("RuntimeError", texto)
+        self.assertNotIn("erpnext-backend", texto)
+        self.assertNotIn("abc123", texto)
+
     def test_sin_deuc_sin_pliegos_y_sin_requisitos_son_avisos_con_lo_que_hay_que_hacer(self):
         async def sin_deuc(n):
             return None
