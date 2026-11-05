@@ -1,5 +1,6 @@
 "use client";
 import Link from "next/link";
+import EstadoAntivirus from "../../componentes/EstadoAntivirus";
 import EstadoCopias from "../../componentes/EstadoCopias";
 import EstadoJev from "../../componentes/EstadoJev";
 import ModelosExternos from "../../componentes/ModelosExternos";
@@ -23,6 +24,7 @@ export default function Agentes() {
       <h1>{visibles.length} agentes</h1>
       <EstadoJev />
       <EstadoCopias />
+      <EstadoAntivirus />
       <ModelosExternos />
       <div className="filtros">
         <button aria-pressed={!filtro} onClick={() => setFiltro(null)}>Todos</button>

@@ -301,6 +301,9 @@ módulos con pruebas, y si un pliego trae una fórmula nueva, se añade como mó
   cuenta para el tope diario). Nada se confirma, firma ni presenta solo.
 - **Viabilidad opina después de leer el pliego**: al terminar el análisis automático, si hay requisitos anotados, se vuelve a pedir a Viabilidad el informe ir/no ir **con los requisitos y la aptitud** (los que probablemente no se
   cumplen, primero), y ese informe sustituye al que se hizo solo con la ficha (`analisis_pliegos.viabilidad_despues`). Sigue siendo consultivo, y si falla (p. ej. el modelo no está disponible) el análisis queda hecho igualmente.
+- **Vigilancia del antivirus** (`antivirus.py`, tarea de Celery cada 3 h, sin IA): los pliegos y los documentos que se suben a Jarvis solo se aceptan con firmas de ClamAV de menos de 48 h (falla cerrado). Si `freshclam` deja de actualizar
+  (p. ej. el DNS de Docker falló al encender el PC), se avisa **por correo a `soporte@`** cuando las firmas pasan de **36 h** (antes de que se empiecen a rechazar documentos) o si clamd no responde, una vez cada 24 h, con los comandos
+  para arreglarlo. La tarjeta **«Antivirus»** de la pantalla Agentes de Jarvis enseña la fecha de las firmas y su edad.
 - **Aviso de plazos urgentes** (`plazos.py`, tarea de Celery cada hora, sin IA): una licitación **en estudio** a la que le quedan 3 días, 1 día o el mismo día del plazo de presentación se avisa **una vez por umbral**
   por correo a `concursos@101.cat` con copia a `notificaciones@101.cat` (config/buzones.yaml → `avisos.copia`), con cuántos requisitos hay por revisar y cuántos bloquean según el perfil. Solo entre las 07:00 y las 21:00;
   si el servidor de correo falla, no se anota y se reintenta a la hora siguiente. Se configura en config/licitaciones.yaml → `plazos`.

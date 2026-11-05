@@ -20,7 +20,7 @@ from .. import subidas
 from ..ajustes import ajustes
 from ..aprobaciones import bandeja, objetivos
 from ..aprobaciones.logica import DecisionNoValida
-from .. import actividad, constancia, copias, kpis, modelos_externos, oficina
+from .. import actividad, antivirus, constancia, copias, kpis, modelos_externos, oficina
 from ..herramientas import licitaciones as motor_lic
 from ..herramientas.licitaciones import MotorNoDisponible
 from ..licitaciones import alertas as alertas_licitaciones
@@ -151,6 +151,12 @@ class Interruptor(BaseModel):
 def _exigir_direccion(usuario: Usuario) -> None:
     if "direccion" not in usuario.roles:
         raise HTTPException(403, "Solo Dirección puede conectar o desconectar los modelos externos")
+
+
+@app.get("/salud/antivirus")
+async def salud_antivirus(usuario: Usuario = Depends(usuario_actual)):
+    """El estado del antivirus para Jarvis: si responde y de cuándo son sus firmas (los documentos se rechazan con firmas de más de 48 horas)."""
+    return await antivirus.estado()
 
 
 @app.get("/salud/copias")
