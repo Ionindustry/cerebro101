@@ -161,8 +161,8 @@ empresa:
   designaciones: [administrador, apoderado, representante legal, gerente, director general, consejero delegado]
   campos:                               # nombre del campo en ERPNext; los personalizados se cambian aquí (si el campo no existe en tu ERP, el dato se da por no informado)
     empresa_registro: registration_details       # Company: datos de inscripción en el Registro Mercantil
-    representante_dni: dni                       # Contact: campo personalizado con el DNI/NIE del representante
-    representante_poder: poder                   # Contact: campo personalizado con los datos del poder (escritura, notario, fecha)
+    representante_dni: custom_dni                     # Contact: campo personalizado con el DNI/NIE del representante
+    representante_poder: custom_poder                  # Contact: campo personalizado con los datos del poder (escritura, notario, fecha)
   # DEUC: cada sociedad tiene su DEUC base (un Word con los datos de la empresa ya rellenados) ADJUNTO a su ficha de empresa (Company) en el ERP, con «DEUC» en el nombre del fichero.
   # En cada concurso se copia y solo se rellenan los campos propios del concurso (título, expediente, órgano de contratación…); lo demás no se toca.
   deuc_patron: "deuc|espd"
