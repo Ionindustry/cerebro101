@@ -63,10 +63,10 @@ Rellena la columna «Tu valor» (en papel, en un Excel, donde quieras) y luego c
 
    | Label | Fieldname | Type |
    |-------|-----------|------|
-   | `DNI` | `dni` | Data |
-   | `Poder` | `poder` | Small Text |
+   | `DNI` | `custom_dni` | Data |
+   | `Poder` | `custom_poder` | Small Text |
 
-   Los **Fieldname** tienen que ser exactamente `dni` y `poder` (en minúsculas): así los espera `config/licitaciones.yaml` → `empresa.campos`. Si prefieres otros nombres, se cambian ahí y me lo dices.
+   Solo tienes que escribir la **Label** (`DNI` y `Poder`): ERPNext genera solo el nombre interno (*Fieldname*) añadiendo `custom_`, es decir `custom_dni` y `custom_poder`, que son los que espera `config/licitaciones.yaml` → `empresa.campos`. Si prefieres otros nombres, se cambian ahí y me lo dices.
 3. **Update**. Recarga la página del Contacto: ya aparecen.
 
 ---
@@ -86,4 +86,4 @@ Rellena la columna «Tu valor» (en papel, en un Excel, donde quieras) y luego c
   `python3 scripts/erpnext_roles_cerebro.py --departamento licitaciones` y después
   `docker compose up -d --force-recreate --no-deps api worker beat`.
 - **Falta un dato que ya has cargado:** casi siempre es el enlace (**Links**) de la dirección o del contacto con la empresa (apartados 2.2 y 2.3), o el cargo del representante que no es una de las palabras permitidas.
-- **No aparece «DNI» o «Poder»:** no se han creado los campos personalizados (2.4) o el *Fieldname* no coincide con `empresa.campos`.
+- **No aparece «DNI» o «Poder»:** no se han creado los campos personalizados (2.4) o el nombre interno no coincide con `empresa.campos`.

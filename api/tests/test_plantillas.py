@@ -47,8 +47,8 @@ EMPRESAS = [{"name": "101 Telecom S.L.", "company_name": "101 Telecomunicaciones
 DIRECCIONES = {"101 Telecom S.L.": [{"name": "D1", "address_line1": "Calle Major 1", "address_line2": "", "city": "Girona", "state": "Girona", "pincode": "17001", "country": "Spain",
                                      "is_primary_address": 1, "is_your_company_address": 1, "phone": "", "email_id": ""}],
                "Ion Industry S.A.": []}
-CONTACTOS = {"101 Telecom S.L.": [{"name": "C1", "first_name": "Marta", "last_name": "Soler", "designation": "Comercial", "dni": "11111111H"},
-                                  {"name": "C2", "first_name": "Ana", "last_name": "Pérez Soler", "designation": "Administradora única", "dni": "12345678Z", "poder": "Escritura 123, notario X"}],
+CONTACTOS = {"101 Telecom S.L.": [{"name": "C1", "first_name": "Marta", "last_name": "Soler", "designation": "Comercial", "custom_dni": "11111111H"},
+                                  {"name": "C2", "first_name": "Ana", "last_name": "Pérez Soler", "designation": "Administradora única", "custom_dni": "12345678Z", "custom_poder": "Escritura 123, notario X"}],
              "Ion Industry S.A.": []}
 
 
@@ -60,7 +60,7 @@ class ERPFalso:
 
     async def __call__(self, doctype, dep, filtros=None, campos=None, limite=20):
         self.llamadas.append((doctype, dep, tuple(campos or [])))
-        if self.sin_personalizados and any(c in (campos or []) for c in ("registration_details", "dni", "poder")):
+        if self.sin_personalizados and any(c in (campos or []) for c in ("registration_details", "custom_dni", "custom_poder")):
             raise httpx.HTTPStatusError("x", request=httpx.Request("GET", "http://x"), response=httpx.Response(417))
         if doctype == "File":
             return [f for f in self.ficheros if f["attached_to_name"] == filtros[1][2]]

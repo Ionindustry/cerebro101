@@ -18,7 +18,7 @@ log = logging.getLogger("cerebro.licitaciones.empresa")
 DEFECTO = {
     "departamento_erp": "licitaciones",
     "designaciones": ["administrador", "apoderado", "representante legal", "gerente", "director general", "consejero delegado"],
-    "campos": {"empresa_registro": "registration_details", "representante_dni": "dni", "representante_poder": "poder"},
+    "campos": {"empresa_registro": "registration_details", "representante_dni": "custom_dni", "representante_poder": "custom_poder"},
     "deuc_patron": "deuc|espd",
 }
 # Los datos que se pueden poner en un documento, y dónde se completa cada uno en el ERP si falta.
