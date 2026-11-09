@@ -2,6 +2,7 @@
 // Reenvía cada petición con el token de la sesión de Keycloak (en desarrollo, con cabeceras de prueba).
 import { cookies } from "next/headers";
 import { COOKIE, obtenerSesion } from "../../../lib/sesion";
+import { reenviarSeguro } from "../../../lib/pasarela";
 
 const API = process.env.CEREBRO_API || "http://localhost:8000";
 
@@ -24,12 +25,8 @@ async function reenviar(req, { params }) {
   const h = await cabeceras();
   if (!h) return Response.json({ error: "Sesión caducada" }, { status: 401 });
   const url = `${API}/${ruta.join("/")}${new URL(req.url).search}`;
-  const r = await fetch(url, {
-    method: req.method,
-    headers: h,
-    body: req.method === "GET" ? undefined : await req.text(),
-  });
-  return new Response(await r.text(), { status: r.status, headers: { "Content-Type": "application/json" } });
+  const r = await reenviarSeguro(url, { method: req.method, headers: h, body: req.method === "GET" ? undefined : await req.text() });
+  return new Response(r.texto, { status: r.status, headers: { "Content-Type": "application/json" } });
 }
 
 export { reenviar as GET, reenviar as POST };

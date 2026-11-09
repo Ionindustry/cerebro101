@@ -96,7 +96,7 @@ export default function Jarvis() {
         method: "POST",
         body: JSON.stringify({ texto: contenido, hilo, origen: "jarvis", ...(ids.length ? { documentos: ids } : {}) }),
       });
-      const d = await r.json();
+      const d = await r.json().catch(() => ({}));
       if (!r.ok) {
         const err = new Error(d.detail || "El Cerebro no ha podido responder");
         err.amigable = Boolean(d.codigo);          // el modelo de IA no está disponible, va lento…: la API ya lo explica
