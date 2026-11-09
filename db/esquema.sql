@@ -604,6 +604,22 @@ CREATE TABLE IF NOT EXISTS importaciones_precios (
   aplicada_en  timestamptz
 );
 
+-- Propuestas de precios de VENTA (api/cerebro/precios_venta.py): el sistema calcula el precio de cada artículo desde su mejor coste, Dirección ajusta o excluye y APRUEBA; solo entonces se escribe la lista
+-- «Venta» en el ERP. Un coste o un tipo de cambio que cambian no cambian ningún precio sin una propuesta nueva y su aprobación.
+CREATE TABLE IF NOT EXISTS propuestas_venta (
+  id           bigserial PRIMARY KEY,
+  agente       text NOT NULL,
+  departamento text NOT NULL,
+  estado       text NOT NULL DEFAULT 'propuesta' CHECK (estado IN ('propuesta', 'aplicando', 'aplicada', 'error', 'descartada')),
+  lista        text NOT NULL,
+  lineas       jsonb NOT NULL,                      -- [{codigo, ref, desc, familia, proveedor, coste, coste_eur, calculado, venta, ajustado, excluida, margen, actual, cambio, variacion_pct, avisos}]
+  avisos       jsonb NOT NULL DEFAULT '[]',
+  resumen      jsonb NOT NULL DEFAULT '{}',
+  resultado    jsonb NOT NULL DEFAULT '{}',
+  creado       timestamptz NOT NULL DEFAULT now(),
+  aplicada_en  timestamptz
+);
+
 -- DEUC base de cada sociedad, subido desde Jarvis (api/cerebro/licitaciones/deuc.py): un Word o un PDF con formulario con los datos de la empresa ya rellenados. El fichero está en
 -- DEUC_DIR/<sociedad>/<sha256>.<formato>; aquí queda quién lo subió y cuándo (la versión más reciente de cada sociedad es la que se usa; las anteriores se conservan).
 CREATE TABLE IF NOT EXISTS deuc_base (

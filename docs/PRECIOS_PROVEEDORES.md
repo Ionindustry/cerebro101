@@ -26,7 +26,10 @@ Lo que Dirección ha pedido y cómo se construye, por pasos (cada uno, su PR). *
    logística del canal, margen, redondeo) y sus avisos («provisional», «de respaldo»). Los productos **próximamente, fin de vida y muestras no se cargan** (se cuentan y se avisa). Sin escribir nada en el ERP hasta que
    una persona apruebe la vista previa (`aplicar`, repetible sin duplicar). El margen del **50 % sobre la venta** para todas las familias lo confirmó Dirección.
    Pendiente de este paso: el stock, el EAN y las características no se escriben aún en el ERP (se guardan en la propuesta); eso llega con el paso 3.
-3. Márgenes por familia y lista de precios «Venta» con aprobación.
+3. **Lista de precios «Venta» con aprobación** (`cerebro/precios_venta.py`, hecho): `proponer_venta` elige para cada artículo el **mejor coste ya en euros** (con logística y cambio; con stock si lo hay), aplica el margen
+   de su familia y el redondeo, y lo compara con el precio que ya tiene la lista «Venta» del ERP (nuevo, sube, baja, igual). `ajustar_venta`: Dirección corrige precios a mano o excluye artículos. `aplicar_venta` (exige la
+   aprobación de una persona, con vista previa de cambios, márgenes y valores provisionales) crea la lista si falta y crea o actualiza solo lo que ha cambiado; es repetible. **Decisión de Dirección: los precios solo cambian
+   cuando Dirección los aprueba**; un coste o un tipo de cambio que cambian no tocan ningún precio de venta sin una propuesta nueva. Tabla `propuestas_venta`. El margen por familia se edita en `config/precios.yaml` (`margen.familias`).
 4. Propuesta de precios con mercado, competencia y estrategias, y tabla de revisión para Dirección.
 5. Documentación del proveedor y fichas técnicas (descarga de internet y subida a mano).
 6. Que Costes, Precio y Catálogo usen todo esto al preparar ofertas y licitaciones.

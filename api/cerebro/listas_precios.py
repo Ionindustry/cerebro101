@@ -34,7 +34,7 @@ from .herramientas.facturas import DatosFactura, a_decimal
 
 log = logging.getLogger("cerebro.listas_precios")
 DEFECTO = {"item_group": "Products", "stock_uom": "Nos", "supplier_group": "All Supplier Groups", "supplier_type": "Company", "moneda": "EUR", "monedas": ["EUR", "USD", "GBP"],
-           "max_lineas": 3000, "lote": 100, "prefijo_lista": "Compra"}
+           "max_lineas": 3000, "lote": 100, "prefijo_lista": "Compra", "lista_venta": "Venta"}
 CAMPOS = ("referencia", "descripcion", "precio", "unidad", "descuento")
 PRECIO_MAX = Decimal("10000000")
 RE_NIF = re.compile(r"^[A-Z0-9]{8,14}$")
@@ -58,6 +58,7 @@ def configuracion() -> dict:
     cfg = {**DEFECTO, **c}
     cfg["max_lineas"] = min(max(int(cfg["max_lineas"]), 10), 20000)
     cfg["lote"] = min(max(int(cfg["lote"]), 10), 500)
+    cfg["lista_venta"] = str(cfg["lista_venta"]).strip()[:140] or "Venta"
     return cfg
 
 
