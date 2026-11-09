@@ -420,6 +420,28 @@ export function estadoPliego(d) {
 }
 /** Se ofrece «Descargar y analizar» si aún no se ha bajado o si hay que reintentarlo (sin analizar, no analizable o sin texto leído); nunca con un infectado. */
 export const puedeDescargarPliego = (d) => !d || ["cuarentena", "no_analizable", "error"].includes(d.estado) || (d.disponible && d.paginas == null);
+/** Subir a mano un documento del pliego (POST /licitaciones/pliegos/{id}/subir): comprobaciones previas en el navegador; la de verdad (por el contenido, antivirus) la hace la API. */
+export const MAX_MB_PLIEGO = 50;
+export const EXTENSIONES_PLIEGO = [".pdf", ".docx", ".xlsx", ".odt", ".ods"];
+export const ACCEPT_PLIEGO = EXTENSIONES_PLIEGO.join(",");
+/** null si el fichero puede subirse; si no, el motivo en una frase. */
+export function validarPliegoSubida(f) {
+  if (!f || !f.name) return "No se ha podido leer el fichero";
+  const nombre = String(f.name).toLowerCase();
+  if (nombre.endsWith(".zip")) return "Es un ZIP: descomprímelo y sube los documentos de dentro por separado";
+  if (nombre.endsWith(".xls") || nombre.endsWith(".doc")) return "Es un formato de Office antiguo: guárdalo como .docx o .xlsx y vuelve a subirlo";
+  if (!EXTENSIONES_PLIEGO.some((e) => nombre.endsWith(e))) return "Formato no admitido. Sube un PDF, Word, Excel (.xlsx) u OpenDocument";
+  if (!f.size) return "El fichero está vacío";
+  if (f.size > MAX_MB_PLIEGO * 1_000_000) return `El fichero pesa más de ${MAX_MB_PLIEGO} MB`;
+  return null;
+}
+/** Lo que la persona lee cuando la subida falla; `detalle` es el mensaje de la API cuando es texto. */
+export function mensajeSubidaPliego(status, detalle = "") {
+  if ((status === 413 || status === 422) && detalle) return detalle;
+  if (status === 413) return `El fichero pesa más de ${MAX_MB_PLIEGO} MB`;
+  if (status === 401 || status === 403) return "Tu sesión ha caducado o no tienes acceso a los pliegos.";
+  return "No se ha podido subir el documento. Inténtalo de nuevo más tarde.";
+}
 /** Lo que se sabe de la lectura de un documento: «12 páginas», «3 bloques», o el aviso. */
 export function lecturaPliego(d) {
   if (!d?.disponible) return "";

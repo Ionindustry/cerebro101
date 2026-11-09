@@ -320,6 +320,18 @@ class TestFlujo(unittest.TestCase):
         with psycopg.connect(P.ajustes.database_url) as c:
             self.assertEqual(c.execute("SELECT count(*) FROM pliegos_paginas").fetchone()[0], 3)
 
+    def test_subido_a_mano_deja_el_texto_listo_y_el_analisis_lo_aprovecha_si_la_plataforma_rechaza(self):
+        async def analizar(d):
+            return P.Veredicto("limpio")
+        r = ejecutar(P.subir(ID, 1, PLIEGO, consulta=self.consulta, analizar=analizar, cfg=CFG))
+        self.assertEqual((r["estado"], r["unidad"], r["paginas"], r["nombre"]), ("limpio", "página", 3, "Pliego administrativo"))
+        self.assertIn("300.000 euros", ejecutar(P.leer(ID, 1, 2))["texto"])
+
+        async def rechaza(url, hosts, max_bytes, timeout):
+            raise P.ErrorPliego("La plataforma ofrece «text/html», que no es un documento de los admitidos")
+        igual = ejecutar(P.obtener(ID, 1, consulta=self.consulta, descargar=rechaza, analizar=analizar, cfg=CFG))
+        self.assertEqual((igual["id"], igual["paginas"]), (r["id"], 3))                          # el análisis automático usa lo subido en vez de fallar
+
     def test_un_documento_infectado_o_sin_analizar_no_tiene_texto_ni_se_busca(self):
         r = self.bajar(veredicto=P.Veredicto("infectado", "dañino"))
         self.assertEqual((r["estado"], r["paginas"]), ("infectado", None))

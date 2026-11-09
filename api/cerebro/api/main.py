@@ -484,6 +484,11 @@ class DescargaPliego(BaseModel):
     n: int
 
 
+class SubidaPliego(BaseModel):
+    n: int
+    base64: str                         # el fichero en base64 (la pasarela del panel solo lleva JSON)
+
+
 class RevisionRequisito(BaseModel):
     estado: str                         # confirmado | rechazado | borrador
 
@@ -499,7 +504,7 @@ async def pliegos_de_la_licitacion(motor_id: str, usuario: Usuario = Depends(usu
     _exige_licitaciones(usuario)
     try:
         reqs = aptitud.con_sugerencias((await pliegos_licitaciones.requisitos(motor_id))["requisitos"])      # + una orientación por requisito con el perfil de la empresa (no es el cumplimiento)
-        return {**await pliegos_licitaciones.documentos(motor_id), "requisitos": reqs, "aptitud": aptitud.resumen(reqs), "analisis": await _analisis_de(motor_id)}
+        return {**await pliegos_licitaciones.documentos(motor_id, con_enlace=True), "requisitos": reqs, "aptitud": aptitud.resumen(reqs), "analisis": await _analisis_de(motor_id)}
     except (pliegos_licitaciones.ErrorPliego, LookupError, MotorNoDisponible) as e:
         raise _error_pliegos(e) from None
 
@@ -541,6 +546,25 @@ async def descargar_pliego(motor_id: str, entrada: DescargaPliego, usuario: Usua
     except (pliegos_licitaciones.ErrorPliego, pliegos_licitaciones.SinPermisoDescarga, LookupError, MotorNoDisponible) as e:
         raise _error_pliegos(e) from None
     log.info("pliegos: %s baja el documento %s de %s (%s)", usuario.id, entrada.n, motor_id, r["estado"])
+    return r
+
+
+@app.post("/licitaciones/pliegos/{motor_id}/subir")
+async def subir_pliego(motor_id: str, entrada: SubidaPliego, usuario: Usuario = Depends(usuario_actual)):
+    """«Subir el pliego»: el documento nº n que una persona ha bajado de la plataforma con su navegador (la plataforma rechaza las descargas automáticas). Cuarentena, antivirus y lectura del texto, como los bajados."""
+    _exige_licitaciones(usuario)
+    cfg = pliegos_licitaciones.configuracion()
+    if len(entrada.base64) > cfg["max_mb"] * 1_400_000:
+        raise HTTPException(413, f"El documento pesa más de {cfg['max_mb']} MB")
+    try:
+        datos = base64.b64decode(entrada.base64, validate=True)
+    except ValueError:                                  # binascii.Error es un ValueError
+        raise HTTPException(422, "El documento no se ha recibido bien") from None
+    try:
+        r = await pliegos_licitaciones.subir(motor_id, entrada.n, datos, cfg=cfg)
+    except (pliegos_licitaciones.ErrorPliego, LookupError, MotorNoDisponible) as e:
+        raise _error_pliegos(e) from None
+    log.info("pliegos: %s sube a mano el documento %s de %s (%s)", usuario.id, entrada.n, motor_id, r["estado"])
     return r
 
 
