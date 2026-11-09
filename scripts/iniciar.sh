@@ -4,6 +4,7 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 [ -f .env ] || { echo "Falta .env: copia .env.example a .env y rellénalo."; exit 1; }
 command -v nvidia-smi >/dev/null && nvidia-smi --query-gpu=name,memory.total --format=csv || echo "Aviso: no se detecta tarjeta NVIDIA"
+./scripts/keycloak_conservar.sh          # que Keycloak no pierda los usuarios al recrearse (no hace nada si ya los conserva)
 docker compose up -d --build postgres redis ollama
 ./scripts/cargar_modelos.sh
 docker compose up -d --build
