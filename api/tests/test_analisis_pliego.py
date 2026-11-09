@@ -111,7 +111,7 @@ class TestEnBase(unittest.TestCase):
     def test_solo_las_licitaciones_en_estudio_y_una_sola_vez(self):
         self.assertEqual(self.lanzar()["motivo"], "no_esta_en_estudio")          # detectada
         self.estudiar()
-        r = self.lanzar(requisitos=[{"estado": "borrador", "tipo": "solvencia_economica", "resumen": "Volumen anual de negocios de 500.000 €", "valor": "", "cita": ""}])
+        r = self.lanzar(requisitos=[{"estado": "borrador", "tipo": "solvencia_economica", "resumen": "Certificado ISO 45001 de seguridad y salud en el trabajo", "valor": "", "cita": ""}])
         self.assertEqual(r["estado"], "hecho")
         self.assertEqual(self.llamadas, [1])                                      # solo el pliego, no el anuncio
         self.assertEqual([a for a, _ in self.peticiones], ["analista-pliegos", "viabilidad"])      # tras leer el pliego, Viabilidad vuelve a opinar
@@ -126,10 +126,10 @@ class TestEnBase(unittest.TestCase):
 
     def test_viabilidad_vuelve_a_valorar_con_los_requisitos_y_su_fallo_no_estropea_el_analisis(self):
         self.estudiar()
-        reqs = [{"estado": "borrador", "tipo": "solvencia_economica", "resumen": "Volumen anual de negocios de 500.000 €", "valor": "", "cita": ""}]
+        reqs = [{"estado": "borrador", "tipo": "solvencia_economica", "resumen": "Certificado ISO 45001 de seguridad y salud en el trabajo", "valor": "", "cita": ""}]
         self.lanzar(requisitos=reqs)
         peticion = next(p for a, p in self.peticiones if a == "viabilidad")
-        self.assertIn("Volumen anual de negocios de 500.000 €", peticion)
+        self.assertIn("Certificado ISO 45001 de seguridad y salud en el trabajo", peticion)
         self.assertIn("NO cumple", peticion)
         self.assertEqual(ejecutar(A.leer(self.lid))["detalle"]["viabilidad"], "no_ir")
         self.assertEqual(ejecutar(embudo.obtener(self.lid))["viabilidad"]["recomendacion"], "no_ir")
