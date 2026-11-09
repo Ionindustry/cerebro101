@@ -181,6 +181,8 @@ async def subir(usuario: str, nombre: str, datos: bytes, analizar=None, lector=N
         cur = await conn.execute("INSERT INTO documentos_subidos (usuario, nombre, formato, bytes, sha256) VALUES (%s,%s,%s,%s,%s) RETURNING id", [usuario, nombre, formato, len(datos), sha])
         did = str((await cur.fetchone())["id"])
     _guardar(did, "cuarentena", formato, bytes(datos))
+    if formato == "pdf" and b"/Encrypt" in datos:
+        datos = await _sin_proteccion(did, bytes(datos))
     v = await (analizar or pliegos.analizar_con_clamd)(bytes(datos))
     en_cuarentena = _carpeta("cuarentena") / f"{did}.{formato}"
     if v.estado in ("limpio", "con_macros"):
@@ -194,6 +196,31 @@ async def subir(usuario: str, nombre: str, datos: bytes, analizar=None, lector=N
     if v.estado in ("limpio", "con_macros"):
         return await extraer(did, bytes(datos), lector, cfg)
     return _publica(await _ficha(did))
+
+
+async def _sin_proteccion(did: str, datos: bytes) -> bytes:
+    """Un PDF con protección «de propietario» (se abre sin contraseña; p. ej. un formulario oficial como el DEUC) se reescribe SIN cifrado en un proceso aparte con límites, y esa copia es la que se analiza con el antivirus y se
+    guarda (conserva el texto y los campos del formulario). Si pide contraseña para abrirse, o falla, no se toca: el antivirus lo marcará como cifrado y no se ofrecerá."""
+    from .licitaciones import formularios as F
+    origen = _carpeta("cuarentena") / f"{did}.pdf"
+    destino = _carpeta("cuarentena") / f"{did}.sin-proteccion.pdf"
+    try:
+        r = await asyncio.to_thread(F.ejecutar_aislado, {"accion": "quitar_proteccion", "ruta": str(origen), "formato": "pdf", "destino": str(destino)})
+        if not r.get("cifrado") or not destino.exists():
+            return datos
+        nuevos = destino.read_bytes()
+    except F.ErrorFormulario as e:
+        log.info("subidas: no se le quita la protección al PDF %s: %s", did, e)
+        return datos
+    finally:
+        destino.unlink(missing_ok=True)
+    if not nuevos.startswith(b"%PDF-") or len(nuevos) > 4 * len(datos) + (1 << 20):
+        return datos
+    _guardar(did, "cuarentena", "pdf", nuevos)
+    async with await _conectar() as conn:
+        await conn.execute("UPDATE documentos_subidos SET bytes = %s WHERE id = %s", [len(nuevos), did])
+    log.info("subidas: PDF %s con protección de propietario reescrito sin cifrado (%d → %d bytes, %s campos de formulario)", did, len(datos), len(nuevos), r.get("campos"))
+    return nuevos
 
 
 async def _ficha(did: str) -> dict:

@@ -200,6 +200,23 @@ def _n(t):
 import unittest.mock  # noqa: E402
 
 
+class TestFormulariosEnCatalan(unittest.TestCase):
+    """El DEUC de la Generalitat (y otros formularios en catalán): los campos que se reconocen y, sobre todo, los que NO se confunden."""
+
+    def test_los_datos_de_la_empresa_y_del_representante(self):
+        casos = {"Nom operador econòmic": "empresa.razon_social", "Adreça postal": "empresa.domicilio", "Telèfon (pag 2)": "empresa.telefono", "Correu electrònic (pag 2)": "empresa.email",
+                 "Nom i cognom representant": "representante.nombre", "Codi postal": "empresa.cp", "Localitat": "empresa.localidad", "Càrrec": "representante.cargo",
+                 "Indiqueu el poder adjudicador o l’entitat adjudicadora": "licitacion.organo"}
+        for etiqueta, clave in casos.items():
+            self.assertEqual(F.emparejar(etiqueta, etiqueta, True), clave, etiqueta)
+
+    def test_no_se_confunden_fechas_ni_numeros_de_registro_ni_datos_ajenos(self):
+        for etiqueta in ("Data creació empresa", "Data (dia)", "Num inscripció o certificació empresa", "Adreça postal repres", "Telèfon repres", "Raons condemna1", "Nº DOUE S"):
+            self.assertIsNone(F.emparejar(etiqueta, etiqueta, True), etiqueta)
+        self.assertNotEqual(F.emparejar("Indiqueu el poder adjudicador", "Indiqueu el poder adjudicador", True), "representante.poder")     # «poder adjudicador» no es el poder del representante
+        self.assertEqual(F.emparejar("Poder notarial", "Poder notarial", True), "representante.poder")
+
+
 def pdf_con_formulario(ruta: Path, campos):
     from pypdf import PdfWriter
     from pypdf.generic import ArrayObject, DictionaryObject, FloatObject, NameObject, NumberObject, TextStringObject
