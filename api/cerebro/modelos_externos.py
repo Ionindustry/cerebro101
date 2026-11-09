@@ -26,7 +26,7 @@ from . import actividad
 from . import anonimizacion as anon
 from .ajustes import ajustes
 from .entidades import cargar_entidades
-from .llm import RespuestaInvalida
+from .llm import RespuestaInvalida, completar_tipo
 from .observabilidad import anotar, generacion
 
 log = logging.getLogger("cerebro.modelos_externos")
@@ -204,6 +204,7 @@ async def _llamar(proveedor: str, mensajes: list[dict], esquema: dict, transport
     cfg = configuracion()
     sistema = "\n\n".join(m["content"] for m in mensajes if m["role"] == "system")
     datos = await LLAMADAS[proveedor](cfg, modelo(proveedor), sistema, [m for m in mensajes if m["role"] != "system"], esquema, transporte)
+    datos = completar_tipo(datos, esquema)
     faltan = [k for k in esquema.get("required", []) if k not in datos]
     if faltan:
         raise RespuestaInvalida(f"Faltan campos en la respuesta: {faltan}")
