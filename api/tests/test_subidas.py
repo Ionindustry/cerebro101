@@ -339,6 +339,41 @@ class TestRutaYHerramienta(unittest.TestCase):
         self.c.post("/jarvis/mensaje", json={"texto": "hola"})
         self.assertEqual(grafo.ainvoke.await_args.args[0]["peticion"], "hola")
 
+    def test_cada_mensaje_se_enruta_de_nuevo_en_vez_de_quedarse_con_el_agente_del_primero(self):
+        grafo = mock.MagicMock()
+        grafo.ainvoke = mock.AsyncMock(return_value={"respuesta": "ok", "acciones": [], "agente": "x", "departamento": "operaciones"})
+        self.main.GRAFO["g"] = grafo
+        self.c.post("/jarvis/mensaje", json={"texto": "Guarda este documento como DEUC", "hilo": "h1"})
+        entrada = grafo.ainvoke.await_args.args[0]
+        self.assertIn("agente", entrada)
+        self.assertIsNone(entrada["agente"])
+        self.assertIsNone(entrada["departamento"])
+
+    def test_langgraph_conserva_el_agente_del_hilo_salvo_que_se_reinicie(self):
+        """La razón del arreglo: el estado del hilo persiste, y pasar None en la entrada lo borra."""
+        try:
+            from langgraph.checkpoint.memory import MemorySaver
+            from langgraph.graph import END, START, StateGraph
+            from cerebro.grafo.estado import Estado
+        except ImportError as e:      # pragma: no cover
+            self.skipTest(str(e))
+        vistos = []
+
+        def nodo(s):
+            vistos.append(s.get("agente"))
+            return {"agente": s.get("agente") or "infraestructura"}
+
+        g = StateGraph(Estado)
+        g.add_node("n", nodo)
+        g.add_edge(START, "n")
+        g.add_edge("n", END)
+        g = g.compile(checkpointer=MemorySaver())
+        cfg = {"configurable": {"thread_id": "t"}}
+        g.invoke({"peticion": "uno"}, cfg)
+        g.invoke({"peticion": "dos"}, cfg)
+        g.invoke({"peticion": "tres", "agente": None}, cfg)
+        self.assertEqual(vistos, [None, "infraestructura", None])
+
 
 if __name__ == "__main__":
     unittest.main()

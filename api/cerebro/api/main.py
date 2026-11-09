@@ -215,8 +215,10 @@ async def mensaje(m: Mensaje, usuario: Usuario = Depends(usuario_actual)):
         except subidas.ErrorSubida as e:
             raise HTTPException(422, str(e)) from None
     config = {"configurable": {"thread_id": hilo}, "callbacks": callbacks(), "metadata": metadatos(hilo, usuario.id)}
-    estado = await GRAFO["g"].ainvoke({"peticion": peticion, "usuario": usuario.id, "origen": m.origen,
-                                       "sensibilidad": m.sensibilidad}, config)
+    # El estado del hilo se conserva entre mensajes: sin reiniciar «agente» y «departamento», el primer agente que atendió la conversación se quedaba con todo lo que se pidiera después
+    # (el DEUC acababa en Infraestructura aunque el sistema lo enruta al Administrativo). Cada mensaje se enruta de nuevo.
+    estado = await GRAFO["g"].ainvoke({"peticion": peticion, "usuario": usuario.id, "origen": m.origen, "sensibilidad": m.sensibilidad,
+                                       "agente": None, "departamento": None}, config)
     return _salida(estado, hilo)
 
 
