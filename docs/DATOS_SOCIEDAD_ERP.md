@@ -80,6 +80,10 @@ Rellena la columna «Tu valor» (en papel, en un Excel, donde quieras) y luego c
    ```
 3. Cuando no falte ninguno, el siguiente paso es **subir el DEUC** a un chat de Jarvis (agente Administrativo): *«Guarda este documento como DEUC base de 101.cat»*. El DEUC base lleva ya estos datos rellenados y en cada concurso solo se completan los campos propios del concurso.
 
+   **Qué DEUC vale:** un **Word (.docx)** o un **PDF con campos de formulario** (en el que puedes hacer clic en un hueco y escribir). Uno «impreso a PDF» (con *Microsoft Print to PDF*, por ejemplo) es solo una imagen: no tiene campos ni texto y **no sirve**.
+   Los formularios oficiales suelen llevar una protección «de propietario» (se abren sin contraseña pero están cifrados contra edición, como el DEUC de la Generalitat): el sistema **la quita al subirlo**, en un proceso aparte y antes del antivirus,
+   y conserva los campos; uno que pide contraseña para abrirse no se acepta. El sistema reconoce los datos de la empresa y del representante en formularios **en castellano y en catalán**; lo que no está claro (fechas, números de registro, datos de otros) lo deja para quien firma.
+
 ## 4. Si no los ve el sistema
 
 - **«El departamento “licitaciones” no tiene permitido consultar…»**: al usuario técnico de ERPNext le faltan permisos. Se arregla con

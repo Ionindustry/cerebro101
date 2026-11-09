@@ -200,6 +200,95 @@ class TestFlujo(unittest.TestCase):
             ejecutar(S.info(r["id"]))
 
 
+LECTOR = lambda *a, **k: {"unidad": "página", "paginas": [{"n": 1, "texto": "texto"}], "avisos": []}      # noqa: E731 — el lector de verdad es otro proceso; aquí no se prueba
+
+
+def pdf_formulario(propietario: str | None = None, usuario: str = "") -> bytes:
+    """Un PDF con un formulario de dos campos; con `propietario` queda cifrado: se abre sin contraseña (clave de usuario vacía) pero con la de propietario puesta, como los formularios oficiales."""
+    from pypdf import PdfWriter
+    from pypdf.generic import ArrayObject, DictionaryObject, FloatObject, NameObject, NumberObject, TextStringObject
+    w = PdfWriter()
+    w.add_blank_page(612, 792)
+    refs = []
+    for i, nombre in enumerate(("Razon social", "NIF")):
+        d = DictionaryObject({NameObject("/Type"): NameObject("/Annot"), NameObject("/Subtype"): NameObject("/Widget"), NameObject("/FT"): NameObject("/Tx"),
+                              NameObject("/T"): TextStringObject(nombre), NameObject("/F"): NumberObject(4),
+                              NameObject("/Rect"): ArrayObject([FloatObject(50), FloatObject(700 - i * 40), FloatObject(300), FloatObject(720 - i * 40)]),
+                              NameObject("/DA"): TextStringObject("/Helv 10 Tf 0 g")})
+        ref = w._add_object(d)
+        refs.append(ref)
+        w.pages[0].setdefault(NameObject("/Annots"), ArrayObject()).append(ref)
+    w._root_object[NameObject("/AcroForm")] = DictionaryObject({NameObject("/Fields"): ArrayObject(refs), NameObject("/DA"): TextStringObject("/Helv 10 Tf 0 g")})
+    if propietario:
+        w.encrypt(user_password=usuario, owner_password=propietario, algorithm="AES-128")
+    b = io.BytesIO()
+    w.write(b)
+    return b.getvalue()
+
+
+@unittest.skipUnless(URL and hasattr(psycopg, "AsyncConnection"), "sin CEREBRO_TEST_PG")
+class TestPdfConProteccionDePropietario(unittest.TestCase):
+    """Un formulario oficial cifrado «de propietario» (se abre sin contraseña) se reescribe sin cifrado ANTES del antivirus, conservando los campos; uno que pide contraseña no se toca."""
+
+    setUp = TestFlujo.setUp
+    tearDown = TestFlujo.tearDown
+
+    def vistos(self):
+        vistos = []
+
+        async def analizar(d):
+            vistos.append(d)
+            return pliegos.Veredicto("limpio")
+        return vistos, analizar
+
+    def test_el_formulario_cifrado_de_propietario_se_analiza_y_se_guarda_sin_cifrado_y_con_sus_campos(self):
+        from pypdf import PdfReader
+        original = pdf_formulario(propietario="secreto")
+        self.assertIn(b"/Encrypt", original)
+        vistos, analizar = self.vistos()
+        r = ejecutar(S.subir("marta", "deuc.pdf", original, analizar=analizar, lector=LECTOR))
+        self.assertEqual(len(vistos), 1)
+        self.assertNotIn(b"/Encrypt", vistos[0])                                                      # el antivirus recibe la copia SIN cifrado
+        lector = PdfReader(io.BytesIO(vistos[0]))
+        self.assertFalse(lector.is_encrypted)
+        self.assertEqual(set((lector.get_fields() or {}).keys()), {"Razon social", "NIF"})            # los campos del formulario se conservan
+        self.assertEqual(r["estado"], "limpio")
+        guardado = next((Path(self.carpeta.name) / "subidas" / "limpio").glob("*.pdf"))
+        self.assertEqual(guardado.read_bytes(), vistos[0])                                            # y es esa copia la que se guarda
+        with psycopg.connect(S.ajustes.database_url) as c:
+            self.assertEqual(c.execute("SELECT bytes FROM documentos_subidos").fetchone()[0], len(vistos[0]))
+
+    def test_si_pide_contrasena_para_abrirse_no_se_toca(self):
+        original = pdf_formulario(propietario="secreto", usuario="clave-de-apertura")
+        vistos, analizar = self.vistos()
+        ejecutar(S.subir("marta", "cerrado.pdf", original, analizar=analizar, lector=LECTOR))
+        self.assertEqual(vistos[0], original)                                                         # tal cual: el antivirus lo marcará como cifrado
+
+    def test_un_pdf_sin_cifrar_pasa_igual_y_un_pdf_roto_no_rompe_la_subida(self):
+        normal = pdf_formulario()
+        vistos, analizar = self.vistos()
+        ejecutar(S.subir("marta", "normal.pdf", normal, analizar=analizar, lector=LECTOR))
+        self.assertEqual(vistos[0], normal)
+        roto = b"%PDF-1.7\n1 0 obj<</Encrypt 2 0 R>>endobj\n" + b"\x00" * 50
+        ejecutar(S.subir("marta", "roto.pdf", roto, analizar=analizar, lector=LECTOR))
+        self.assertEqual(vistos[1], roto)                                                             # no se pudo reescribir: se queda como estaba y el antivirus decide
+
+    def test_las_funciones_del_proceso_aislado(self):
+        from cerebro.licitaciones import formularios as F
+        with tempfile.TemporaryDirectory() as t:
+            ruta, dest = Path(t) / "a.pdf", Path(t) / "b.pdf"
+            ruta.write_bytes(pdf_formulario(propietario="x"))
+            self.assertEqual(F.quitar_proteccion_pdf(ruta, dest), {"cifrado": True, "campos": 2})
+            self.assertTrue(dest.exists())
+            ruta.write_bytes(pdf_formulario())
+            dest.unlink()
+            self.assertEqual(F.quitar_proteccion_pdf(ruta, dest), {"cifrado": False})
+            self.assertFalse(dest.exists())                                                           # sin cifrado no se escribe nada
+            ruta.write_bytes(pdf_formulario(propietario="x", usuario="y"))
+            with self.assertRaisesRegex(F.ErrorFormulario, "contraseña"):
+                F.quitar_proteccion_pdf(ruta, dest)
+
+
 class TestRutaYHerramienta(unittest.TestCase):
     def setUp(self):
         try:

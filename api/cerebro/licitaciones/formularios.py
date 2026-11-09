@@ -14,6 +14,7 @@ Se ejecuta en un proceso aparte con límites (ver `ejecutar_aislado`)."""
 from __future__ import annotations
 
 import json
+import os
 import re
 import subprocess
 import sys
@@ -104,7 +105,17 @@ REGLAS = (
     (r"(codigos? cpv|cpv)\s*[:,]?$", "licitacion.cpv"),
     (r"(procedimiento de contratacion|tipo de procedimiento)\s*[:,]?$", "licitacion.procedimiento"),
     (r"(valor estimado( del contrato)?|presupuesto base de licitacion)\s*[:,]?$", "licitacion.importe"),
-    (r"(poder|escritura|notario|protocolo)\b.*$", "representante.poder"),
+    # Formularios en catalán (p. ej. el DEUC de la Generalitat): el nombre del campo, sin tildes y sin el «(pag 2)» final
+    (r"(nom (de l.?)?operador economic|nom de l.?empresa|ra(o|ó)n? social|denominaci(o|ó)( social)?)\s*[:,]?$", "empresa.razon_social"),
+    (r"nom i cognoms? (del |de la )?representant\s*[:,]?$", "representante.nombre"),
+    (r"(adre(c|ç)a postal|adre(c|ç)a|domicili)( social| fiscal)?\s*[:,]?$", "empresa.domicilio"),
+    (r"(codi postal)\s*[:,]?$", "empresa.cp"),
+    (r"(localitat|poblacio|municipi|ciutat)\s*[:,]?$", "empresa.localidad"),
+    (r"(telefon|tel\.?)\s*[:,]?$", "empresa.telefono"),
+    (r"(correu( electronic)?|e-?mail)\s*[:,]?$", "empresa.email"),
+    (r"(carrec|en qualitat de|amb el carrec de)\s*[:,]?$", "representante.cargo"),
+    (r"(indiqueu|indiqui).{0,40}(poder adjudicador|entitat adjudicadora)", "licitacion.organo"),
+    (r"(poder(?! adjudicador)|escritura|notario|protocolo)\b.*$", "representante.poder"),
     (r"(registro mercantil|inscrita en|inscripcion)\b.*$", "empresa.registro"),
     (r"(numero de expediente|n[º°o.]? de expediente|expediente( n[º°o.])?|referencia)\s*[:,]?$", "licitacion.expediente"),
     (r"(objeto del contrato|contrato de|licitacion denominada|denominad[ao]|para la contratacion de|objeto)\s*[:,]?$", "licitacion.objeto"),
@@ -115,10 +126,14 @@ _REP = re.compile(r"en representacion|en nombre de|actuando en nombre")
 def emparejar(etiqueta: str, antes: str = "", en_tabla: bool = False, despues: str = "") -> str | None:
     """La clave del dato que corresponde a un hueco, mirando lo que hay justo antes (`etiqueta`) y todo el texto anterior (`antes`). None si no está claro: lo completa una persona
     (o un agente que elige la clave, nunca el valor)."""
-    e = _norm(etiqueta)[-90:]
+    e = re.sub(r"\s*\((pag|pagina)\.? ?\d+\)|,\s*web\s*$", "", _norm(etiqueta)[-90:]).strip()          # «Telèfon (pag 2)» → «telefon»
     todo = _norm(antes)
     if RE_FECHA.search(antes + " __"):
         return None
+    if re.match(r"(data|fecha|date)\b", e):
+        return None                                             # una fecha la pone quien firma, y «Data creació empresa» no es la razón social
+    if re.search(r"\b(inscripcio|certificacio)\b", e):
+        return None                                             # «Num inscripció o certificació empresa» es un número de registro oficial, no la razón social
     if re.search(r"(^|\s)(en|lugar)\s*[:,]?$", e) and len(todo) < 12:
         return "empresa.localidad"                                   # «En ______, a … de … de 2026»
     for patron, clave in REGLAS:
@@ -480,6 +495,29 @@ def _campos_pdf(ruta: Path):
         raise ErrorFormulario(f"El PDF no se puede leer ({type(e).__name__})") from None
 
 
+def quitar_proteccion_pdf(ruta: Path, destino: Path) -> dict:
+    """Muchos formularios oficiales (el DEUC de la Generalitat, por ejemplo) llevan una protección «de propietario»: se abren SIN contraseña pero están cifrados para impedir copiar o editar. Con ella, el antivirus los marca
+    como cifrados y no se pueden rellenar. Si el PDF se abre con la contraseña vacía, se escribe una copia SIN cifrado (conserva los campos del formulario y el texto) y es esa copia la que se analiza y se guarda.
+    Un PDF que pide contraseña para abrirse NO se toca. Devuelve {"cifrado": False} si no estaba cifrado (y no se escribe nada) o {"cifrado": True, "campos": n}."""
+    from pypdf import PdfReader, PdfWriter
+    try:
+        lector = PdfReader(str(ruta))
+        if not lector.is_encrypted:
+            return {"cifrado": False}
+        if not lector.decrypt(""):
+            raise ErrorFormulario("El PDF pide una contraseña para abrirse: no se puede usar")
+        campos = len(lector.get_fields() or {})
+        escritor = PdfWriter(clone_from=lector)
+        with open(destino, "wb") as f:
+            escritor.write(f)
+        os.chmod(destino, 0o600)
+        return {"cifrado": True, "campos": campos}
+    except ErrorFormulario:
+        raise
+    except Exception as e:      # noqa: BLE001 — un PDF hostil o roto puede fallar de muchas maneras
+        raise ErrorFormulario(f"El PDF no se puede leer ({type(e).__name__})") from None
+
+
 def detectar_pdf(ruta: Path) -> dict:
     _, campos = _campos_pdf(ruta)
     out, avisos = [], []
@@ -778,6 +816,8 @@ def main() -> int:
             res = rellenar(ruta, formato, Path(orden["destino"]), {str(k): v for k, v in (orden.get("valores") or {}).items()})
         elif orden["accion"] == "extraer_zip":
             res = extraer_zip(ruta, Path(orden["destino"]))
+        elif orden["accion"] == "quitar_proteccion" and formato == "pdf":
+            res = quitar_proteccion_pdf(ruta, Path(orden["destino"]))
         else:
             raise ErrorFormulario("acción desconocida")
     except ErrorFormulario as e:
