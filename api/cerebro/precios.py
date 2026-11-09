@@ -21,7 +21,9 @@ CENT = Decimal("0.01")
 MARGEN_MAX = Decimal("0.95")
 DEFECTO = {"margen": {"base": "venta", "por_defecto": 0.50, "minimo": 0.10, "familias": {}}, "redondeo": {"modo": "centimo", "terminacion": 0.90},
            "canales": {"fabricante": {"moneda": "USD", "logistica_pct": None}, "distribuidor": {"moneda": "EUR", "logistica_pct": 0}},
-           "cambio_a_eur": {"USD": None, "GBP": None}, "cambio_online": {"activo": True, "max_dias": 5, "colchon_pct": 0}, "provisional": []}
+           "cambio_a_eur": {"USD": None, "GBP": None}, "cambio_online": {"activo": True, "max_dias": 5, "colchon_pct": 0}, "provisional": [],
+           "estrategias": {"competitivo": {"base": "minimo", "ajuste": -0.03}, "alineado": {"base": "mediana", "ajuste": 0}, "premium": {"base": "mediana", "ajuste": 0.05}},
+           "mercado": {"max_dias": 90, "iva_pct": 21}}
 
 
 class ErrorPrecios(ValueError):
@@ -84,8 +86,20 @@ def configuracion(cfg: dict | None = None) -> dict:
     max_dias = int(co["max_dias"]) if co.get("max_dias") is not None else 5
     if not 1 <= max_dias <= 60:
         raise ErrorPrecios("cambio_online.max_dias debe estar entre 1 y 60")
+    est = {}
+    for nombre, e in (cfg.get("estrategias") if cfg.get("estrategias") is not None else DEFECTO["estrategias"]).items():
+        e = e or {}
+        if e.get("base") not in ("minimo", "mediana", "maximo"):
+            raise ErrorPrecios(f"estrategias.{nombre}.base debe ser minimo, mediana o maximo (del precio de la competencia)")
+        ajuste = _d(e.get("ajuste", 0), f"estrategias.{nombre}.ajuste")
+        if ajuste is None or not Decimal("-0.5") <= ajuste <= Decimal("1"):
+            raise ErrorPrecios(f"estrategias.{nombre}.ajuste debe estar entre -0,5 y 1 (-0.03 = un 3 % por debajo)")
+        est[str(nombre)] = {"base": e["base"], "ajuste": ajuste}
+    mer = {**DEFECTO["mercado"], **(cfg.get("mercado") or {})}
+    mer = {"max_dias": max(1, min(int(mer["max_dias"]), 730)), "iva_pct": _d(mer.get("iva_pct"), "mercado.iva_pct") or Decimal(21)}
     return {"margen": m, "redondeo": r, "canales": canales, "cambio_a_eur": cambio, "provisional": list(cfg.get("provisional") or []),
-            "cambio_online": {"activo": bool(co.get("activo", True)), "max_dias": max_dias, "colchon_pct": colchon}, "cambio_info": {}}
+            "cambio_online": {"activo": bool(co.get("activo", True)), "max_dias": max_dias, "colchon_pct": colchon}, "cambio_info": {},
+            "estrategias": est, "mercado": mer}
 
 
 def con_cambios_en_linea(cfg: dict, ultimos: dict, hoy) -> dict:
@@ -206,3 +220,21 @@ def mejor_coste(ofertas: list[dict], cfg: dict, solo_con_stock: bool = True) -> 
         con = [o for o in calculables if o.get("stock") is not None and Decimal(str(o["stock"])) > 0]
         calculables = con or calculables
     return min(calculables, key=lambda o: o["coste_eur"])
+
+
+def estrategias_de_precio(coste_eur: Decimal, mercado: dict | None, cfg: dict) -> dict[str, dict]:
+    """Los precios que saldrían con cada estrategia de precio frente a la competencia (sin IVA), por encima siempre del margen mínimo: {nombre: {precio, margen, limitada}}. `mercado` = {minimo, mediana, maximo}
+    de los precios de la competencia (ver cerebro/mercado.py); sin él no hay estrategias. Solo código: ninguna cifra la pone un modelo."""
+    if not mercado:
+        return {}
+    suelo = redondear(precio_venta(coste_eur, cfg["margen"]["minimo"]), cfg)
+    out = {}
+    for nombre, e in cfg["estrategias"].items():
+        base = mercado.get(e["base"])
+        if base is None:
+            continue
+        p = Decimal(str(base)) * (1 + e["ajuste"])
+        limitada = p < suelo
+        p = redondear(max(p, suelo), cfg)
+        out[nombre] = {"precio": str(p), "margen": str(((p - coste_eur) / p).quantize(Decimal("0.0001"))), "limitada": limitada}
+    return out

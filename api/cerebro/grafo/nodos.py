@@ -5,6 +5,7 @@ import json
 import logging
 import os
 import re
+import time
 
 from langgraph.types import interrupt
 
@@ -183,20 +184,37 @@ async def _ejecutar_agente(estado: Estado, ficha) -> Estado:
     mensajes = [{"role": "system", "content": sistema_agente(ficha, disponibles)},
                 {"role": "user", "content": estado["peticion"]}]
     pasos: list[dict] = []
-    for _ in range(MAX_PASOS_AGENTE.get(ficha.id, MAX_PASOS)):
+    t0 = time.perf_counter()
+    t_modelo = t_herramientas = 0.0
+    maximo = MAX_PASOS_AGENTE.get(ficha.id, MAX_PASOS)
+
+    def resumen(motivo: str) -> None:
+        # Una sola línea por tarea: sirve para saber dónde se va el tiempo (modelo o herramientas) y cuántas llamadas hace cada agente
+        log.info("agente %s: %s en %d pasos · %.0f s en total (modelo %.0f s, herramientas %.0f s)", ficha.id, motivo, len(pasos) + (1 if motivo == "respuesta" else 0),
+                 time.perf_counter() - t0, t_modelo, t_herramientas)
+
+    for n in range(1, maximo + 1):
         await actividad.marcar(ficha.id, "Pensando")
+        t1 = time.perf_counter()
         d = await _paso_del_agente(ficha, estado, mensajes)
+        dt = time.perf_counter() - t1
+        t_modelo += dt
+        log.info("agente %s: paso %d/%d · modelo %.1f s (contexto ≈ %d caracteres) → %s", ficha.id, n, maximo, dt, sum(len(m["content"]) for m in mensajes),
+                 "respuesta" if d["tipo"] == "respuesta" else f"{d.get('herramienta', '?')}.{d.get('operacion', '?')}")
         if d["tipo"] == "respuesta":
             acciones = [{**a, "argumentos": a.get("argumentos", {}), "estado": "propuesta"}
                         for a in d.get("acciones", [])]
+            resumen("respuesta")
             return {"respuesta": d.get("respuesta", ""), "acciones": acciones, "pasos": pasos}
         args = inyectar(ficha, estado, d.get("herramienta", ""), d.get("argumentos") or {})
         await actividad.marcar(ficha.id, f"Usando {d.get('herramienta', '?')} · {d.get('operacion', '?')}")
+        t2 = time.perf_counter()
         try:
             resultado = await H.usar(ficha, d.get("herramienta", ""), d.get("operacion", ""),
                                      sensibilidad=estado.get("sensibilidad"), usuario=estado.get("usuario"), **args)
         except Exception as e:  # el error vuelve al modelo para que corrija o cambie de plan
             resultado = {"error": str(e)}
+        t_herramientas += time.perf_counter() - t2
         if isinstance(resultado, dict) and "error" in resultado:       # sin esto no se sabe por qué un agente da vueltas hasta agotar los pasos
             log.warning("agente %s: %s.%s devolvió un error: %s", ficha.id, d.get("herramienta"), d.get("operacion"), str(resultado["error"])[:200])
         clave = f"{d.get('herramienta', '?')}.{d.get('operacion', '?')}"
@@ -206,6 +224,7 @@ async def _ejecutar_agente(estado: Estado, ficha) -> Estado:
         mensajes += [{"role": "assistant", "content": json.dumps(d, ensure_ascii=False)},
                      {"role": "user", "content": "Resultado: " + json.dumps(resultado, ensure_ascii=False,
                                                                             default=str)[:limite_resultado()]}]
+    resumen("sin terminar")
     return {"respuesta": "No he podido terminar la tarea en el número máximo de pasos.", "pasos": pasos,
             "acciones": []}
 

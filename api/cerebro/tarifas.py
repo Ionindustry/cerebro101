@@ -15,9 +15,13 @@ import csv
 import io
 import json
 import re
+import subprocess
+import sys
+import tempfile
 import unicodedata
 import zipfile
-from dataclasses import dataclass, field
+from dataclasses import asdict, dataclass, field, fields
+from pathlib import Path
 from decimal import Decimal, InvalidOperation
 
 MAX_FILAS = 60_000
@@ -368,3 +372,80 @@ def _avisos_generales(t: Tarifa) -> None:
     dup = sum(1 for v in refs.values() if v > 1)
     if dup:
         t.avisos.append(f"{dup} referencias aparecen más de una vez (en hojas distintas o repetidas): revisa cuál vale")
+
+
+# ---- En un proceso aparte ----
+# El Excel o el CSV es un documento de terceros: se lee en un proceso con límites de memoria y de tiempo y sin secretos en el entorno, y los productos vuelven como JSON.
+
+def _a_json(t: Tarifa) -> dict:
+    def v(x):
+        return str(x) if isinstance(x, Decimal) else x
+    return {"formato": t.formato, "hojas": t.hojas, "avisos": t.avisos, "productos": [{k: v(x) for k, x in asdict(p).items()} for p in t.productos]}
+
+
+def _de_json(d: dict) -> Tarifa:
+    t = Tarifa(formato=str(d.get("formato", "")), hojas=list(d.get("hojas") or []), avisos=list(d.get("avisos") or []))
+    nombres = {f.name for f in fields(Producto)}
+    for p in d.get("productos") or []:
+        p = {k: x for k, x in p.items() if k in nombres}
+        for k in ("coste", "pvp_recomendado", "stock"):
+            if p.get(k) is not None:
+                p[k] = Decimal(str(p[k]))
+        t.productos.append(Producto(**p))
+    return t
+
+
+def leer_aislado(ruta: Path, nombre: str = "", moneda: str = "", timeout: float = 120) -> Tarifa:
+    """Lo mismo que `leer`, pero el fichero se abre en un proceso aparte con límites (el Excel es de terceros). Un fallo del lector es un error claro, no un cierre del servicio."""
+    from .licitaciones.pliegos import _entorno_hijo
+    orden = json.dumps({"ruta": str(ruta), "nombre": nombre, "moneda": moneda}).encode("utf-8")
+    with tempfile.TemporaryDirectory(prefix="tarifa-") as tmp:
+        try:
+            r = subprocess.run([sys.executable, "-m", "cerebro.tarifas"], input=orden, cwd=tmp, env=_entorno_hijo(), capture_output=True, timeout=timeout, check=False)
+        except subprocess.TimeoutExpired:
+            raise ErrorTarifa("El fichero tarda demasiado en leerse") from None
+    try:
+        res = json.loads(r.stdout[:200_000_000].decode("utf-8", "replace") or "{}")
+    except ValueError:
+        res = {}
+    if r.returncode != 0 or "error" in res:
+        if res.get("error"):
+            raise ErrorTarifa(res["error"])
+        señal = f"señal {-r.returncode}" if r.returncode < 0 else f"código {r.returncode}"
+        raise ErrorTarifa(f"No se ha podido leer el fichero (el lector terminó con {señal}" + (": se quedó sin memoria o lo cortó el sistema" if r.returncode in (-9, -6) else "") + ")")
+    return _de_json(res)
+
+
+def _poner_limites() -> None:
+    try:
+        import resource
+    except ImportError:      # pragma: no cover
+        return
+    for limite, valor in ((resource.RLIMIT_AS, 2 << 30), (resource.RLIMIT_CPU, 110), (resource.RLIMIT_FSIZE, 32 << 20), (resource.RLIMIT_NOFILE, 64), (resource.RLIMIT_CORE, 0)):
+        try:
+            resource.setrlimit(limite, (valor, valor))
+        except (ValueError, OSError):
+            pass
+
+
+def main() -> int:
+    _poner_limites()
+    try:
+        orden = json.loads(sys.stdin.buffer.read(100_000).decode("utf-8"))
+        datos = Path(orden["ruta"]).read_bytes()
+        res = _a_json(leer(datos, str(orden.get("nombre") or ""), str(orden.get("moneda") or "")))
+    except ErrorTarifa as e:
+        print(json.dumps({"error": str(e)}, ensure_ascii=False))
+        return 1
+    except MemoryError:
+        print(json.dumps({"error": "El fichero necesita demasiada memoria para leerse"}))
+        return 1
+    except (OSError, ValueError, KeyError) as e:
+        print(json.dumps({"error": f"No se ha podido leer el fichero ({type(e).__name__})"}))
+        return 1
+    sys.stdout.write(json.dumps(res, ensure_ascii=False))
+    return 0
+
+
+if __name__ == "__main__":      # pragma: no cover
+    sys.exit(main())

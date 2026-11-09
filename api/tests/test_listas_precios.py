@@ -314,9 +314,10 @@ class TestHerramienta(unittest.TestCase):
 
     def test_operaciones_y_quien_la_tiene(self):
         h = self.base._REGISTRO["listas_precios"]
-        self.assertEqual(set(h.operaciones), {"tabla", "proponer", "estado", "aplicar"})
-        self.assertEqual(h.externas, frozenset({"aplicar"}))
-        self.assertEqual(set(h.vistas), {"aplicar"})
+        self.assertEqual(set(h.operaciones), {"tabla", "proponer", "proponer_tarifa", "estado", "aplicar", "proponer_venta", "ajustar_venta", "estado_venta", "aplicar_venta",
+                                                    "elegir_estrategia", "anotar_mercado", "listar_mercado", "retirar_mercado"})
+        self.assertEqual(h.externas, frozenset({"aplicar", "aplicar_venta"}))
+        self.assertEqual(set(h.vistas), {"aplicar", "aplicar_venta"})
         self.assertEqual({a for a, f in self.registro.fichas.items() if "listas_precios" in f.herramientas}, {"catalogo-proveedores"})
 
     def test_aplicar_exige_la_aprobacion_de_una_persona(self):
@@ -336,5 +337,249 @@ class TestHerramienta(unittest.TestCase):
         self.assertEqual(args, {"importacion": 3, "departamento": ficha.departamento})
 
 
+# ---- Precios de VENTA ----
+
+def _of(proveedor, canal, coste, moneda, stock=None, familia="Camaras", marca="Milesight", ref="MS-C1"):
+    return {"proveedor": proveedor, "lista": f"Compra {proveedor}", "canal": canal, "coste": coste, "moneda": moneda, "stock": stock, "ref": ref, "desc": "Camara", "familia": familia, "marca": marca}
+
+
+class TestCalcularVenta(unittest.TestCase):
+    def cfg(self, **kw):
+        return TestTarifasEnLaImportacion.cfg(self)
+
+    def test_elige_el_mejor_coste_ya_en_euros_y_calcula_la_venta(self):
+        from cerebro import precios_venta as V
+        # fabricante: 100 USD × 0,9 × 1,15 = 103,50 €; distribuidor: 110 €  → gana el fabricante; venta = 103,50 ÷ 0,5 = 207,00
+        of = {"MILESI-MS-C1": {"Compra Milesight": _of("Milesight", "fabricante", "100", "USD"), "Compra Asecur": _of("Asecur", "distribuidor", "110", "EUR", stock="5")}}
+        lineas, avisos = V.calcular_lineas(of, self.cfg(), {})
+        l = lineas[0]
+        self.assertEqual((l["proveedor"], l["coste_eur"], l["venta"], l["cambio"], l["actual"], l["ofertas"]), ("Asecur", "110.00", "220.00", "nuevo", None, 2))   # con stock manda el distribuidor
+
+    def test_sin_stock_en_ninguno_gana_el_mas_barato(self):
+        from cerebro import precios_venta as V
+        of = {"X": {"a": _of("Milesight", "fabricante", "100", "USD"), "b": _of("Asecur", "distribuidor", "110", "EUR")}}
+        l = V.calcular_lineas(of, self.cfg(), {})[0][0]
+        self.assertEqual((l["proveedor"], l["venta"]), ("Milesight", "207.00"))
+
+    def test_cambio_respecto_al_precio_que_ya_hay_y_ajuste_a_mano(self):
+        from cerebro import precios_venta as V
+        of = {"A": {"a": _of("Milesight", "fabricante", "100", "USD", ref="A")}, "B": {"a": _of("Milesight", "fabricante", "100", "USD", ref="B")}, "C": {"a": _of("Milesight", "fabricante", "100", "USD", ref="C")}}
+        lineas, _ = V.calcular_lineas(of, self.cfg(), {"A": Decimal("207.00"), "B": Decimal("180.00"), "C": Decimal("250.00")}, {"C": Decimal("105.00")}, {"B"})
+        por = {l["codigo"]: l for l in lineas}
+        self.assertEqual((por["A"]["cambio"], por["B"]["cambio"], por["B"]["variacion_pct"], por["B"]["excluida"]), ("igual", "sube", "15.0", True))
+        self.assertEqual((por["C"]["venta"], por["C"]["ajustado"], por["C"]["cambio"]), ("105.00", True, "baja"))
+        self.assertTrue(any("por debajo del mínimo" in a for a in por["C"]["avisos"]))                  # 105 sobre un coste de 103,50: margen 1,4 %
+        r = V.resumir(lineas)
+        self.assertEqual((r["articulos"], r["incluidos"], r["excluidos"], r["igual"], r["baja"], r["ajustados"]), (3, 2, 1, 1, 1, 1))
+
+    def test_sin_tipo_de_cambio_el_articulo_no_entra(self):
+        from cerebro import precios, precios_venta as V
+        cfg = precios.configuracion({"cambio_a_eur": {"USD": None}})
+        lineas, avisos = V.calcular_lineas({"A": {"a": _of("Milesight", "fabricante", "100", "USD")}}, cfg, {})
+        self.assertEqual(lineas, [])
+        self.assertTrue(any("sin coste calculable" in a for a in avisos))
+
+
+@unittest.skipUnless(URL and hasattr(psycopg, "AsyncConnection"), "sin CEREBRO_TEST_PG")
+class TestFlujoVenta(unittest.TestCase):
+    def setUp(self):
+        from cerebro import precios_venta
+        self.V = precios_venta
+        self.schema = f"t_venta_{time.time_ns()}"
+        with psycopg.connect(URL, autocommit=True) as c:
+            c.execute(f"CREATE SCHEMA {self.schema}")
+            c.execute(f"SET search_path = {self.schema}")
+            t = ESQUEMA.read_text(encoding="utf-8")
+            c.execute(t[t.index("-- Importaciones de listas de precios de proveedores"):t.index("-- DEUC base de cada sociedad")])
+        sep = "&" if "?" in URL else "?"
+        self.erp = ErpFalso()
+        self.carpeta = tempfile.TemporaryDirectory()
+        self.p = [mock.patch.object(L, "ajustes", SimpleNamespace(database_url=f"{URL}{sep}options=-csearch_path%3D{self.schema}", dir_config=self.carpeta.name)),
+                  mock.patch.object(L, "erpnext", self.erp),
+                  mock.patch.object(L.cambio, "configuracion_de_precios", mock.AsyncMock(return_value=TestTarifasEnLaImportacion.cfg(self)))]
+        for p in self.p:
+            p.start()
+        from psycopg.types.json import Jsonb
+        lin = [{"codigo": "MILESI-MS-C1", "ref": "MS-C1", "desc": "Camara", "precio": "100.0000", "familia": "Camaras", "marca": "Milesight", "stock": None},
+               {"codigo": "MILESI-MS-C2", "ref": "MS-C2", "desc": "Camara 2", "precio": "250.0000", "familia": "Camaras", "marca": "Milesight", "stock": None}]
+        with psycopg.connect(f"{URL}{sep}options=-csearch_path%3D{self.schema}", autocommit=True) as c:
+            c.execute("INSERT INTO importaciones_precios (agente, departamento, estado, proveedor, moneda, lista, lineas, resumen) VALUES ('a','operaciones','aplicada',%s,'USD','Compra Milesight',%s,%s)",
+                      [Jsonb({"nombre": "Milesight"}), Jsonb(lin), Jsonb({"tarifa": True, "canal": "fabricante"})])
+            c.execute("INSERT INTO importaciones_precios (agente, departamento, estado, proveedor, moneda, lista, lineas, resumen) VALUES ('a','operaciones','aplicada',%s,'EUR','Compra Vieja',%s,%s)",
+                      [Jsonb({"nombre": "Vieja"}), Jsonb(lin), Jsonb({})])           # una importación antigua (sin canal): no se usa
+
+    def tearDown(self):
+        for p in self.p:
+            p.stop()
+        self.carpeta.cleanup()
+        with psycopg.connect(URL, autocommit=True) as c:
+            c.execute(f"DROP SCHEMA {self.schema} CASCADE")
+
+    def test_proponer_ajustar_aprobar_y_aplicar_sin_duplicar(self):
+        r = ejecutar(self.V.proponer("precio", "operaciones"))
+        self.assertEqual((r["articulos"], r["nuevo"], r["lista"]), (2, 2, "Venta"))
+        self.assertTrue(any("antiguas" in a for a in r["avisos"]))
+        self.assertEqual({c[0] for c in self.erp.llamadas}, {"listar"})                                    # solo lecturas
+        a = ejecutar(self.V.ajustar(r["propuesta"], ajustes={"MILESI-MS-C1": "199,90"}, excluir=["MILESI-MS-C2"]))
+        self.assertEqual((a["incluidos"], a["excluidos"], a["ajustados"]), (1, 1, 1))
+        v = ejecutar(self.V.vista_aplicar(r["propuesta"], "operaciones"))
+        texto = "\n".join(f"{k}: {x}" for k, x in v["campos"])
+        self.assertIn("1 precios nuevos", texto)
+        self.assertIn("1 excluidos", texto)
+        self.assertIn("1 ajustados a mano", texto)
+        res = ejecutar(self.V.aplicar(r["propuesta"], "operaciones"))
+        self.assertEqual((res["estado"], res["lista_creada"], res["precios_nuevos"], res["excluidos"]), ("aplicada", True, 1, 1))
+        p = next(iter(self.erp.precios.values()))
+        self.assertEqual((p["item_code"], p["price_list_rate"], p["selling"], p["buying"], p["price_list"]), ("MILESI-MS-C1", 199.9, 1, 0, "Venta"))
+        with self.assertRaises(self.V.ErrorVenta):                                                          # no se aplica dos veces
+            ejecutar(self.V.aplicar(r["propuesta"], "operaciones"))
+
+    def test_un_precio_que_ya_esta_igual_no_se_toca_y_uno_distinto_se_actualiza(self):
+        self.erp.listas.add("Venta")
+        self.erp.precios["IP-1"] = {"item_code": "MILESI-MS-C1", "price_list": "Venta", "price_list_rate": 207.0}
+        self.erp.precios["IP-2"] = {"item_code": "MILESI-MS-C2", "price_list": "Venta", "price_list_rate": 100.0}
+        r = ejecutar(self.V.proponer("precio", "operaciones"))
+        self.assertEqual((r["igual"], r["sube"], r["nuevo"]), (1, 1, 0))
+        res = ejecutar(self.V.aplicar(r["propuesta"], "operaciones"))
+        self.assertEqual((res["sin_cambios"], res["precios_actualizados"], res["precios_nuevos"], res["lista_creada"]), (1, 1, 0, False))
+        self.assertEqual(self.erp.precios["IP-2"]["price_list_rate"], 517.5)                             # 250 USD × 0,9 × 1,15 = 258,75 € ; venta = 517,50
+
+    def test_errores_claros(self):
+        with self.assertRaises(self.V.ErrorVenta):
+            ejecutar(self.V.proponer("p", "operaciones", ajustes={"X": "abc"}))
+        r = ejecutar(self.V.proponer("p", "operaciones"))
+        with self.assertRaisesRegex(self.V.ErrorVenta, "No están en la propuesta"):
+            ejecutar(self.V.ajustar(r["propuesta"], excluir=["NO-EXISTE"]))
+        ejecutar(self.V.descartar(r["propuesta"]))
+        with self.assertRaisesRegex(self.V.ErrorVenta, "descartada"):
+            ejecutar(self.V.ajustar(r["propuesta"], excluir=["MILESI-MS-C1"]))
+
+
 if __name__ == "__main__":
     unittest.main()
+
+
+# ---- Tarifas (Excel o CSV de un fabricante o de un distribuidor) ----
+
+TARIFA_FABRICANTE = ("Order Model Name;Product Name;EXW China;Production Status;Categories\n"
+                     "MS-C1;Camara de trafico;100,00;MP;Camaras\n"
+                     "MS-C2;Camara fija;250,00;MP;Camaras\n"
+                     "MS-X9;Camara futura;300,00;TBE;Camaras\n"
+                     "MS-O1;Camara antigua;80,00;EOL;Camaras\n").encode()
+TARIFA_DISTRIBUIDOR = ("Referencia;Nombre;Precio;Stock;Marca\n"
+                       "MS-C1;Camara de trafico;\"150,00 €\";5;Milesight\n"
+                       "OTRO-1;Soporte;10,00;0;Genérica\n").encode()
+
+
+class TestTarifasEnLaImportacion(unittest.TestCase):
+    def cfg(self):
+        from cerebro import precios
+        return precios.configuracion({"margen": {"por_defecto": 0.5}, "canales": {"fabricante": {"moneda": "USD", "logistica_pct": 0.15}, "distribuidor": {"moneda": "EUR", "logistica_pct": 0}},
+                                      "cambio_a_eur": {"USD": 0.9}})
+
+    def lineas(self, datos, canal, moneda, prov):
+        t = L.tarifas.leer(datos, "t.csv", moneda)
+        return L._lineas_de_tarifa(t, prov, canal, self.cfg(), 3000)
+
+    def test_fabricante_calcula_coste_en_euros_y_venta_y_no_carga_lo_que_no_esta_disponible(self):
+        r = self.lineas(TARIFA_FABRICANTE, "fabricante", "USD", "Milesight")
+        self.assertEqual([l["codigo"] for l in r["lineas"]], ["MILESI-MS-C1", "MILESI-MS-C2"])
+        l = r["lineas"][0]
+        self.assertEqual((l["precio"], l["coste_eur"], l["venta"]), ("100.0000", "103.50", "207.00"))        # 100 USD × 0,9 × 1,15 = 103,50 € ; venta = coste ÷ (1 − 0,5)
+        self.assertEqual(r["no_cargadas"], 2)
+        self.assertTrue(any("próximamente" in a and "fin de vida" in a for a in r["avisos"]))
+
+    def test_el_mismo_producto_del_distribuidor_llega_al_mismo_articulo(self):
+        f = self.lineas(TARIFA_FABRICANTE, "fabricante", "USD", "Milesight")["lineas"][0]
+        d = self.lineas(TARIFA_DISTRIBUIDOR, "distribuidor", "EUR", "Asecur")
+        mismo = next(l for l in d["lineas"] if l["marca"] == "Milesight")
+        self.assertEqual(mismo["codigo"], f["codigo"])                                                      # un solo artículo, con un coste por proveedor
+        self.assertEqual((mismo["precio"], mismo["coste_eur"], mismo["venta"]), ("150.0000", "150.00", "300.00"))
+        otro = next(l for l in d["lineas"] if l["marca"] == "Genérica")
+        self.assertEqual(otro["codigo"], "GENERI-OTRO-1")
+
+    def test_sin_marca_en_el_distribuidor_se_avisa(self):
+        r = self.lineas(b"Ref;Precio\nZ-1;5,00\n", "distribuidor", "EUR", "Asecur")
+        self.assertEqual(r["lineas"][0]["codigo"], "ASECUR-Z-1")
+        self.assertTrue(any("no traen la marca" in a for a in r["avisos"]))
+
+    def test_si_todo_es_no_disponible_es_un_error(self):
+        with self.assertRaises(L.ErrorImportacion):
+            self.lineas(b"Ref;Precio;Status\nA;5,00;EOL\n", "fabricante", "USD", "Milesight")
+
+    def test_sin_tipo_de_cambio_la_linea_se_carga_sin_venta_y_lo_dice(self):
+        from cerebro import precios
+        cfg = precios.configuracion({"cambio_a_eur": {"USD": None}, "canales": {"fabricante": {"moneda": "USD", "logistica_pct": 0}}})
+        t = L.tarifas.leer(b"Ref;Precio\nA-1;5,00\n", "t.csv", "USD")
+        r = L._lineas_de_tarifa(t, "Milesight", "fabricante", cfg, 3000)
+        self.assertIsNone(r["lineas"][0]["venta"])
+        self.assertTrue(any("sin precio de venta calculado" in a for a in r["avisos"]))
+
+
+class TestTarifaAislada(unittest.TestCase):
+    def test_se_lee_en_un_proceso_aparte_y_los_decimales_vuelven_intactos(self):
+        with tempfile.TemporaryDirectory() as d:
+            ruta = Path(d) / "t.csv"
+            ruta.write_bytes(TARIFA_FABRICANTE)
+            t = L.tarifas.leer_aislado(ruta, "t.csv", "USD")
+        self.assertEqual([p.referencia for p in t.productos], ["MS-C1", "MS-C2", "MS-X9", "MS-O1"])
+        self.assertEqual((t.productos[0].coste, t.productos[0].moneda, t.productos[2].estado), (Decimal("100.00"), "USD", "proximamente"))
+
+    def test_un_fichero_que_no_es_tarifa_da_un_error_claro(self):
+        with tempfile.TemporaryDirectory() as d:
+            ruta = Path(d) / "x.csv"
+            ruta.write_bytes(b"%PDF-1.4 algo")
+            with self.assertRaisesRegex(L.tarifas.ErrorTarifa, "PDF"):
+                L.tarifas.leer_aislado(ruta, "x.csv", "EUR")
+            with self.assertRaises(L.tarifas.ErrorTarifa):
+                L.tarifas.leer_aislado(Path(d) / "no_existe.csv", "x", "EUR")
+
+
+@unittest.skipUnless(URL and hasattr(psycopg, "AsyncConnection"), "sin CEREBRO_TEST_PG")
+class TestProponerTarifa(unittest.TestCase):
+    def setUp(self):                                   # igual que el flujo, pero con una tarifa guardada en la «carpeta» de subidas
+        TestFlujo.setUp(self)
+        self.subidas = tempfile.TemporaryDirectory()
+        (Path(self.subidas.name) / "limpio").mkdir()
+        (Path(self.subidas.name) / "limpio" / f"{DOC}.csv").write_bytes(TARIFA_FABRICANTE)
+        ficha = {"id": DOC, "nombre": "tarifa.csv", "formato": "csv", "estado": "limpio"}
+        self.q = [mock.patch.object(L.subidas, "info", mock.AsyncMock(return_value=ficha)),
+                  mock.patch.object(L.subidas, "RAIZ", Path(self.subidas.name)),
+                  mock.patch.object(L.subidas, "texto_completo", mock.AsyncMock(return_value="Milesight")),
+                  mock.patch.object(L.cambio, "configuracion_de_precios", mock.AsyncMock(return_value=TestTarifasEnLaImportacion.cfg(self)))]
+        for p in self.q:
+            p.start()
+
+    def tearDown(self):
+        for p in self.q:
+            p.stop()
+        self.subidas.cleanup()
+        TestFlujo.tearDown(self)
+
+    def test_propone_guarda_y_la_vista_previa_resume_la_tarifa(self):
+        r = ejecutar(L.proponer_tarifa(DOC, {"nombre": "Milesight"}, "fabricante", "catalogo-proveedores", "operaciones", moneda="USD"))
+        self.assertEqual((r["lineas"], r["canal"], r["moneda"], r["lista"], r["articulos_nuevos"]), (2, "fabricante", "USD", "Compra Milesight", 2))
+        self.assertEqual((r["venta_min"], r["venta_max"], r["con_venta"]), ("207.00", "517.50", 2))
+        self.assertEqual({c[0] for c in self.erp.llamadas}, {"listar"})                                    # solo lecturas
+        v = ejecutar(L.vista_aplicar(r["importacion"], "operaciones"))
+        texto = "\n".join(f"{k}: {x}" for k, x in v["campos"])
+        self.assertIn("canal «fabricante»", texto)
+        self.assertIn("2 no se cargan", texto)
+
+    def test_aplicar_crea_un_articulo_por_marca_y_referencia_con_su_coste_en_la_lista_del_proveedor(self):
+        r = ejecutar(L.proponer_tarifa(DOC, {"nombre": "Milesight"}, "fabricante", "a", "operaciones", moneda="USD"))
+        a = ejecutar(L.aplicar(r["importacion"], "operaciones"))
+        self.assertEqual((a["estado"], a["articulos_creados"], a["precios_nuevos"]), ("aplicada", 2, 2))
+        self.assertEqual(set(self.erp.items), {"MILESI-MS-C1", "MILESI-MS-C2"})
+        p = next(v for v in self.erp.precios.values() if v["item_code"] == "MILESI-MS-C1")
+        self.assertEqual((p["price_list_rate"], p["currency"], p["price_list"]), (100.0, "USD", "Compra Milesight"))
+
+    def test_canal_o_formato_incorrectos(self):
+        with self.assertRaisesRegex(L.ErrorImportacion, "canal"):
+            ejecutar(L.proponer_tarifa(DOC, {"nombre": "X"}, "mayorista", "a", "operaciones"))
+        L.subidas.info.return_value = {"id": DOC, "nombre": "x.pdf", "formato": "pdf", "estado": "limpio"}
+        with self.assertRaisesRegex(L.ErrorImportacion, "pdf"):
+            ejecutar(L.proponer_tarifa(DOC, {"nombre": "X"}, "fabricante", "a", "operaciones"))
+        L.subidas.info.return_value = {"id": DOC, "nombre": "x.csv", "formato": "csv", "estado": "cuarentena"}
+        with self.assertRaisesRegex(L.ErrorImportacion, "antivirus"):
+            ejecutar(L.proponer_tarifa(DOC, {"nombre": "X"}, "fabricante", "a", "operaciones"))

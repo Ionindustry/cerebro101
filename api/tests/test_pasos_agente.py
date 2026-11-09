@@ -53,6 +53,29 @@ class TestPasos(unittest.TestCase):
         self.assertGreater(n, 15)
         self.assertEqual(len(r["pasos"]), n)
 
+    def test_cada_paso_y_la_tarea_dejan_constancia_del_tiempo(self):
+        """Para saber dónde se va el tiempo de un agente lento: una línea por paso y un resumen con modelo y herramientas por separado."""
+        with self.assertLogs("cerebro.grafo", level="INFO") as g:
+            correr("rastreador")
+        texto = "\n".join(g.output)
+        self.assertEqual(texto.count("paso "), 5)
+        self.assertIn("paso 1/5 · modelo", texto)
+        self.assertIn("pliegos.documentos", texto)
+        self.assertRegex(texto, r"sin terminar en 5 pasos · \d+ s en total \(modelo \d+ s, herramientas \d+ s\)")
+
+    def test_el_resumen_de_una_tarea_terminada_cuenta_el_paso_de_la_respuesta(self):
+        async def paso(ficha, estado, mensajes):
+            return {"tipo": "respuesta", "respuesta": "listo"}
+
+        async def nada(*a, **k):
+            return None
+
+        with mock.patch.object(nodos, "_paso_del_agente", paso), mock.patch.object(nodos.H, "disponibles_para", lambda f: []), mock.patch.object(nodos, "sistema_agente", lambda f, d: "s"), \
+                mock.patch.object(nodos.actividad, "marcar", nada), self.assertLogs("cerebro.grafo", level="INFO") as g:
+            r = asyncio.run(nodos._ejecutar_agente({"peticion": "hola"}, Ficha("rastreador")))
+        self.assertEqual(r["respuesta"], "listo")
+        self.assertIn("respuesta en 1 pasos", "\n".join(g.output))
+
 
 if __name__ == "__main__":
     unittest.main()
