@@ -12,6 +12,7 @@ POR VERIFICAR con el ERPNext real de 101.cat: los nombres de los campos (Supplie
 """
 from __future__ import annotations
 
+import asyncio
 import csv
 import io
 import logging
@@ -26,7 +27,7 @@ import yaml
 from psycopg.rows import dict_row
 from psycopg.types.json import Jsonb
 
-from . import subidas
+from . import cambio, precios, subidas, tarifas
 from .ajustes import ajustes
 from .herramientas import erpnext
 from .herramientas.facturas import DatosFactura, a_decimal
@@ -286,6 +287,22 @@ async def _existentes(departamento: str, doctype: str, campo: str, valores: list
     return out
 
 
+async def _comprobar_erp(departamento: str, prov: dict, lineas: list[dict], cfg: dict, avisos: list[str]) -> tuple[bool | None, int | None, int | None]:
+    """Qué existe ya en el ERP: (proveedor existe, artículos nuevos, artículos existentes). Marca cada línea con `existe`. Sin ERP devuelve None y lo avisa: se comprobará al aplicar."""
+    try:
+        codigos = [l["codigo"] for l in lineas]
+        ya = await _existentes(departamento, "Item", "item_code", codigos, cfg["lote"])
+        for l in lineas:
+            l["existe"] = l["codigo"] in ya
+        filtro = [["tax_id", "=", prov["nif"]]] if prov["nif"] else [["supplier_name", "=", prov["nombre"]]]
+        encontrados = await erpnext.listar("Supplier", departamento, filtros=filtro, campos=["name"], limite=3)
+        return bool(encontrados), len(codigos) - len(ya), len(ya)
+    except Exception as e:  # noqa: BLE001 — sin ERP se propone igual, avisando de que no se ha podido comprobar
+        log.warning("listas de precios: no se pudo comprobar el ERP: %s: %s", type(e).__name__, e)
+        avisos.append("No se ha podido consultar el ERP para ver qué artículos y proveedor existen ya: se comprobará al aplicar")
+        return None, None, None
+
+
 async def proponer(documento: str, proveedor: dict, columnas: dict, agente: str, departamento: str, fila_cabecera: int = 1, paginas: list[int] | None = None, moneda: str | None = None,
                    iva_incluido_pct: float | None = None, vigente_desde: str | None = None, consulta_erp=None) -> dict:
     """Lee la tabla del documento con las columnas que dice el agente, la valida, comprueba contra el ERP qué existe y GUARDA la propuesta. No escribe nada en el ERP."""
@@ -311,19 +328,7 @@ async def proponer(documento: str, proveedor: dict, columnas: dict, agente: str,
     precios = sorted(Decimal(l["precio"]) for l in r["lineas"])
     if precios[-1] > precios[0] * 5000:
         avisos.append("Hay una diferencia enorme entre el precio más bajo y el más alto: puede haber una columna equivocada")
-    existe_prov, nuevos, existentes = None, None, None
-    try:
-        codigos = [l["codigo"] for l in r["lineas"]]
-        ya = await _existentes(departamento, "Item", "item_code", codigos, cfg["lote"])
-        existentes, nuevos = len(ya), len(codigos) - len(ya)
-        for l in r["lineas"]:
-            l["existe"] = l["codigo"] in ya
-        filtro = [["tax_id", "=", prov["nif"]]] if prov["nif"] else [["supplier_name", "=", prov["nombre"]]]
-        encontrados = await erpnext.listar("Supplier", departamento, filtros=filtro, campos=["name"], limite=3)
-        existe_prov = bool(encontrados)
-    except Exception as e:  # noqa: BLE001 — sin ERP se propone igual, avisando de que no se ha podido comprobar
-        log.warning("listas de precios: no se pudo comprobar el ERP: %s: %s", type(e).__name__, e)
-        avisos.append("No se ha podido consultar el ERP para ver qué artículos y proveedor existen ya: se comprobará al aplicar")
+    existe_prov, nuevos, existentes = await _comprobar_erp(departamento, prov, r["lineas"], cfg, avisos)
     resumen = {"lineas": len(r["lineas"]), "rechazadas": r["n_rechazadas"], "omitidas": r["omitidas"], "articulos_existentes": existentes, "articulos_nuevos": nuevos, "proveedor_existe": existe_prov,
                "precio_min": str(precios[0]), "precio_max": str(precios[-1]), "columnas": r["columnas"], "vigente_desde": vigente_desde, "documento": ficha["nombre"]}
     async with await _conectar() as conn:
@@ -336,6 +341,119 @@ async def proponer(documento: str, proveedor: dict, columnas: dict, agente: str,
     return {"importacion": iid, "proveedor": {**prov, "existe_en_el_erp": existe_prov}, "lista": lista, "moneda": moneda, **{k: v for k, v in resumen.items() if k != "documento"},
             "rechazadas_primeras": r["rechazadas"][:10], "avisos": avisos, "muestra": [{k: l[k] for k in ("ref", "desc", "precio")} for l in r["lineas"][:5]],
             "siguiente": "Si todo es correcto, propón la acción «aplicar» de esta herramienta con este número de importación: una persona la revisará y la aprobará antes de que se escriba nada en el ERP."}
+
+
+# ---- Proponer desde una tarifa (Excel o CSV del fabricante o del distribuidor) ----
+
+NO_CARGAR = {"proximamente": "próximamente", "fin_de_vida": "fin de vida", "muestra": "muestra"}
+CANALES = ("fabricante", "distribuidor")
+
+
+def _lineas_de_tarifa(t, prov_nombre: str, canal: str, cfg_precios: dict, max_lineas: int) -> dict:
+    """De los productos de una tarifa a las líneas de la importación. UN producto por fabricante y referencia: el código del artículo es la marca (o el fabricante, en su propia tarifa) + la referencia, de modo
+    que la tarifa del fabricante y la del distribuidor llegan al MISMO artículo y cada una pone su coste en su lista de precios. Todo el cálculo (cambio, logística, margen, redondeo) lo hace `precios`."""
+    lineas, vistos, avisos = [], {}, []
+    no_cargadas: dict[str, int] = {}
+    sin_marca = repetidas = sin_calculo = 0
+    for p in t.productos:
+        if p.estado in NO_CARGAR:
+            no_cargadas[p.estado] = no_cargadas.get(p.estado, 0) + 1
+            continue
+        ref = (p.referencia if canal == "fabricante" else (p.referencia_fabricante or p.referencia)).strip()
+        marca = p.marca or (prov_nombre if canal == "fabricante" else "")
+        if not marca:
+            sin_marca += 1
+        try:
+            codigo = codigo_articulo(prefijo_proveedor(marca or prov_nombre), ref)
+            coste = p.coste.quantize(Decimal("0.0001"), rounding=ROUND_HALF_UP)
+        except (ErrorImportacion, AttributeError) as e:
+            avisos.append(f"{p.hoja} fila {p.fila}: {e}")
+            continue
+        etiqueta = f"{p.hoja}, fila {p.fila}"
+        if codigo in vistos:
+            repetidas += 1
+            if vistos[codigo]["precio"] != str(coste):
+                avisos.append(f"Referencia repetida con coste distinto ({ref[:30]}: {vistos[codigo]['precio']} y {coste}, {etiqueta}): se conserva la primera")
+            continue
+        linea = {"fila": etiqueta, "ref": ref[:80], "codigo": codigo, "desc": (p.descripcion or ref)[:300], "precio": str(coste), "unidad": "", "marca": marca[:60], "ean": p.ean,
+                 "familia": p.familia or p.linea, "stock": None if p.stock is None else str(p.stock), "estado": p.estado, "pvp": None if p.pvp_recomendado is None else str(p.pvp_recomendado),
+                 "especificaciones": dict(list(p.especificaciones.items())[:12]), "avisos_producto": p.avisos[:3]}
+        try:
+            c = precios.calcular(coste, p.moneda, canal, linea["familia"], cfg_precios)
+            linea.update({"coste_eur": str(c.coste_eur), "venta": str(c.venta), "margen": str(c.margen_real), "avisos_precio": c.avisos})
+        except precios.ErrorPrecios as e:
+            sin_calculo += 1
+            linea.update({"coste_eur": None, "venta": None, "margen": None, "avisos_precio": [str(e)]})
+        vistos[codigo] = linea
+        lineas.append(linea)
+        if len(lineas) > max_lineas:
+            raise ErrorImportacion(f"La tarifa tiene más de {max_lineas} productos: divídela en varias")
+    if not lineas:
+        raise ErrorImportacion("La tarifa no tiene ningún producto cargable (todos son próximos, de fin de vida o muestras, o no tienen precio)")
+    if no_cargadas:
+        avisos.append("No se cargan: " + ", ".join(f"{n} {NO_CARGAR[k]}" for k, n in no_cargadas.items()) + " (no se deben ofrecer como disponibles)")
+    if sin_marca:
+        avisos.append(f"{sin_marca} productos no traen la marca: se les pone el prefijo de {prov_nombre} y no se unirán al del fabricante")
+    if repetidas:
+        avisos.append(f"{repetidas} líneas repetidas (misma referencia): se conserva la primera")
+    if sin_calculo:
+        avisos.append(f"{sin_calculo} productos sin precio de venta calculado (falta el tipo de cambio o el coste no es válido)")
+    return {"lineas": lineas, "avisos": avisos, "no_cargadas": sum(no_cargadas.values())}
+
+
+async def proponer_tarifa(documento: str, proveedor: dict, canal: str, agente: str, departamento: str, moneda: str | None = None, vigente_desde: str | None = None, lector=None) -> dict:
+    """Lee una tarifa (Excel o CSV) subida al chat SIN que el agente diga las columnas (el lector de `tarifas` las reconoce), calcula el coste en euros y el precio de venta de cada producto con `precios` y GUARDA la
+    propuesta. No escribe nada en el ERP: una persona la aprueba antes (`aplicar`). `canal` es de dónde se compra: «fabricante» o «distribuidor» (decide la moneda, la logística y el nombre de la lista)."""
+    cfg = configuracion()
+    if canal not in CANALES:
+        raise ErrorImportacion("canal debe ser «fabricante» (compra directa a fábrica) o «distribuidor» (compra a un distribuidor)")
+    cfg_precios = await cambio.configuracion_de_precios()
+    moneda = str(moneda or cfg_precios["canales"].get(canal, {}).get("moneda") or cfg["moneda"]).upper()
+    if moneda not in cfg["monedas"]:
+        raise ErrorImportacion(f"moneda debe ser una de: {', '.join(cfg['monedas'])}")
+    if vigente_desde is not None and not (isinstance(vigente_desde, str) and RE_FECHA.match(vigente_desde)):
+        raise ErrorImportacion("vigente_desde debe ser una fecha aaaa-mm-dd")
+    ficha = await subidas.info(documento)
+    if ficha["estado"] not in ("limpio", "con_macros"):
+        raise ErrorImportacion("Ese documento no ha pasado el antivirus: no se puede leer")
+    if ficha["formato"] not in ("xlsx", "csv"):
+        raise ErrorImportacion(f"Una tarifa se lee de un Excel (.xlsx) o un CSV; este documento es «{ficha['formato']}». Para otros formatos usa «proponer» indicando las columnas")
+    ruta = subidas._carpeta(ficha["estado"]) / f"{ficha['id']}.{ficha['formato']}"
+    try:
+        tarifa = await asyncio.to_thread(lector or tarifas.leer_aislado, ruta, ficha["nombre"], moneda)
+    except tarifas.ErrorTarifa as e:
+        raise ErrorImportacion(str(e)) from None
+    try:
+        texto = await subidas.texto_completo(documento)
+    except Exception:  # noqa: BLE001 — si el texto no está, solo se pierde el aviso de «el nombre no sale en el documento»
+        texto = ""
+    prov, avisos_prov = validar_proveedor(proveedor, texto)
+    r = _lineas_de_tarifa(tarifa, prov["nombre"], canal, cfg_precios, cfg["max_lineas"])
+    lineas = r["lineas"]
+    avisos = avisos_prov + tarifa.avisos + r["avisos"]
+    existe_prov, nuevos, existentes = await _comprobar_erp(departamento, prov, lineas, cfg, avisos)
+    costes = sorted(Decimal(l["precio"]) for l in lineas)
+    ventas = [Decimal(l["venta"]) for l in lineas if l["venta"]]
+    provisional = sorted({a for l in lineas for a in l["avisos_precio"] if "provisional" in a or "respaldo" in a})
+    familias: dict[str, int] = {}
+    for l in lineas:
+        familias[l["familia"] or "(sin familia)"] = familias.get(l["familia"] or "(sin familia)", 0) + 1
+    resumen = {"tarifa": True, "canal": canal, "lineas": len(lineas), "rechazadas": 0, "omitidas": r["no_cargadas"], "articulos_existentes": existentes, "articulos_nuevos": nuevos, "proveedor_existe": existe_prov,
+               "precio_min": str(costes[0]), "precio_max": str(costes[-1]), "venta_min": str(min(ventas)) if ventas else None, "venta_max": str(max(ventas)) if ventas else None,
+               "con_venta": len(ventas), "provisional": provisional, "familias": dict(sorted(familias.items(), key=lambda kv: -kv[1])[:15]), "hojas": tarifa.hojas[:20],
+               "vigente_desde": vigente_desde, "documento": ficha["nombre"], "columnas": {}}
+    lista = nombre_lista(cfg, prov["nombre"])
+    async with await _conectar() as conn:
+        cur = await conn.execute(
+            """INSERT INTO importaciones_precios (documento_id, agente, departamento, proveedor, moneda, lista, lineas, rechazadas, avisos, resumen)
+               VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s) RETURNING id""",
+            [ficha["id"], agente, departamento, Jsonb(prov), moneda, lista, Jsonb(lineas), Jsonb([]), Jsonb(avisos), Jsonb(resumen)])
+        iid = (await cur.fetchone())["id"]
+    log.info("listas de precios: %s propone la tarifa %s (%s, canal %s, %d productos)", agente, iid, prov["nombre"], canal, len(lineas))
+    return {"importacion": iid, "proveedor": {**prov, "existe_en_el_erp": existe_prov}, "lista": lista, "moneda": moneda, "canal": canal,
+            **{k: v for k, v in resumen.items() if k not in ("documento", "tarifa", "columnas", "hojas")}, "avisos": avisos,
+            "muestra": [{k: l[k] for k in ("ref", "desc", "precio", "venta")} for l in lineas[:5]],
+            "siguiente": "Si todo es correcto, propón la acción «aplicar» con este número de importación: una persona la revisará y la aprobará antes de que se escriba nada en el ERP."}
 
 
 # ---- Lo guardado ----
@@ -375,6 +493,11 @@ async def vista_aplicar(importacion: int, departamento: str) -> dict:
               ["Documento", r.get("documento", "")],
               ["Líneas", f"{r['lineas']} con precio · {r['rechazadas']} rechazadas · rango {r['precio_min']} – {r['precio_max']} {f['moneda']} (sin IVA)"],
               ["Artículos", "no se ha podido comprobar" if r.get("articulos_nuevos") is None else f"{r['articulos_nuevos']} nuevos (se crean) · {r['articulos_existentes']} que ya existen (solo precio)"]]
+    if r.get("tarifa"):
+        campos.append(["Tarifa", f"canal «{r['canal']}» · costes {r['precio_min']} – {r['precio_max']} {f['moneda']} · precio de venta calculado en {r['con_venta']} de {r['lineas']} productos"
+                       + (f" ({r['venta_min']} – {r['venta_max']} € sin IVA)" if r.get("venta_min") else "") + (f" · {r['omitidas']} no se cargan (próximos, fin de vida o muestras)" if r.get("omitidas") else "")])
+        if r.get("provisional"):
+            campos.append(["Valores provisionales", "\n".join(f"- {a}" for a in r["provisional"][:5])])
     if f["avisos"]:
         campos.append(["Avisos", "\n".join(f"- {a}" for a in f["avisos"][:8])])
     campos.append(["Primeras líneas", "\n".join(f"{l['ref']} · {l['desc'][:60]} · {l['precio']}" + ("" if l.get("existe", True) else " (nuevo)") for l in f["lineas"][:12])])

@@ -20,7 +20,12 @@ Lo que Dirección ha pedido y cómo se construye, por pasos (cada uno, su PR). *
 ## Pasos
 1. **Lector de tarifas** (`cerebro/tarifas.py`, hecho): Excel con varias hojas y varias tablas, o CSV; cabecera en cualquier fila; columnas con nombres distintos; estados «próximamente», «fin de vida», «muestra»;
    características técnicas (columnas sobrantes o JSON); familia, stock, EAN, marca, precio recomendado; moneda del proveedor. Pura (sin BD ni red): se llamará desde un proceso aparte con límites.
-2. Conectarlo al importador (`cerebro/listas_precios.py`): un producto por fabricante y referencia, varios costes, propuesta y aprobación.
+2. **Conectado al importador** (`cerebro/listas_precios.py`, hecho): operación `proponer_tarifa` (el agente no dice las columnas; indica el proveedor y el **canal**, «fabricante» o «distribuidor»). El fichero se lee en un
+   **proceso aparte con límites** (`tarifas.leer_aislado`). **Un artículo por marca y referencia**: el código es marca + referencia (en la tarifa del propio fabricante, su nombre), así que la tarifa del fabricante y la del
+   distribuidor llegan al MISMO artículo y cada una pone su coste en su lista «Compra <proveedor>», con su moneda. Cada línea lleva el coste en euros y el precio de venta calculados con `precios` (cambio en línea,
+   logística del canal, margen, redondeo) y sus avisos («provisional», «de respaldo»). Los productos **próximamente, fin de vida y muestras no se cargan** (se cuentan y se avisa). Sin escribir nada en el ERP hasta que
+   una persona apruebe la vista previa (`aplicar`, repetible sin duplicar). El margen del **50 % sobre la venta** para todas las familias lo confirmó Dirección.
+   Pendiente de este paso: el stock, el EAN y las características no se escriben aún en el ERP (se guardan en la propuesta); eso llega con el paso 3.
 3. Márgenes por familia y lista de precios «Venta» con aprobación.
 4. Propuesta de precios con mercado, competencia y estrategias, y tabla de revisión para Dirección.
 5. Documentación del proveedor y fichas técnicas (descarga de internet y subida a mano).

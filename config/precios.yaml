@@ -3,7 +3,7 @@
 
 margen:
   base: venta                  # el margen es SOBRE LA VENTA: venta = coste ÷ (1 − margen). Con coste 100 y margen 50 %: venta 200 (no 150, que sería un recargo del 50 % sobre el coste)
-  por_defecto: 0.50            # margen de las familias que no se citan abajo (0.50 = 50 % de la venta)
+  por_defecto: 0.50            # margen de las familias que no se citan abajo (0.50 = 50 % de la venta). CONFIRMADO por Dirección para todas las familias
   minimo: 0.10                 # por debajo de este margen, la fila se marca para revisar (no se bloquea: decide Dirección)
   familias: {}                 # margen por familia (0.40 = 40 %). Ejemplo, cuando se decida:  camaras: 0.40  /  accesorios: 0.55  /  grabadores: 0.35
 
@@ -33,4 +33,4 @@ cambio_a_eur:
   GBP: null
 
 # Lo que está aquí es un valor de partida y no un dato confirmado: cada cálculo que lo use lo avisa («provisional») hasta que lo quites de la lista.
-provisional: [margen.por_defecto, canales.fabricante.logistica_pct, cambio_a_eur.USD]
+provisional: [canales.fabricante.logistica_pct, cambio_a_eur.USD]   # el margen del 50 % sobre la venta lo confirmó Dirección
