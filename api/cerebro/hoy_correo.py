@@ -14,7 +14,7 @@ from zoneinfo import ZoneInfo
 import psycopg
 from psycopg.rows import dict_row
 
-from . import hoy
+from . import enlaces, hoy
 from .ajustes import ajustes
 from .herramientas import buzones as B
 from .licitaciones import alertas as alertas_mod
@@ -22,7 +22,7 @@ from .licitaciones import avisos_correo as correo
 from .licitaciones import resumen as resumen_lic
 
 log = logging.getLogger("cerebro.hoy_correo")
-DEFECTO = {"activo": True, "desde": "08:30", "hasta_hora": 12, "url_panel": "http://localhost:3000"}
+DEFECTO = {"activo": True, "desde": "08:30", "hasta_hora": 12, "url_panel": ""}       # vacío = PANEL_URL del .env (y, sin ella, localhost)
 CLAVE = "hoy_correo"
 ROTULOS = {"urgente": "URGENTE", "aviso": "HAY QUE MIRARLO", "info": "PARA TU INFORMACIÓN"}
 
@@ -36,8 +36,9 @@ def configuracion(cfg: dict | None = None) -> dict:
         c["_minutos"] = 8 * 60 + 30
     c["hasta_hora"] = min(max(int(c["hasta_hora"]), 1), 24)
     c["activo"] = bool(c["activo"])
-    url = str(c["url_panel"]).rstrip("/")
-    c["url_panel"] = url if url.startswith(("http://", "https://")) else DEFECTO["url_panel"]
+    c["url_panel"] = enlaces.valida(c["url_panel"]) or enlaces.desde_entorno("PANEL_URL") or "http://localhost:3000"
+    if enlaces.es_local(c["url_panel"]):
+        log.warning("hoy_correo: los enlaces del correo apuntan a %s, que solo funciona en este equipo: pon PANEL_URL en el .env con la dirección pública del panel", c["url_panel"])
     return c
 
 

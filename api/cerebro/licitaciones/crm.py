@@ -18,6 +18,7 @@ import yaml
 from psycopg.rows import dict_row
 from psycopg.types.json import Jsonb
 
+from .. import enlaces
 from ..ajustes import ajustes
 from . import embudo
 
@@ -29,7 +30,7 @@ DEFECTO = {
     "activo": True,
     "crear_detectadas": False,       # False: el trato nace cuando una persona decide estudiarla; True: también las que detecta el sistema
     "limite_s": 25,                  # tiempo máximo que se espera al CRM antes de seguir (la acción de la persona no depende de él)
-    "url_publica": "http://localhost:8081/crm",
+    "url_publica": "",               # vacío = CRM_URL_PUBLICA del .env (y, sin ella, localhost)
     "etapas": {"detectada": "Qualification", "en_estudio": "Proposal/Quotation", "presentada": "Negotiation",
                "ganada": "Won", "perdida": "Lost", "descartada": "Lost"},
 }
@@ -58,8 +59,9 @@ def _texto(t, n: int) -> str:
 def url_del_trato(trato: str | None, cfg: dict | None = None) -> str | None:
     if not trato:
         return None
-    base = str((cfg or configuracion()).get("url_publica") or "").rstrip("/")
-    return f"{base}/deals/{trato}" if base.startswith(("http://", "https://")) else None
+    puesta = (cfg or configuracion()).get("url_publica")
+    base = enlaces.valida(puesta) if puesta else (enlaces.desde_entorno("CRM_URL_PUBLICA") or "http://localhost:8081/crm")
+    return f"{base}/deals/{trato}" if base else None            # una dirección puesta a mano y rara (javascript:…) no da enlace
 
 
 def datos_trato(fila: dict, cfg: dict, organizacion: str) -> dict:

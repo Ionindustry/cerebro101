@@ -20,6 +20,8 @@ x-api: &api
     TZ: "${TZ:-Europe/Madrid}"
     REDIS_URL: "${REDIS_URL:-redis://redis:6379/0}"
     OLLAMA_URL: "${OLLAMA_URL:-http://ollama:11434}"
+    PANEL_URL: "${PANEL_URL:-http://localhost:3000}"            # dirección pública del panel: los enlaces de los correos (resumen diario de licitaciones)
+    CRM_URL_PUBLICA: "${CRM_URL_PUBLICA:-}"                      # dirección pública del CRM para los enlaces a los tratos
     OLLAMA_TIMEOUT: "${OLLAMA_TIMEOUT:-}"                 # vacío = valor por defecto del código
     OLLAMA_TIMEOUT_CONEXION: "${OLLAMA_TIMEOUT_CONEXION:-}"
     OLLAMA_TIMEOUT_EMBEDDINGS: "${OLLAMA_TIMEOUT_EMBEDDINGS:-}"

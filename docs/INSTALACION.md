@@ -19,6 +19,8 @@
    usuarios, asignar roles (`direccion`, `responsable`, `usuario`) y grupos de departamento. El panel pide ese
    inicio de sesión al entrar (http://localhost:3000). Fuera de localhost, poner en `.env` `PANEL_URL` y
    `KEYCLOAK_URL_PUBLICA` con sus direcciones https y añadir `PANEL_URL/*` en las URI del cliente `cerebro-panel`.
+   **Los enlaces de los correos** (el resumen diario de licitaciones) usan esa misma `PANEL_URL`; con `localhost` solo abren en el propio equipo, así que el sistema avisa en el registro. Los enlaces a los tratos del CRM usan `CRM_URL_PUBLICA` (p. ej. `https://crm.101.cat/crm`).
+   Se cambian en `.env` y se aplican con `./scripts/actualizar.sh`.
 5. Cargar documentos: `docker compose exec api python /app/scripts/cargar_conocimiento.py /datos/conocimiento`.
 6. ERPNext (incluido en `erpnext/docker-compose.yml`, basado en frappe_docker):
    - En `.env`: `ERPNEXT_DB_ROOT_PASSWORD`, `ERPNEXT_ADMIN_PASSWORD` y `ERPNEXT_SITE` (por defecto `erp.101.cat`).
