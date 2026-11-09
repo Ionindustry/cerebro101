@@ -281,6 +281,56 @@ class TestFlujo(unittest.TestCase):
         r = self.pedir(veredicto=P.Veredicto("con_macros", "El documento lleva macros: solo se leerá su texto"))
         self.assertEqual((r["estado"], r["disponible"]), ("con_macros", True))
 
+    def subir(self, n=1, datos=PDF, veredicto=None, cfg=None):
+        async def analizar(d):
+            return veredicto or P.Veredicto("limpio")
+        return ejecutar(P.subir(ID, n, datos, consulta=self.consulta, analizar=analizar, cfg=cfg or CFG))
+
+    def test_subir_a_mano_pasa_por_cuarentena_y_antivirus_y_usa_el_nombre_de_la_ficha(self):
+        r = self.subir()
+        self.assertEqual((r["estado"], r["disponible"], r["formato"], r["n"], r["nombre"]), ("limpio", True, "pdf", 1, "Pliego administrativo"))
+        self.assertEqual(self.ficheros(), [f"{ID}/limpio/{r['sha256']}.pdf"])
+        self.assertEqual(self.bajadas, [])                                                    # no se ha pedido nada a la plataforma
+        self.assertEqual(self.subir()["id"], r["id"])                                         # el mismo contenido no se duplica
+        inf = self.subir(n=2, datos=PDF + b"x", veredicto=P.Veredicto("infectado", "dañino"))
+        self.assertEqual((inf["estado"], inf["disponible"]), ("infectado", False))
+
+    def test_el_enlace_solo_se_da_al_panel_y_solo_de_las_plataformas_de_la_lista(self):
+        sin = ejecutar(P.documentos(ID, consulta=self.consulta))
+        self.assertTrue(all("enlace" not in d and "_url" not in d for d in sin["documentos"]))       # los agentes nunca ven la dirección
+        con = ejecutar(P.documentos(ID, consulta=self.consulta, con_enlace=True))["documentos"]
+        self.assertEqual([d["enlace"] for d in con], ["https://contrataciondelestado.es/a", None])    # la de evil.com no se ofrece
+
+    def test_subir_rechaza_html_zip_vacio_tamano_y_numero_malo(self):
+        with self.assertRaisesRegex(P.ErrorPliego, "no es un PDF"):
+            self.subir(datos=b"<html><body>Request Rejected</body></html>")
+        with self.assertRaisesRegex(P.ErrorPliego, "ZIP"):
+            self.subir(datos=b"PK\x03\x04" + b"\0" * 30)
+        with self.assertRaisesRegex(P.ErrorPliego, "vacío"):
+            self.subir(datos=b"")
+        with self.assertRaisesRegex(P.ErrorPliego, "pesa más"):
+            self.subir(cfg={**CFG, "max_mb": 1}, datos=PDF + b"0" * 1_100_000)
+        for n in (0, 3, "1", True, None):
+            with self.assertRaises(P.ErrorPliego, msg=repr(n)):
+                self.subir(n=n)
+        with self.assertRaises(P.ErrorPliego):
+            ejecutar(P.subir("no-es-uuid", 1, PDF, consulta=self.consulta, cfg=CFG))
+        self.assertEqual(self.ficheros(), [])
+
+    def test_si_la_plataforma_rechaza_la_descarga_se_usa_lo_subido_a_mano(self):
+        subido = self.subir()
+        async def rechaza(url, hosts, max_bytes, timeout):
+            raise P.ErrorPliego("La plataforma ofrece «text/html», que no es un documento de los admitidos")
+        async def sin_texto(*a, **k):
+            raise AssertionError("no debe analizarse otra vez")
+        # sin texto leído aún (el PDF de prueba no tiene páginas) no hay documento aprovechable: el error de la plataforma sigue saliendo
+        with self.assertRaises(P.ErrorPliego):
+            ejecutar(P.obtener(ID, 1, consulta=self.consulta, descargar=rechaza, analizar=sin_texto, cfg=CFG))
+        with psycopg.connect(P.ajustes.database_url, autocommit=True) as c:
+            c.execute("UPDATE pliegos_documentos SET paginas = 3, unidad = 'página' WHERE id = %s", [subido["id"]])
+        r = ejecutar(P.obtener(ID, 1, consulta=self.consulta, descargar=rechaza, analizar=sin_texto, cfg=CFG))
+        self.assertEqual((r["id"], r["disponible"], r["paginas"]), (subido["id"], True, 3))
+
     def test_se_rechaza_lo_que_no_es_un_documento_o_no_es_de_la_lista_o_el_numero_no_existe(self):
         with self.assertRaisesRegex(P.ErrorPliego, "no es un PDF"):
             self.pedir(datos=b"<html><script>")

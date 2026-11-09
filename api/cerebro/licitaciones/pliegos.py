@@ -273,12 +273,15 @@ def _id_valido(motor_id) -> str:
     return t
 
 
-async def documentos(motor_id: str, consulta=None) -> dict:
-    """Los documentos de la licitación (por número) y lo que ya se ha bajado de cada uno."""
+async def documentos(motor_id: str, consulta=None, con_enlace: bool = False) -> dict:
+    """Los documentos de la licitación (por número) y lo que ya se ha bajado de cada uno. Con `con_enlace` (solo para el panel de las personas, nunca para los agentes) cada uno lleva `enlace`:
+    su dirección en la plataforma, solo si es de una plataforma de la lista, para que una persona lo abra con su navegador y lo suba a mano."""
     motor_id = _id_valido(motor_id)
     ficha = await (consulta or motor._get)(f"/tenders/{motor_id}")
     bajados = {d["n"]: d for d in await listar(motor_id)}
-    return {"licitacion": motor_id, "documentos": [{**{k: v for k, v in d.items() if k != "_url"}, "descarga": bajados.get(d["n"])} for d in documentos_de(ficha)]}
+    hosts = configuracion()["hosts"] if con_enlace else []
+    return {"licitacion": motor_id, "documentos": [{**{k: v for k, v in d.items() if k != "_url"}, "descarga": bajados.get(d["n"]),
+                                                     **({"enlace": d["_url"] if host_permitido(d["_url"] or "", hosts) else None} if con_enlace else {})} for d in documentos_de(ficha)]}
 
 
 async def obtener(motor_id: str, n: int, consulta=None, descargar=None, analizar=None, extraer_texto=None, cfg: dict | None = None) -> dict:
@@ -294,7 +297,28 @@ async def obtener(motor_id: str, n: int, consulta=None, descargar=None, analizar
         raise SinPermisoDescarga("Ese documento no está en una plataforma de contratación de la lista: no se descarga")
     if await _descargas_hoy() >= cfg["max_diarios"]:
         raise ErrorPliego(f"Se ha llegado al máximo de {cfg['max_diarios']} descargas de documentos al día: sigue mañana")
-    datos = await (descargar or descargar_seguro)(doc["_url"], cfg["hosts"], cfg["max_mb"] * 1_000_000, cfg["timeout_s"])
+    try:
+        datos = await (descargar or descargar_seguro)(doc["_url"], cfg["hosts"], cfg["max_mb"] * 1_000_000, cfg["timeout_s"])
+    except ErrorPliego:
+        # La plataforma puede negarse a servir descargas automáticas («Request Rejected»): si una persona ya subió ese documento a mano, se usa ese.
+        previo = await _existente(motor_id, n)
+        if previo:
+            return previo
+        raise
+    return await incorporar(motor_id, n, doc["nombre"], datos, analizar, extraer_texto)
+
+
+async def _existente(motor_id: str, n: int) -> dict | None:
+    """El documento nº n ya incorporado, limpio y con su texto leído (el más reciente), o None."""
+    async with await _conectar() as conn:
+        cur = await conn.execute(f"SELECT {COLS} FROM pliegos_documentos WHERE motor_id = %s AND n = %s AND estado IN ('limpio', 'con_macros') AND paginas IS NOT NULL ORDER BY id DESC LIMIT 1",
+                                 [motor_id, n])
+        f = await cur.fetchone()
+    return _ficha_publica(f) if f else None
+
+
+async def incorporar(motor_id: str, n: int, nombre: str, datos: bytes, analizar=None, extraer_texto=None) -> dict:
+    """Un documento ya en memoria (bajado de la plataforma o subido a mano): comprueba qué es por su CONTENIDO, lo deja en cuarentena, lo pasa por el antivirus y, si queda limpio, lee su texto."""
     if not datos:
         raise ErrorPliego("El documento está vacío")
     formato = formato_real(datos)
@@ -311,11 +335,29 @@ async def obtener(motor_id: str, n: int, consulta=None, descargar=None, analizar
         _guardar_fichero(motor_id, "cuarentena", sha, formato, datos)
         cur = await conn.execute(
             """INSERT INTO pliegos_documentos (motor_id, n, nombre, formato, bytes, sha256, estado) VALUES (%s,%s,%s,%s,%s,%s,'cuarentena')
-               ON CONFLICT (motor_id, sha256) DO UPDATE SET n = EXCLUDED.n RETURNING id""", [motor_id, n, doc["nombre"], formato, len(datos), sha])
+               ON CONFLICT (motor_id, sha256) DO UPDATE SET n = EXCLUDED.n RETURNING id""", [motor_id, n, nombre, formato, len(datos), sha])
         did = (await cur.fetchone())["id"]
     v = await (analizar or analizar_con_clamd)(datos)
     r = await _cerrar(did, motor_id, sha, formato, datos, v)
     return await extraer(did, extraer_texto) if r["disponible"] else r
+
+
+async def subir(motor_id: str, n: int, datos: bytes, consulta=None, analizar=None, extraer_texto=None, cfg: dict | None = None) -> dict:
+    """Un documento del pliego que una persona ha bajado de la plataforma con su navegador y sube a mano (la plataforma rechaza las descargas automáticas). Mismo trato que uno bajado:
+    tipo real por su contenido, cuarentena, antivirus y lectura del texto en un proceso aparte. El nombre y el número salen de la ficha de la licitación, no del fichero. ZIP no."""
+    motor_id = _id_valido(motor_id)
+    cfg = cfg or configuracion()
+    ficha = await (consulta or motor._get)(f"/tenders/{motor_id}")
+    docs = documentos_de(ficha)
+    if isinstance(n, bool) or not isinstance(n, int) or not 1 <= n <= len(docs):
+        raise ErrorPliego(f"n debe ser un número entre 1 y {len(docs)}" if docs else "Esa licitación no tiene documentos publicados")
+    if len(datos) > cfg["max_mb"] * 1_000_000:
+        raise ErrorPliego(f"El documento pesa más de {cfg['max_mb']} MB")
+    if await _descargas_hoy() >= cfg["max_diarios"]:
+        raise ErrorPliego(f"Se ha llegado al máximo de {cfg['max_diarios']} documentos al día: sigue mañana")
+    if formato_real(datos or b"") == "zip":
+        raise ErrorPliego("Es un ZIP: descomprímelo y sube los documentos de dentro por separado")
+    return await incorporar(motor_id, n, docs[n - 1]["nombre"], datos, analizar, extraer_texto)
 
 
 async def _cerrar(did: int, motor_id: str, sha: str, formato: str, datos: bytes, v: Veredicto) -> dict:

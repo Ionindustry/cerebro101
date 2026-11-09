@@ -3,7 +3,8 @@ import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useEffect, useState } from "react";
 import Redaccion from "./Redaccion";
-import { SOBRES_OFERTA, autorSeccionTexto, claseSeccion, estadoSeccionEtiqueta, mensajeOferta, pendientesOferta, precioAEnvio, resumenOfertaTexto, FORMULAS_PRECIO, costeErpTexto, mensajeReglas, reglasAEnvio, reglasAFormulario, cercaniaTexto, mensajeParecidas, motivosTexto, aptitudSimulacion, costeDeTexto, filasDeCurva, mensajeSimulador, probabilidadConRango, porcentaje, CUMPLIMIENTOS, cumplimientoEtiqueta, cumplimientoNecesitaNota, estadoEtiqueta, estadoPliego, estadoRequisito, sugerenciaDe, aptitudTexto, analisisPliegosTexto, etiquetaEmbudo, fechaTexto, fichaOrgHref, importeTexto, lecturaPliego, lugarCita, matrizCsv, matrizDe, mensajeEmbudo, mensajePliegos, resumenMatriz, nombreFuente, puedeDescargarPliego, resumenRequisitos, tipoRequisito, urlSegura } from "../../../../lib/licitaciones";
+import { aBase64 } from "../../../../lib/adjuntos";
+import { SOBRES_OFERTA, autorSeccionTexto, claseSeccion, estadoSeccionEtiqueta, mensajeOferta, pendientesOferta, precioAEnvio, resumenOfertaTexto, FORMULAS_PRECIO, costeErpTexto, mensajeReglas, reglasAEnvio, reglasAFormulario, cercaniaTexto, mensajeParecidas, motivosTexto, aptitudSimulacion, costeDeTexto, filasDeCurva, mensajeSimulador, probabilidadConRango, porcentaje, CUMPLIMIENTOS, cumplimientoEtiqueta, cumplimientoNecesitaNota, estadoEtiqueta, estadoPliego, estadoRequisito, sugerenciaDe, aptitudTexto, analisisPliegosTexto, etiquetaEmbudo, fechaTexto, fichaOrgHref, importeTexto, lecturaPliego, lugarCita, matrizCsv, matrizDe, mensajeEmbudo, mensajePliegos, mensajeSubidaPliego, validarPliegoSubida, ACCEPT_PLIEGO, resumenMatriz, nombreFuente, puedeDescargarPliego, resumenRequisitos, tipoRequisito, urlSegura } from "../../../../lib/licitaciones";
 import { Fallo, Item, pedir, pedirCerebro } from "../../cliente";
 
 const Dato = ({ t, children }) => <div><dt>{t}</dt><dd>{children ?? "—"}</dd></div>;
@@ -132,6 +133,17 @@ function Pliegos({ id }) {
     catch (e) { setError(e); await cargar(); }
     finally { setTrabajando(null); }
   };
+  const subir = async (n, ev) => {
+    const f = ev.target.files?.[0];
+    ev.target.value = "";                                   // permite volver a elegir el mismo fichero
+    if (!f) return;
+    const motivo = validarPliegoSubida(f);
+    if (motivo) { setError({ status: 422, detalle: motivo, subida: true }); return; }
+    setTrabajando(n); setError(null);
+    try { await pedirCerebro(`licitaciones/pliegos/${encodeURIComponent(id)}/subir`, enviar({ n, base64: aBase64(await f.arrayBuffer()) })); await cargar(); }
+    catch (e) { setError({ ...e, subida: true }); await cargar(); }
+    finally { setTrabajando(null); }
+  };
   const analizar = async () => {
     setTrabajando("analizando"); setError(null);
     try { await pedirCerebro(`licitaciones/pliegos/${encodeURIComponent(id)}/analizar`, { method: "POST" }); await cargar(); }
@@ -161,7 +173,7 @@ function Pliegos({ id }) {
     <section className="tarjeta" aria-label="Pliegos">
       <h2>Pliegos</h2>
       <p className="meta">Los documentos se bajan a cuarentena y pasan por el antivirus antes de leerse; nadie recibe el fichero original, solo su texto. Los requisitos los anota un agente de IA con su cita literal y una persona los confirma o rechaza.</p>
-      {error && <p role="alert" className="lic-error">{mensajePliegos(error.status)}</p>}
+      {error && <p role="alert" className="lic-error">{error.subida ? mensajeSubidaPliego(error.status, error.detalle) : mensajePliegos(error.status)}</p>}
       {(() => {
         const an = analisisPliegosTexto(d?.analisis);
         return (
@@ -183,6 +195,15 @@ function Pliegos({ id }) {
               {lectura && <span className="meta">{lectura}</span>}
               {x.descarga?.motivo && <span className="meta">{x.descarga.motivo}</span>}
               {puedeDescargarPliego(x.descarga) && <span className="lic-fila"><button className="boton no" disabled={trabajando !== null} onClick={() => bajar(x.n)}>{trabajando === x.n ? "Descargando y analizando…" : x.descarga ? "Reintentar" : "Descargar y analizar"}</button></span>}
+              {x.descarga?.estado !== "infectado" && (
+                <span className="lic-fila">
+                  <label className="boton no" aria-disabled={trabajando !== null} title="Si la plataforma rechaza la descarga automática: bájalo con tu navegador y súbelo aquí. Pasa por cuarentena y antivirus como los demás.">
+                    {trabajando === x.n ? "Subiendo y analizando…" : "Subir el documento a mano"}
+                    <input type="file" accept={ACCEPT_PLIEGO} hidden disabled={trabajando !== null} onChange={(ev) => subir(x.n, ev)} />
+                  </label>
+                  {urlSegura(x.enlace) && <a className="meta" href={urlSegura(x.enlace)} target="_blank" rel="noopener noreferrer">Abrirlo en la plataforma (para bajarlo con tu navegador)</a>}
+                </span>
+              )}
             </li>
           );
         })}

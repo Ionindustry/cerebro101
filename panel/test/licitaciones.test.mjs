@@ -4,7 +4,7 @@ import {
   antiguedadTexto, conAcceso, decidir, estadoEtiqueta, estadoMotor, filtrosAQuery, fechaTexto, importeTexto, limpiarCpv, limpiarNuts, mensajeDeError,
   nombreFuente, queryAFiltros, rutaPermitida, totalTexto, urlSegura,
 } from "../lib/licitaciones.js";
-import { viabilidadEtiqueta, admiteResumen, avisosDeAlertaTexto, canalEtiqueta, CANALES_ALERTA, ambitoTexto, eventoEtiqueta, filtroDeAlerta, filtroTexto, mensajeAlertas, sinLeerTexto } from "../lib/licitaciones.js";
+import { validarPliegoSubida, mensajeSubidaPliego, MAX_MB_PLIEGO, viabilidadEtiqueta, admiteResumen, avisosDeAlertaTexto, canalEtiqueta, CANALES_ALERTA, ambitoTexto, eventoEtiqueta, filtroDeAlerta, filtroTexto, mensajeAlertas, sinLeerTexto } from "../lib/licitaciones.js";
 import { SOBRES_OFERTA, autorSeccionTexto, estadoSeccionEtiqueta, mensajeOferta, pendientesOferta, precioAEnvio, resumenOfertaTexto, FILTROS_VACIOS, cercaniaTexto, costeErpTexto, mensajeParecidas, mensajeReglas, motivosTexto, reglasAEnvio, reglasAFormulario } from "../lib/licitaciones.js";
 import { rutaNoExiste } from "../lib/licitaciones.js";
 import {
@@ -1058,4 +1058,24 @@ test("revisión previa de la oferta: titular según el resultado", () => {
   assert.equal(revisionTitular({ resultado: "con_avisos", avisos: 1 }).clase, "aviso");
   assert.equal(revisionTitular({ resultado: "lista" }).clase, "abierta");
   assert.deepEqual(MARCA_REVISION, { ok: "✔", aviso: "!", bloqueo: "✘" });
+});
+
+test("subir un documento del pliego a mano: formatos y tamaño", () => {
+  const f = (name, size = 1000) => ({ name, size });
+  assert.equal(validarPliegoSubida(f("Pliego.PDF")), null);
+  assert.equal(validarPliegoSubida(f("a.docx")), null);
+  assert.equal(validarPliegoSubida(f("a.xlsx")), null);
+  assert.match(validarPliegoSubida(f("a.zip")), /ZIP/);
+  assert.match(validarPliegoSubida(f("a.doc")), /antiguo/);
+  assert.match(validarPliegoSubida(f("a.exe")), /no admitido/);
+  assert.match(validarPliegoSubida(f("a.pdf", 0)), /vacío/);
+  assert.match(validarPliegoSubida(f("a.pdf", MAX_MB_PLIEGO * 1_000_000 + 1)), /pesa más/);
+  assert.match(validarPliegoSubida(null), /leer/);
+});
+
+test("subir un documento del pliego: mensajes de error", () => {
+  assert.equal(mensajeSubidaPliego(422, "El documento no es un PDF"), "El documento no es un PDF");
+  assert.match(mensajeSubidaPliego(413), /pesa más/);
+  assert.match(mensajeSubidaPliego(403), /acceso/);
+  assert.match(mensajeSubidaPliego(500), /Inténtalo/);
 });
