@@ -77,7 +77,7 @@ calendario_plazos:
 crm:
   activo: true
   crear_detectadas: false       # false: el trato nace cuando se decide estudiarla; true: también las que detecta el sistema (más ruido en el CRM)
-  url_publica: http://localhost:8081/crm       # dirección del CRM para los enlaces del panel
+  url_publica: ""               # dirección del CRM para los enlaces del panel. Vacío = CRM_URL_PUBLICA del .env (p. ej. https://crm.101.cat/crm)
   etapas:                       # etapa del trato según el estado del embudo (los nombres de las etapas de tu CRM)
     detectada: Qualification
     en_estudio: Proposal/Quotation
@@ -142,7 +142,7 @@ resumen_hoy:
   activo: true
   desde: "08:30"
   hasta_hora: 12
-  url_panel: "http://localhost:3000"   # a dónde apuntan los enlaces del correo
+  url_panel: ""   # a dónde apuntan los enlaces del correo. Vacío = la dirección pública PANEL_URL del .env (con localhost, el enlace solo funciona en este equipo)
 
 # Análisis automático de los pliegos: al pasar una licitación a «en estudio», se descargan sus pliegos (cuarentena y antivirus) y el Analista de Pliegos anota los requisitos, con su cita literal, EN BORRADOR:
 # una persona los confirma. Acota el trabajo con modelos: como mucho `max_por_dia` licitaciones nuevas al día (las que se piden a mano no cuentan) y `max_documentos` documentos por licitación.
