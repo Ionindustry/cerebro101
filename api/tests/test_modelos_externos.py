@@ -128,6 +128,21 @@ class TestConsultar(unittest.TestCase):
         self.assertEqual(cuerpo["tools"][0]["input_schema"], ESQUEMA)
         self.assertEqual(cuerpo["model"], "claude-opus-5-5")
 
+    def test_si_claude_olvida_el_tipo_se_deduce_en_vez_de_descartar_la_respuesta(self):
+        with entorno(ANTHROPIC_API_KEY="clave-claude"):
+            herr = consultar(Ficha(), msgs(), {"claude": True}, claude_ok([], {"herramienta": "ofertas", "operacion": "leer", "argumentos": {}}))
+            resp = consultar(Ficha(), msgs(), {"claude": True}, claude_ok([], {"respuesta": "Hecho"}))
+            vacia = consultar(Ficha(), msgs(), {"claude": True}, claude_ok([], {"argumentos": {}}))
+        self.assertEqual((herr["tipo"], herr["herramienta"]), ("herramienta", "ofertas"))
+        self.assertEqual((resp["tipo"], resp["respuesta"]), ("respuesta", "Hecho"))
+        self.assertIsNone(vacia)                                               # sin nada que permita deducirlo sigue siendo inválida: se usa el modelo local
+
+    def test_completar_tipo_no_toca_lo_que_ya_lo_trae_ni_esquemas_sin_tipo(self):
+        from cerebro.llm import completar_tipo
+        con_tipo = {"tipo": "respuesta", "respuesta": "x", "herramienta": "y"}
+        self.assertEqual(completar_tipo(con_tipo, ESQUEMA), con_tipo)
+        self.assertEqual(completar_tipo({"respuesta": "x"}, {"properties": {"agente": {}}}), {"respuesta": "x"})
+
     def test_el_modelo_se_puede_cambiar_con_el_entorno(self):
         visto: list = []
         with entorno(ANTHROPIC_API_KEY="k", CLAUDE_MODELO="claude-sonnet-5-5"):

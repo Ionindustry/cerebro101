@@ -63,6 +63,16 @@ class ModeloNoEncontrado(ErrorModelo):
     codigo, http = "modelo_no_encontrado", 503
 
 
+def completar_tipo(datos: dict, esquema: dict) -> dict:
+    """Si el esquema pide `tipo` («herramienta» o «respuesta») y el modelo lo ha omitido pero el resto no deja dudas (trae `herramienta`, o trae `respuesta`), se deduce en vez de descartar toda la respuesta."""
+    if "tipo" in (esquema.get("properties") or {}) and "tipo" not in datos:
+        if str(datos.get("herramienta") or "").strip():
+            return {**datos, "tipo": "herramienta"}
+        if str(datos.get("respuesta") or "").strip():
+            return {**datos, "tipo": "respuesta"}
+    return datos
+
+
 class RespuestaInvalida(ErrorModelo):
     codigo, http = "respuesta_invalida", 502
 
@@ -246,6 +256,7 @@ async def chat(asignacion: Asignacion, mensajes: list[dict], esquema: dict | Non
             raise RespuestaInvalida(f"El modelo {asignacion.modelo} no devolvió JSON válido") from e
         if not isinstance(datos, dict):
             raise RespuestaInvalida(f"El modelo {asignacion.modelo} devolvió {type(datos).__name__} en vez de un objeto")
+        datos = completar_tipo(datos, esquema)
         faltan = [k for k in esquema.get("required", []) if k not in datos]
         if faltan:
             raise RespuestaInvalida(f"Faltan campos en la respuesta: {faltan}")

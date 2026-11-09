@@ -197,6 +197,8 @@ async def _ejecutar_agente(estado: Estado, ficha) -> Estado:
                                      sensibilidad=estado.get("sensibilidad"), usuario=estado.get("usuario"), **args)
         except Exception as e:  # el error vuelve al modelo para que corrija o cambie de plan
             resultado = {"error": str(e)}
+        if isinstance(resultado, dict) and "error" in resultado:       # sin esto no se sabe por qué un agente da vueltas hasta agotar los pasos
+            log.warning("agente %s: %s.%s devolvió un error: %s", ficha.id, d.get("herramienta"), d.get("operacion"), str(resultado["error"])[:200])
         clave = f"{d.get('herramienta', '?')}.{d.get('operacion', '?')}"
         await actividad.contar(ficha.id, ("error:" if isinstance(resultado, dict) and "error" in resultado else "uso:") + clave)
         pasos.append({"herramienta": d.get("herramienta"), "operacion": d.get("operacion"),
