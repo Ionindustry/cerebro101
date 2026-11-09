@@ -21,6 +21,10 @@
    `KEYCLOAK_URL_PUBLICA` con sus direcciones https y añadir `PANEL_URL/*` en las URI del cliente `cerebro-panel`.
    **Los enlaces de los correos** (el resumen diario de licitaciones) usan esa misma `PANEL_URL`; con `localhost` solo abren en el propio equipo, así que el sistema avisa en el registro. Los enlaces a los tratos del CRM usan `CRM_URL_PUBLICA` (p. ej. `https://crm.101.cat/crm`).
    Se cambian en `.env` y se aplican con `./scripts/actualizar.sh`.
+   **Keycloak conserva sus datos** (volumen `keycloak-datos`): los usuarios y ajustes sobreviven a recrear el contenedor. Si tu Keycloak es anterior a esto, ejecuta UNA vez
+   `./scripts/keycloak_conservar.sh`: para Keycloak, guarda una copia de sus datos en `copias/keycloak-FECHA/`, lo recrea con el volumen y vuelca en él lo que había (no pierde usuarios; `iniciar.sh` y `arrancar.sh` lo llaman solos).
+   **Cambiar la contraseña del administrador** (si se ha visto en un chat o una captura): `./scripts/keycloak_clave_admin.sh`. La genera al azar, la pone en Keycloak y la guarda en `.env` (permisos 600);
+   se muestra una vez por pantalla. Con datos permanentes, cambiar `KEYCLOAK_ADMIN_PASSWORD` a mano en el `.env` NO cambia la contraseña real: usa el script.
 5. Cargar documentos: `docker compose exec api python /app/scripts/cargar_conocimiento.py /datos/conocimiento`.
 6. ERPNext (incluido en `erpnext/docker-compose.yml`, basado en frappe_docker):
    - En `.env`: `ERPNEXT_DB_ROOT_PASSWORD`, `ERPNEXT_ADMIN_PASSWORD` y `ERPNEXT_SITE` (por defecto `erp.101.cat`).

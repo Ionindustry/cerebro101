@@ -341,7 +341,9 @@ services:
       # Emisor de los tokens fijo (la dirección que ve el navegador); el panel y la API lo usan también por dentro
       KC_HOSTNAME: "${KEYCLOAK_URL_PUBLICA:-http://localhost:8080}"
       KC_HOSTNAME_BACKCHANNEL_DYNAMIC: "true"
-    volumes: ["./config/keycloak:/opt/keycloak/data/import:ro"]
+    volumes:
+      - "./config/keycloak:/opt/keycloak/data/import:ro"
+      - "keycloak-datos:/opt/keycloak/data/h2"      # usuarios y ajustes: sin esto se perdían al recrear el contenedor (scripts/keycloak_conservar.sh lo estrena sin perder lo que haya)
     ports: ["127.0.0.1:8080:8080"]
     networks: [cerebro]
     restart: unless-stopped
@@ -415,7 +417,7 @@ services:
     networks: [cerebro]
     restart: unless-stopped
 
-volumes: {pgdata: {}, ollama: {}, datos: {}, whisper: {}, agent-reach: {}, langfuse-db: {}, langfuse-clickhouse: {},
+volumes: {keycloak-datos: {}, pgdata: {}, ollama: {}, datos: {}, whisper: {}, agent-reach: {}, langfuse-db: {}, langfuse-clickhouse: {},
   langfuse-clickhouse-logs: {}, langfuse-minio: {}, langfuse-redis: {}, redis-panel: {}, clamav-firmas: {}}
 
 networks:

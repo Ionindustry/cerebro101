@@ -60,6 +60,7 @@ docker info >/dev/null 2>&1 || { echo "[$(marca)] Docker no responde: arráncalo
 docker network inspect cerebro >/dev/null 2>&1 || docker network create cerebro >/dev/null
 
 echo "[$(marca)] Arrancando el Cerebro..."
+"$(dirname "$0")/keycloak_conservar.sh" >/dev/null 2>&1 || echo "[$(marca)] AVISO: Keycloak no pudo pasar a conservar sus datos (ejecuta ./scripts/keycloak_conservar.sh y mira el mensaje)"
 docker compose --progress quiet up -d --no-build "${SERVICIOS[@]}" || docker compose --progress quiet up -d "${SERVICIOS[@]}" || echo "[$(marca)] AVISO: docker compose up falló (mira docker compose ps)"
 
 if [ -f erpnext/docker-compose.yml ] && [ "${ARRANCAR_SIN_ERP:-0}" != 1 ] && [ -n "$("${ERP[@]}" ps -a -q 2>/dev/null)" ]; then
