@@ -364,6 +364,17 @@ CREATE TABLE IF NOT EXISTS vigilancia_avisos (
   detalle    text NOT NULL DEFAULT ''
 );
 
+-- Tipos de cambio (api/cerebro/cambio.py): los publica cada día laborable el Banco Central Europeo; se guardan los de cada día (euros por unidad de la moneda) para calcular los costes en euros de los
+-- proveedores que trabajan en otra moneda (api/cerebro/precios.py). El de la fecha más reciente manda; si es demasiado viejo, se avisa.
+CREATE TABLE IF NOT EXISTS tipos_cambio (
+  fecha          date NOT NULL,
+  moneda         text NOT NULL,
+  eur_por_unidad numeric(18,8) NOT NULL CHECK (eur_por_unidad > 0),
+  fuente         text NOT NULL DEFAULT 'BCE',
+  obtenido       timestamptz NOT NULL DEFAULT now(),
+  PRIMARY KEY (fecha, moneda)
+);
+
 -- Resumen diario de licitaciones (a las 16:00, para Dirección; ver api/cerebro/licitaciones/resumen.py). El contenido es un documento completo:
 -- lo que se vio ese día no cambia aunque después cambien las licitaciones.
 CREATE TABLE IF NOT EXISTS licitaciones_resumenes (

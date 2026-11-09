@@ -1,0 +1,36 @@
+# PRECIOS DE VENTA: márgenes por familia, redondeo y costes de cada canal de compra (cerebro/precios.py). Todo se calcula con código; la IA no calcula importes.
+# Se edita aquí, sin tocar código. Los precios de los proveedores se entienden SIN IVA (el IVA va aparte).
+
+margen:
+  base: venta                  # el margen es SOBRE LA VENTA: venta = coste ÷ (1 − margen). Con coste 100 y margen 50 %: venta 200 (no 150, que sería un recargo del 50 % sobre el coste)
+  por_defecto: 0.50            # margen de las familias que no se citan abajo (0.50 = 50 % de la venta)
+  minimo: 0.10                 # por debajo de este margen, la fila se marca para revisar (no se bloquea: decide Dirección)
+  familias: {}                 # margen por familia (0.40 = 40 %). Ejemplo, cuando se decida:  camaras: 0.40  /  accesorios: 0.55  /  grabadores: 0.35
+
+redondeo:
+  modo: centimo                # centimo (2 decimales) | euro (hacia arriba, euros enteros) | terminar_en (hacia arriba, acabado en el valor de «terminacion»)
+  terminacion: 0.90            # solo con terminar_en: 0.90 (…,90) o 0.99 (…,99)
+
+# Cómo se llega al coste en euros de cada canal de compra. El mismo producto puede venir del fabricante y del distribuidor: se compara el coste YA EN EUROS y con la logística.
+canales:
+  fabricante:                  # compra directa a fábrica (p. ej. EXW: sin transporte, aranceles ni cambio)
+    moneda: USD                # el fabricante que trabaja en dólares, en dólares; el que trabaja en euros, EUR
+    logistica_pct: 0.15        # % sobre el coste en euros para transporte, aranceles y gestión (0.15 = 15 %). PROVISIONAL: ajústalo con una importación real
+  distribuidor:                # compra a un distribuidor local (los precios de su tarifa son los de compra, sin descuento adicional)
+    moneda: EUR
+    logistica_pct: 0           # portes y demás sobre el coste: 0 si van incluidos
+
+# Tipo de cambio EN LÍNEA: el sistema baja cada día laborable el del Banco Central Europeo (cerebro/cambio.py) y usa el más reciente. Los valores de «cambio_a_eur» de abajo son solo el respaldo
+# si todavía no se ha bajado ninguno o si el último es demasiado viejo (y entonces el cálculo lo avisa).
+cambio_online:
+  activo: true
+  max_dias: 5                  # un tipo con más días que esto se considera viejo: se usa el de respaldo y se avisa (cubre fines de semana y festivos)
+  colchon_pct: 0               # margen de seguridad sobre el cambio, por si se mueve entre que compras y vendes (0.02 = 2 % más caro). 0 = sin colchón
+
+# Tipo de cambio de RESPALDO: euros por unidad de la moneda (0.92 = 1 USD son 0,92 EUR). Sin dato, un coste en otra moneda no se convierte y la fila lo dice.
+cambio_a_eur:
+  USD: 0.92                    # PROVISIONAL: pon el cambio real
+  GBP: null
+
+# Lo que está aquí es un valor de partida y no un dato confirmado: cada cálculo que lo use lo avisa («provisional») hasta que lo quites de la lista.
+provisional: [margen.por_defecto, canales.fabricante.logistica_pct, cambio_a_eur.USD]
