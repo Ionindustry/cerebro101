@@ -46,17 +46,17 @@ pesos:
   procedimiento: 10
 
 # PERFIL DE LA EMPRESA COMO LICITADOR (lo que Viabilidad sabe de 101.cat al valorar si merece la pena presentarse). Rellénalo con datos REALES; lo que no se rellene se le dice al agente como «no consta»
-# (nunca inventa). 101.cat es una empresa de NUEVA CREACIÓN: no tiene histórico de volumen de negocio ni de contratos, y casi nunca podrá acreditar la solvencia por cuentas anuales; Viabilidad mira
-# entonces si el pliego exige solvencia o clasificación y si hay otra vía (medios personales o externos, UTE, umbrales sin exigencia). Es una ayuda: lo decide una persona y la validez legal de cada vía
-# la confirma el asesor.
+# (nunca inventa). La sociedad que se presenta (la Company «101» del ERP) es de 2012 y ya ha facturado: NO es de nueva creación, así que puede acreditar la solvencia económica por su volumen de negocios y la
+# técnica por su relación de suministros. (Si algún día se presentara una sociedad con menos de 5 años, poner nueva_creacion: true: entonces Viabilidad mira otras vías, medios externos, UTE o umbrales sin
+# exigencia.) Es una ayuda: lo decide una persona y la validez legal de cada vía la confirma el asesor.
 perfil_licitador:
-  nueva_creacion: true
-  constitucion: "2026-11-04"            # fecha de constitución, aaaa-mm-dd
+  nueva_creacion: false
+  constitucion: "2012"                  # fecha de constitución: aaaa-mm-dd, o solo el año si no se sabe el día
   capital_social: "20.000 €"          # p. ej. «3.000 €»
-  rolece: "en trámite"                  # inscripción en el Registro Oficial de Licitadores: «sí», «no» o «en trámite»
+  rolece: "sí"                          # inscripción en el Registro Oficial de Licitadores: «sí», «no» o «en trámite»
   seguro_rc: "300.000 €"               # seguro de responsabilidad civil: cobertura, p. ej. «600.000 €»
   certificaciones: ["ISO 9001", "ISO 14001", "ISO 27001", "ENS nivel alto (en proceso de certificación)"]         # p. ej. [ISO 9001, ISO 27001]
-  experiencia: "El equipo tiene 20 años de experiencia en videovigilancia (a título personal de sus miembros: la empresa en sí no tiene histórico de contratos)"             # experiencia del equipo o del administrador en trabajos parecidos (texto libre y breve)
+  experiencia: "El equipo tiene 20 años de experiencia en videovigilancia; la sociedad lleva operando desde 2012 y tiene suministros de videovigilancia (detalle de importes y clientes: pendiente de completar)"             # experiencia del equipo o del administrador en trabajos parecidos (texto libre y breve)
   notas: ""                   # cualquier otra cosa que deba saber Viabilidad (aliados para una UTE, subcontratistas con solvencia…)
 
 # Embudo propio: el consumidor de eventos mete en el embudo (estado «detectada») las licitaciones NUEVAS, abiertas y con un encaje igual o superior

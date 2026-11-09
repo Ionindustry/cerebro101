@@ -109,10 +109,11 @@ class TestPeticion(unittest.TestCase):
         self.assertIn("Requisitos del pliego que ya ha leído", p)
         self.assertNotIn("Requisitos del pliego que ya ha leído", rastreo.construir_peticion(fila(), {}))
 
-    def test_la_configuracion_real_trae_el_perfil_de_empresa_nueva(self):
+    def test_la_configuracion_real_trae_el_perfil_de_la_sociedad_con_historia(self):
         from cerebro.licitaciones import resumen
         p = resumen.config().get("perfil_licitador")
-        self.assertTrue(p["nueva_creacion"])
+        self.assertFalse(p["nueva_creacion"])                           # la sociedad es de 2012 y ya ha facturado
+        self.assertTrue(str(p["constitucion"]).startswith("2012"))
         self.assertIn("Perfil de 101.cat como licitador", rastreo.construir_peticion({"motor_id": "x", "titulo": "t"}))
 
     def test_los_datos_de_terceros_van_dentro_de_un_bloque_y_no_pueden_cerrarlo(self):
