@@ -53,3 +53,50 @@ class TestPermisosDeLosRoles(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class FalsoERP:
+    """Un ERP de mentira para `aplicar_departamento`: guarda los permisos del rol y registra lo que se le pide."""
+    def __init__(self, filas):
+        self.filas, self.llamadas = filas, []
+
+    def llamar(self, metodo, ruta, datos=None):
+        self.llamadas.append((metodo, ruta, datos))
+        if ruta.startswith("/api/resource/Role/"):
+            return 200, {"data": {}}
+        if ruta.startswith("/api/resource/Custom DocPerm"):
+            return 200, {"data": self.filas}
+        if ruta.endswith("permission_manager.add"):
+            return 417, {"error": "ya existe"}                      # la fila existe (solo con «select»): «add» no sirve
+        if ruta.startswith("/api/resource/User/"):
+            return 200, {"data": {"roles": [{"role": "Cerebro Licitaciones"}]}}
+        return 200, {}
+
+
+class TestAplicarSobreFilaExistente(unittest.TestCase):
+    def test_una_fila_solo_con_select_se_ajusta_a_lectura(self):
+        import tempfile
+        fila = {"parent": "Company", "permlevel": 0, **{t: 0 for t in roles.TIPOS}, "select": 1}
+        erp = FalsoERP([fila])
+        with tempfile.TemporaryDirectory() as t:
+            env = Path(t) / ".env"
+            env.write_text("ERPNEXT_TOKEN_LICITACIONES=a:b\n", encoding="utf-8")
+            from unittest import mock
+            with mock.patch.object(roles, "probar", return_value="lee"), mock.patch.object(roles, "puede_leer", return_value=True), mock.patch.object(roles.time, "sleep"):
+                roles.aplicar_departamento(erp, POL, "licitaciones", "101.cat", env, False, False, "http://x")
+        ajustes = [(d["ptype"], d["value"]) for m, r, d in erp.llamadas if r.endswith("permission_manager.update") and d["doctype"] == "Company"]
+        self.assertIn(("read", 1), ajustes)                       # ahora SÍ lee la Company
+        self.assertIn(("select", 0), ajustes)                     # y deja de ser solo «select»
+
+    def test_el_filtro_de_permisos_no_va_codificado_dos_veces(self):
+        import tempfile
+        erp = FalsoERP([])
+        with tempfile.TemporaryDirectory() as t:
+            env = Path(t) / ".env"
+            env.write_text("ERPNEXT_TOKEN_LICITACIONES=a:b\n", encoding="utf-8")
+            from unittest import mock
+            with mock.patch.object(roles, "probar", return_value="lee"), mock.patch.object(roles, "puede_leer", return_value=True), mock.patch.object(roles.time, "sleep"):
+                roles.aplicar_departamento(erp, POL, "licitaciones", "101.cat", env, True, False, "http://x")
+        pedido = next(r for m, r, d in erp.llamadas if r.startswith("/api/resource/Custom DocPerm"))
+        self.assertNotIn("%", pedido)
+        self.assertIn('"role"', pedido)

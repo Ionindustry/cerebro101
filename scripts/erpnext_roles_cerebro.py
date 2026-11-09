@@ -73,6 +73,18 @@ def probar(url: str, token: str, doctype: str) -> str:
         return f"error:{type(e).__name__}"
 
 
+def puede_leer(url: str, token: str, doctype: str) -> bool | None:
+    """Si el usuario técnico tiene permiso de LECTURA (no solo de selección) sobre el documento, según el propio ERP. None si no se pudo preguntar.
+    Con solo «select» una lista devuelve únicamente el nombre y parece que «lee»: por eso no basta con pedir la lista."""
+    req = urllib.request.Request(f"{url.rstrip('/')}/api/method/frappe.client.has_permission?doctype={urllib.parse.quote(doctype, safe='')}&perm_type=read",
+                                 headers={"Authorization": f"token {token}", "Accept": "application/json"})
+    try:
+        with urllib.request.urlopen(req, timeout=20) as r:
+            return bool(json.load(r).get("message", {}).get("has_permission"))
+    except Exception:  # noqa: BLE001
+        return None
+
+
 def aplicar_departamento(c: Cliente, politica: dict, dep: str, dominio: str, ruta_env: Path, simular: bool, regenerar: bool, url: str) -> bool:
     rol, correo = nombre_rol(dep), f"cerebro.{dep}@{dominio}"
     deseados = permisos_deseados(politica, dep)
@@ -87,8 +99,8 @@ def aplicar_departamento(c: Cliente, politica: dict, dep: str, dominio: str, rut
             print("  ERROR: no se pudo crear el rol"); return False
 
     # 2) permisos: los que hay ahora frente a los que deben haber
-    filtro = urllib.parse.quote(json.dumps([["role", "=", rol]]))
-    campos = urllib.parse.quote(json.dumps(["parent", "permlevel"] + TIPOS))
+    filtro = json.dumps([["role", "=", rol]])                  # sin codificar: `llamar` ya codifica la ruta entera (codificado dos veces, ERPNext no entendía el filtro y devolvía «nada»)
+    campos = json.dumps(["parent", "permlevel"] + TIPOS)
     st, r = c.llamar("GET", f"/api/resource/Custom DocPerm?filters={filtro}&fields={campos}&limit_page_length=1000")
     actuales = {x["parent"]: {t: x.get(t, 0) for t in TIPOS} for x in (r.get("data", []) if st == 200 else []) if x.get("permlevel", 0) == 0}
     cambios = 0
@@ -102,7 +114,7 @@ def aplicar_departamento(c: Cliente, politica: dict, dep: str, dominio: str, rut
         if simular:
             continue
         st, rr = c.llamar("POST", PM + "add", {"parent": doc, "role": rol, "permlevel": 0})
-        if st >= 300:
+        if st >= 300 and doc not in actuales:          # si la fila ya existe (p. ej. solo con «select»), «add» da error y lo que hay que hacer es AJUSTARLA
             no_existen.add(doc)
             continue
         for t in TIPOS:
@@ -162,7 +174,7 @@ def aplicar_departamento(c: Cliente, politica: dict, dep: str, dominio: str, rut
     solo_nombre = set(politica.get("referencias", []) or [])           # con «selección» el ERP devuelve únicamente el nombre
     malos_no = malos_si = []
     for intento in range(4):
-        malos_no = [d for d in sorted(leer) if probar(url, token, d) != "lee"]
+        malos_no = [d for d in sorted(leer) if probar(url, token, d) != "lee" or puede_leer(url, token, d) is False]
         malos_si = [d for d in VIGILADOS if d not in leer and d not in solo_nombre and d != "User" and probar(url, token, d) == "lee"]
         if not malos_no and not malos_si:
             break
