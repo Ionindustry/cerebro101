@@ -20,7 +20,14 @@ canales:
     moneda: EUR
     logistica_pct: 0           # portes y demás sobre el coste: 0 si van incluidos
 
-# Tipo de cambio: euros por unidad de la moneda (0.92 = 1 USD son 0,92 EUR). Sin dato, un coste en otra moneda no se convierte y la fila lo dice.
+# Tipo de cambio EN LÍNEA: el sistema baja cada día laborable el del Banco Central Europeo (cerebro/cambio.py) y usa el más reciente. Los valores de «cambio_a_eur» de abajo son solo el respaldo
+# si todavía no se ha bajado ninguno o si el último es demasiado viejo (y entonces el cálculo lo avisa).
+cambio_online:
+  activo: true
+  max_dias: 5                  # un tipo con más días que esto se considera viejo: se usa el de respaldo y se avisa (cubre fines de semana y festivos)
+  colchon_pct: 0               # margen de seguridad sobre el cambio, por si se mueve entre que compras y vendes (0.02 = 2 % más caro). 0 = sin colchón
+
+# Tipo de cambio de RESPALDO: euros por unidad de la moneda (0.92 = 1 USD son 0,92 EUR). Sin dato, un coste en otra moneda no se convierte y la fila lo dice.
 cambio_a_eur:
   USD: 0.92                    # PROVISIONAL: pon el cambio real
   GBP: null

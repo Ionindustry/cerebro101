@@ -21,7 +21,7 @@ CENT = Decimal("0.01")
 MARGEN_MAX = Decimal("0.95")
 DEFECTO = {"margen": {"base": "venta", "por_defecto": 0.50, "minimo": 0.10, "familias": {}}, "redondeo": {"modo": "centimo", "terminacion": 0.90},
            "canales": {"fabricante": {"moneda": "USD", "logistica_pct": None}, "distribuidor": {"moneda": "EUR", "logistica_pct": 0}},
-           "cambio_a_eur": {"USD": None, "GBP": None}, "provisional": []}
+           "cambio_a_eur": {"USD": None, "GBP": None}, "cambio_online": {"activo": True, "max_dias": 5, "colchon_pct": 0}, "provisional": []}
 
 
 class ErrorPrecios(ValueError):
@@ -77,7 +77,36 @@ def configuracion(cfg: dict | None = None) -> dict:
     for nombre, c in {**DEFECTO["canales"], **(cfg.get("canales") or {})}.items():
         canales[nombre] = {"moneda": str((c or {}).get("moneda") or "EUR").upper(), "logistica_pct": _d((c or {}).get("logistica_pct"), f"logística de «{nombre}»")}
     cambio = {str(k).upper(): _d(v, f"cambio {k}") for k, v in {**DEFECTO["cambio_a_eur"], **(cfg.get("cambio_a_eur") or {})}.items()}
-    return {"margen": m, "redondeo": r, "canales": canales, "cambio_a_eur": cambio, "provisional": list(cfg.get("provisional") or [])}
+    co = {**DEFECTO["cambio_online"], **(cfg.get("cambio_online") or {})}
+    colchon = _d(co.get("colchon_pct"), "cambio_online.colchon_pct") or Decimal(0)
+    if not Decimal(0) <= colchon <= Decimal("0.5"):
+        raise ErrorPrecios("cambio_online.colchon_pct debe estar entre 0 y 0,5 (0.02 = 2 %)")
+    max_dias = int(co["max_dias"]) if co.get("max_dias") is not None else 5
+    if not 1 <= max_dias <= 60:
+        raise ErrorPrecios("cambio_online.max_dias debe estar entre 1 y 60")
+    return {"margen": m, "redondeo": r, "canales": canales, "cambio_a_eur": cambio, "provisional": list(cfg.get("provisional") or []),
+            "cambio_online": {"activo": bool(co.get("activo", True)), "max_dias": max_dias, "colchon_pct": colchon}, "cambio_info": {}}
+
+
+def con_cambios_en_linea(cfg: dict, ultimos: dict, hoy) -> dict:
+    """La configuración con el tipo de cambio EN LÍNEA (el del Banco Central Europeo, ver cerebro/cambio.py) en vez del de respaldo del fichero, para las monedas que lo tengan y no sea viejo (más de `max_dias`).
+    `ultimos` = {moneda: {"fecha": date, "eur_por_unidad": Decimal}}. Si hay `colchon_pct`, el cambio se encarece ese porcentaje (margen de seguridad). Lo que no se pueda usar queda con el de respaldo y la fila lo avisa."""
+    co = cfg["cambio_online"]
+    nuevo = {**cfg, "cambio_a_eur": dict(cfg["cambio_a_eur"]), "cambio_info": {}, "provisional": list(cfg["provisional"])}
+    for moneda in {m for m in list(cfg["cambio_a_eur"]) + [c["moneda"] for c in cfg["canales"].values()] if m != "EUR"}:
+        u = ultimos.get(moneda)
+        if not co["activo"] or not u:
+            nuevo["cambio_info"][moneda] = {"origen": "respaldo", "motivo": "sin tipo en línea"}
+            continue
+        dias = (hoy - u["fecha"]).days
+        if dias > co["max_dias"]:
+            nuevo["cambio_info"][moneda] = {"origen": "respaldo", "motivo": f"el último tipo en línea es del {u['fecha']} (hace {dias} días)"}
+            continue
+        nuevo["cambio_a_eur"][moneda] = Decimal(str(u["eur_por_unidad"])) * (1 + co["colchon_pct"])
+        nuevo["cambio_info"][moneda] = {"origen": "BCE", "fecha": u["fecha"], "dias": dias}
+        if f"cambio_a_eur.{moneda}" in nuevo["provisional"]:
+            nuevo["provisional"].remove(f"cambio_a_eur.{moneda}")
+    return nuevo
 
 
 def margen_de(familia: str, cfg: dict) -> Decimal:
@@ -103,7 +132,10 @@ def coste_en_euros(coste, moneda: str, canal: str, cfg: dict) -> tuple[Decimal, 
         if cambio is None or cambio <= 0:
             raise ErrorPrecios(f"Falta el tipo de cambio de {moneda} a EUR (cambio_a_eur en config/precios.yaml)")
         c = c * cambio
-        if f"cambio_a_eur.{moneda}" in cfg["provisional"]:
+        info = cfg.get("cambio_info", {}).get(moneda)
+        if info and info["origen"] == "respaldo" and cfg["cambio_online"]["activo"]:
+            avisos.append(f"cambio {moneda}→EUR de respaldo ({info['motivo']})")
+        elif f"cambio_a_eur.{moneda}" in cfg["provisional"]:
             avisos.append(f"cambio {moneda}→EUR provisional")
     log = (cfg["canales"].get(canal) or {}).get("logistica_pct")
     if log is None:

@@ -73,6 +73,7 @@ app.conf.beat_schedule = {**_calendario(), **_resumen_licitaciones(), **_rastreo
                           "avisos-por-correo": {"task": "cerebro.tareas.celery_app.enviar_avisos_correo", "schedule": 300.0},
                           "hoy-por-correo": {"task": "cerebro.tareas.celery_app.enviar_hoy_por_correo", "schedule": 3600.0},
                           "vigilar-antivirus": {"task": "cerebro.tareas.celery_app.vigilar_antivirus", "schedule": 10800.0},
+                          "cambio-bce": {"task": "cerebro.tareas.celery_app.actualizar_cambio", "schedule": crontab(minute="30", hour="16,17,18", day_of_week="1-5")},
                           "vigilar-copias": {"task": "cerebro.tareas.celery_app.vigilar_copias", "schedule": 21600.0},
                           "plazos-urgentes": {"task": "cerebro.tareas.celery_app.avisar_plazos", "schedule": 3600.0},
                           "vigilante-motor": {"task": "cerebro.tareas.celery_app.vigilar_motor", "schedule": 900.0},
@@ -223,6 +224,19 @@ def vigilar_copias() -> dict:
     """Cada 6 horas mira si hay una copia de seguridad correcta reciente y, si pasan más de 3 días sin ella, avisa a soporte@ (una vez cada 24 h) (cerebro/copias.py). Sin IA."""
     from .. import copias
     return asyncio.run(copias.vigilar())
+
+
+@app.task(name="cerebro.tareas.celery_app.actualizar_cambio", bind=True, max_retries=3)
+def actualizar_cambio(self) -> dict:
+    """Cada día laborable, después de las 16:00 de Madrid (cuando el Banco Central Europeo publica), baja el tipo de cambio y lo guarda para los precios (cerebro/cambio.py). Es idempotente: las pasadas de las 17:30
+    y las 18:30 solo repiten lo ya guardado si todo fue bien, y recogen el dato si la primera falló. Sin IA."""
+    from .. import cambio
+    try:
+        return asyncio.run(cambio.actualizar())
+    except cambio.ErrorCambio as e:
+        if self.request.retries < self.max_retries:
+            raise self.retry(countdown=600)
+        return {"estado": "error", "motivo": str(e)}
 
 
 @app.task(name="cerebro.tareas.celery_app.avisar_plazos")

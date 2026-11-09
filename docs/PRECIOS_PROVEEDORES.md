@@ -5,6 +5,9 @@ Lo que Dirección ha pedido y cómo se construye, por pasos (cada uno, su PR). *
 - **Dos tipos de proveedor para el mismo producto:** el **fabricante** (precio de fábrica, p. ej. EXW; pide logística, aranceles y cambio) y el **distribuidor** (precio local con stock). El mismo producto puede venir de los dos:
   hay que reconocerlo por la referencia del fabricante y el EAN, guardar **un solo producto con varios costes (uno por proveedor)** y poder elegir el coste (el más barato, o el más barato con stock).
 - **Moneda:** la del proveedor. Un fabricante que trabaja en dólares, en dólares; uno que trabaja en euros, en euros. El cambio y la logística son parámetros editables.
+- **Tipo de cambio en línea:** el sistema baja cada día laborable el del **Banco Central Europeo** (`cerebro/cambio.py`, tarea a las 16:30 de Madrid, gratuito y sin clave) y usa el más reciente. El del fichero
+  `config/precios.yaml` es solo el **respaldo** (sin tipo guardado o con más de `max_dias` días); en ese caso cada cálculo lo avisa. Se puede añadir un **colchón** (`colchon_pct`) contra variaciones. Primera carga a mano:
+  `docker compose exec api python /app/scripts/actualizar_cambio.py`.
 - **IVA aparte:** todos los precios se entienden **sin IVA**.
 - **Márgenes por familia, sobre la venta:** `venta = coste ÷ (1 − margen)` (con coste 100 y margen 30 %: 142,86 €, no 130 €).
 - **Datos de cada producto:** referencia, descripción, características técnicas, precio de coste, precio de venta y stock disponible; y documentación del proveedor (listas de precios, NDA, fichas técnicas, catálogos).
