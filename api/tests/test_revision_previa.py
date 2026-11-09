@@ -31,7 +31,7 @@ def dobles(**kw):
         return {"documentos": [{"n": 1, "descarga": {"estado": "limpio"}}, {"n": 2, "descarga": None}]}
 
     async def requisitos(m):
-        return {"requisitos": [{"estado": "confirmado", "tipo": "solvencia_economica", "resumen": "Volumen anual de negocios de 500.000 €", "valor": "", "cita": ""},
+        return {"requisitos": [{"estado": "confirmado", "tipo": "solvencia_economica", "resumen": "Certificado ISO 45001 de seguridad y salud en el trabajo", "valor": "", "cita": ""},
                                {"estado": "borrador", "tipo": "plazo", "resumen": "Entrega en 30 días", "valor": "", "cita": ""}]}
 
     async def oferta(m):

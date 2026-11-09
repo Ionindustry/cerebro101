@@ -87,9 +87,9 @@ class TestSeguimiento(unittest.TestCase):
         return {"id": i, "motor_id": f"0b1f7a3e-1111-4222-8333-44444444444{i}", "titulo": f"Lic {i}", "organismo": "Ayto", "estado": estado, "fecha_limite": lim, **kw}
 
     def test_ordena_por_plazo_marca_urgentes_y_cuenta_requisitos_y_bloqueos(self):
-        reqs = [{"estado": "confirmado", "tipo": "solvencia_economica", "resumen": "Volumen anual de negocios de 500.000 €", "valor": "", "cita": ""},
+        reqs = [{"estado": "confirmado", "tipo": "solvencia_economica", "resumen": "Certificado ISO 45001 de seguridad y salud en el trabajo", "valor": "", "cita": ""},
                 {"estado": "borrador", "tipo": "plazo", "resumen": "Entrega en 30 días", "valor": "", "cita": ""},
-                {"estado": "rechazado", "tipo": "solvencia_economica", "resumen": "Volumen anual de negocios", "valor": "", "cita": ""}]
+                {"estado": "rechazado", "tipo": "solvencia_economica", "resumen": "Certificado ISO 45001", "valor": "", "cita": ""}]
         r = self.seg([self.fila(1, dias=20), self.fila(2, dias=3), self.fila(3, "presentada", dias=None)], reqs)
         self.assertEqual([i["id"] for i in r["items"]], [2, 1, 3])                  # primero lo urgente, las presentadas al final
         self.assertEqual((r["total"], r["urgentes"]), (3, 1))
