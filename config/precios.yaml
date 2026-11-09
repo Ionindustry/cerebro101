@@ -34,3 +34,14 @@ cambio_a_eur:
 
 # Lo que está aquí es un valor de partida y no un dato confirmado: cada cálculo que lo use lo avisa («provisional») hasta que lo quites de la lista.
 provisional: [canales.fabricante.logistica_pct, cambio_a_eur.USD]   # el margen del 50 % sobre la venta lo confirmó Dirección
+
+# Estrategias de precio frente a la COMPETENCIA (cerebro/mercado.py, cerebro/precios.py): cada una parte de un precio de la competencia (el mínimo, la mediana o el máximo de los que se han anotado, sin IVA)
+# y le aplica un ajuste (-0.03 = un 3 % por debajo). Nunca baja del margen mínimo. Dirección elige cuál aplicar a cada producto, a una familia o a todos. El precio con tu margen (50 % sobre la venta) va siempre aparte.
+estrategias:
+  competitivo: {base: minimo, ajuste: -0.03}      # un 3 % por debajo del más barato
+  alineado:    {base: mediana, ajuste: 0}          # al precio habitual del mercado
+  premium:     {base: mediana, ajuste: 0.05}       # un 5 % por encima de la mediana
+
+mercado:
+  max_dias: 90                 # un precio de la competencia con más de estos días no cuenta (los precios cambian)
+  iva_pct: 21                  # IVA que se quita a los precios de tienda (que lo llevan incluido) para compararlos con los nuestros, que van sin IVA

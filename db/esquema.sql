@@ -620,6 +620,24 @@ CREATE TABLE IF NOT EXISTS propuestas_venta (
   aplicada_en  timestamptz
 );
 
+-- Precios de la competencia y del mercado (api/cerebro/mercado.py): cada referencia lleva su fuente y su fecha para que Dirección pueda comprobarla; con ellas el código calcula las estrategias de precio.
+CREATE TABLE IF NOT EXISTS referencias_mercado (
+  id               bigserial PRIMARY KEY,
+  codigo           text NOT NULL,                       -- código del artículo (marca + referencia), el de la propuesta de precios
+  tipo             text NOT NULL CHECK (tipo IN ('tienda', 'distribuidor', 'tarifa', 'adjudicacion')),
+  fuente           text NOT NULL,
+  url              text,
+  precio           numeric(14, 2) NOT NULL,             -- tal como lo ve el cliente
+  iva_incluido_pct numeric(5, 2) NOT NULL DEFAULT 0,
+  precio_sin_iva   numeric(14, 2) NOT NULL,
+  fecha            date NOT NULL,
+  nota             text,
+  agente           text NOT NULL,
+  retirada         boolean NOT NULL DEFAULT false,
+  creado           timestamptz NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS referencias_mercado_codigo ON referencias_mercado (codigo) WHERE NOT retirada;
+
 -- DEUC base de cada sociedad, subido desde Jarvis (api/cerebro/licitaciones/deuc.py): un Word o un PDF con formulario con los datos de la empresa ya rellenados. El fichero está en
 -- DEUC_DIR/<sociedad>/<sha256>.<formato>; aquí queda quién lo subió y cuándo (la versión más reciente de cada sociedad es la que se usa; las anteriores se conservan).
 CREATE TABLE IF NOT EXISTS deuc_base (

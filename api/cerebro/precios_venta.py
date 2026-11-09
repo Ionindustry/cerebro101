@@ -14,7 +14,9 @@ from decimal import ROUND_HALF_UP, Decimal, InvalidOperation
 
 from psycopg.types.json import Jsonb
 
-from . import cambio, listas_precios as LP, precios
+from datetime import date
+
+from . import cambio, listas_precios as LP, mercado as M, precios
 
 log = logging.getLogger("cerebro.precios_venta")
 CENT = Decimal("0.01")
@@ -60,11 +62,12 @@ async def _ofertas() -> tuple[dict[str, dict[str, dict]], int]:
         for l in f["lineas"]:
             ofertas.setdefault(l["codigo"], {})[f["lista"]] = {
                 "proveedor": f["proveedor"]["nombre"], "lista": f["lista"], "canal": canal, "coste": l["precio"], "moneda": f["moneda"], "stock": l.get("stock"), "ref": l["ref"], "desc": l["desc"],
-                "familia": l.get("familia") or "", "marca": l.get("marca") or ""}
+                "familia": l.get("familia") or "", "marca": l.get("marca") or "", "pvp": l.get("pvp")}
     return ofertas, sin_tarifa
 
 
-def calcular_lineas(ofertas: dict[str, dict[str, dict]], cfg: dict, actuales: dict[str, Decimal], ajustes: dict[str, Decimal] | None = None, excluir: set[str] | None = None) -> tuple[list[dict], list[str]]:
+def calcular_lineas(ofertas: dict[str, dict[str, dict]], cfg: dict, actuales: dict[str, Decimal], ajustes: dict[str, Decimal] | None = None, excluir: set[str] | None = None,
+                    referencias: dict[str, list[dict]] | None = None, hoy: date | None = None) -> tuple[list[dict], list[str]]:
     """Del mejor coste de cada artículo a su línea de propuesta. Pura (sin ERP ni base de datos)."""
     lineas, avisos, sin_precio = [], [], 0
     for codigo in sorted(ofertas):
@@ -83,7 +86,9 @@ def calcular_lineas(ofertas: dict[str, dict[str, dict]], cfg: dict, actuales: di
             av.append(f"el precio ajustado deja un margen por debajo del mínimo ({cfg['margen']['minimo'] * 100:.0f} %)")
         actual = actuales.get(codigo)
         tipo, pct = _cambio(venta, actual)
-        lineas.append({"codigo": codigo, "ref": mejor["ref"], "desc": mejor["desc"][:140], "familia": mejor["familia"], "marca": mejor["marca"], "proveedor": mejor["proveedor"], "canal": mejor["canal"],
+        mer = M.estadisticas((referencias or {}).get(codigo, []), cfg["mercado"]["max_dias"], hoy)
+        estr = precios.estrategias_de_precio(c.coste_eur, mer, cfg) if mer and mer.get("n") else {}
+        lineas.append({"mercado": mer, "estrategias": estr, "pvp_fabricante": mejor.get("pvp"), "codigo": codigo, "ref": mejor["ref"], "desc": mejor["desc"][:140], "familia": mejor["familia"], "marca": mejor["marca"], "proveedor": mejor["proveedor"], "canal": mejor["canal"],
                        "coste": str(mejor["coste"]), "moneda": mejor["moneda"], "coste_eur": str(c.coste_eur), "ofertas": len(ofertas[codigo]), "calculado": str(calculado), "venta": str(venta),
                        "ajustado": final is not None, "excluida": codigo in (excluir or set()), "margen": str(margen), "actual": None if actual is None else str(actual), "cambio": tipo, "variacion_pct": pct, "avisos": av})
     if sin_precio:
@@ -97,7 +102,7 @@ def resumir(lineas: list[dict]) -> dict:
     margenes = sorted(Decimal(l["margen"]) for l in vivas)
     provisional = sorted({a for l in vivas for a in l["avisos"] if "provisional" in a or "respaldo" in a})
     return {"articulos": len(lineas), "incluidos": len(vivas), "excluidos": len(lineas) - len(vivas), **cuenta, "ajustados": sum(1 for l in vivas if l["ajustado"]),
-            "margen_min": str(margenes[0]) if margenes else None, "margen_max": str(margenes[-1]) if margenes else None,
+            "con_mercado": sum(1 for l in vivas if (l.get("mercado") or {}).get("n")), "margen_min": str(margenes[0]) if margenes else None, "margen_max": str(margenes[-1]) if margenes else None,
             "bajo_minimo": sum(1 for l in vivas if any("por debajo del mínimo" in a for a in l["avisos"])), "provisional": provisional}
 
 
@@ -136,7 +141,13 @@ async def proponer(agente: str, departamento: str, ajustes: dict | None = None, 
         log.warning("precios de venta: no se pudo leer la lista del ERP: %s: %s", type(e).__name__, e)
         actuales = {}
         avisos.append("No se ha podido leer la lista de venta del ERP: los cambios no son fiables hasta que se vuelva a proponer")
-    lineas, av = calcular_lineas(ofertas, cfg, actuales, aj, exc)
+    try:
+        referencias = await M.de_codigos(sorted(ofertas))
+    except Exception as e:  # noqa: BLE001 — sin la tabla de mercado se propone igual, sin estrategias
+        log.warning("precios de venta: no se han podido leer los precios de la competencia: %s: %s", type(e).__name__, e)
+        referencias = {}
+        avisos.append("No se han podido leer los precios de la competencia: la propuesta no lleva estrategias")
+    lineas, av = calcular_lineas(ofertas, cfg, actuales, aj, exc, referencias)
     avisos += av
     if sin_tarifa:
         avisos.append(f"{sin_tarifa} importaciones antiguas no se usan (no son tarifas con canal y familia)")
@@ -226,6 +237,25 @@ async def ajustar(propuesta: int, ajustes: dict | None = None, excluir: list | N
     return {"propuesta": propuesta, **resumen}
 
 
+async def elegir_estrategia(propuesta: int, estrategia: str, codigos: list | None = None, familia: str | None = None) -> dict:
+    """Dirección elige una estrategia de precio (competitivo, alineado, premium…) para los artículos de la propuesta (todos, los de una familia o los códigos indicados) que tengan precios de la competencia. El precio
+    de la estrategia pasa a ser el de la propuesta, igual que un ajuste a mano. No escribe en el ERP."""
+    f = await _cargar(propuesta)
+    if f["estado"] not in ("propuesta", "error"):
+        raise ErrorVenta(f"Esta propuesta está «{f['estado']}»: ya no se puede ajustar")
+    nombres = sorted({n for l in f["lineas"] for n in (l.get("estrategias") or {})})
+    if estrategia not in nombres:
+        raise ErrorVenta("estrategia debe ser una de: " + (", ".join(nombres) or "(ninguna: faltan precios de la competencia; anótalos con anotar_mercado y vuelve a proponer)"))
+    pedidos = set(codigos) if codigos else None
+    fam = precios.norm(familia) if familia else None
+    ajustes = {l["codigo"]: Decimal(l["estrategias"][estrategia]["precio"]) for l in f["lineas"]
+               if estrategia in (l.get("estrategias") or {}) and (pedidos is None or l["codigo"] in pedidos) and (fam is None or precios.norm(l["familia"]) == fam)}
+    if not ajustes:
+        raise ErrorVenta("Ningún artículo de esa selección tiene esa estrategia")
+    r = await ajustar(propuesta, ajustes=ajustes)
+    return {**r, "estrategia": estrategia, "articulos": len(ajustes)}
+
+
 async def descartar(propuesta: int) -> dict:
     async with await LP._conectar() as conn:
         cur = await conn.execute("UPDATE propuestas_venta SET estado = 'descartada' WHERE id = %s AND estado IN ('propuesta', 'error') RETURNING id", [propuesta])
@@ -245,6 +275,8 @@ async def vista_aplicar(propuesta: int, departamento: str) -> dict:
               ["Cambios", f"{r['nuevo']} precios nuevos · {r['sube']} suben · {r['baja']} bajan · {r['igual']} sin cambios (no se tocan)" + (f" · {r['ajustados']} ajustados a mano" if r["ajustados"] else "")],
               ["Margen", f"de {float(r['margen_min']) * 100:.1f} % a {float(r['margen_max']) * 100:.1f} % sobre la venta" + (f" · {r['bajo_minimo']} por debajo del mínimo" if r["bajo_minimo"] else "")]
               if r["margen_min"] else ["Margen", "—"]]
+    if r.get("con_mercado"):
+        campos.append(["Competencia", f"{r['con_mercado']} artículos con precios de la competencia anotados (estrategias de precio disponibles)"])
     if r["provisional"]:
         campos.append(["Valores provisionales", "\n".join(f"- {a}" for a in r["provisional"][:5])])
     if f["avisos"]:

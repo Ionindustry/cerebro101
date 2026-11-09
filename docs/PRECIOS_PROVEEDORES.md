@@ -30,7 +30,11 @@ Lo que Dirección ha pedido y cómo se construye, por pasos (cada uno, su PR). *
    de su familia y el redondeo, y lo compara con el precio que ya tiene la lista «Venta» del ERP (nuevo, sube, baja, igual). `ajustar_venta`: Dirección corrige precios a mano o excluye artículos. `aplicar_venta` (exige la
    aprobación de una persona, con vista previa de cambios, márgenes y valores provisionales) crea la lista si falta y crea o actualiza solo lo que ha cambiado; es repetible. **Decisión de Dirección: los precios solo cambian
    cuando Dirección los aprueba**; un coste o un tipo de cambio que cambian no tocan ningún precio de venta sin una propuesta nueva. Tabla `propuestas_venta`. El margen por familia se edita en `config/precios.yaml` (`margen.familias`).
-4. Propuesta de precios con mercado, competencia y estrategias, y tabla de revisión para Dirección.
+4. **Competencia y estrategias de precio** (`cerebro/mercado.py`, `precios.estrategias_de_precio`, hecho): los agentes buscan precios con la herramienta `web` (tiendas y distribuidores), en otras tarifas o en adjudicaciones y los **anotan
+   con su fuente y su fecha** (`anotar_mercado`; sin fuente no se anota; los precios de tienda llevan IVA y se les quita; los de más de 90 días no cuentan; las adjudicaciones son un importe de contrato, no un precio unitario: solo contexto).
+   Con ellos el código calcula, para cada artículo, las estrategias de `config/precios.yaml` (competitivo, alineado, premium: parten del mínimo o la mediana de la competencia con un ajuste) **sin bajar nunca del margen mínimo**.
+   La propuesta de precios de venta lleva por artículo el precio con tu margen, el PVP del fabricante, el mercado (mínimo, mediana, máximo, fecha) y las estrategias; Dirección elige con `elegir_estrategia` (todos, una familia o códigos)
+   o ajusta a mano, y aprueba como siempre. Tabla `referencias_mercado`. Pendiente: pantalla propia de revisión en el panel.
 5. Documentación del proveedor y fichas técnicas (descarga de internet y subida a mano).
 6. Que Costes, Precio y Catálogo usen todo esto al preparar ofertas y licitaciones.
 7. Actualización periódica de precios por archivo y por webservice.

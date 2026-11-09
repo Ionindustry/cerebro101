@@ -314,7 +314,8 @@ class TestHerramienta(unittest.TestCase):
 
     def test_operaciones_y_quien_la_tiene(self):
         h = self.base._REGISTRO["listas_precios"]
-        self.assertEqual(set(h.operaciones), {"tabla", "proponer", "proponer_tarifa", "estado", "aplicar", "proponer_venta", "ajustar_venta", "estado_venta", "aplicar_venta"})
+        self.assertEqual(set(h.operaciones), {"tabla", "proponer", "proponer_tarifa", "estado", "aplicar", "proponer_venta", "ajustar_venta", "estado_venta", "aplicar_venta",
+                                                    "elegir_estrategia", "anotar_mercado", "listar_mercado", "retirar_mercado"})
         self.assertEqual(h.externas, frozenset({"aplicar", "aplicar_venta"}))
         self.assertEqual(set(h.vistas), {"aplicar", "aplicar_venta"})
         self.assertEqual({a for a, f in self.registro.fichas.items() if "listas_precios" in f.herramientas}, {"catalogo-proveedores"})
