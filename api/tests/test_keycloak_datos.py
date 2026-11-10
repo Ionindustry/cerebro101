@@ -26,7 +26,11 @@ case "$1 $2" in
   "compose stop"|"compose start") exit 0 ;;
   "compose up")
     case "$*" in *--no-start*) touch nuevo; rm -f existe;; esac; exit 0 ;;
-  "compose exec") echo "kcadm: $*" >> kcadm.log; exit 0 ;;
+  "compose exec")
+    echo "kcadm: $*" >> kcadm.log
+    # con «clave_distinta»: la contraseña del .env/contenedor no sirve y solo vale la que se escriba («correcta»)
+    if [ -f clave_distinta ] && [ "${ACTUAL:-}" != "correcta" ]; then echo "Invalid user credentials [invalid_grant]" >&2; exit 1; fi
+    exit 0 ;;
 esac
 case "$1" in
   inspect) [ -f con_volumen ] && echo "/opt/keycloak/data/h2" ; echo "/opt/keycloak/data/import"; exit 0 ;;
@@ -154,9 +158,37 @@ class TestClaveAdmin(unittest.TestCase):
             self.assertIn(nueva, r.stdout)                                                    # se enseña una vez en pantalla
             llamadas = (e.falso / "llamadas.log").read_text()
             self.assertNotIn(nueva, llamadas)                                                 # no va como argumento de ningún comando (se vería en `ps`)
-            self.assertIn("-e NUEVA keycloak", llamadas)                                      # va por el entorno
+            self.assertIn("-e NUEVA -e ACTUAL keycloak", llamadas)                              # van por el entorno
         finally:
             e.limpiar()
+
+    def correr_con(self, e, entrada):
+        return subprocess.run([BASH, "scripts/keycloak_clave_admin.sh"], cwd=e.repo, env=e.env, input=entrada, capture_output=True, text=True, timeout=60)
+
+    def test_si_la_clave_del_env_no_sirve_pide_la_actual_sin_mostrarla_y_reintenta(self):
+        e = Entorno(existe=True, con_volumen=True, clave_distinta=True)
+        try:
+            r = self.correr_con(e, "correcta\n")
+            self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+            self.assertIn("No ha servido la contraseña del .env", r.stderr)
+            nueva = re.search(r"^KEYCLOAK_ADMIN_PASSWORD=(.+)$", (e.repo / ".env").read_text(), re.M).group(1)
+            self.assertNotEqual(nueva, "vieja")
+            llamadas = (e.falso / "llamadas.log").read_text()
+            self.assertNotIn("correcta", llamadas)                                            # la actual tampoco va como argumento
+            self.assertNotIn("correcta", r.stdout + r.stderr)                                 # ni se escribe por pantalla
+            self.assertIn("-e NUEVA -e ACTUAL keycloak", llamadas)
+        finally:
+            e.limpiar()
+
+    def test_si_tampoco_sirve_la_que_se_escribe_o_no_se_escribe_nada_no_cambia_el_env(self):
+        for entrada in ("mala\n", ""):
+            e = Entorno(existe=True, con_volumen=True, clave_distinta=True)
+            try:
+                r = self.correr_con(e, entrada)
+                self.assertEqual(r.returncode, 1, entrada)
+                self.assertIn("KEYCLOAK_ADMIN_PASSWORD=vieja", (e.repo / ".env").read_text())     # el .env no se toca
+            finally:
+                e.limpiar()
 
     def test_si_keycloak_no_conserva_sus_datos_se_niega(self):
         e = Entorno(existe=True)
