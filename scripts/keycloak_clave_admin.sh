@@ -20,16 +20,30 @@ fi
 
 nueva="$(python3 -c 'import secrets; print(secrets.token_urlsafe(24))')"
 
+cambiar() {
+  docker compose exec -T -e NUEVA -e ACTUAL keycloak bash -c '
+    set -e
+    KCADM=/opt/keycloak/bin/kcadm.sh
+    CFG=$(mktemp)
+    trap "rm -f $CFG" EXIT
+    $KCADM config credentials --config "$CFG" --server http://localhost:8080 --realm master --user admin --password "${ACTUAL:-$KC_BOOTSTRAP_ADMIN_PASSWORD}" >/dev/null
+    $KCADM set-password --config "$CFG" -r master --username admin --new-password "$NUEVA"
+  '
+}
+
 echo "→ Cambiando la contraseña en Keycloak"
 export NUEVA="$nueva"          # va por el entorno («-e NUEVA» sin valor): así no aparece en la lista de procesos ni en ningún registro de comandos
-docker compose exec -T -e NUEVA keycloak bash -c '
-  set -e
-  KCADM=/opt/keycloak/bin/kcadm.sh
-  CFG=$(mktemp)
-  trap "rm -f $CFG" EXIT
-  $KCADM config credentials --config "$CFG" --server http://localhost:8080 --realm master --user admin --password "$KC_BOOTSTRAP_ADMIN_PASSWORD" >/dev/null
-  $KCADM set-password --config "$CFG" -r master --username admin --new-password "$NUEVA"
-'
+export ACTUAL=""
+if ! cambiar; then
+  # La contraseña que Keycloak creó la primera vez no tiene por qué ser la que hay hoy en el .env (se pudo cambiar a mano desde su consola): se pide la actual, sin mostrarla.
+  echo
+  echo "No ha servido la contraseña del .env. Escribe la contraseña ACTUAL del administrador de Keycloak (no se ve al escribir; es la que usas en http://localhost:8080):" >&2
+  IFS= read -rs ACTUAL || true
+  echo >&2
+  [ -n "$ACTUAL" ] || { echo "Sin contraseña actual no se puede cambiar. Si no la recuerdas, mira docs/INSTALACION.md (recuperar el acceso de administrador de Keycloak)." >&2; exit 1; }
+  export ACTUAL
+  cambiar || { echo "Tampoco ha servido: comprueba que es la que usas para entrar en http://localhost:8080 (usuario admin)." >&2; exit 1; }
+fi
 
 echo "→ Guardándola en .env"
 python3 - "$nueva" <<'PY'

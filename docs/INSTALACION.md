@@ -24,7 +24,8 @@
    **Keycloak conserva sus datos** (volumen `keycloak-datos`): los usuarios y ajustes sobreviven a recrear el contenedor. Si tu Keycloak es anterior a esto, ejecuta UNA vez
    `./scripts/keycloak_conservar.sh`: para Keycloak, guarda una copia de sus datos en `copias/keycloak-FECHA/`, lo recrea con el volumen y vuelca en él lo que había (no pierde usuarios; `iniciar.sh` y `arrancar.sh` lo llaman solos).
    **Cambiar la contraseña del administrador** (si se ha visto en un chat o una captura): `./scripts/keycloak_clave_admin.sh`. La genera al azar, la pone en Keycloak y la guarda en `.env` (permisos 600);
-   se muestra una vez por pantalla. Con datos permanentes, cambiar `KEYCLOAK_ADMIN_PASSWORD` a mano en el `.env` NO cambia la contraseña real: usa el script.
+   se muestra una vez por pantalla. Con datos permanentes, cambiar `KEYCLOAK_ADMIN_PASSWORD` a mano en el `.env` NO cambia la contraseña real: usa el script. Si la que hay en el `.env` ya no es la real (p. ej. se cambió desde la consola de Keycloak), el script pide la actual sin mostrarla.
+   **Si no recuerdas la contraseña de administrador de Keycloak:** como el usuario `admin` solo se crea la primera vez, hay que crear otro administrador temporal con el servidor parado: `docker compose stop keycloak`, `docker compose run --rm --no-deps -e KC_BOOTSTRAP_ADMIN_PASSWORD=<temporal> keycloak bootstrap-admin user --username temporal --password:env KC_BOOTSTRAP_ADMIN_PASSWORD` (en Keycloak 26) y volver a arrancar. Después, entra con él en http://localhost:8080 y restablece la contraseña de `admin`.
 5. Cargar documentos: `docker compose exec api python /app/scripts/cargar_conocimiento.py /datos/conocimiento`.
 6. ERPNext (incluido en `erpnext/docker-compose.yml`, basado en frappe_docker):
    - En `.env`: `ERPNEXT_DB_ROOT_PASSWORD`, `ERPNEXT_ADMIN_PASSWORD` y `ERPNEXT_SITE` (por defecto `erp.101.cat`).
