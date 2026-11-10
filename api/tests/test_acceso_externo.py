@@ -43,6 +43,11 @@ class TestPuras(unittest.TestCase):
         again = AE.valores_nuevos("a.b.cat", "c.b.cat", "a@b.es", v["COMPOSE_FILE"])["COMPOSE_FILE"]
         self.assertEqual(again.count("externo"), 1)                                          # no se añade dos veces
 
+    def test_sin_puerto_80_el_proxy_solo_lo_publica_en_local(self):
+        v = AE.valores_nuevos("a.b.cat", "c.b.cat", "a@b.es", "", sin_puerto_80=True)
+        self.assertEqual(v["PROXY_HTTP_BIND"], "127.0.0.1:8088")
+        self.assertNotIn("PROXY_HTTP_BIND", AE.valores_nuevos("a.b.cat", "c.b.cat", "a@b.es", ""))
+
     def test_poner_solo_toca_esas_claves(self):
         t = "A=1  # comentario\nPANEL_URL=http://localhost:3000\nB=2\n"
         r = AE.poner(t, {"PANEL_URL": "https://x.cat", "NUEVA": "z", "A": None})
@@ -53,7 +58,7 @@ class TestFicheros(unittest.TestCase):
     def test_el_proxy_solo_publica_80_y_443_y_nada_mas_se_expone(self):
         c = yaml.safe_load((RAIZ / "despliegue" / "docker-compose.externo.yml").read_text(encoding="utf-8"))
         self.assertEqual(set(c["services"]), {"keycloak", "proxy"})
-        self.assertEqual(set(c["services"]["proxy"]["ports"]), {"80:80", "443:443", "443:443/udp"})
+        self.assertEqual(set(c["services"]["proxy"]["ports"]), {"${PROXY_HTTP_BIND:-80}:80", "443:443", "443:443/udp"})
         self.assertNotIn("ports", c["services"]["keycloak"])                                  # Keycloak sigue solo en 127.0.0.1 (lo dice el compose base)
         self.assertIn("./despliegue/Caddyfile.externo:/etc/caddy/Caddyfile:ro", c["services"]["proxy"]["volumes"])
 

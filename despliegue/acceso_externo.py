@@ -1,7 +1,7 @@
 """Activa o desactiva el acceso desde fuera (HTTPS) para una instalación LOCAL: el panel en https://brain.101.cat y el inicio de sesión en https://auth.101.cat.
 
   python3 despliegue/acceso_externo.py estado
-  python3 despliegue/acceso_externo.py activar --panel brain.101.cat --auth auth.101.cat --correo tu@correo [--simular]
+  python3 despliegue/acceso_externo.py activar --panel brain.101.cat --auth auth.101.cat --correo tu@correo [--simular] [--sin-puerto-80]
   python3 despliegue/acceso_externo.py desactivar
 
 Qué hace «activar» (en este orden, y se detiene si algo falla antes de tocar nada):
@@ -48,15 +48,18 @@ def validar(panel: str, auth: str, correo: str) -> tuple[str, str, str]:
     return panel, auth, correo
 
 
-def valores_nuevos(panel: str, auth: str, correo: str, compose_actual: str) -> dict[str, str]:
+def valores_nuevos(panel: str, auth: str, correo: str, compose_actual: str, sin_puerto_80: bool = False) -> dict[str, str]:
     """Lo que se fija en el .env. COMPOSE_FILE conserva lo que ya hubiera (p. ej. docker-compose.sin-gpu.yml) y añade el proxy."""
     partes = [p for p in (compose_actual or "").split(":") if p]
     if not partes:
         partes = ["docker-compose.yml"]
     if SUPERPUESTO not in partes:
         partes.append(SUPERPUESTO)
-    return {"DOM_PANEL": panel, "DOM_AUTH": auth, "CORREO_ADMIN": correo, "TLS_MODO": "letsencrypt", "PANEL_URL": f"https://{panel}", "KEYCLOAK_URL_PUBLICA": f"https://{auth}",
-            "COMPOSE_FILE": ":".join(partes)}
+    v = {"DOM_PANEL": panel, "DOM_AUTH": auth, "CORREO_ADMIN": correo, "TLS_MODO": "letsencrypt", "PANEL_URL": f"https://{panel}", "KEYCLOAK_URL_PUBLICA": f"https://{auth}",
+         "COMPOSE_FILE": ":".join(partes)}
+    if sin_puerto_80:
+        v["PROXY_HTTP_BIND"] = "127.0.0.1:8088"          # el 80 de este equipo lo usa otro programa: el del proxy queda solo en local y el certificado se valida por el 443
+    return v
 
 
 def leer_env(texto: str) -> dict[str, str]:
@@ -112,7 +115,7 @@ def pasos_siguientes(panel: str, auth: str) -> str:
 Falta lo que está fuera del sistema (hazlo ahora; sin esto, desde internet no se llega):
   1. Cortafuegos de Windows (PowerShell COMO ADMINISTRADOR):
        New-NetFirewallRule -DisplayName "Cerebro HTTPS" -Direction Inbound -Protocol TCP -LocalPort 80,443 -Action Allow
-  2. Router: reenvía los puertos TCP 80 y 443 a la dirección interna de este PC (y reserva esa dirección para el PC, para que no cambie).
+  2. Router: reenvía los puertos TCP 80 y 443 (solo el 443 si usaste --sin-puerto-80) a la dirección interna de este PC (y reserva esa dirección para el PC, para que no cambie).
   3. DNS: {panel} y {auth} deben apuntar a tu IP pública fija (los registros A de Hostalia).
   4. Desde ESTE PC, si el router no permite entrar por su propia IP pública, añade al fichero C:\\Windows\\System32\\drivers\\etc\\hosts (como administrador):
        127.0.0.1 {panel} {auth}
@@ -131,7 +134,7 @@ def activar(a: argparse.Namespace) -> int:
         raise ErrorAcceso("El acceso externo ya está activado (hay un .acceso-externo.json). Para cambiarlo, primero «desactivar».")
     texto = ruta.read_text(encoding="utf-8")
     actual = leer_env(texto)
-    nuevos = valores_nuevos(panel, auth, correo, actual.get("COMPOSE_FILE", ""))
+    nuevos = valores_nuevos(panel, auth, correo, actual.get("COMPOSE_FILE", ""), a.sin_puerto_80)
     if a.simular:
         print("Se fijaría en el .env:")
         for k, v in nuevos.items():
@@ -199,6 +202,7 @@ def main(argv: list[str] | None = None) -> int:
     act.add_argument("--correo", required=True)
     act.add_argument("--simular", action="store_true")
     act.add_argument("--sin-dns", action="store_true")
+    act.add_argument("--sin-puerto-80", action="store_true", help="el puerto 80 de este equipo lo usa otro programa: el proxy solo publica el 443")
     s.add_parser("desactivar")
     s.add_parser("estado")
     a = p.parse_args(argv)

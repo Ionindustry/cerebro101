@@ -17,6 +17,10 @@ Para abrir Jarvis y los enlaces de los correos desde el móvil o desde otra ofic
 4. Regla de entrada en el **cortafuegos de Windows** para 80 y 443 (PowerShell como administrador):
    `New-NetFirewallRule -DisplayName "Cerebro HTTPS" -Direction Inbound -Protocol TCP -LocalPort 80,443 -Action Allow`
 
+## Si el puerto 80 ya lo usa otro programa
+
+Compruébalo en Windows con `netstat -ano | findstr ":80 :443"` (un `LISTENING` en `0.0.0.0:80` y su número de proceso; `tasklist /fi "PID eq NUMERO"` dice cuál es). Si no puedes cerrar ese programa, activa con `--sin-puerto-80`: el proxy solo publica el 443 hacia fuera (el 80 queda en `127.0.0.1:8088`) y Let's Encrypt valida el certificado por el 443. En el router, reenvía solo el 443. Quien escriba `http://` desde fuera no llegará; `https://` sí.
+
 ## Activar
 
 ```bash

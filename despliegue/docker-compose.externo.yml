@@ -9,7 +9,7 @@ services:
 
   proxy:
     image: caddy:2
-    ports: ["80:80", "443:443", "443:443/udp"]
+    ports: ["${PROXY_HTTP_BIND:-80}:80", "443:443", "443:443/udp"]       # con --sin-puerto-80 el 80 del proxy solo se publica en este equipo (otro programa ya usa el 80); Let's Encrypt valida entonces por el 443
     environment:
       CORREO_ADMIN: "${CORREO_ADMIN:?define CORREO_ADMIN}"
       TLS_MODO: "${TLS_MODO:-letsencrypt}"
