@@ -4,7 +4,7 @@ import { useParams } from "next/navigation";
 import { useEffect, useState } from "react";
 import Redaccion from "./Redaccion";
 import { aBase64 } from "../../../../lib/adjuntos";
-import { SOBRES_OFERTA, autorSeccionTexto, claseSeccion, estadoSeccionEtiqueta, mensajeOferta, pendientesOferta, precioAEnvio, resumenOfertaTexto, FORMULAS_PRECIO, costeErpTexto, mensajeReglas, reglasAEnvio, reglasAFormulario, cercaniaTexto, mensajeParecidas, motivosTexto, aptitudSimulacion, costeDeTexto, filasDeCurva, mensajeSimulador, probabilidadConRango, porcentaje, CUMPLIMIENTOS, cumplimientoEtiqueta, cumplimientoNecesitaNota, estadoEtiqueta, estadoPliego, estadoRequisito, sugerenciaDe, aptitudTexto, analisisPliegosTexto, etiquetaEmbudo, fechaTexto, fichaOrgHref, importeTexto, lecturaPliego, lugarCita, matrizCsv, matrizDe, mensajeEmbudo, mensajePliegos, mensajeSubidaPliego, validarPliegoSubida, ACCEPT_PLIEGO, resumenMatriz, nombreFuente, puedeDescargarPliego, resumenRequisitos, tipoRequisito, urlSegura } from "../../../../lib/licitaciones";
+import { SOBRES_OFERTA, autorSeccionTexto, claseSeccion, estadoSeccionEtiqueta, mensajeOferta, pendientesOferta, precioAEnvio, resumenOfertaTexto, FORMULAS_PRECIO, costeErpTexto, mensajeReglas, reglasAEnvio, reglasAFormulario, cercaniaTexto, mensajeParecidas, motivosTexto, aptitudSimulacion, costeDeTexto, filasDeCurva, mensajeSimulador, probabilidadConRango, porcentaje, CUMPLIMIENTOS, cumplimientoEtiqueta, cumplimientoNecesitaNota, estadoEtiqueta, estadoPliego, estadoRequisito, sugerenciaDe, aptitudTexto, analisisPliegosTexto, etiquetaEmbudo, fechaTexto, fichaOrgHref, importeTexto, lecturaPliego, lugarCita, matrizCsv, matrizDe, mensajeEmbudo, mensajePliegos, mensajeSubidaPliego, validarPliegoSubida, ACCEPT_PLIEGO, resumenMatriz, nombreFuente, puedeBajarOriginal, puedeDescargarPliego, resumenRequisitos, tipoRequisito, urlFicheroPliego, urlSegura } from "../../../../lib/licitaciones";
 import { Fallo, Item, pedir, pedirCerebro } from "../../cliente";
 
 const Dato = ({ t, children }) => <div><dt>{t}</dt><dd>{children ?? "—"}</dd></div>;
@@ -47,7 +47,7 @@ function Estudiar({ id }) {
 
 const enviar = (cuerpo) => ({ method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(cuerpo) });
 
-// Pliegos: los documentos de la licitación (se bajan a cuarentena y pasan por el antivirus, nadie recibe el fichero) y los requisitos que ha anotado el Analista de Pliegos con su cita.
+// Pliegos: los documentos de la licitación (se bajan a cuarentena y pasan por el antivirus; los agentes solo reciben su texto, las personas pueden descargar el original limpio) y los requisitos que ha anotado el Analista de Pliegos con su cita.
 // Los confirma o rechaza una persona. Solo Dirección y Licitaciones (para los demás la consulta da 403 y la tarjeta no aparece).
 function Cumplimiento({ r, onCumplir, trabajando }) {
   const [estado, setEstado] = useState(r.cumplimiento || "pendiente");
@@ -172,7 +172,7 @@ function Pliegos({ id }) {
   return (
     <section className="tarjeta" aria-label="Pliegos">
       <h2>Pliegos</h2>
-      <p className="meta">Los documentos se bajan a cuarentena y pasan por el antivirus antes de leerse; nadie recibe el fichero original, solo su texto. Los requisitos los anota un agente de IA con su cita literal y una persona los confirma o rechaza.</p>
+      <p className="meta">Los documentos se bajan a cuarentena y pasan por el antivirus antes de leerse. Los agentes de IA solo ven su texto; las personas de Licitaciones y Dirección pueden descargar el original cuando ha pasado el antivirus. Los requisitos los anota un agente de IA con su cita literal y una persona los confirma o rechaza.</p>
       {error && <p role="alert" className="lic-error">{error.subida ? mensajeSubidaPliego(error.status, error.detalle) : mensajePliegos(error.status)}</p>}
       {(() => {
         const an = analisisPliegosTexto(d?.analisis);
@@ -194,6 +194,7 @@ function Pliegos({ id }) {
               <span className="lic-fila"><span className="titulo">{x.nombre}</span><span className={`lic-etiqueta ${e.clase}`}>{e.texto}</span></span>
               {lectura && <span className="meta">{lectura}</span>}
               {x.descarga?.motivo && <span className="meta">{x.descarga.motivo}</span>}
+              {puedeBajarOriginal(x.descarga) && urlFicheroPliego(id, x.n) && <span className="lic-fila"><a className="boton no" href={urlFicheroPliego(id, x.n)} download>Descargar el documento original ({String(x.descarga.formato || "").toUpperCase()})</a></span>}
               {puedeDescargarPliego(x.descarga) && <span className="lic-fila"><button className="boton no" disabled={trabajando !== null} onClick={() => bajar(x.n)}>{trabajando === x.n ? "Descargando y analizando…" : x.descarga ? "Reintentar" : "Descargar y analizar"}</button></span>}
               {x.descarga?.estado !== "infectado" && (
                 <span className="lic-fila">

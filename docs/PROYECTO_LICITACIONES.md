@@ -650,3 +650,8 @@ Si el equipo estuvo apagado (o Docker parado) unos días, al volver a arrancar e
 ### Entradas enormes
 
 Alguna licitación de la plataforma es gigantesca (miles de lotes). El lector de la sindicación admite entradas de hasta **16 MiB** (lo que se guarda en el almacén se puede volver a leer) y, por encima, **la SALTA con un aviso** en el registro (`entrada demasiado grande: se salta y la página sigue`) en lugar de rechazar la página entera: una sola entrada enorme llegó a bloquear el relleno del histórico y a dejar cada vuelta del ingestor en error («ingesta fallida … entrada demasiado grande»). Por encima de 64 MiB el documento se rechaza (hostil o roto). Además, si una vuelta acaba en error por una página antigua, el estado «al día» de lo reciente se anota igualmente.
+
+
+## Descargar el documento original de un pliego (panel)
+
+En el expediente de una licitación, cada documento que ya pasó el antivirus como **limpio** tiene un botón «Descargar el documento original». Lo sirve la API (`GET /licitaciones/pliegos/{id}/documentos/{n}/fichero`) solo a Dirección y al departamento de Licitaciones, como adjunto (`Content-Disposition: attachment`, `nosniff`, sin caché, `CSP: sandbox`), y comprueba otra vez su huella SHA-256: si lo guardado no coincide con lo que se analizó, no se entrega. No se entregan los infectados, los que llevan macros ni los que siguen en cuarentena. **Los agentes de IA siguen sin recibir el fichero: solo ven su texto.** El panel lo sirve por una ruta aparte (`/descargas/pliego/<id>/<n>`) porque la pasarela general solo lleva texto.

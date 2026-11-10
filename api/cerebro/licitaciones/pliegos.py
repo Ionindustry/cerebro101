@@ -317,6 +317,35 @@ async def _existente(motor_id: str, n: int) -> dict | None:
     return _ficha_publica(f) if f else None
 
 
+MIME = {"pdf": "application/pdf", "docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        "xlsx": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", "odt": "application/vnd.oasis.opendocument.text", "ods": "application/vnd.oasis.opendocument.spreadsheet"}
+
+
+async def fichero(motor_id: str, n: int) -> tuple[bytes, str, str]:
+    """El fichero original del documento nº `n` para que una PERSONA de Licitaciones o Dirección lo descargue: (contenido, nombre, tipo). Solo si ha pasado el antivirus como LIMPIO (un Word con
+    macros no se entrega) y si lo guardado sigue siendo lo que se analizó (se comprueba su huella). Es información de una licitación pública; los agentes siguen sin recibirlo: ellos solo ven el texto."""
+    motor_id = _id_valido(motor_id)
+    if isinstance(n, bool) or not isinstance(n, int) or n < 1:
+        raise ErrorPliego("n es el número del documento (desde 1)")
+    async with await _conectar() as conn:
+        cur = await conn.execute(f"SELECT {COLS} FROM pliegos_documentos WHERE motor_id = %s AND n = %s AND estado = 'limpio' ORDER BY id DESC LIMIT 1", [motor_id, n])
+        f = await cur.fetchone()
+    if not f:
+        raise NoExiste("Ese documento no está descargado y limpio: bájalo primero (o súbelo) y espera a que pase el antivirus")
+    ruta = carpeta(motor_id, "limpio") / f"{f['sha256']}.{f['formato']}"
+    try:
+        datos = ruta.read_bytes()
+    except OSError:
+        raise ErrorPliego("El fichero ya no está guardado: vuelve a bajarlo o a subirlo") from None
+    if hashlib.sha256(datos).hexdigest() != f["sha256"]:
+        log.error("pliegos: el fichero %s no coincide con su huella: no se entrega", ruta)
+        raise ErrorPliego("El fichero guardado no coincide con el que se analizó: no se entrega. Vuelve a bajarlo o a subirlo")
+    nombre = re.sub(r"[\\/:*?\"<>|\x00-\x1f]", "_", str(f["nombre"] or "documento")).strip(" .")[:100] or "documento"
+    if not nombre.lower().endswith("." + f["formato"]):
+        nombre = f"{nombre}.{f['formato']}"
+    return datos, nombre, MIME.get(f["formato"], "application/octet-stream")
+
+
 async def incorporar(motor_id: str, n: int, nombre: str, datos: bytes, analizar=None, extraer_texto=None) -> dict:
     """Un documento ya en memoria (bajado de la plataforma o subido a mano): comprueba qué es por su CONTENIDO, lo deja en cuarentena, lo pasa por el antivirus y, si queda limpio, lee su texto."""
     if not datos:

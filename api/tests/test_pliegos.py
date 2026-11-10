@@ -295,6 +295,28 @@ class TestFlujo(unittest.TestCase):
         inf = self.subir(n=2, datos=PDF + b"x", veredicto=P.Veredicto("infectado", "dañino"))
         self.assertEqual((inf["estado"], inf["disponible"]), ("infectado", False))
 
+    def test_el_original_se_entrega_a_las_personas_solo_si_esta_limpio_y_no_ha_cambiado(self):
+        r = self.subir()
+        datos, nombre, tipo = ejecutar(P.fichero(ID, 1))
+        self.assertEqual((datos, nombre, tipo), (PDF, "Pliego administrativo.pdf", "application/pdf"))
+        with self.assertRaises(P.NoExiste):                                                    # lo que no se ha bajado
+            ejecutar(P.fichero(ID, 2))
+        with self.assertRaises(P.ErrorPliego):
+            ejecutar(P.fichero(ID, 0))
+        (Path(self.carpeta.name) / ID / "limpio" / f"{r['sha256']}.pdf").write_bytes(PDF + b"cambiado")         # alguien lo toca en el disco
+        with self.assertRaisesRegex(P.ErrorPliego, "no coincide"):
+            ejecutar(P.fichero(ID, 1))
+        (Path(self.carpeta.name) / ID / "limpio" / f"{r['sha256']}.pdf").unlink()
+        with self.assertRaisesRegex(P.ErrorPliego, "ya no está guardado"):
+            ejecutar(P.fichero(ID, 1))
+
+    def test_el_original_no_se_entrega_si_esta_infectado_con_macros_o_en_cuarentena(self):
+        self.subir(n=2, datos=PDF + b"x", veredicto=P.Veredicto("infectado", "dañino"))
+        self.subir(n=1, veredicto=P.Veredicto("con_macros", "macros"))
+        for n in (1, 2):
+            with self.assertRaises(P.NoExiste):
+                ejecutar(P.fichero(ID, n))
+
     def test_el_enlace_solo_se_da_al_panel_y_solo_de_las_plataformas_de_la_lista(self):
         sin = ejecutar(P.documentos(ID, consulta=self.consulta))
         self.assertTrue(all("enlace" not in d and "_url" not in d for d in sin["documentos"]))       # los agentes nunca ven la dirección
@@ -369,6 +391,44 @@ class TestHerramienta(unittest.TestCase):
             c = P.configuracion()
         self.assertIn("contrataciondelestado.es", c["hosts"])
         self.assertEqual((c["max_mb"], c["max_diarios"], c["firmas_max_horas"]), (100, 40, 48))
+
+
+class TestRutaDelFichero(unittest.TestCase):
+    def setUp(self):
+        try:
+            from fastapi.testclient import TestClient
+            from cerebro.api import main
+            from cerebro.api.auth import Usuario, usuario_actual
+        except ImportError as e:      # pragma: no cover
+            self.skipTest(str(e))
+        self.main, self.Usuario, self.actual = main, Usuario, usuario_actual
+        self.c = TestClient(main.app)
+
+    def tearDown(self):
+        self.main.app.dependency_overrides.clear()
+
+    def como(self, roles, deps):
+        self.main.app.dependency_overrides[self.actual] = lambda: self.Usuario("marta", set(roles), set(deps))
+
+    def test_se_descarga_con_cabeceras_seguras_solo_dirección_o_licitaciones(self):
+        self.como({"usuario"}, {"licitaciones"})
+        with mock.patch.object(self.main.pliegos_licitaciones, "fichero", mock.AsyncMock(return_value=(PDF, "Pliego ñ.pdf", "application/pdf"))):
+            r = self.c.get(f"/licitaciones/pliegos/{ID}/documentos/1/fichero")
+            self.assertEqual((r.status_code, r.content, r.headers["content-type"]), (200, PDF, "application/pdf"))
+            self.assertTrue(r.headers["content-disposition"].startswith("attachment; filename*=UTF-8''Pliego%20%C3%B1.pdf"))
+            self.assertEqual((r.headers["x-content-type-options"], r.headers["cache-control"]), ("nosniff", "no-store"))
+            self.assertIn("sandbox", r.headers["content-security-policy"])
+            self.como({"usuario"}, {"operaciones"})
+            self.assertEqual(self.c.get(f"/licitaciones/pliegos/{ID}/documentos/1/fichero").status_code, 403)        # otro departamento
+            self.como({"direccion"}, set())
+            self.assertEqual(self.c.get(f"/licitaciones/pliegos/{ID}/documentos/1/fichero").status_code, 200)
+
+    def test_los_errores_son_claros(self):
+        self.como({"direccion"}, set())
+        with mock.patch.object(self.main.pliegos_licitaciones, "fichero", mock.AsyncMock(side_effect=P.NoExiste("Ese documento no está descargado y limpio"))):
+            self.assertEqual(self.c.get(f"/licitaciones/pliegos/{ID}/documentos/3/fichero").status_code, 404)
+        with mock.patch.object(self.main.pliegos_licitaciones, "fichero", mock.AsyncMock(side_effect=P.ErrorPliego("no coincide"))):
+            self.assertEqual(self.c.get(f"/licitaciones/pliegos/{ID}/documentos/1/fichero").status_code, 422)
 
 
 if __name__ == "__main__":

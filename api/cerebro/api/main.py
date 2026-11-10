@@ -12,7 +12,7 @@ from contextlib import asynccontextmanager
 
 import psycopg
 from fastapi import Depends, FastAPI, HTTPException
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, Response
 from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
 from langgraph.types import Command
 from pydantic import BaseModel
@@ -519,6 +519,21 @@ async def _analisis_de(motor_id: str) -> dict | None:
     except Exception as e:      # noqa: BLE001
         log.warning("pliegos: no se ha podido leer el análisis de %s: %s: %s", motor_id, type(e).__name__, e)
         return None
+
+
+@app.get("/licitaciones/pliegos/{motor_id}/documentos/{n}/fichero")
+async def fichero_del_pliego(motor_id: str, n: int, usuario: Usuario = Depends(usuario_actual)):
+    """El fichero original de un documento del pliego, para descargarlo desde el panel (solo personas de Dirección y Licitaciones; los agentes nunca lo reciben). Solo si pasó el antivirus."""
+    _exige_licitaciones(usuario)
+    try:
+        datos, nombre, tipo = await pliegos_licitaciones.fichero(motor_id, n)
+    except (pliegos_licitaciones.ErrorPliego, LookupError) as e:
+        raise _error_pliegos(e) from None
+    log.info("pliegos: %s descarga el documento %s de %s (%d bytes)", usuario.id, n, motor_id, len(datos))
+    from urllib.parse import quote
+    return Response(content=datos, media_type=tipo, headers={
+        "Content-Disposition": f"attachment; filename*=UTF-8''{quote(nombre)}", "X-Content-Type-Options": "nosniff", "Cache-Control": "no-store",
+        "Content-Security-Policy": "default-src 'none'; sandbox"})
 
 
 @app.post("/licitaciones/pliegos/{motor_id}/analizar", status_code=202)

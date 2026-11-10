@@ -419,6 +419,16 @@ export function estadoPliego(d) {
   return { texto, clase };
 }
 /** Se ofrece «Descargar y analizar» si aún no se ha bajado o si hay que reintentarlo (sin analizar, no analizable o sin texto leído); nunca con un infectado. */
+// Descarga del fichero original (solo cuando ya pasó el antivirus como «limpio»): la ruta del panel y la de la API. null si el id o el número no son válidos.
+const UUID_FICHERO = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+export function rutaFicheroPliego(motor, n) {
+  const k = Number(n);
+  if (!UUID_FICHERO.test(String(motor || "")) || !/^\d{1,3}$/.test(String(n)) || !Number.isInteger(k) || k < 1) return null;
+  return `licitaciones/pliegos/${String(motor).toLowerCase()}/documentos/${k}/fichero`;
+}
+export const urlFicheroPliego = (motor, n) => (rutaFicheroPliego(motor, n) ? `/descargas/pliego/${String(motor).toLowerCase()}/${Number(n)}` : null);
+export const puedeBajarOriginal = (d) => Boolean(d && d.estado === "limpio");
+
 export const puedeDescargarPliego = (d) => !d || ["cuarentena", "no_analizable", "error"].includes(d.estado) || (d.disponible && d.paginas == null);
 /** Subir a mano un documento del pliego (POST /licitaciones/pliegos/{id}/subir): comprobaciones previas en el navegador; la de verdad (por el contenido, antivirus) la hace la API. */
 export const MAX_MB_PLIEGO = 50;
