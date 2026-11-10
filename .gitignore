@@ -9,3 +9,4 @@ panel/.next/
 servicios/voz/voces/*.onnx*
 copias/
 evidencias/
+.acceso-externo.json

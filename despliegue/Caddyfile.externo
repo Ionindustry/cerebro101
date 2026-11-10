@@ -1,0 +1,46 @@
+# Proxy inverso del acceso externo (instalación local): solo el panel de Jarvis y el inicio de sesión. Las direcciones salen del .env (DOM_PANEL, DOM_AUTH).
+# Caddy obtiene y renueva los certificados de Let's Encrypt solo; hace falta que los dos nombres apunten a esta IP y que lleguen los puertos 80 y 443.
+{
+	email {$CORREO_ADMIN}
+}
+
+(tls_letsencrypt) {
+}
+
+(tls_interno) {
+	tls internal
+}
+
+(seguridad) {
+	encode zstd gzip
+	header {
+		Strict-Transport-Security "max-age=31536000"
+		X-Content-Type-Options "nosniff"
+		X-Frame-Options "DENY"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		-Server
+	}
+}
+
+# Panel de Jarvis
+{$DOM_PANEL} {
+	import tls_{$TLS_MODO}
+	import seguridad
+	reverse_proxy panel:3000
+}
+
+# Inicio de sesión (Keycloak). La consola de administración y el realm «master» solo desde IPS_ADMIN (por defecto, redes privadas); desde internet, 403.
+# El usuario administra Keycloak desde este equipo en http://localhost:8080, que no se publica.
+{$DOM_AUTH} {
+	import tls_{$TLS_MODO}
+	import seguridad
+	@administracion path /admin /admin/* /realms/master /realms/master/*
+	handle @administracion {
+		@fuera not remote_ip {$IPS_ADMIN}
+		respond @fuera "Acceso restringido" 403
+		reverse_proxy keycloak:8080
+	}
+	handle {
+		reverse_proxy keycloak:8080
+	}
+}

@@ -1,0 +1,29 @@
+# Acceso desde fuera para UNA instalación local (la de un PC con Docker Desktop): solo añade el proxy con HTTPS delante del panel y del inicio de sesión.
+# No cambia nada más: Keycloak sigue en su modo y con sus datos, y el ERP, Langfuse y la API NO se publican (el panel habla con la API por la red interna).
+# Lo activa  despliegue/acceso_externo.py activar  (añade este fichero a COMPOSE_FILE en el .env); para el servidor completo con Keycloak en producción, ver docker-compose.produccion.yml.
+services:
+  keycloak:
+    environment:
+      KC_HTTP_ENABLED: "true"                 # el TLS lo termina Caddy
+      KC_PROXY_HEADERS: xforwarded
+
+  proxy:
+    image: caddy:2
+    ports: ["${PROXY_HTTP_BIND:-80}:80", "443:443", "443:443/udp"]       # con --sin-puerto-80 el 80 del proxy solo se publica en este equipo (otro programa ya usa el 80); Let's Encrypt valida entonces por el 443
+    environment:
+      CORREO_ADMIN: "${CORREO_ADMIN:?define CORREO_ADMIN}"
+      TLS_MODO: "${TLS_MODO:-letsencrypt}"
+      DOM_PANEL: "${DOM_PANEL:?define DOM_PANEL}"
+      DOM_AUTH: "${DOM_AUTH:?define DOM_AUTH}"
+      IPS_ADMIN: "${IPS_ADMIN:-private_ranges}"
+    volumes:
+      - ./despliegue/Caddyfile.externo:/etc/caddy/Caddyfile:ro
+      - caddy-datos:/data              # certificados: conservarlo evita pedirlos de nuevo en cada arranque
+      - caddy-config:/config
+    depends_on: [panel, keycloak]
+    networks: [cerebro]
+    restart: unless-stopped
+
+volumes:
+  caddy-datos: {}
+  caddy-config: {}

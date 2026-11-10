@@ -1079,3 +1079,18 @@ test("subir un documento del pliego: mensajes de error", () => {
   assert.match(mensajeSubidaPliego(403), /acceso/);
   assert.match(mensajeSubidaPliego(500), /Inténtalo/);
 });
+
+import { puedeBajarOriginal, rutaFicheroPliego, urlFicheroPliego } from "../lib/licitaciones.js";
+
+test("la descarga del original solo se ofrece de un documento limpio y con un id y un número válidos", () => {
+  const id = "0b1f7a3e-1111-4222-8333-444444444444";
+  assert.equal(puedeBajarOriginal({ estado: "limpio" }), true);
+  for (const e of ["cuarentena", "infectado", "con_macros", "no_analizable", "error"]) assert.equal(puedeBajarOriginal({ estado: e }), false, e);
+  assert.equal(puedeBajarOriginal(null), false);
+  assert.equal(rutaFicheroPliego(id, 2), `licitaciones/pliegos/${id}/documentos/2/fichero`);
+  assert.equal(urlFicheroPliego(id.toUpperCase(), "3"), `/descargas/pliego/${id}/3`);
+  for (const [m, n] of [["../etc/passwd", 1], [id, 0], [id, -1], [id, "1/../2"], [id, "1.5"], [id, 1000], ["no-es-uuid", 1], [undefined, 1], [id, ""]]) {
+    assert.equal(rutaFicheroPliego(m, n), null, `${m} ${n}`);
+    assert.equal(urlFicheroPliego(m, n), null, `${m} ${n}`);
+  }
+});
