@@ -9,7 +9,9 @@ services:
 
   proxy:
     image: caddy:2
-    ports: ["${PROXY_HTTP_BIND:-80}:80", "443:443", "443:443/udp"]       # con --sin-puerto-80 el 80 del proxy solo se publica en este equipo (otro programa ya usa el 80); Let's Encrypt valida entonces por el 443
+    # El 443 NO lo publica el proxy sino el reenviador de abajo: en Docker Desktop (Windows) el puerto 443 publicado por el propio proxy se cortaba justo después del saludo HTTPS, y el mismo reenvío
+    # hecho por otro contenedor desde la red interna funcionaba. Con --sin-puerto-80 el 80 del proxy solo se publica en este equipo (otro programa ya usa el 80).
+    ports: ["${PROXY_HTTP_BIND:-80}:80"]
     environment:
       CORREO_ADMIN: "${CORREO_ADMIN:?define CORREO_ADMIN}"
       TLS_MODO: "${TLS_MODO:-letsencrypt}"
@@ -21,6 +23,14 @@ services:
       - caddy-datos:/data              # certificados: conservarlo evita pedirlos de nuevo en cada arranque
       - caddy-config:/config
     depends_on: [panel, keycloak]
+    networks: [cerebro]
+    restart: unless-stopped
+
+  reenvio:                       # lleva el puerto HTTPS del equipo al proxy por la red interna (TCP puro: no ve ni toca el contenido, que sigue cifrado hasta Caddy)
+    image: alpine/socat@sha256:e8a6e8868a8e6e01d9c2c321a8f8d4474d2d741d962462e5c5a124a8e66a0055
+    command: TCP-LISTEN:443,fork,reuseaddr TCP:proxy:443
+    ports: ["${PROXY_HTTPS_PUERTO:-443}:443"]       # en Docker Desktop (Windows) se usa 18443 y Windows redirige su 443 a ese puerto (netsh portproxy): ver docs/ACCESO_EXTERNO.md
+    depends_on: [proxy]
     networks: [cerebro]
     restart: unless-stopped
 

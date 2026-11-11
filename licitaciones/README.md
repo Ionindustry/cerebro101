@@ -61,7 +61,7 @@ bench/grafo    banco de pruebas de la fase 0 (módulo Go aparte)
 ```
 
 ## En local
-Hace falta **Go 1.27.3** (el `go.mod` lo declara; con `GOTOOLCHAIN=auto` Go lo descarga solo).
+Hace falta **Go 1.27.4** (el `go.mod` lo declara; con `GOTOOLCHAIN=auto` Go lo descarga solo).
 ```bash
 cd licitaciones
 go vet ./...

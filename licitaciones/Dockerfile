@@ -1,7 +1,7 @@
 # Imagen única del motor de licitaciones (ADR 0008): cuatro binarios, cada servicio elige el suyo con `command`.
 # Contexto de construcción: la carpeta licitaciones/   (docker build -f licitaciones/Dockerfile licitaciones)
-# POR VERIFICAR (fase 1): fijar la imagen base por digest (`golang:1.27.3-bookworm@sha256:…`) cuando se consulte el registro.
-FROM golang:1.27.3-bookworm AS build
+# POR VERIFICAR (fase 1): fijar la imagen base por digest (`golang:1.27.4-bookworm@sha256:…`) cuando se consulte el registro.
+FROM golang:1.27.4-bookworm AS build
 ENV GOTOOLCHAIN=local CGO_ENABLED=0
 WORKDIR /src
 COPY go.mod go.sum ./
