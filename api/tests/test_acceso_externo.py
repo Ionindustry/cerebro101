@@ -43,6 +43,23 @@ class TestPuras(unittest.TestCase):
         again = AE.valores_nuevos("a.b.cat", "c.b.cat", "a@b.es", v["COMPOSE_FILE"])["COMPOSE_FILE"]
         self.assertEqual(again.count("externo"), 1)                                          # no se añade dos veces
 
+    def test_el_puerto_https_del_reenviador_solo_se_fija_si_no_es_el_443(self):
+        self.assertEqual(AE.valores_nuevos("a.b.cat", "c.b.cat", "a@b.es", "", puerto_https=18443)["PROXY_HTTPS_PUERTO"], "18443")
+        self.assertNotIn("PROXY_HTTPS_PUERTO", AE.valores_nuevos("a.b.cat", "c.b.cat", "a@b.es", ""))
+
+    def test_un_correo_de_ejemplo_se_rechaza(self):
+        for c in ("maria@miempresa.com", "tu_correo@tudominio.es", "alguien@example.com"):
+            with self.assertRaisesRegex(AE.ErrorAcceso, "ejemplo"):
+                AE.validar("brain.101.cat", "auth.101.cat", c)
+        self.assertEqual(AE.validar("brain.101.cat", "auth.101.cat", "albert@101.cat")[2], "albert@101.cat")
+
+    def test_los_pasos_con_docker_desktop_incluyen_la_redireccion_de_windows_y_el_hosts_sin_127(self):
+        t = AE.pasos_siguientes("brain.101.cat", "auth.101.cat", 18443, True)
+        self.assertIn("netsh interface portproxy add v4tov4 listenaddress=DIRECCION_DEL_PC listenport=443 connectaddress=127.0.0.1 connectport=18443", t)
+        self.assertIn("DIRECCION_DEL_PC brain.101.cat auth.101.cat", t)
+        self.assertIn("-LocalPort 443 -Action Allow", t)
+        self.assertNotIn("netsh", AE.pasos_siguientes("brain.101.cat", "auth.101.cat"))
+
     def test_sin_puerto_80_el_proxy_solo_lo_publica_en_local(self):
         v = AE.valores_nuevos("a.b.cat", "c.b.cat", "a@b.es", "", sin_puerto_80=True)
         self.assertEqual(v["PROXY_HTTP_BIND"], "127.0.0.1:8088")
@@ -57,8 +74,14 @@ class TestPuras(unittest.TestCase):
 class TestFicheros(unittest.TestCase):
     def test_el_proxy_solo_publica_80_y_443_y_nada_mas_se_expone(self):
         c = yaml.safe_load((RAIZ / "despliegue" / "docker-compose.externo.yml").read_text(encoding="utf-8"))
-        self.assertEqual(set(c["services"]), {"keycloak", "proxy"})
-        self.assertEqual(set(c["services"]["proxy"]["ports"]), {"${PROXY_HTTP_BIND:-80}:80", "443:443", "443:443/udp"})
+        self.assertEqual(set(c["services"]), {"keycloak", "proxy", "reenvio"})
+        self.assertEqual(c["services"]["proxy"]["ports"], ["${PROXY_HTTP_BIND:-80}:80"])                  # el 443 no lo publica el proxy: lo hace el reenviador
+        r = c["services"]["reenvio"]
+        self.assertEqual(r["ports"], ["${PROXY_HTTPS_PUERTO:-443}:443"])
+        self.assertEqual(r["command"], "TCP-LISTEN:443,fork,reuseaddr TCP:proxy:443")                    # TCP puro hacia el proxy, por la red interna
+        self.assertRegex(r["image"], r"@sha256:[0-9a-f]{64}$")                                           # imagen fijada por su huella, no por una etiqueta que se pueda cambiar
+        self.assertEqual(r["networks"], ["cerebro"])
+        self.assertEqual(r["restart"], "unless-stopped")
         self.assertNotIn("ports", c["services"]["keycloak"])                                  # Keycloak sigue solo en 127.0.0.1 (lo dice el compose base)
         self.assertIn("./despliegue/Caddyfile.externo:/etc/caddy/Caddyfile:ro", c["services"]["proxy"]["volumes"])
 
@@ -171,7 +194,7 @@ class TestFlujo(unittest.TestCase):
             self.assertEqual(stat.S_IMODE((e.repo / ".env").stat().st_mode), 0o600)
             antes = json.loads((e.repo / ".acceso-externo.json").read_text())
             self.assertEqual((antes["PANEL_URL"], antes["COMPOSE_FILE"]), ("http://localhost:3000", None))
-            self.assertIn("up -d --no-build keycloak panel api worker beat proxy", e.llamadas())
+            self.assertIn("up -d --no-build keycloak panel api worker beat proxy reenvio", e.llamadas())
             self.assertTrue(e.kc.exists())                                                     # se ejecutó configurar_keycloak
             self.assertIn("Cortafuegos de Windows", r.stdout)
             self.assertEqual(e.correr(*ARGS).returncode, 1)                                    # y no se activa dos veces
@@ -191,7 +214,23 @@ class TestFlujo(unittest.TestCase):
             for k in ("COMPOSE_FILE", "DOM_PANEL", "CORREO_ADMIN"):
                 self.assertNotIn(k, v)
             self.assertFalse((e.repo / ".acceso-externo.json").exists())
-            self.assertIn("rm -sf proxy", e.llamadas())
+            self.assertIn("rm -sf proxy reenvio", e.llamadas())
+        finally:
+            e.limpiar()
+
+    def test_cambiar_el_puerto_de_un_acceso_ya_activado(self):
+        e = Entorno()
+        try:
+            self.assertEqual(e.correr("puerto", "18443").returncode, 1)                       # sin activar no se puede
+            self.assertEqual(e.correr(*ARGS).returncode, 0)
+            r = e.correr("puerto", "18443")
+            self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+            self.assertEqual(e.env_repo()["PROXY_HTTPS_PUERTO"], "18443")
+            self.assertIn("up -d --no-build proxy reenvio", e.llamadas())
+            self.assertIn("netsh interface portproxy", r.stdout)
+            self.assertEqual(e.correr("puerto", "70000").returncode, 1)
+            self.assertEqual(e.correr("desactivar").returncode, 0)
+            self.assertNotIn("PROXY_HTTPS_PUERTO", e.env_repo())                              # al desactivar también se quita
         finally:
             e.limpiar()
 

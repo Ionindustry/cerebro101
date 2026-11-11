@@ -21,14 +21,39 @@ Para abrir Jarvis y los enlaces de los correos desde el móvil o desde otra ofic
 
 Compruébalo en Windows con `netstat -ano | findstr ":80 :443"` (un `LISTENING` en `0.0.0.0:80` y su número de proceso; `tasklist /fi "PID eq NUMERO"` dice cuál es). Si no puedes cerrar ese programa, activa con `--sin-puerto-80`: el proxy solo publica el 443 hacia fuera (el 80 queda en `127.0.0.1:8088`) y Let's Encrypt valida el certificado por el 443. En el router, reenvía solo el 443. Quien escriba `http://` desde fuera no llegará; `https://` sí.
 
+## Docker Desktop en Windows: el reenviador y la redirección del 443
+
+En Docker Desktop (Windows con WSL), el puerto 443 **publicado por el propio proxy se cortaba justo después del saludo HTTPS**, tanto desde el navegador como desde fuera, mientras que el mismo reenvío hecho por **otro contenedor desde la red interna** funcionaba. Por eso el proxy no publica el 443: lo hace un pequeño reenviador (`reenvio`, `socat` fijado por su huella SHA-256, TCP puro: el contenido sigue cifrado hasta Caddy). Se activa con `--puerto-https 18443` y Windows redirige su 443 a ese puerto:
+
+```powershell
+# PowerShell COMO ADMINISTRADOR (sustituye 192.168.1.102 por la dirección interna fija de este PC)
+New-NetFirewallRule -DisplayName "Cerebro HTTPS" -Direction Inbound -Protocol TCP -LocalPort 443 -Action Allow
+netsh interface portproxy add v4tov4 listenaddress=192.168.1.102 listenport=443 connectaddress=127.0.0.1 connectport=18443
+netsh interface portproxy show all
+```
+
+- El **router** sigue reenviando el 443 externo al 443 de ese PC; el resto va por dentro.
+- En el `hosts` de este PC usa **la dirección del PC** (`192.168.1.102 brain.101.cat auth.101.cat`) y no `127.0.0.1`: en `127.0.0.1:443` puede escuchar otro programa de Windows (un reenviador de WSL) que no habla con el proxy. Edítalo con PowerShell como administrador (no reescribas el fichero con un `-replace`; añade o reconstruye la línea).
+- El puerto 80 puede estar ocupado por una regla vieja de `netsh interface portproxy` (míralo con `netsh interface portproxy show all`): con `--sin-puerto-80` no hace falta.
+- La regla de `netsh` y la dirección fija del PC son lo que sostiene el acceso: reserva la dirección en el router.
+
+### Si ya tienes el acceso activado con una «sonda» manual (`sonda-443`)
+
+```bash
+git checkout despliegue/docker-compose.externo.yml     # por si lo editaste a mano
+git pull --ff-only
+docker rm -f sonda-443                                  # libera el puerto 18443
+python3 despliegue/acceso_externo.py puerto 18443       # el reenviador oficial lo sustituye
+```
+
 ## Activar
 
 ```bash
-python3 despliegue/acceso_externo.py activar --panel brain.101.cat --auth auth.101.cat --correo tu@correo --simular   # solo enseña lo que haría
-python3 despliegue/acceso_externo.py activar --panel brain.101.cat --auth auth.101.cat --correo tu@correo
+python3 despliegue/acceso_externo.py activar --panel brain.101.cat --auth auth.101.cat --correo TU_CORREO_REAL --puerto-https 18443 --sin-puerto-80 --simular   # solo enseña lo que haría
+python3 despliegue/acceso_externo.py activar --panel brain.101.cat --auth auth.101.cat --correo TU_CORREO_REAL --puerto-https 18443 --sin-puerto-80
 ```
 
-Fija en `.env` `PANEL_URL`, `KEYCLOAK_URL_PUBLICA`, `DOM_PANEL`, `DOM_AUTH`, `CORREO_ADMIN` y `TLS_MODO`, y añade el proxy (`despliegue/docker-compose.externo.yml`, con `despliegue/Caddyfile.externo`) a `COMPOSE_FILE`; recrea Keycloak, el panel, la API y el proxy y ajusta el cliente de Keycloak. Los valores anteriores quedan en `.acceso-externo.json`. Se detiene antes de tocar nada si Keycloak no conserva sus datos o los nombres aún no resuelven en DNS.
+Fija en `.env` `PANEL_URL`, `KEYCLOAK_URL_PUBLICA`, `DOM_PANEL`, `DOM_AUTH`, `CORREO_ADMIN` y `TLS_MODO`, y añade el proxy (`despliegue/docker-compose.externo.yml`, con `despliegue/Caddyfile.externo`) a `COMPOSE_FILE`; recrea Keycloak, el panel, la API y el proxy y ajusta el cliente de Keycloak. Los valores anteriores quedan en `.acceso-externo.json`. Se detiene antes de tocar nada si Keycloak no conserva sus datos, los nombres aún no resuelven en DNS o el correo es de ejemplo (usa el tuyo: Let's Encrypt lo usa para avisarte).
 
 Después de activar, **todos usan `https://brain.101.cat`**, también tú en este PC: el panel vuelve a su dirección pública tras iniciar sesión. Si el router no deja entrar por su propia IP pública, añade en `C:\Windows\System32\drivers\etc\hosts` (como administrador): `127.0.0.1 brain.101.cat auth.101.cat`.
 
