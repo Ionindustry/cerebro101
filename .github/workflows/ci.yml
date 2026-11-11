@@ -32,8 +32,8 @@ jobs:
           for intento in 1 2 3; do
             if aptq update && aptq install -y --no-install-recommends tesseract-ocr tesseract-ocr-spa tesseract-ocr-cat tesseract-ocr-eng poppler-utils; then exit 0; fi
             echo "apt falló (intento $intento de 3)"
-            # Si el espejo de Azure de los ejecutores no responde, se prueba el archivo principal de Ubuntu (el 11/11/2026 estuvo caído más de 15 minutos y las pruebas ni llegaban a empezar)
-            echo 'http://archive.ubuntu.com/ubuntu/ priority:1' | sudo tee /etc/apt/apt-mirrors.txt >/dev/null
+            # Si el espejo de Azure de los ejecutores no responde, se prueba el archivo principal de Ubuntu por HTTPS (el 11/11/2026 el acceso por HTTP a los espejos de Ubuntu estuvo caído más de 15 minutos mientras packages.microsoft.com por HTTPS sí respondía, y las pruebas ni llegaban a empezar)
+            echo 'https://archive.ubuntu.com/ubuntu/ priority:1' | sudo tee /etc/apt/apt-mirrors.txt >/dev/null
             sleep 5
           done
           exit 1
