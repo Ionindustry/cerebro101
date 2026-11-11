@@ -37,6 +37,28 @@ netsh interface portproxy show all
 - El puerto 80 puede estar ocupado por una regla vieja de `netsh interface portproxy` (míralo con `netsh interface portproxy show all`): con `--sin-puerto-80` no hace falta.
 - La regla de `netsh` y la dirección fija del PC son lo que sostiene el acceso: reserva la dirección en el router.
 
+### Que no se rompa tras reiniciar el PC
+
+La cadena completa tiene varios eslabones, y cada uno se arregla solo o lo vigila algo:
+
+| Eslabón | Si falla | Quién lo arregla |
+|---|---|---|
+| Docker Desktop | el motor no arranca | la tarea «Cerebro - arranque» y el vigilante de `scripts/windows/autoarranque.ps1` |
+| Servicios del Cerebro (panel, API, Keycloak…) | están parados | `scripts/arrancar.sh` (lo lanzan las tareas anteriores) |
+| Reenviador y proxy (contenedores `reenvio` y `proxy`) | se paran | `restart: unless-stopped` |
+| **Regla de Windows (`netsh portproxy`) sin escuchar tras arrancar** | desde fuera no se llega (el servicio «Ayudante de IP» arranca antes que la red) | **`scripts/windows/reenvio_https.ps1 -Instalar`**: tarea como SYSTEM que al arrancar y cada 5 minutos comprueba que Windows escucha en el 443 y, si no, reinicia `iphlpsvc` |
+| Dirección interna del PC | la regla apunta a otra | reserva de la dirección en el router; el vigilante lo anota en su registro |
+| Suspensión del PC | todo se para | «Suspensión: Nunca» |
+
+Instalar el vigilante del reenvío (PowerShell COMO ADMINISTRADOR):
+
+```powershell
+powershell -ExecutionPolicy Bypass -File \\wsl.localhost\Ubuntu\home\pc\cerebro101\scripts\windows\reenvio_https.ps1 -Instalar
+powershell -ExecutionPolicy Bypass -File C:\ProgramData\Cerebro\reenvio_https.ps1 -Estado
+```
+
+Copia el script a `C:\ProgramData\Cerebro` (la tarea no depende de WSL para arrancar) y deja su registro en `C:\ProgramData\Cerebro\reenvio-https.log`. Solo actúa si existe una regla del 443; `-Quitar` borra la tarea.
+
 ### Si ya tienes el acceso activado con una «sonda» manual (`sonda-443`)
 
 ```bash
