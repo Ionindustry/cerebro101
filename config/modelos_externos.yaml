@@ -15,11 +15,13 @@ proveedores:
   claude:
     nombre: "Claude (Anthropic)"
     url: "https://api.anthropic.com"
-    modelo: "claude-opus-5-5"   # se puede cambiar con CLAUDE_MODELO en el .env
+    modelo: "claude-opus-5-5"   # el de por defecto; se puede cambiar con CLAUDE_MODELO en el .env o elegir otro en el panel (Agentes → Modelos externos)
+    modelos: [claude-opus-5-5, claude-sonnet-5-5, claude-haiku-5-5]    # los que se pueden elegir en el panel (comprobadlos en console.anthropic.com)
   chatgpt:
     nombre: "ChatGPT (OpenAI)"
     url: "https://api.openai.com"
-    modelo: "gpt-5"             # comprobad la etiqueta vigente en platform.openai.com; se cambia con CHATGPT_MODELO en el .env
+    modelo: "gpt-5"             # comprobad la etiqueta vigente en platform.openai.com; se cambia con CHATGPT_MODELO en el .env o eligiendo otro en el panel
+    modelos: [gpt-5, gpt-5-mini]        # los que se pueden elegir en el panel (comprobadlos en platform.openai.com y añadid los que uséis)
 
 # Qué es una consulta «compleja»: un texto largo o que pide análisis, comparación, redacción extensa o estrategia.
 # También se pregunta a un modelo externo cuando el modelo local no ha dado una respuesta válida ni subiendo al principal.

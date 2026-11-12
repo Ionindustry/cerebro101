@@ -23,6 +23,13 @@ pero solo mientras Dirección los tenga **conectados** en el panel. Por defecto 
 - O el modelo local no ha dado una respuesta válida ni subiendo al modelo principal (último recurso).
 - Se pregunta primero a Claude y, si no está conectado o falla, a ChatGPT; si ninguno responde, sigue el modelo local. Nunca se queda sin respuesta por esto.
 
+## Elegir el modelo
+
+Hay dos elecciones distintas:
+
+- **Qué proveedor** (Claude o ChatGPT) redacta: al preparar la oferta hay un selector **«Memoria técnica con»** (*Automático*, *Claude*, *ChatGPT*). En *Automático* manda `redaccion.proveedor_por_paso` de `config/modelos_externos.yaml` (p. ej. `{solucion: claude, memoria: chatgpt}`) y, si no hay nada, el orden general. Si el elegido no responde, se prueba el otro y el resumen del paso lo dice.
+- **Qué modelo** usa cada proveedor (p. ej. Claude Opus, Sonnet o Haiku): lo elige Dirección en **Agentes → Modelos externos**, con el desplegable de cada proveedor. Solo se puede elegir entre los que figuran en `modelos:` de cada proveedor en `config/modelos_externos.yaml` (añade ahí los que uses, comprobados en la web del proveedor). Elegir modelo no conecta ni desconecta nada, queda constancia de quién y cuándo, y «(por defecto)» marca el de la configuración (o el de `CLAUDE_MODELO` / `CHATGPT_MODELO` del `.env`).
+
 ## Redactar la memoria técnica con Claude o ChatGPT
 
 En **«Preparar la oferta»**, los pasos del *Arquitecto de Solución* y del *Redactor de Memoria* los redacta Claude o ChatGPT (en ese orden de preferencia) **si Dirección los ha conectado**; si no, o si fallan, los hace el modelo local como siempre y el resumen del paso lo dice. Se configura en `config/modelos_externos.yaml`, sección `redaccion` (qué pasos, tamaño del pliego que se envía, tamaño de la respuesta). El precio, los costes y el sobre administrativo **nunca** salen a la nube.

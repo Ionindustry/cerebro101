@@ -15,8 +15,10 @@ export const uso = (p) => (p.usadas_hoy == null ? "uso de hoy no disponible" : `
 // Se puede conectar si tiene clave; desconectar se puede siempre
 export const puedeCambiar = (p) => p.activo || p.tiene_clave;
 
-export const mensajeError = (estado, detalle) =>
-  estado === 403 ? "Solo Dirección puede conectar o desconectar los modelos externos."
-    : estado === 409 ? (detalle || "Falta la clave de este modelo.")
-      : estado === 503 ? "No se ha podido guardar el cambio. Inténtalo de nuevo en un momento."
-        : "No se ha podido cambiar el estado.";
+export function mensajeError(estado, detalle) {
+  if (estado === 403) return "Solo Dirección puede conectar o desconectar los modelos externos.";
+  if (estado === 409) return detalle || "Falta la clave de este modelo.";
+  if (estado === 422) return detalle || "Ese modelo no está entre los permitidos.";
+  if (estado === 503) return "No se ha podido guardar el cambio. Inténtalo de nuevo en un momento.";
+  return "No se ha podido cambiar el estado.";
+}

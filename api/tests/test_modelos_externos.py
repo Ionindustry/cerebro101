@@ -336,5 +336,99 @@ class TestDesanonimizar(unittest.TestCase):
         self.assertIn("[PERSONA_1]", r.texto)
 
 
+class TestEleccionDelModelo(unittest.TestCase):
+    def test_los_modelos_posibles_incluyen_siempre_el_de_por_defecto(self):
+        with entorno(CLAUDE_MODELO="", CHATGPT_MODELO=""):
+            c = m.modelos_posibles("claude")
+            self.assertIn("claude-opus-5-5", c)
+            self.assertIn("claude-sonnet-5-5", c)
+            self.assertEqual(c[0] if m.modelo("claude") not in m.configuracion()["proveedores"]["claude"].get("modelos", []) else m.modelo("claude"), m.modelo("claude"))
+        with entorno(CLAUDE_MODELO="mi-modelo-propio"):
+            self.assertEqual(m.modelos_posibles("claude")[0], "mi-modelo-propio")         # el del .env siempre se puede elegir
+
+    def test_un_modelo_que_no_esta_permitido_se_rechaza_antes_de_tocar_la_base(self):
+        with self.assertRaises(ValueError) as c:
+            asyncio.run(m.poner_modelo("claude", "gpt-5", "albert"))
+        self.assertIn("no es uno de los modelos permitidos", str(c.exception))
+        with self.assertRaises(ValueError):
+            asyncio.run(m.poner_modelo("chatgpt", "'; DROP TABLE x; --", "albert"))
+
+    def test_sin_base_se_usa_el_de_por_defecto(self):
+        async def sin_base():
+            raise OSError("sin base")
+        with mock.patch.object(m, "_conectar", sin_base), entorno(CLAUDE_MODELO=""):
+            self.assertEqual(asyncio.run(m.modelo_elegido("claude")), m.modelo("claude"))
+
+    def test_el_modelo_elegido_es_el_que_se_envia_al_proveedor(self):
+        visto: list = []
+
+        async def elegido(p):
+            return "claude-sonnet-5-5"
+        with entorno(ANTHROPIC_API_KEY="k"), mock.patch.object(m, "modelo_elegido", elegido):
+            consultar(Ficha(), msgs(), {"claude": True}, claude_ok(visto))
+        self.assertEqual(visto[0][2]["model"], "claude-sonnet-5-5")
+
+
+URL_PG = os.environ.get("CEREBRO_TEST_PG")
+
+
+@unittest.skipUnless(URL_PG, "sin CEREBRO_TEST_PG")
+class TestEleccionDelModeloEnBD(unittest.TestCase):
+    def setUp(self):
+        import time
+        from pathlib import Path
+        from types import SimpleNamespace
+        import psycopg
+        self.schema = f"t_mext_{time.time_ns()}"
+        with psycopg.connect(URL_PG, autocommit=True) as c:
+            c.execute(f"CREATE SCHEMA {self.schema}")
+            c.execute(f"SET search_path = {self.schema}")
+            t = (Path(__file__).resolve().parents[2] / "db" / "esquema.sql").read_text(encoding="utf-8")
+            c.execute(t[t.index("CREATE TABLE IF NOT EXISTS modelos_externos"):t.index("-- Registro de acciones ejecutadas")])
+        sep = "&" if "?" in URL_PG else "?"
+        self.parche = mock.patch.object(m, "ajustes", SimpleNamespace(database_url=f"{URL_PG}{sep}options=-csearch_path%3D{self.schema}", dir_config=m.ajustes.dir_config))
+        self.parche.start()
+
+    def tearDown(self):
+        import psycopg
+        self.parche.stop()
+        with psycopg.connect(URL_PG, autocommit=True) as c:
+            c.execute(f"DROP SCHEMA {self.schema} CASCADE")
+
+    def test_elegir_cambiar_y_volver_al_de_por_defecto_sin_tocar_la_conexion(self):
+        with entorno(CLAUDE_MODELO=""):
+            por_defecto = m.modelo("claude")
+            asyncio.run(m.poner("claude", True, "albert"))
+            self.assertEqual(asyncio.run(m.modelo_elegido("claude")), por_defecto)
+            asyncio.run(m.poner_modelo("claude", "claude-sonnet-5-5", "albert"))
+            self.assertEqual(asyncio.run(m.modelo_elegido("claude")), "claude-sonnet-5-5")
+            self.assertTrue(asyncio.run(m.activos())["claude"])                          # elegir modelo no desconecta
+            asyncio.run(m.poner_modelo("claude", "auto", "albert"))
+            self.assertEqual(asyncio.run(m.modelo_elegido("claude")), por_defecto)
+            asyncio.run(m.poner_modelo("chatgpt", "gpt-5-mini", "albert"))               # elegir sin haberlo conectado nunca: queda desconectado
+            self.assertFalse(asyncio.run(m.activos())["chatgpt"])
+            e = asyncio.run(m.estado())
+            self.assertEqual([p["modelo"] for p in e["proveedores"] if p["id"] == "chatgpt"], ["gpt-5-mini"])
+            self.assertIn("gpt-5", [p["modelos"] for p in e["proveedores"] if p["id"] == "chatgpt"][0])
+
+    def test_el_endpoint_solo_lo_cambia_direccion_y_solo_a_un_modelo_permitido(self):
+        from cerebro.api import main
+        from cerebro.api.main import Usuario, usuario_actual
+        from fastapi.testclient import TestClient
+        c = TestClient(main.app)
+        try:
+            main.app.dependency_overrides[usuario_actual] = lambda: Usuario("marta", {"usuario"}, {"licitaciones"})
+            self.assertEqual(c.post("/modelos-externos/claude/modelo", json={"modelo": "claude-sonnet-5-5"}).status_code, 403)
+            main.app.dependency_overrides[usuario_actual] = lambda: Usuario("albert", {"direccion"}, set())
+            self.assertEqual(c.post("/modelos-externos/gemini/modelo", json={"modelo": "x"}).status_code, 404)
+            self.assertEqual(c.post("/modelos-externos/claude/modelo", json={"modelo": "gpt-5"}).status_code, 422)
+            with mock.patch.object(main.constancia, "dejar_constancia", mock.AsyncMock()):
+                r = c.post("/modelos-externos/claude/modelo", json={"modelo": "claude-sonnet-5-5"})
+            self.assertEqual(r.status_code, 200)
+            self.assertEqual([p["modelo"] for p in r.json()["proveedores"] if p["id"] == "claude"], ["claude-sonnet-5-5"])
+        finally:
+            main.app.dependency_overrides.clear()
+
+
 if __name__ == "__main__":
     unittest.main()

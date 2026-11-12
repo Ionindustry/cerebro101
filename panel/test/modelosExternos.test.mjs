@@ -30,3 +30,9 @@ test("los errores se explican en claro", () => {
   assert.match(mensajeError(503), /Inténtalo/);
   assert.match(mensajeError(500), /No se ha podido/);
 });
+
+test("modelos externos: el 422 explica que el modelo no está permitido", () => {
+  assert.match(mensajeError(422), /permitidos/);
+  assert.equal(mensajeError(422, "«x» no es uno de los modelos permitidos de claude"), "«x» no es uno de los modelos permitidos de claude");
+  assert.match(mensajeError(503), /Inténtalo/);
+});

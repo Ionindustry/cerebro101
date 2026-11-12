@@ -349,7 +349,8 @@ async def intentar(motor_id: str, defin: dict, sel: list[dict], titulo: str, fic
         if not escritas:
             return None, "el modelo externo no ha devuelto ninguna sección utilizable"
         quien = "Claude" if proveedor == "claude" else "ChatGPT"
-        resumen = f"Redactado con {quien} ({externos.modelo(proveedor)}): {len(escritas)} de {len(sel)} secciones."
+        nombre_modelo = await externos.modelo_elegido(proveedor)
+        resumen = f"Redactado con {quien} ({nombre_modelo}): {len(escritas)} de {len(sel)} secciones."
         if preferido and preferido != proveedor:
             resumen += f" Se pidió {'Claude' if preferido == 'claude' else 'ChatGPT'} pero no ha podido responder."
         if omitidas:
@@ -357,7 +358,7 @@ async def intentar(motor_id: str, defin: dict, sel: list[dict], titulo: str, fic
         resumen += "".join(f" {a}." for a in avisos) + (f" {nota[0].upper() + nota[1:]}." if nota else "")
         if datos.get("resumen"):
             resumen += "\n" + _corto(datos["resumen"], 1500)
-        return {"escritas": escritas, "omitidas": omitidas, "resumen": resumen, "proveedor": proveedor, "modelo": externos.modelo(proveedor)}, ""
+        return {"escritas": escritas, "omitidas": omitidas, "resumen": resumen, "proveedor": proveedor, "modelo": nombre_modelo}, ""
     except externos.ErrorExterno as e:
         return None, str(e)[:300]
     except Exception as e:      # noqa: BLE001 — cualquier fallo: el paso lo hace el modelo local, y el motivo queda a la vista

@@ -122,6 +122,7 @@ CREATE TABLE IF NOT EXISTS modelos_externos (
   cambiado_por text,
   cambiado     timestamptz NOT NULL DEFAULT now()
 );
+ALTER TABLE modelos_externos ADD COLUMN IF NOT EXISTS modelo text;      -- el modelo elegido en el panel para este proveedor (NULL = el de la configuración)
 
 -- Registro de acciones ejecutadas (evidencia para ENS / ISO 27001)
 CREATE TABLE IF NOT EXISTS registro_acciones (

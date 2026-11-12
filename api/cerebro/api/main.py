@@ -243,6 +243,27 @@ async def cambiar_modelo_externo(proveedor: str, i: Interruptor, usuario: Usuari
     return await modelos_externos.estado()
 
 
+class ElegirModelo(BaseModel):
+    modelo: str = "auto"              # uno de los permitidos del proveedor, o «auto» para volver al de por defecto
+
+
+@app.post("/modelos-externos/{proveedor}/modelo")
+async def elegir_modelo_externo(proveedor: str, e: ElegirModelo, usuario: Usuario = Depends(usuario_actual)):
+    """Dirección elige qué modelo usa un proveedor (p. ej. Claude Opus o Sonnet). Solo entre los permitidos en config/modelos_externos.yaml; queda constancia de quién y cuándo."""
+    _exigir_direccion(usuario)
+    if proveedor not in modelos_externos.CLAVES:
+        raise HTTPException(404, "Proveedor desconocido")
+    try:
+        await modelos_externos.poner_modelo(proveedor, e.modelo, usuario.id)
+    except ValueError as err:
+        raise HTTPException(422, str(err)) from None
+    except Exception as err:  # noqa: BLE001
+        log.exception("No se pudo guardar el modelo de %s", proveedor)
+        raise HTTPException(503, "No se ha podido guardar el cambio (la base de datos no responde)") from err
+    await constancia.dejar_constancia(None, usuario.id, "modelos_externos", "elegir_modelo", None, f"{proveedor}: modelo {e.modelo[:60]} elegido por {usuario.id}")
+    return await modelos_externos.estado()
+
+
 @app.post("/jarvis/mensaje")
 async def mensaje(m: Mensaje, usuario: Usuario = Depends(usuario_actual)):
     hilo = m.hilo or str(uuid.uuid4())
