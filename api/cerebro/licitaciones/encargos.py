@@ -29,6 +29,7 @@ AGENTE = "director-oferta"
 MAX_ENCARGO = 3500                 # caracteres de un encargo
 MAX_ITEMS = 8
 MAX_USUARIO = 6000                 # lo que puede escribir una persona
+MAX_LOCAL = 1800                   # lo que se le da a un agente que trabaja con el modelo local (ventana de 8192 tokens): un encargo largo le quitaría sitio a lo que tiene que leer y escribir
 
 SECCIONES = (("requisitos_y_criterios", "TE TOCAN (requisitos y criterios)"), ("entregables", "ENTREGABLES"), ("datos_a_buscar", "DATOS QUE TIENES QUE BUSCAR"),
              ("no_te_corresponde", "NO TE CORRESPONDE"))
@@ -199,8 +200,22 @@ async def escribir_persona(motor_id: str, agente: str, contenido: str, usuario: 
     return {"agente": agente, "guardado": bool(contenido)}
 
 
-async def texto_para(motor_id: str, agente: str) -> str:
-    """El encargo de un agente, listo para ponerlo en su petición, o vacío si no hay. Si la base falla, vacío: el agente trabaja con su contexto de siempre."""
+def recortar(texto: str, maximo: int) -> str:
+    """Recorta el encargo por líneas completas (sin partir una frase) y avisa de que se ha recortado. Pura."""
+    if len(texto) <= maximo:
+        return texto
+    aviso = "\n[Encargo recortado para el modelo local; el texto completo está en la ficha de la oferta.]"
+    salida, usado = [], 0
+    for linea in texto.split("\n"):
+        if usado + len(linea) + 1 > maximo - len(aviso):
+            break
+        salida.append(linea)
+        usado += len(linea) + 1
+    return ("\n".join(salida) or texto[: maximo - len(aviso)]).rstrip() + aviso
+
+
+async def texto_para(motor_id: str, agente: str, maximo: int | None = None) -> str:
+    """El encargo de un agente, listo para ponerlo en su petición, o vacío si no hay. Con `maximo` se recorta (los agentes locales). Si la base falla, vacío: el agente trabaja con su contexto de siempre."""
     try:
         async with await O._conectar() as conn:
             cur = await conn.execute("SELECT contenido, origen FROM ofertas_encargos WHERE motor_id = %s AND agente = %s", [O._id(motor_id), agente])
@@ -211,7 +226,8 @@ async def texto_para(motor_id: str, agente: str) -> str:
     if not f or not f["contenido"].strip():
         return ""
     quien = "una persona de Licitaciones" if f["origen"] == "persona" else "el director de la oferta"
-    return (f"ENCARGO ESPECÍFICO DE ESTA LICITACIÓN (lo ha redactado {quien}; se suma a tus reglas, nunca las sustituye):\n{f['contenido']}")
+    cuerpo = recortar(f["contenido"], maximo) if maximo else f["contenido"]
+    return (f"ENCARGO ESPECÍFICO DE ESTA LICITACIÓN (lo ha redactado {quien}; se suma a tus reglas, nunca las sustituye):\n{cuerpo}")
 
 
 # ---- El paso ----

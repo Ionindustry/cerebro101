@@ -72,6 +72,20 @@ class TestPuros(unittest.TestCase):
         self.assertIn("««««\ntexto del pliego\n»»»»", u)
 
 
+class TestRecorte(unittest.TestCase):
+    def test_un_encargo_corto_no_se_toca_y_uno_largo_se_recorta_por_lineas_avisando(self):
+        corto = "OBJETIVO: hacer lo suyo\n\nENTREGABLES:\n- uno"
+        self.assertEqual(E.recortar(corto, 1800), corto)
+        largo = "\n".join(f"- línea {i} " + "x" * 80 for i in range(100))
+        r = E.recortar(largo, 600)
+        self.assertLessEqual(len(r), 600)
+        self.assertIn("recortado para el modelo local", r)
+        self.assertTrue(r.split("\n")[0].startswith("- línea 0"))
+        self.assertNotIn("línea 99", r)
+        self.assertTrue(all(l.startswith("- línea") or l.startswith("[Encargo") for l in r.split("\n")))     # nunca parte una línea por la mitad
+        self.assertLessEqual(len(E.recortar("x" * 5000, 300)), 300)                                            # una sola línea enorme también se recorta
+
+
 @unittest.skipUnless(URL and hasattr(psycopg, "AsyncConnection"), "sin CEREBRO_TEST_PG")
 class TestFlujo(unittest.TestCase):
     def setUp(self):
@@ -161,6 +175,16 @@ class TestFlujo(unittest.TestCase):
         self.assertEqual((res["escritas"], res["proveedor"]), ([sel[0]["clave"]], "claude"))
         despues = {x["clave"]: x for x in asyncio.run(O.leer(ID))["secciones"]}
         self.assertEqual(despues[sel[0]["clave"]]["contenido"], "Texto de la memoria.")
+
+    def test_los_agentes_locales_reciben_el_encargo_recortado_y_los_externos_el_completo(self):
+        asyncio.run(E.guardar(ID, "redactor-memoria", "OBJETIVO: x\n\n" + "\n".join(f"- punto {i} " + "y" * 90 for i in range(60)), "modelo", "agente:director-oferta", "claude", "m"))
+        completo = asyncio.run(E.texto_para(ID, "redactor-memoria"))
+        local = asyncio.run(E.texto_para(ID, "redactor-memoria", E.MAX_LOCAL))
+        self.assertGreater(len(completo), E.MAX_LOCAL)
+        self.assertLessEqual(len(local), E.MAX_LOCAL + 200)                                           # + la cabecera del encargo
+        self.assertIn("ENCARGO ESPECÍFICO", local)
+        self.assertIn("recortado para el modelo local", local)
+        self.assertNotIn("recortado", completo)
 
     def test_si_el_modelo_externo_falla_se_usa_la_plantilla_y_se_dice_por_que(self):
         async def falla(*a, **k):

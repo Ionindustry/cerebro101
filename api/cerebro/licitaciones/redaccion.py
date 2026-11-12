@@ -334,14 +334,16 @@ async def _paso_escritor(ejecucion_id: int, indice: int, e: dict, defin: dict, i
         return
     from . import encargos as encargos_mod
     encargo = await encargos_mod.texto_para(motor_id, defin["agente"])
-    if encargo:                                      # el encargo a medida de esta licitación se suma al contexto del paso (y a las reglas fijas de la petición)
-        defin = {**defin, "contexto": f"{defin.get('contexto', '')}\n\n{encargo}".strip()}
+    defin_externo = {**defin, "contexto": f"{defin.get('contexto', '')}\n\n{encargo}".strip()} if encargo else defin       # Claude y ChatGPT reciben el encargo completo
+    encargo_local = await encargos_mod.texto_para(motor_id, defin["agente"], encargos_mod.MAX_LOCAL) if encargo else ""
+    if encargo_local:                                # el modelo local, más corto: su ventana es pequeña (se suma a las reglas fijas de la petición)
+        defin = {**defin, "contexto": f"{defin.get('contexto', '')}\n\n{encargo_local}".strip()}
     estado, externa = None, ""
     from . import redaccion_externa as externa_mod
     if externa_mod.paso_activo(defin["id"]):
         # Claude o ChatGPT, si Dirección los ha conectado: redactan el paso de una vez, con todo el material. Si no procede o falla, lo hace el modelo local como siempre.
         await _marcar(ejecucion_id, indice, resumen="Redactando con Claude o ChatGPT…")
-        res, motivo = await externa_mod.intentar(motor_id, defin, sel, titulo, ficha or {}, modelo=e.get("modelo") or "auto")
+        res, motivo = await externa_mod.intentar(motor_id, defin_externo, sel, titulo, ficha or {}, modelo=e.get("modelo") or "auto")
         if res:
             estado = {"respuesta": res["resumen"]}
         else:
@@ -380,7 +382,7 @@ async def _paso_informe(ejecucion_id: int, indice: int, e: dict, defin: dict, in
             return
         peticion = peticion_evaluacion(motor_id, titulo, ficha, con_texto)
     from . import encargos as encargos_mod
-    encargo = await encargos_mod.texto_para(motor_id, defin["agente"])
+    encargo = await encargos_mod.texto_para(motor_id, defin["agente"], encargos_mod.MAX_LOCAL)         # los informes los hace siempre el modelo local
     if encargo:
         peticion = f"{peticion}\n\n{encargo}"
     estado = await invocar(defin["agente"], peticion)
