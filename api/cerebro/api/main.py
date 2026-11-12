@@ -162,6 +162,14 @@ CACHE_HOY_S = 30         # Jarvis pide «Hoy» cada minuto desde cada pestaña a
 async def que_hacer_hoy(usuario: Usuario = Depends(usuario_actual)):
     """«Qué hacer hoy»: lo que necesita atención de quien abre Jarvis, ordenado por urgencia: aprobaciones pendientes de sus departamentos, plazos de licitaciones y requisitos por revisar (Dirección y Licitaciones) y el estado
     del sistema (Dirección y Tecnología). Solo lee. La lista depende SOLO de los permisos (roles y departamentos), no de quién eres: por eso se puede reutilizar entre pestañas con los mismos permisos."""
+    datos = await _hoy_de(usuario)
+    try:
+        return hoy.sin_archivados(datos, await hoy.claves_archivadas(usuario.id))
+    except Exception:  # noqa: BLE001 — si el archivo falla, la lista sale entera: mejor ver de más que no ver nada
+        return {**datos, "archivados": 0}
+
+
+async def _hoy_de(usuario: Usuario) -> dict:
     clave = (frozenset(usuario.roles), frozenset(usuario.departamentos))
     ahora = time.monotonic()
     guardada = _CACHE_HOY.get(clave)
@@ -172,6 +180,36 @@ async def que_hacer_hoy(usuario: Usuario = Depends(usuario_actual)):
         _CACHE_HOY.clear()
     _CACHE_HOY[clave] = (ahora, datos)
     return datos
+
+
+class ClaveHoy(BaseModel):
+    clave: str
+
+
+@app.get("/hoy/archivo")
+async def archivo_de_hoy(usuario: Usuario = Depends(usuario_actual)):
+    """Lo vencido que esta persona ha archivado, lo último primero."""
+    return {"items": await hoy.archivo(usuario.id)}
+
+
+@app.post("/hoy/archivar")
+async def archivar_en_hoy(c: ClaveHoy, usuario: Usuario = Depends(usuario_actual)):
+    """Archiva un elemento vencido de la lista de esta persona. El texto lo pone el servidor desde la lista que ella ve, no el navegador."""
+    item = next((i for i in (await _hoy_de(usuario))["items"] if i.get("clave") == c.clave), None)
+    if not item:
+        raise HTTPException(404, "Ese elemento ya no está en la lista de hoy")
+    try:
+        await hoy.archivar(usuario.id, item)
+    except ValueError as e:
+        raise HTTPException(422, str(e)) from None
+    return {"ok": True}
+
+
+@app.post("/hoy/desarchivar")
+async def desarchivar_en_hoy(c: ClaveHoy, usuario: Usuario = Depends(usuario_actual)):
+    if not await hoy.desarchivar(usuario.id, c.clave):
+        raise HTTPException(404, "Ese elemento no estaba archivado")
+    return {"ok": True}
 
 
 @app.get("/salud/antivirus")

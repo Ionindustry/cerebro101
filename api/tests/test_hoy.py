@@ -186,5 +186,86 @@ class TestBandeja(unittest.TestCase):
         self.assertEqual([i["categoria"] for i in r.json()["items"]], ["aprobaciones"])      # solo la de Finanzas
 
 
+class TestArchivo(unittest.TestCase):
+    def test_solo_los_vencidos_se_pueden_archivar_y_llevan_su_clave(self):
+        items = H.de_licitaciones(SEG)
+        vencidos = [i for i in items if i["archivable"]]
+        self.assertEqual([i["titulo"] for i in vencidos], ["Plazo vencido: Licitación 2"])
+        self.assertEqual(vencidos[0]["clave"], "plazo-vencido:0b1f7a3e-1111-4222-8333-444444444442")
+        self.assertTrue(all(i["clave"] is None for i in items if not i["archivable"]))
+
+    def test_la_lista_sin_archivados_recalcula_contadores_y_no_toca_el_original(self):
+        datos = {"items": [{"nivel": "urgente", "clave": None}, {"nivel": "aviso", "clave": "plazo-vencido:a"}, {"nivel": "urgente", "clave": "plazo-vencido:b"}], "urgentes": 2}
+        r = H.sin_archivados(datos, {"plazo-vencido:b"})
+        self.assertEqual([r["urgentes"], r["archivados"], len(r["items"])], [1, 1, 2])
+        self.assertEqual(len(datos["items"]), 3)
+
+    def test_clave_valida(self):
+        self.assertTrue(H.CLAVE_VALIDA.match("plazo-vencido:0b1f7a3e-1111"))
+        for mala in ("", "plazo vencido:1", "x:'; drop", "sin-dos-puntos", "a:" + "b" * 65):
+            self.assertIsNone(H.CLAVE_VALIDA.match(mala), mala)
+
+
+@unittest.skipUnless(URL and hasattr(psycopg, "AsyncConnection"), "sin CEREBRO_TEST_PG")
+class TestArchivoEnBD(unittest.TestCase):
+    def setUp(self):
+        self.schema = f"t_hoyarch_{time.time_ns()}"
+        with psycopg.connect(URL, autocommit=True) as c:
+            c.execute(f"CREATE SCHEMA {self.schema}")
+            c.execute(f"SET search_path = {self.schema}")
+            t = ESQUEMA.read_text(encoding="utf-8")
+            c.execute(t[t.index("CREATE TABLE IF NOT EXISTS hoy_archivados"):])
+        sep = "&" if "?" in URL else "?"
+        self.parche = mock.patch.object(H, "ajustes", SimpleNamespace(database_url=f"{URL}{sep}options=-csearch_path%3D{self.schema}"))
+        self.parche.start()
+
+    def tearDown(self):
+        self.parche.stop()
+        with psycopg.connect(URL, autocommit=True) as c:
+            c.execute(f"DROP SCHEMA {self.schema} CASCADE")
+
+    def test_archivar_listar_y_recuperar_es_por_persona(self):
+        item = [i for i in H.de_licitaciones(SEG) if i["archivable"]][0]
+        ejecutar(H.archivar("ana", item))
+        ejecutar(H.archivar("ana", item))                                                      # repetir no duplica
+        self.assertEqual([f["titulo"] for f in ejecutar(H.archivo("ana"))], ["Plazo vencido: Licitación 2"])
+        self.assertEqual(ejecutar(H.archivo("luis")), [])                                       # lo de Ana no es de Luis
+        self.assertEqual(ejecutar(H.claves_archivadas("ana")), {item["clave"]})
+        self.assertFalse(ejecutar(H.desarchivar("luis", item["clave"])))
+        self.assertTrue(ejecutar(H.desarchivar("ana", item["clave"])))
+        self.assertEqual(ejecutar(H.archivo("ana")), [])
+
+    def test_lo_que_no_es_archivable_se_rechaza(self):
+        with self.assertRaises(ValueError):
+            ejecutar(H.archivar("ana", H.de_aprobaciones([{"creado": AHORA, "accion": "x", "datos": {}}], AHORA)[0]))
+
+    def test_el_endpoint_archiva_oculta_y_recupera(self):
+        from cerebro.api import main
+        from cerebro.api.main import Usuario, usuario_actual
+        from fastapi.testclient import TestClient
+
+        async def construir(roles, deps, ahora=None, **kw):
+            items = H.de_licitaciones(SEG)
+            return {"items": items, "urgentes": sum(1 for i in items if i["nivel"] == "urgente"), "avisos": [], "secciones": {}}
+        main._CACHE_HOY.clear()
+        main.app.dependency_overrides[usuario_actual] = lambda: Usuario("ana", {"direccion"}, set())
+        try:
+            with mock.patch.object(main.hoy, "construir", construir):
+                c = TestClient(main.app)
+                clave = [i["clave"] for i in c.get("/hoy").json()["items"] if i["clave"]][0]
+                self.assertEqual(c.post("/hoy/archivar", json={"clave": "plazo-vencido:no-existe"}).status_code, 404)
+                self.assertEqual(c.post("/hoy/archivar", json={"clave": clave}).status_code, 200)
+                d = c.get("/hoy").json()
+                self.assertNotIn(clave, [i["clave"] for i in d["items"]])
+                self.assertEqual(d["archivados"], 1)
+                self.assertEqual([i["clave"] for i in c.get("/hoy/archivo").json()["items"]], [clave])
+                self.assertEqual(c.post("/hoy/desarchivar", json={"clave": clave}).status_code, 200)
+                self.assertEqual(c.post("/hoy/desarchivar", json={"clave": clave}).status_code, 404)
+                self.assertIn(clave, [i["clave"] for i in c.get("/hoy").json()["items"]])
+        finally:
+            main.app.dependency_overrides.clear()
+            main._CACHE_HOY.clear()
+
+
 if __name__ == "__main__":
     unittest.main()
