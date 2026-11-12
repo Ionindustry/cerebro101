@@ -856,6 +856,7 @@ async def descargar_plantilla_rellenada(motor_id: str, doc_id: int, usuario: Usu
 class RedactarEntrada(BaseModel):
     rehacer: bool = False             # también rehace los borradores de los agentes (nunca lo que haya escrito o revisado una persona)
     empresa: str | None = None        # la sociedad del ERP con la que se presenta; si el ERP tiene varias y no se ha elegido nunca, hay que indicarla
+    modelo: str = "auto"              # con qué modelo externo redactar la memoria técnica: auto (lo que diga la configuración), claude o chatgpt
 
 
 @app.post("/licitaciones/ofertas/{motor_id}/redactar", status_code=202)
@@ -868,7 +869,7 @@ async def redactar_oferta_con_agentes(motor_id: str, entrada: RedactarEntrada | 
         ficha = await motor_lic._get(f"/tenders/{motor_id.strip().lower()}") if motor_lic._UUID.match(motor_id.strip()) else {}
         oferta = await ofertas_licitaciones.plan(motor_id, ficha, usuario.id)
         await _fijar_sociedad(motor_id, oferta, entrada.empresa)
-        ejecucion = await redaccion_ofertas.reservar(motor_id, usuario.id, entrada.rehacer)
+        ejecucion = await redaccion_ofertas.reservar(motor_id, usuario.id, entrada.rehacer, modelo=entrada.modelo)
     except redaccion_ofertas.Conflicto as e:
         raise HTTPException(409, str(e)) from None
     except empresa_erp.VariasEmpresas as e:

@@ -27,3 +27,15 @@ complejidad:
   caracteres: 600
   palabras: [analiza, analiz*, compara, compar*, estrategia, estratègia, informe, redacta, redacció, propuesta, proposta, plan de,
              evalúa, avalua, resume, resumeix, conclusiones, conclusions, riesgos, riscos, pros y contras, argumenta]
+
+# Redacción de la memoria técnica con Claude o ChatGPT (api/cerebro/licitaciones/redaccion_externa.py): en «Preparar la oferta», los pasos indicados los redacta un modelo externo (si Dirección lo ha
+# conectado) en vez del modelo local. Recibe el texto del pliego (documentación pública), los requisitos confirmados, los criterios de puntuación y datos de 101.cat (perfil y base de conocimiento,
+# anonimizados). Solo deja BORRADORES que revisa una persona. Si no hay modelo conectado o falla, sigue el modelo local como siempre.
+redaccion:
+  activa: true
+  pasos: [solucion, memoria]          # qué pasos de «Preparar la oferta» se redactan con el modelo externo
+  max_caracteres_pliego: 90000        # lo que se envía del texto de los pliegos (si es más largo se reparte entre los documentos y se avisa)
+  max_tokens: 10000                   # tamaño máximo de lo que escribe el modelo (todas las secciones del paso)
+  proveedor_por_paso: {}              # a quién se le pregunta primero en cada paso cuando la persona deja «Automático»; p. ej. {solucion: claude, memoria: chatgpt}. Vacío = el orden general
+  fragmentos_conocimiento: 6          # cuántos fragmentos de la base de conocimiento de 101.cat se envían por consulta
+  max_caracteres_conocimiento: 8000

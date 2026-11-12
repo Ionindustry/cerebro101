@@ -555,6 +555,7 @@ CREATE TABLE IF NOT EXISTS ofertas_ejecuciones (
   creada    timestamptz NOT NULL DEFAULT now(),
   terminada timestamptz
 );
+ALTER TABLE ofertas_ejecuciones ADD COLUMN IF NOT EXISTS modelo text NOT NULL DEFAULT 'auto';     -- con qué modelo externo redactar: auto | claude | chatgpt
 CREATE UNIQUE INDEX IF NOT EXISTS ofertas_ejecuciones_una_en_curso ON ofertas_ejecuciones (motor_id) WHERE estado = 'en_curso';
 CREATE INDEX IF NOT EXISTS ofertas_ejecuciones_motor ON ofertas_ejecuciones (motor_id, id DESC);
 

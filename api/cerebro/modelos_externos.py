@@ -250,16 +250,24 @@ async def consultar(ficha, mensajes: list[dict], esquema: dict, sensibilidad: st
     return None
 
 
-async def consultar_publico(agente: str, mensajes: list[dict], esquema: dict, max_tokens: int = 6000, timeout: int = 240, transporte=None) -> tuple[dict, str]:
+def ordenar(candidatos: list[str], preferido: str | None) -> list[str]:
+    """Los proveedores en el orden en que se prueban: el preferido primero (si está entre los candidatos) y el resto como estaban. Pura."""
+    if preferido in candidatos:
+        return [preferido] + [p for p in candidatos if p != preferido]
+    return list(candidatos)
+
+
+async def consultar_publico(agente: str, mensajes: list[dict], esquema: dict, max_tokens: int = 6000, timeout: int = 240, transporte=None, preferido: str | None = None) -> tuple[dict, str]:
     """Una consulta a Claude o ChatGPT sobre un documento PÚBLICO (un pliego de contratación): se envía tal cual, sin anonimizar y sin el límite de tamaño de las consultas de los agentes.
     Mantiene las demás reglas: solo si Dirección lo ha conectado, con su clave y dentro del tope diario; si un proveedor falla se prueba el siguiente. Devuelve (respuesta, proveedor).
+    `preferido` («claude» o «chatgpt») va el primero si está conectado y con clave; si no puede responder, se pasa al otro. Sin preferencia, manda el orden de la configuración.
     Si ninguno puede, lanza ErrorExterno con un motivo legible por la persona. Lo que se envíe aquí NO debe llevar datos privados de la empresa ni de personas."""
     cfg = configuracion()
     con_clave = [p for p in cfg["orden"] if clave(p)]
     if not con_clave:
         raise ErrorExterno("No hay ninguna clave de Claude ni de ChatGPT: ponla con «python3 scripts/modelos_activar.py claude» (o chatgpt)")
     conectados = await activos()
-    candidatos = [p for p in con_clave if conectados.get(p)]
+    candidatos = ordenar([p for p in con_clave if conectados.get(p)], preferido)
     if not candidatos:
         raise ErrorExterno("Claude y ChatGPT están desconectados: Dirección los conecta en Agentes → Modelos externos")
     ultimo = ""

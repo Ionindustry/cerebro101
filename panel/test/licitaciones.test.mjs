@@ -1105,3 +1105,9 @@ test("panel de licitaciones: embudo, fuentes y plazos próximos", () => {
   const p = plazosProximos([{ valor: "2026-11-12", cuenta: 2 }, { valor: "2026-11-25", cuenta: 3 }, { valor: "2026-12-30", cuenta: 4 }], "2026-11-12");
   assert.deepEqual(p, { siete: 2, quince: 5, treinta: 5, sesenta: 9 });
 });
+
+import { MODELOS_REDACCION } from "../lib/licitaciones.js";
+test("redacción: el modelo se puede elegir entre automático, Claude y ChatGPT", () => {
+  assert.deepEqual(MODELOS_REDACCION.map(([k]) => k), ["auto", "claude", "chatgpt"]);
+  assert.equal(MODELOS_REDACCION[0][0], "auto");
+});

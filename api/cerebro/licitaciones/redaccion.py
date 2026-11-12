@@ -100,11 +100,11 @@ def pasos_iniciales(secciones: list[dict], rehacer: bool) -> list[dict]:
 
 
 def _ejecucion(f: dict) -> dict:
-    return {"id": f["id"], "licitacion": str(f["motor_id"]), "estado": f["estado"], "por": f["por"], "rehacer": f["rehacer"], "pasos": list(f["pasos"] or []), "error": f["error"],
+    return {"id": f["id"], "licitacion": str(f["motor_id"]), "estado": f["estado"], "por": f["por"], "rehacer": f["rehacer"], "modelo": f.get("modelo") or "auto", "pasos": list(f["pasos"] or []), "error": f["error"],
             "creada": _iso(f["creada"]), "terminada": _iso(f["terminada"])}
 
 
-async def reservar(motor_id: str, usuario: str, rehacer: bool = False, ahora: datetime | None = None) -> dict:
+async def reservar(motor_id: str, usuario: str, rehacer: bool = False, ahora: datetime | None = None, modelo: str = "auto") -> dict:
     """Anota una ejecución nueva antes de encolar el trabajo. Conflicto si ya hay una en curso (y reciente); NoExiste si la oferta aún no está preparada."""
     motor_id = O._id(motor_id)
     ahora = _ahora(ahora)
@@ -120,8 +120,9 @@ async def reservar(motor_id: str, usuario: str, rehacer: bool = False, ahora: da
                     raise Conflicto("Los agentes ya están trabajando en esta oferta")
                 await conn.execute("UPDATE ofertas_ejecuciones SET estado = 'error', error = %s, terminada = %s WHERE id = %s",
                                    ["La ejecución anterior no terminó (¿se reinició el servidor?)", ahora, vieja["id"]])
-            cur = await conn.execute("INSERT INTO ofertas_ejecuciones (motor_id, por, rehacer, pasos, creada) VALUES (%s,%s,%s,%s,%s) RETURNING *",
-                                     [motor_id, str(usuario)[:200], bool(rehacer), Jsonb(pasos_iniciales(o["secciones"], bool(rehacer))), ahora])
+            from .redaccion_externa import modelo_pedido
+            cur = await conn.execute("INSERT INTO ofertas_ejecuciones (motor_id, por, rehacer, pasos, creada, modelo) VALUES (%s,%s,%s,%s,%s,%s) RETURNING *",
+                                     [motor_id, str(usuario)[:200], bool(rehacer), Jsonb(pasos_iniciales(o["secciones"], bool(rehacer))), ahora, modelo_pedido(modelo)])
             f = await cur.fetchone()
     log.info("oferta: %s pide que los agentes redacten la oferta de %s (ejecución %s, rehacer=%s)", usuario, motor_id, f["id"], bool(rehacer))
     return _ejecucion(f)
@@ -303,11 +304,23 @@ async def _paso_escritor(ejecucion_id: int, indice: int, e: dict, defin: dict, i
         else:
             await _marcar(ejecucion_id, indice, estado=OMITIDO, resumen="Nada que escribir: las secciones ya tienen contenido o las tiene una persona.", secciones=[], fin=_iso(_ahora(None)))
         return
-    estado = await invocar(defin["agente"], peticion_escritor(defin, motor_id, titulo, sel) + adicional)
+    estado, externa = None, ""
+    from . import redaccion_externa as externa_mod
+    if externa_mod.paso_activo(defin["id"]):
+        # Claude o ChatGPT, si Dirección los ha conectado: redactan el paso de una vez, con todo el material. Si no procede o falla, lo hace el modelo local como siempre.
+        await _marcar(ejecucion_id, indice, resumen="Redactando con Claude o ChatGPT…")
+        res, motivo = await externa_mod.intentar(motor_id, defin, sel, titulo, ficha or {}, modelo=e.get("modelo") or "auto")
+        if res:
+            estado = {"respuesta": res["resumen"]}
+        else:
+            externa = f"Se ha usado el modelo local: {motivo}."
+            log.info("redacción: el paso %s de %s lo hace el modelo local (%s)", defin["id"], motor_id, motivo)
+    if estado is None:
+        estado = await invocar(defin["agente"], peticion_escritor(defin, motor_id, titulo, sel) + adicional)
     despues = {s["clave"]: s for s in (await O.leer(motor_id, con_contenido=False))["secciones"]}
     escritas = [s["clave"] for s in sel if despues.get(s["clave"], {}).get("estado") != "vacia" and despues[s["clave"]]["por"] == f"agente:{defin['agente']}"]
     faltan = [s["clave"] for s in sel if s["clave"] not in escritas]
-    resumen = (resumen_plantillas + "\n" if resumen_plantillas else "") + _respuesta(estado)
+    resumen = (resumen_plantillas + "\n" if resumen_plantillas else "") + (externa + "\n" if externa else "") + _respuesta(estado)
     campos = {"secciones": [s["clave"] for s in sel], "escritas": len(escritas), "faltan": faltan, "resumen": resumen[:MAX_RESUMEN], "fin": _iso(_ahora(None))}
     if (estado or {}).get("error") and not escritas:
         await _marcar(ejecucion_id, indice, estado=ERROR, error=str(estado["error"])[:300], **campos)
