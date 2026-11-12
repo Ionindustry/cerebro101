@@ -1214,3 +1214,27 @@ export function mensajeEncargos(status) {
   if (status === 422) return "No se ha podido guardar: el texto es demasiado largo o el agente no recibe encargos.";
   return "No se ha podido completar la operación. Inténtalo en unos minutos.";
 }
+
+// ---- «En estudio» en el panel de control: las licitaciones que se están estudiando, las que antes cierran primero, cada una con su enlace a la ficha ----
+
+/** Las licitaciones en estudio ordenadas por plazo (las que cierran antes primero; las sin plazo, al final) y con los días que quedan (hoy en Madrid, redondeado hacia abajo; negativo = ya cerró). Pura. */
+export function enEstudioOrdenadas(items, ahora = new Date()) {
+  const lista = (Array.isArray(items) ? items : []).filter((x) => x && x.estado === "en_estudio");
+  const dias = (x) => {
+    const t = x.fecha_limite ? new Date(x.fecha_limite).getTime() : NaN;
+    return Number.isNaN(t) ? null : (t - ahora.getTime()) / 86400000;
+  };
+  return lista.map((x) => ({ ...x, dias: dias(x) }))
+    .sort((a, b) => (a.dias === null) - (b.dias === null) || (a.dias ?? 0) - (b.dias ?? 0) || String(a.titulo).localeCompare(String(b.titulo)));
+}
+
+/** Clase de la etiqueta de plazo: roja si ya cerró o cierra en 3 días, ámbar en 7, normal si no. */
+export function claseDePlazo(dias) {
+  if (dias === null || dias === undefined) return "";
+  if (dias < 3) return "caido";
+  if (dias < 7) return "aviso";
+  return "";
+}
+
+/** A dónde lleva cada licitación en estudio: su ficha si el motor la conoce y, si no, el embudo. */
+export const hrefEnEstudio = (x) => (x?.motor_id && /^[0-9a-f-]{36}$/i.test(String(x.motor_id)) ? `/licitaciones/expedientes/${x.motor_id}` : "/licitaciones/embudo");
