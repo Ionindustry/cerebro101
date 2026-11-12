@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useMemo, useState } from "react";
 import { Barras, Calendario, Cifra } from "./buscar/Dashboard";
+import EnEstudio from "./EnEstudio";
 import { Fallo, pedir, pedirCerebro } from "./cliente";
 import { divisionEtiqueta, embudoGrupos, etiquetaEmbudo, fuentesGrupos, hoyMadrid, importeCorto, nombreFuente, plazosProximos, tasaExitoTexto, zonaEtiqueta } from "../../lib/licitaciones";
 
@@ -21,6 +22,7 @@ export default function Panel() {
   return (
     <section className="lic" aria-labelledby="lic-panel-t">
       <h2 id="lic-panel-t">Panel de control</h2>
+      <EnEstudio />
       {error && <Fallo e={error} />}
       {!st && !error && <p className="meta" aria-busy="true">Calculando el panel…</p>}
       {st && (

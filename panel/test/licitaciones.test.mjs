@@ -1145,3 +1145,21 @@ test("repetir un paso: qué botón sale en cada estado y cuándo pide confirmaci
   assert.equal(botonDePaso({ id: "x", estado: "error" }, null), null);
   assert.match(CONFIRMAR_REHACER, /persona/);
 });
+
+import { claseDePlazo, enEstudioOrdenadas, hrefEnEstudio } from "../lib/licitaciones.js";
+test("en estudio: solo las de ese estado, las que cierran antes primero y con enlace a su ficha", () => {
+  const ahora = new Date("2026-11-12T10:00:00Z");
+  const x = (id, titulo, estado, fecha_limite, motor_id = "0b1f7a3e-1111-4222-8333-44444444444" + id) => ({ id, titulo, estado, fecha_limite, motor_id });
+  const r = enEstudioOrdenadas([x(1, "Sin plazo", "en_estudio", null), x(2, "Lejana", "en_estudio", "2026-12-20T10:00:00Z"), x(3, "Ganada", "ganada", "2026-11-13T10:00:00Z"),
+                                x(4, "Cierra mañana", "en_estudio", "2026-11-13T10:00:00Z"), x(5, "Ya cerró", "en_estudio", "2026-11-10T10:00:00Z")], ahora);
+  assert.deepEqual(r.map((i) => i.titulo), ["Ya cerró", "Cierra mañana", "Lejana", "Sin plazo"]);
+  assert.equal(r[1].dias, 1);
+  assert.ok(r[0].dias < 0);
+  assert.equal(r[3].dias, null);
+  assert.deepEqual(enEstudioOrdenadas(null, ahora), []);
+  assert.deepEqual(enEstudioOrdenadas([null, { estado: "en_estudio", titulo: "a" }], ahora).map((i) => i.titulo), ["a"]);
+  assert.deepEqual([claseDePlazo(null), claseDePlazo(-2), claseDePlazo(2.9), claseDePlazo(5), claseDePlazo(20)], ["", "caido", "caido", "aviso", ""]);
+  assert.equal(hrefEnEstudio({ motor_id: "0b1f7a3e-1111-4222-8333-444444444441" }), "/licitaciones/expedientes/0b1f7a3e-1111-4222-8333-444444444441");
+  assert.equal(hrefEnEstudio({ motor_id: "../x" }), "/licitaciones/embudo");                  // un identificador raro nunca se convierte en una ruta
+  assert.equal(hrefEnEstudio({}), "/licitaciones/embudo");
+});
