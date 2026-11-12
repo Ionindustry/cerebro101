@@ -80,7 +80,7 @@ class TestRedaccion(unittest.TestCase):
 
     def test_reservar_prepara_los_pasos_y_omite_lo_que_no_hay_que_escribir(self):
         e = self.reservar()
-        self.assertEqual([p["id"] for p in e["pasos"]], ["solucion", "memoria", "administrativo", "costes", "precio", "evaluacion"])
+        self.assertEqual([p["id"] for p in e["pasos"]], ["encargos", "solucion", "memoria", "administrativo", "costes", "precio", "evaluacion"])
         self.assertEqual(e["estado"], "en_curso")
         p = self.pasos(e)
         self.assertEqual(p["solucion"]["secciones"], ["descripcion-solucion"])
@@ -193,6 +193,31 @@ class TestRedaccion(unittest.TestCase):
     def test_un_modelo_raro_se_guarda_como_automatico(self):
         self.assertEqual(ejecutar(R.reservar(ID, "albert", modelo="gemini"))["modelo"], "auto")
 
+    def test_el_director_hace_los_encargos_primero_y_cada_agente_recibe_el_suyo(self):
+        e = self.reservar()
+        inv = agentes_que_escriben(TODOS)
+        fin = ejecutar(R.ejecutar(e["id"], inv))
+        p = self.pasos(fin)
+        self.assertEqual(fin["estado"], "completa")
+        self.assertEqual(p["encargos"]["estado"], "hecho")
+        self.assertIn("Encargos de la plantilla para 6 agentes", p["encargos"]["resumen"])
+        self.assertEqual([a for a, _ in inv.llamadas][0], "arquitecto-solucion")                 # el director no es un agente que se invoque: sus encargos se guardan
+        peticiones = dict(inv.llamadas)
+        for agente in ("arquitecto-solucion", "redactor-memoria", "administrativo-licitaciones", "costes-licitacion", "precio-licitacion", "evaluador-ofertas"):
+            self.assertIn("ENCARGO ESPECÍFICO DE ESTA LICITACIÓN", peticiones[agente], agente)
+            self.assertIn("nunca las sustituye", peticiones[agente], agente)
+        self.assertLess(peticiones["costes-licitacion"].index("ENCARGO"), peticiones["costes-licitacion"].index("Reglas:"))     # las reglas fijas van después y mandan
+
+    def test_un_encargo_escrito_por_una_persona_es_el_que_recibe_el_agente(self):
+        from cerebro.licitaciones import encargos
+        e = self.reservar()
+        ejecutar(encargos.escribir_persona(ID, "costes-licitacion", "Desglosa la formación aparte.", "albert"))
+        inv = agentes_que_escriben(TODOS)
+        ejecutar(R.ejecutar(e["id"], inv))
+        peticion = dict(inv.llamadas)["costes-licitacion"]
+        self.assertIn("Desglosa la formación aparte.", peticion)
+        self.assertIn("una persona de Licitaciones", peticion)
+
     def test_un_agente_que_dice_hecho_sin_guardar_nada_es_un_error_y_la_cadena_sigue(self):
         e = self.reservar()
         ejecutar(O.escribir_seccion(ID, "tecnico", "crit-1", "x", agente="redactor-memoria"))       # ya tenía contenido: no se toca sin «rehacer»
@@ -301,9 +326,9 @@ class TestTextos(unittest.TestCase):
         self.assertNotIn("Pendientes:", t)                                                  # lo que no bloquea (la fecha) no se le pide al agente
 
     def test_las_pasos_estan_en_el_orden_del_trabajo_y_los_informes_no_escriben(self):
-        self.assertEqual([p["id"] for p in R.PASOS], ["solucion", "memoria", "administrativo", "costes", "precio", "evaluacion"])
+        self.assertEqual([p["id"] for p in R.PASOS], ["encargos", "solucion", "memoria", "administrativo", "costes", "precio", "evaluacion"])
         self.assertEqual([p["id"] for p in R.PASOS if p.get("informe")], ["precio", "evaluacion"])
-        self.assertEqual(R.seleccion(R.PASOS[4], [{"sobre": "economico", "clave": "x", "estado": "vacia", "por": "", "version": 0}], False), [])
+        self.assertEqual(R.seleccion(R.PASOS[5], [{"sobre": "economico", "clave": "x", "estado": "vacia", "por": "", "version": 0}], False), [])
 
 
 if __name__ == "__main__":

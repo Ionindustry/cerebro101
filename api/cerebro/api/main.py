@@ -34,6 +34,7 @@ from ..licitaciones import ofertas as ofertas_licitaciones
 from ..licitaciones import empresa as empresa_erp
 from ..licitaciones import plantillas as plantillas_ofertas
 from ..licitaciones import redaccion as redaccion_ofertas
+from ..licitaciones import encargos as encargos_ofertas
 from ..licitaciones import reglas as reglas_licitaciones
 from ..licitaciones import simulador as simulador_licitaciones
 from ..licitaciones import embudo as embudo_licitaciones
@@ -916,6 +917,30 @@ async def revision_previa_de_la_oferta(motor_id: str, usuario: Usuario = Depends
     except ofertas_licitaciones.ErrorOferta as e:
         raise HTTPException(422, str(e)) from None
     return await revision_previa.revisar(motor_id)
+
+
+@app.get("/licitaciones/ofertas/{motor_id}/encargos")
+async def encargos_de_la_oferta(motor_id: str, usuario: Usuario = Depends(usuario_actual)):
+    """El encargo a medida que recibe cada agente de «Preparar la oferta» en esta licitación (vacío mientras no se haya generado), con quién lo redactó."""
+    _exige_licitaciones(usuario)
+    try:
+        return {"encargos": await encargos_ofertas.listar(motor_id)}
+    except ofertas_licitaciones.ErrorOferta as e:
+        raise _oferta_error(e) from None
+
+
+class EncargoEntrada(BaseModel):
+    contenido: str = ""               # vacío = quitar mi versión y volver al encargo generado
+
+
+@app.post("/licitaciones/ofertas/{motor_id}/encargos/{agente}")
+async def escribir_encargo(motor_id: str, agente: str, e: EncargoEntrada, usuario: Usuario = Depends(usuario_actual)):
+    """Una persona de Licitaciones o Dirección edita el encargo de un agente. Lo suyo no lo pisa ninguna ejecución nueva; se aplica a los agentes que aún no han empezado."""
+    _exige_licitaciones(usuario)
+    try:
+        return await encargos_ofertas.escribir_persona(motor_id, agente, e.contenido, usuario.id)
+    except ofertas_licitaciones.ErrorOferta as err:
+        raise _oferta_error(err) from None
 
 
 @app.get("/licitaciones/ofertas/{motor_id}/ejecucion")
