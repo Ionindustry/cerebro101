@@ -1187,3 +1187,30 @@ export function plazosProximos(plazos, hoy) {
 
 /** Con qué modelo externo se redacta la memoria técnica en «Preparar la oferta»: el sistema elige (según la configuración) o la persona fuerza uno; si el elegido no responde, se prueba el otro. */
 export const MODELOS_REDACCION = [["auto", "Automático (el sistema elige)"], ["claude", "Claude"], ["chatgpt", "ChatGPT"]];
+
+// ---- Encargos por agente (GET/POST licitaciones/ofertas/{id}/encargos): lo que recibe cada agente de «Preparar la oferta» en esta licitación ----
+
+/** Quién redactó el encargo, para la etiqueta de cada uno. */
+export function origenEncargoTexto(e) {
+  if (!e || !e.origen) return "Aún sin generar";
+  if (e.origen === "persona") return `Escrito por ${e.por || "una persona"}`;
+  if (e.origen === "modelo") return `Redactado por ${e.proveedor === "claude" ? "Claude" : "ChatGPT"}${e.modelo ? ` (${e.modelo})` : ""}`;
+  return "Plantilla (sin modelo externo)";
+}
+
+export const claseEncargo = (e) => (!e?.origen ? "" : e.origen === "persona" ? "ok" : e.origen === "modelo" ? "ok" : "aviso");
+
+/** ¿Hay algo que guardar? (el texto cambió respecto a lo que hay y, si se vacía, solo cuenta si había una versión de una persona). */
+export function encargoEditado(e, texto) {
+  const t = String(texto ?? "").trim();
+  if (!t) return e?.origen === "persona";
+  return t !== String(e?.contenido || "").trim();
+}
+
+export function mensajeEncargos(status) {
+  if (status === 401) return "Tu sesión ha caducado.";
+  if (status === 403) return "Los encargos son para Dirección y el departamento de Licitaciones.";
+  if (status === 404) return "Esta licitación aún no tiene la oferta preparada.";
+  if (status === 422) return "No se ha podido guardar: el texto es demasiado largo o el agente no recibe encargos.";
+  return "No se ha podido completar la operación. Inténtalo en unos minutos.";
+}

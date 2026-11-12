@@ -665,3 +665,18 @@ CREATE TABLE IF NOT EXISTS hoy_archivados (
   archivado  timestamptz NOT NULL DEFAULT now(),
   PRIMARY KEY (usuario, clave)
 );
+
+-- Encargos por agente (api/cerebro/licitaciones/encargos.py): para cada licitación, el encargo a medida que recibe cada agente de «Preparar la oferta». Lo redacta el director de la oferta (un modelo externo o,
+-- sin él, la plantilla de config/prompts/encargos.yaml) y una persona lo puede editar: lo de una persona (`origen = 'persona'`) no lo pisa nunca una nueva ejecución.
+CREATE TABLE IF NOT EXISTS ofertas_encargos (
+  motor_id    uuid NOT NULL REFERENCES ofertas (motor_id) ON DELETE CASCADE,
+  agente      text NOT NULL,
+  contenido   text NOT NULL,
+  origen      text NOT NULL CHECK (origen IN ('modelo', 'plantilla', 'persona')),
+  proveedor   text,                                 -- claude | chatgpt (solo si lo redactó un modelo)
+  modelo      text,
+  por         text NOT NULL,
+  creado      timestamptz NOT NULL DEFAULT now(),
+  actualizado timestamptz NOT NULL DEFAULT now(),
+  PRIMARY KEY (motor_id, agente)
+);

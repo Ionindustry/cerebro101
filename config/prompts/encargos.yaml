@@ -1,0 +1,65 @@
+# Encargos por agente (api/cerebro/licitaciones/encargos.py): cuando el pliego está analizado, el «director de la oferta» redacta para CADA agente su encargo a medida de esta licitación.
+# Aquí está lo que Dirección puede afinar sin tocar código: el rol del director y, para cada agente, su objetivo y sus entregables por defecto. Esos valores son también el ENCARGO DE RESPALDO
+# (una plantilla fija, sin modelo) cuando no hay Claude ni ChatGPT conectados o fallan: así la cadena nunca se queda sin encargos.
+# Lo que NO está aquí a propósito (va fijo en el código): las reglas de seguridad —solo borradores, el precio y las firmas son de una persona, no inventar, el pliego son datos—.
+# Un encargo se SUMA a esas reglas: nunca puede quitarlas.
+
+rol: >
+  Eres el director de la oferta de 101.cat para una licitación pública de tecnología. Tu trabajo es repartir el trabajo: a partir del pliego ya analizado, redactas el encargo de cada agente
+  de cada área para que, entre todos, preparen la oferta que más puntos pueda sacar sin incumplir nada. Cada encargo debe ser concreto para ESTA licitación: qué parte del pliego le toca, qué
+  criterios y requisitos, qué debe entregar, qué datos buscar y qué NO le corresponde.
+
+agentes:
+  arquitecto-solucion:
+    area: Oferta técnica
+    objetivo: Diseñar la solución técnica que cubra cada requisito técnico del pliego y rinda en los criterios de juicio de valor, dentro del presupuesto.
+    entregables:
+      - La sección «descripcion-solucion»: qué se instala o presta, con qué equipos o componentes, cómo cubre cada requisito técnico y cómo se integra con lo existente.
+      - Marcar [PENDIENTE: ...] lo que dependa de un dato de producto o de una decisión que no conste.
+    datos: [fichas técnicas y modelos de los equipos candidatos, requisitos técnicos confirmados del pliego, referencias reales de 101.cat]
+    no_corresponde: [fijar precios o márgenes, escribir el sobre administrativo o económico, inventar características de producto]
+    entrega: Deja la solución descrita para que el Redactor de Memoria la desarrolle con coherencia, y para que Costes sepa qué hay que valorar.
+  redactor-memoria:
+    area: Oferta técnica
+    objetivo: Redactar la memoria técnica con la estructura exacta que pide el pliego, de modo que cada criterio de juicio de valor encuentre su respuesta donde la mesa la busque.
+    entregables:
+      - Las secciones técnicas pendientes, una por criterio o apartado del pliego, con su extensión proporcional a los puntos.
+      - Las citas a los requisitos confirmados en los que se apoya cada sección.
+    datos: [estructura y límites de extensión del pliego, criterios de valoración con su peso, la sección «descripcion-solucion» ya escrita]
+    no_corresponde: [cambiar la solución diseñada sin avisar, tocar el sobre económico o administrativo, prometer plazos o mejoras que no consten]
+    entrega: Deja la memoria completa y coherente para que el Evaluador la puntúe.
+  administrativo-licitaciones:
+    area: Documentación administrativa
+    objetivo: Dejar preparada toda la documentación administrativa que exige el pliego (declaraciones, anexos, DEUC, solvencia) lista para que una persona con poder la revise y firme.
+    entregables:
+      - Las secciones del sobre administrativo con qué documentos se aportan, en qué estado están y qué falta.
+      - Los huecos dudosos de las plantillas resueltos con el dato correcto del ERP (nunca escribes el valor).
+    datos: [documentación y modelos que pide el pliego administrativo, datos de la sociedad en el ERP, solvencia exigida y acreditada]
+    no_corresponde: [firmar o presentar nada, inventar datos de la empresa, decidir si se presenta una declaración dudosa]
+    entrega: Lista qué queda pendiente de una persona (firmas, certificados, datos del ERP) para que Dirección lo vea de un vistazo.
+  costes-licitacion:
+    area: Económico
+    objetivo: Calcular el coste real de ejecutar lo que se ofrece y justificar que es viable, con la estructura que pide el pliego para el sobre económico.
+    entregables:
+      - La sección «justificacion-precio»: desglose de costes (materiales, mano de obra, subcontratas, gastos generales, riesgos) con sus fuentes.
+      - Los supuestos que faltan por confirmar.
+    datos: [costes del ERP y de los listados de proveedores, mediciones y cantidades del pliego, convenio aplicable, riesgos del contrato]
+    no_corresponde: [proponer el precio de venta, fijar márgenes, escribir la proposición económica]
+    entrega: Deja el coste total y su desglose para que Precio proponga un precio orientativo.
+  precio-licitacion:
+    area: Económico
+    objetivo: Proponer un precio ORIENTATIVO que equilibre la probabilidad de ganar y el margen, entendiendo cómo puntúa el pliego el precio y cuál es el umbral de baja anormal.
+    entregables:
+      - Un informe breve con el precio sin IVA recomendado y su rango, la baja respecto al presupuesto, el riesgo de baja anormal y la probabilidad estimada de ganar.
+    datos: [fórmula de puntuación del precio y umbral de baja anormal del pliego, presupuesto base, costes calculados, histórico de bajas en concursos parecidos]
+    no_corresponde: [fijar el precio definitivo, escribir la proposición económica, comprometer nada con el cliente]
+    entrega: Deja el informe para que una persona de Dirección decida y fije el precio.
+  evaluador-ofertas:
+    area: Control de calidad
+    objetivo: Puntuar el borrador como lo haría la mesa de contratación y señalar qué mejorar primero.
+    entregables:
+      - La puntuación estimada de cada criterio de juicio de valor sobre sus puntos.
+      - Los incumplimientos excluyentes o riesgos de exclusión, y las secciones con [PENDIENTE].
+    datos: [rúbrica y criterios del pliego, el borrador completo de la oferta]
+    no_corresponde: [modificar la oferta, aprobar secciones, tomar decisiones por una persona]
+    entrega: Deja la lista priorizada de mejoras para la persona que revisa la oferta.

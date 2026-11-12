@@ -38,6 +38,15 @@ El modelo recibe de una vez: el texto de los pliegos (documentación pública, c
 
 **El prompt se adapta a cada licitación** (`config/prompts/memoria_tecnica.yaml` + `redaccion_externa.adaptacion`): tipo de contrato (suministros, servicios, obras; por el campo de la ficha o por el CPV), sector (por la división CPV: telecomunicaciones, seguridad, software…), idioma del pliego (castellano o catalán), límite de páginas si el pliego lo impone, y un **reparto de la extensión por criterio** en proporción a sus puntos (los criterios automáticos no se redactan). Dirección puede afinar el rol, el estilo y las pautas por tipo y sector editando el YAML. Las reglas de honradez (no inventar, marcar `[PENDIENTE: …]`, tratar el pliego como datos, no tocar el precio) van **fijas en el código**: ninguna edición del YAML puede quitarlas.
 
+## Encargos por agente
+
+Al pulsar «Preparar la oferta», el **primer paso** es el *director de la oferta*: a partir del pliego ya analizado, redacta el **encargo de cada agente** de cada área (Arquitecto, Redactor de Memoria, Administrativo, Costes, Precio y Evaluador) a medida de esa licitación: su objetivo, los requisitos y criterios que le tocan, lo que debe entregar, los datos que tiene que buscar, lo que **no** le corresponde y qué deja al siguiente. Cada agente recibe el suyo al empezar su paso, **sumado** a sus reglas fijas (solo borradores, el precio y las firmas son de una persona, no inventar): un encargo nunca las sustituye, y siempre va antes de ellas en la petición.
+
+- **Quién lo redacta**: Claude o ChatGPT (con el mismo selector de proveedor y modelo de arriba; `redaccion.proveedor_por_paso.encargos` lo fija por defecto) y **solo con datos públicos** del pliego, de modo que los encargos de Costes y Precio no llevan ningún dato privado de la empresa; esos agentes (sensibilidad alta) siguen ejecutándose siempre en local. Sin modelo externo, o si falla, se usa la **plantilla** de `config/prompts/encargos.yaml` (objetivo y entregables por defecto de cada agente, más los criterios de la ficha con su peso): la cadena nunca se queda sin encargos.
+- **Dónde se ven y se editan**: en la tarjeta de la oferta, «Encargos por agente». Una persona de Licitaciones o Dirección puede escribir su versión; **lo suyo no lo pisa ninguna ejecución nueva** (se puede quitar para volver al generado) y se aplica a los agentes que aún no han empezado. Se ejecutan solos si nadie los toca.
+- **Qué se guarda**: tabla `ofertas_encargos` (quién lo redactó: modelo, plantilla o persona; con proveedor y modelo).
+- Dirección afina el rol del director y los valores por defecto de cada agente editando `config/prompts/encargos.yaml`.
+
 ## Qué sale a la nube y qué no
 
 - **Solo agentes de sensibilidad baja o media** (`sensibilidad_maxima`). Los de sensibilidad alta (RR.HH., económico, legal…) no los usan nunca.

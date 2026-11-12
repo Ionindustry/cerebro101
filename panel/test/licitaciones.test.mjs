@@ -1111,3 +1111,19 @@ test("redacción: el modelo se puede elegir entre automático, Claude y ChatGPT"
   assert.deepEqual(MODELOS_REDACCION.map(([k]) => k), ["auto", "claude", "chatgpt"]);
   assert.equal(MODELOS_REDACCION[0][0], "auto");
 });
+
+import { claseEncargo, encargoEditado, mensajeEncargos, origenEncargoTexto } from "../lib/licitaciones.js";
+test("encargos por agente: quién lo redactó, si hay algo que guardar y los mensajes", () => {
+  assert.equal(origenEncargoTexto(null), "Aún sin generar");
+  assert.equal(origenEncargoTexto({ origen: "modelo", proveedor: "claude", modelo: "claude-opus-5-5" }), "Redactado por Claude (claude-opus-5-5)");
+  assert.equal(origenEncargoTexto({ origen: "modelo", proveedor: "chatgpt" }), "Redactado por ChatGPT");
+  assert.equal(origenEncargoTexto({ origen: "persona", por: "albert" }), "Escrito por albert");
+  assert.equal(origenEncargoTexto({ origen: "plantilla" }), "Plantilla (sin modelo externo)");
+  assert.deepEqual([claseEncargo(null), claseEncargo({ origen: "plantilla" }), claseEncargo({ origen: "modelo" }), claseEncargo({ origen: "persona" })], ["", "aviso", "ok", "ok"]);
+  assert.equal(encargoEditado({ origen: "plantilla", contenido: "A" }, "A "), false);          // sin cambios no hay nada que guardar
+  assert.equal(encargoEditado({ origen: "plantilla", contenido: "A" }, "B"), true);
+  assert.equal(encargoEditado({ origen: "plantilla", contenido: "A" }, ""), false);             // vaciar lo generado no tiene sentido
+  assert.equal(encargoEditado({ origen: "persona", contenido: "A" }, ""), true);                // vaciar lo mío = quitar mi versión
+  assert.match(mensajeEncargos(404), /oferta preparada/);
+  assert.match(mensajeEncargos(403), /Licitaciones/);
+});
