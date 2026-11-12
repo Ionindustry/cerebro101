@@ -70,6 +70,18 @@ Copia el script a `C:\ProgramData\Cerebro` (la tarea no depende de WSL para arra
 
 Lo que **no** hace: reiniciar Docker Desktop ni WSL, porque cortaría trabajos largos en curso (como «Preparar la oferta»). Para que Docker Desktop arranque solo, activa en su configuración «Start Docker Desktop when you sign in».
 
+### Cuando Docker responde pero los puertos publicados no (el fallo de Docker Desktop)
+
+Síntoma: los contenedores están `Up` y Caddy responde por dentro, pero todo da `000` desde fuera, y también desde Windows y desde Ubuntu a `127.0.0.1:8088` o `:18443`. Causa: Docker Desktop reenvía los puertos con su proceso `com.docker.backend`; si WSL se reinicia por debajo (`wsl --shutdown`) y Docker Desktop no se cierra del todo, ese proceso queda **más viejo que `wslrelay`** (el reenviador de WSL) con una conexión muerta: sigue escuchando, pero no reenvía nada. Reiniciar contenedores no lo arregla.
+
+Lo repara solo la tarea **«Cerebro - vigilante»** (`scripts/windows/autoarranque.ps1`, se ejecuta como tu usuario cada 5 minutos): si la API o el panel no responden con Docker vivo, primero vuelve a levantar los servicios y, si siguen sin responder (3 comprobaciones seguidas, o 2 si el backend es más viejo que `wslrelay`), **reinicia Docker Desktop**. Reglas para no hacer daño:
+
+- **No lo reinicia si hay una oferta redactándose o un análisis de pliego en curso** (se cortaría el trabajo): lo anota en el registro y espera a que terminen.
+- Como mucho **2 reinicios por hora**; si no basta, escribe `REQUIERE ATENCION` en el registro.
+- Un backend más viejo que `wslrelay` por sí solo no provoca nada: solo acelera el reinicio cuando ya fallan los puertos.
+
+Registro: `%USERPROFILE%\cerebro-autoarranque\autoarranque.log`. Si no está instalada (`powershell -ExecutionPolicy Bypass -File autoarranque.ps1 -Estado` dice «NO instalada»), instálala como administrador con `-Instalar`. Para recuperarlo a mano: cierra Docker Desktop, `Stop-Process -Name "com.docker.backend","Docker Desktop" -Force`, `wsl --shutdown`, ábrelo y espera a «Engine running».
+
 ### Si ya tienes el acceso activado con una «sonda» manual (`sonda-443`)
 
 ```bash

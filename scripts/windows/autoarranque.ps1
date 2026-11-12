@@ -8,7 +8,10 @@
     "Cerebro - copia"      cada dia a las 14:00 (si el PC estaba apagado, en cuanto se enciende): copia de seguridad automatica (scripts/copia_automatica.sh:
                            comprueba la copia, conserva las ultimas 7 y avisa a soporte@ si falla)
     "Cerebro - vigilante"  cada 5 minutos: si Docker no responde durante dos comprobaciones seguidas lo reinicia (maximo 3 veces por hora);
-                           si Docker responde pero la API o el panel no, vuelve a levantar los servicios (recreando api y panel si sus puertos se perdieron)
+                           si Docker responde pero la API o el panel no, vuelve a levantar los servicios (recreando api y panel si sus puertos se perdieron);
+                           si aun asi los puertos publicados siguen sin responder (Docker Desktop deja de reenviarlos, p. ej. tras reiniciar WSL: su
+                           com.docker.backend queda mas viejo que wslrelay), reinicia Docker Desktop, pero SOLO si no hay una oferta ni un analisis de pliegos
+                           en curso (se cortaria el trabajo) y con tope de 2 reinicios por hora
   Todo queda en %USERPROFILE%\cerebro-autoarranque\autoarranque.log
 
   Uso (PowerShell; -Instalar hay que lanzarlo como ADMINISTRADOR, las tareas luego se ejecutan con tu usuario, sin privilegios):
@@ -94,9 +97,41 @@ function Levantar-Cerebro {
 
 function Leer-Estado {
   if (Test-Path $Fichero) { try { return Get-Content $Fichero -Raw | ConvertFrom-Json } catch {} }
-  return [pscustomobject]@{ fallos = 0; recuperaciones = @() }
+  return [pscustomobject]@{ fallos = 0; puertos = 0; recuperaciones = @() }
 }
 function Guardar-Estado($e) { $e | ConvertTo-Json -Depth 3 | Set-Content -Path $Fichero -Encoding UTF8 }
+
+# Docker con tiempo maximo y devolviendo lo que imprime (o $null si no responde a tiempo)
+function Docker-Salida([string[]]$Argumentos, [int]$Segundos = 30) {
+  $salida = Join-Path $env:TEMP "cerebro-docker-salida.txt"; $err = Join-Path $env:TEMP "cerebro-docker-salida-err.txt"
+  Remove-Item $salida, $err -ErrorAction SilentlyContinue
+  try {
+    $p = Start-Process -FilePath "docker" -ArgumentList $Argumentos -NoNewWindow -PassThru -RedirectStandardOutput $salida -RedirectStandardError $err
+    if (-not $p.WaitForExit($Segundos * 1000)) { try { $p.Kill() } catch {}; return $null }
+    Start-Sleep -Milliseconds 200
+    if (-not (Test-Path $salida)) { return $null }
+    return [string](Get-Content $salida -Raw -ErrorAction SilentlyContinue)
+  } catch { return $null }
+}
+
+# Cuantas ofertas redactandose y analisis de pliegos hay en curso (reiniciar Docker los cortaria). $null si no se puede saber.
+function Trabajos-En-Curso {
+  $consulta = "SELECT (SELECT count(*) FROM ofertas_ejecuciones WHERE estado = 'en_curso') + (SELECT count(*) FROM licitaciones_analisis_pliego WHERE estado = 'en_curso')"
+  $texto = Docker-Salida @("exec", "cerebro-101-postgres-1", "psql", "-U", "cerebro", "-d", "cerebro", "-tAc", ('"' + $consulta + '"')) 30
+  if ($null -eq $texto) { return $null }
+  $m = [regex]::Match($texto, '^\s*(\d+)\s*$')
+  if ($m.Success) { return [int]$m.Groups[1].Value }
+  return $null
+}
+
+# El reenvio de puertos de Docker Desktop (com.docker.backend) esta mas viejo que el de WSL (wslrelay): WSL se reinicio por debajo y el backend se quedo
+# con una conexion muerta. Pasa tras "wsl --shutdown" si Docker Desktop no se cierra del todo.
+function Backend-Viejo {
+  $b = Get-Process -Name "com.docker.backend" -ErrorAction SilentlyContinue | Sort-Object StartTime | Select-Object -First 1
+  $r = Get-Process -Name "wslrelay" -ErrorAction SilentlyContinue | Sort-Object StartTime -Descending | Select-Object -First 1
+  if (-not $b -or -not $r) { return $false }
+  return (($r.StartTime - $b.StartTime).TotalMinutes -gt 2)
+}
 
 function Recuperar-Docker {
   Escribir-Log "RECUPERANDO Docker: se cierra Docker Desktop, se reinicia WSL y se vuelve a abrir"
@@ -184,8 +219,29 @@ if ($Vigilar) {
     if ((-not (Api-Responde)) -or (-not (Panel-Responde))) {
       Escribir-Log "Docker responde pero la API o el panel no: se vuelven a levantar los servicios (y, si hace falta, se recrean api y panel)"
       Levantar-Cerebro
-      if ((Api-Responde) -and (Panel-Responde)) { Escribir-Log "La API y el panel responden otra vez" } else { Escribir-Log "La API o el panel siguen sin responder (puede estar cargando; se reintentara en 5 minutos)" }
+      if ((Api-Responde) -and (Panel-Responde)) { Escribir-Log "La API y el panel responden otra vez"; $e | Add-Member -NotePropertyName puertos -NotePropertyValue 0 -Force; Guardar-Estado $e }
+      else {
+        # Los servicios estan levantados pero sus puertos no responden: Docker Desktop no los esta reenviando. Reiniciar Docker Desktop lo arregla
+        $e | Add-Member -NotePropertyName puertos -NotePropertyValue (([int]$e.puertos) + 1) -Force
+        $viejo = Backend-Viejo
+        Escribir-Log ("La API o el panel siguen sin responder con Docker vivo (comprobacion n.o $($e.puertos)" + $(if ($viejo) { "; el reenvio de puertos de Docker Desktop esta MAS VIEJO que el de WSL" } else { "" }) + ")")
+        if (($e.puertos -ge 3) -or ($viejo -and $e.puertos -ge 2)) {
+          $trabajos = Trabajos-En-Curso
+          $hace1h = (Get-Date).AddHours(-1)
+          $recientes = @($e.recuperaciones | Where-Object { $_ -and ([datetime]$_ -gt $hace1h) })
+          if ($null -ne $trabajos -and $trabajos -gt 0) { Escribir-Log "Hay $trabajos trabajo(s) en curso (oferta o analisis de pliego): no reinicio Docker Desktop hasta que terminen." }
+          elseif ($recientes.Count -ge 2) { Escribir-Log "REQUIERE ATENCION: ya se reinicio Docker Desktop 2 veces en la ultima hora y los puertos siguen sin responder. Revisalo a mano." }
+          else {
+            Escribir-Log "Los puertos publicados no responden y no hay trabajos en curso: reinicio Docker Desktop."
+            $e.recuperaciones = @($recientes + (Get-Date).ToString("o")); $e.puertos = 0; Guardar-Estado $e
+            Recuperar-Docker
+            return
+          }
+        }
+        Guardar-Estado $e
+      }
     }
+    elseif ([int]$e.puertos -ne 0) { $e | Add-Member -NotePropertyName puertos -NotePropertyValue 0 -Force; Guardar-Estado $e }
     return
   }
   $e.fallos = [int]$e.fallos + 1
