@@ -1094,3 +1094,14 @@ test("la descarga del original solo se ofrece de un documento limpio y con un id
     assert.equal(urlFicheroPliego(m, n), null, `${m} ${n}`);
   }
 });
+
+import { embudoGrupos, fuentesGrupos, plazosProximos } from "../lib/licitaciones.js";
+test("panel de licitaciones: embudo, fuentes y plazos próximos", () => {
+  const g = embudoGrupos({ por_estado: { en_estudio: 3, ganada: 1 } });
+  assert.equal(g.find((x) => x.valor === "en_estudio").cuenta, 3);
+  assert.equal(embudoGrupos(null).every((x) => x.cuenta === 0), true);
+  assert.deepEqual(fuentesGrupos({ fuentes: [{ fuente: "placsp", expedientes: 10 }, { fuente: "ted" }] }), [{ valor: "placsp", cuenta: 10 }, { valor: "ted", cuenta: 0 }]);
+  assert.deepEqual(fuentesGrupos(null), []);
+  const p = plazosProximos([{ valor: "2026-11-12", cuenta: 2 }, { valor: "2026-11-25", cuenta: 3 }, { valor: "2026-12-30", cuenta: 4 }], "2026-11-12");
+  assert.deepEqual(p, { siete: 2, quince: 5, treinta: 5, sesenta: 9 });
+});

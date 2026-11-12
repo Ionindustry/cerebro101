@@ -1,7 +1,8 @@
 "use client";
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
-import { CATEGORIAS, hoyResumen, hrefSeguro } from "../../lib/hoy";
+import { CATEGORIAS, NIVELES, hoyIndicadores, hoyResumen, hrefSeguro } from "../../lib/hoy";
+import { Barras, Cifra } from "../licitaciones/buscar/Dashboard";
 
 // «Qué hacer hoy»: lo que necesita atención de quien abre Jarvis, en una sola lista ordenada por urgencia. Solo lee: cada elemento lleva a la pantalla donde se resuelve.
 export default function Hoy() {
@@ -9,6 +10,7 @@ export default function Hoy() {
   const cargar = useCallback(() => fetch("/cerebro/hoy").then((r) => { if (r.status === 401) { window.location.href = "/auth/login"; return null; } if (!r.ok) throw new Error(); return r.json(); }).then(setD).catch(() => setD(null)), []);
   useEffect(() => { cargar(); const t = setInterval(cargar, 60000); return () => clearInterval(t); }, [cargar]);
   const r = hoyResumen(d);
+  const ind = hoyIndicadores(d);
   return (
     <div className="lic">
       <div className="lic-fila">
@@ -16,6 +18,20 @@ export default function Hoy() {
         <button className="boton no" onClick={cargar}>Actualizar</button>
       </div>
       {d === undefined ? <p className="meta" aria-busy="true">Cargando…</p> : <p role="status"><strong>{r.titular}</strong></p>}
+      {d && ind.total > 0 && (
+        <>
+          <div className="lic-cifras">
+            <Cifra titulo="Urgente" valor={ind.urgentes} nota={ind.urgentes ? "hazlo hoy" : "nada urgente"} />
+            <Cifra titulo="Hay que mirarlo" valor={ind.porMirar} />
+            <Cifra titulo="Para tu información" valor={ind.info} />
+            <Cifra titulo="Total" valor={ind.total} />
+          </div>
+          <div className="lic-graficos">
+            <Barras titulo="Por urgencia" grupos={ind.porNivel} etiqueta={(v) => NIVELES[v]?.titulo || v} />
+            <Barras titulo="Por área" grupos={ind.porCategoria} etiqueta={(v) => CATEGORIAS[v] || v} />
+          </div>
+        </>
+      )}
       {r.avisos.map((a) => <p key={a} role="status" className="lic-aviso">{a}</p>)}
       {r.grupos.map((g) => (
         <section key={g.nivel} className="lic" aria-label={g.titulo}>

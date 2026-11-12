@@ -1166,3 +1166,21 @@ export function alturasTrimestres(ts) {
 
 /** Enlace a «Competencia» con un CPV (grupo de 5 cifras) de la ficha. */
 export const competenciaDeCpv = (cpv) => (/^\d{2,8}$/.test(cpv || "") ? `/licitaciones/competencia?cpv=${cpv}` : "/licitaciones/competencia");
+
+/** El embudo propio (GET licitaciones/embudo/resumen) → grupos {valor, cuenta} para pintarlo como barras, en el orden del embudo. */
+export function embudoGrupos(r) {
+  const por = r?.por_estado || {};
+  return ESTADOS_EMBUDO.map(([k]) => ({ valor: k, cuenta: por[k] ?? 0 }));
+}
+
+/** Las fuentes del motor (GET ops/status) → grupos {valor, cuenta}: expedientes por fuente. */
+export function fuentesGrupos(d) {
+  return (Array.isArray(d?.fuentes) ? d.fuentes : []).map((f) => ({ valor: f.fuente, cuenta: f.expedientes ?? 0 }));
+}
+
+/** Las licitaciones que cierran pronto a partir del calendario de plazos: cuántas vencen en 7, 15 y 30 días desde hoy (AAAA-MM-DD, hora de Madrid). */
+export function plazosProximos(plazos, hoy) {
+  const dias = calendarioPlazos(plazos, hoy, 60);
+  const hasta = (n) => dias.slice(0, n).reduce((a, d) => a + d.cuenta, 0);
+  return { siete: hasta(7), quince: hasta(15), treinta: hasta(30), sesenta: hasta(60) };
+}

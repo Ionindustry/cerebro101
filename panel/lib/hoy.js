@@ -19,3 +19,12 @@ export function hoyResumen(d) {
 
 /** Un enlace de la lista solo si es una ruta interna del panel (nunca una dirección externa). */
 export const hrefSeguro = (h) => (typeof h === "string" && /^\/(?!\/)[A-Za-z0-9_\-/]*$/.test(h) ? h : null);
+
+/** Indicadores de la pantalla «Hoy»: totales por urgencia y por categoría, para las cifras y las barras. Pura. */
+export function hoyIndicadores(d) {
+  const items = d?.items || [];
+  const cuenta = (f) => items.filter(f).length;
+  const porNivel = ["urgente", "aviso", "info"].map((n) => ({ valor: n, cuenta: cuenta((i) => i.nivel === n) }));
+  const porCategoria = Object.keys(CATEGORIAS).map((c) => ({ valor: c, cuenta: cuenta((i) => i.categoria === c) })).filter((g) => g.cuenta > 0);
+  return { total: items.length, urgentes: cuenta((i) => i.nivel === "urgente"), porMirar: cuenta((i) => i.nivel === "aviso"), info: cuenta((i) => i.nivel === "info"), porNivel, porCategoria };
+}
