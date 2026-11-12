@@ -218,6 +218,77 @@ class TestRedaccion(unittest.TestCase):
         self.assertIn("Desglosa la formación aparte.", peticion)
         self.assertIn("una persona de Licitaciones", peticion)
 
+    def test_repetir_un_solo_paso_no_vuelve_a_hacer_los_demas_y_conserva_lo_que_dieron(self):
+        primera = self.reservar()
+        inv = agentes_que_escriben({**TODOS, "redactor-memoria": []})                       # el Redactor «dice hecho» sin guardar nada: error
+        fin = ejecutar(R.ejecutar(primera["id"], inv))
+        self.assertEqual(self.pasos(fin)["memoria"]["estado"], "error")
+        e = ejecutar(R.reservar(ID, "albert", solo="memoria"))
+        p = self.pasos(e)
+        self.assertEqual(p["memoria"]["estado"], "pendiente")                                # solo ese paso vuelve a empezar
+        self.assertEqual((p["solucion"]["estado"], p["costes"]["estado"], p["encargos"]["estado"]), ("hecho", "hecho", "hecho"))
+        self.assertEqual(p["solucion"]["escritas"], 1)                                      # conserva lo que dio la ejecución anterior
+        inv2 = agentes_que_escriben(TODOS)
+        fin2 = ejecutar(R.ejecutar(e["id"], inv2))
+        self.assertEqual([a for a, _ in inv2.llamadas], ["redactor-memoria"])                # solo se invoca al agente repetido
+        self.assertEqual(self.pasos(fin2)["memoria"]["estado"], "hecho")
+        self.assertEqual(fin2["estado"], "completa")
+
+    def test_repetir_un_informe_vuelve_a_pedirlo_y_lo_demas_queda_igual(self):
+        primera = self.reservar()
+        ejecutar(R.ejecutar(primera["id"], agentes_que_escriben(TODOS)))
+        e = ejecutar(R.reservar(ID, "albert", solo="precio"))
+        inv = agentes_que_escriben(TODOS)
+        fin = ejecutar(R.ejecutar(e["id"], inv))
+        self.assertEqual([a for a, _ in inv.llamadas], ["precio-licitacion"])
+        self.assertEqual(fin["estado"], "completa")
+
+    def test_repetir_requiere_haberla_preparado_y_un_paso_que_exista_y_no_hay_dos_a_la_vez(self):
+        with self.assertRaises(O.ErrorOferta):
+            ejecutar(R.reservar(ID, "albert", solo="no-existe"))
+        with self.assertRaises(O.NoExiste):
+            ejecutar(R.reservar(ID, "albert", solo="memoria"))                                # nunca se ha preparado con los agentes
+        self.reservar()
+        with self.assertRaises(R.Conflicto):
+            ejecutar(R.reservar(ID, "albert", solo="memoria"))                                # ya hay una en curso
+
+    def test_un_paso_de_la_ejecucion_anterior_que_no_llego_a_hacerse_queda_como_error_con_su_boton(self):
+        ant = [{"id": "solucion", "estado": "hecho", "resumen": "ok", "error": ""}, {"id": "memoria", "estado": "en_curso", "resumen": "", "error": ""},
+               {"id": "costes", "estado": "pendiente", "resumen": "", "error": ""}]
+        inicial = R.pasos_iniciales([], False)
+        nuevos = {p["id"]: p for p in R.pasos_de_repeticion(inicial, ant, "precio")}
+        self.assertEqual((nuevos["solucion"]["estado"], nuevos["solucion"]["resumen"]), ("hecho", "ok"))
+        self.assertEqual((nuevos["memoria"]["estado"], nuevos["costes"]["estado"]), ("error", "error"))
+        self.assertIn("repítelo con su botón", nuevos["memoria"]["error"])
+        self.assertEqual(nuevos["precio"]["estado"], "pendiente")
+        self.assertEqual(nuevos["encargos"]["estado"], "omitido")                            # no estaba en la ejecución anterior
+
+    def test_el_endpoint_de_repetir_un_paso_valida_permisos_y_encola_solo_ese_trabajo(self):
+        from cerebro.api import main
+        from cerebro.api.main import Usuario, usuario_actual
+        from fastapi.testclient import TestClient
+        primera = self.reservar()
+        ejecutar(R.ejecutar(primera["id"], agentes_que_escriben(TODOS)))
+        c = TestClient(main.app)
+        enviados = []
+        try:
+            main.app.dependency_overrides[usuario_actual] = lambda: Usuario("pepe", {"usuario"}, {"finanzas"})
+            self.assertEqual(c.post(f"/licitaciones/ofertas/{ID}/redactar/memoria", json={}).status_code, 403)
+            main.app.dependency_overrides[usuario_actual] = lambda: Usuario("marta", {"usuario"}, {"licitaciones"})
+            self.assertEqual(c.post(f"/licitaciones/ofertas/{ID}/redactar/no-existe", json={}).status_code, 422)
+            from cerebro.tareas import celery_app
+            with mock.patch.object(celery_app.app, "send_task", lambda nombre, args=None, queue=None, **k: enviados.append((nombre, args, queue))):
+                r = c.post(f"/licitaciones/ofertas/{ID}/redactar/memoria", json={"rehacer": True, "modelo": "claude"})
+                self.assertEqual(r.status_code, 202)
+                self.assertEqual(c.post(f"/licitaciones/ofertas/{ID}/redactar/costes", json={}).status_code, 409)       # ya hay una en curso
+        finally:
+            main.app.dependency_overrides.clear()
+        e = r.json()["ejecucion"]
+        self.assertEqual([enviados[0][0], enviados[0][1], enviados[0][2]], ["cerebro.tareas.celery_app.redactar_oferta", [e["id"]], "peticiones"])
+        self.assertEqual((e["modelo"], e["rehacer"]), ("claude", True))
+        self.assertEqual({p["id"]: p["estado"] for p in e["pasos"]}["memoria"], "pendiente")
+        self.assertEqual({p["id"]: p["estado"] for p in e["pasos"]}["solucion"], "hecho")
+
     def test_un_agente_que_dice_hecho_sin_guardar_nada_es_un_error_y_la_cadena_sigue(self):
         e = self.reservar()
         ejecutar(O.escribir_seccion(ID, "tecnico", "crit-1", "x", agente="redactor-memoria"))       # ya tenía contenido: no se toca sin «rehacer»

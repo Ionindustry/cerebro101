@@ -1127,3 +1127,21 @@ test("encargos por agente: quién lo redactó, si hay algo que guardar y los men
   assert.match(mensajeEncargos(404), /oferta preparada/);
   assert.match(mensajeEncargos(403), /Licitaciones/);
 });
+
+import { botonDePaso, CONFIRMAR_REHACER } from "../lib/licitaciones.js";
+test("repetir un paso: qué botón sale en cada estado y cuándo pide confirmación", () => {
+  const ejec = { estado: "parcial" };
+  const b = (id, estado, e = ejec) => botonDePaso({ id, estado }, e);
+  assert.deepEqual(b("memoria", "error"), { texto: "Reintentar", rehacer: false, confirmar: false });
+  assert.deepEqual(b("solucion", "parcial"), { texto: "Completar lo que falta", rehacer: false, confirmar: false });
+  assert.equal(b("costes", "pendiente").texto, "Hacer este paso");
+  assert.equal(b("administrativo", "omitido").texto, "Hacer este paso");
+  assert.deepEqual(b("memoria", "hecho"), { texto: "Rehacer este paso", rehacer: true, confirmar: true });          // rehacer borradores pide confirmación
+  assert.deepEqual(b("precio", "hecho"), { texto: "Repetir el informe", rehacer: false, confirmar: false });         // un informe no pisa nada
+  assert.deepEqual(b("evaluacion", "error"), { texto: "Reintentar", rehacer: false, confirmar: false });
+  assert.equal(b("memoria", "error", { estado: "en_curso" }), null);                   // mientras trabajan los agentes no se repite nada
+  assert.equal(b("memoria", "en_curso"), null);
+  assert.equal(botonDePaso(null, ejec), null);
+  assert.equal(botonDePaso({ id: "x", estado: "error" }, null), null);
+  assert.match(CONFIRMAR_REHACER, /persona/);
+});

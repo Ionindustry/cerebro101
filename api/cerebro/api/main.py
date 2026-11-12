@@ -908,6 +908,33 @@ async def redactar_oferta_con_agentes(motor_id: str, entrada: RedactarEntrada | 
     return {"ejecucion": ejecucion, "oferta": oferta}
 
 
+class RepetirPaso(BaseModel):
+    rehacer: bool = False             # también rehace los borradores que ya escribió este agente (nunca lo que haya escrito o revisado una persona)
+    modelo: str = "auto"              # con qué modelo externo, si el paso lo redacta uno: auto, claude o chatgpt
+
+
+@app.post("/licitaciones/ofertas/{motor_id}/redactar/{paso}", status_code=202)
+async def repetir_paso_de_la_oferta(motor_id: str, paso: str, entrada: RepetirPaso | None = None, usuario: Usuario = Depends(usuario_actual)):
+    """Repite UNA acción de «Preparar la oferta» (la de un agente: el Arquitecto, el Redactor, Costes…) sin volver a lanzar toda la cadena. Los demás pasos conservan lo que dieron.
+    Responde 202 con la ejecución en curso; el panel consulta `/ejecucion`. Solo escriben borradores: lo de una persona no se toca."""
+    _exige_licitaciones(usuario)
+    entrada = entrada or RepetirPaso()
+    try:
+        ejecucion = await redaccion_ofertas.reservar(motor_id, usuario.id, entrada.rehacer, modelo=entrada.modelo, solo=paso)
+    except redaccion_ofertas.Conflicto as e:
+        raise HTTPException(409, str(e)) from None
+    except (ofertas_licitaciones.ErrorOferta, MotorNoDisponible, LookupError) as e:
+        raise _oferta_error(e) from None
+    try:
+        from ..tareas.celery_app import app as celery
+        celery.send_task("cerebro.tareas.celery_app.redactar_oferta", args=[ejecucion["id"]], queue="peticiones")
+    except Exception as e:      # noqa: BLE001 — sin cola no hay trabajo: se cierra la ejecución para poder volver a pedirla
+        log.error("ofertas: no se ha podido encolar el paso %s de %s: %s: %s", paso, motor_id, type(e).__name__, e)
+        await redaccion_ofertas.cerrar(ejecucion["id"], "No se ha podido encolar el trabajo: inténtalo de nuevo")
+        raise HTTPException(503, "No se ha podido encolar el trabajo") from None
+    return {"ejecucion": ejecucion}
+
+
 @app.get("/licitaciones/ofertas/{motor_id}/revision")
 async def revision_previa_de_la_oferta(motor_id: str, usuario: Usuario = Depends(usuario_actual)):
     """«Revisar antes de preparar la oferta»: qué hay y qué falta (ficha, sociedad y sus datos en el ERP, DEUC, pliegos, requisitos, oferta y última pasada de los agentes) SIN llamar a ningún modelo ni cambiar nada."""

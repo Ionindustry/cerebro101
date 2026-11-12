@@ -1214,3 +1214,18 @@ export function mensajeEncargos(status) {
   if (status === 422) return "No se ha podido guardar: el texto es demasiado largo o el agente no recibe encargos.";
   return "No se ha podido completar la operación. Inténtalo en unos minutos.";
 }
+
+// ---- Repetir un paso de «Preparar la oferta» (POST licitaciones/ofertas/{id}/redactar/{paso}): el botón de cada agente ----
+
+/** El botón de un paso: si se puede pulsar, qué dice y si hay que pedir confirmación porque rehace lo ya hecho. `ejec`: la última ejecución. Pura. */
+export function botonDePaso(paso, ejec) {
+  if (!paso || !ejec || ejec.estado === "en_curso") return null;                        // mientras trabajan los agentes no se repite nada
+  if (paso.estado === "en_curso") return null;
+  if (paso.estado === "error") return { texto: "Reintentar", rehacer: false, confirmar: false };
+  if (paso.estado === "parcial") return { texto: "Completar lo que falta", rehacer: false, confirmar: false };
+  if (paso.estado === "pendiente" || paso.estado === "omitido") return { texto: "Hacer este paso", rehacer: false, confirmar: false };
+  const informe = paso.id === "precio" || paso.id === "evaluacion";
+  return { texto: informe ? "Repetir el informe" : "Rehacer este paso", rehacer: !informe, confirmar: !informe };   // un informe no pisa nada; los borradores sí se rehacen
+}
+
+export const CONFIRMAR_REHACER = "Se volverán a escribir los borradores de este agente. Lo que haya escrito o revisado una persona no se toca. ¿Continuar?";

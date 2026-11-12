@@ -105,10 +105,30 @@ def _ejecucion(f: dict) -> dict:
             "creada": _iso(f["creada"]), "terminada": _iso(f["terminada"])}
 
 
-async def reservar(motor_id: str, usuario: str, rehacer: bool = False, ahora: datetime | None = None, modelo: str = "auto") -> dict:
+def pasos_de_repeticion(inicial: list[dict], anteriores: list[dict] | None, solo: str) -> list[dict]:
+    """Los pasos de una ejecución que repite SOLO uno: ese paso empieza de nuevo (pendiente) y los demás conservan lo que dio la ejecución anterior (para que el panel siga enseñando el cuadro
+    completo). Un paso que la ejecución anterior no tenía (se añadió después) queda como «omitido». Pura."""
+    previos = {p["id"]: p for p in (anteriores or [])}
+    out = []
+    for p in inicial:
+        if p["id"] == solo:
+            out.append(p)
+        elif p["id"] in previos:
+            q = dict(previos[p["id"]])
+            if q.get("estado") in (PENDIENTE, EN_CURSO):       # no llegó a hacerse: no se hace ahora (solo se pidió otro paso), pero queda a la vista con su propio botón para repetirlo
+                q = {**q, "estado": ERROR, "error": "No llegó a hacerse en la ejecución anterior: repítelo con su botón.", "fin": None}
+            out.append(q)
+        else:
+            out.append({**p, "estado": OMITIDO, "resumen": "No se repite: solo se ha pedido repetir otro paso."})
+    return out
+
+
+async def reservar(motor_id: str, usuario: str, rehacer: bool = False, ahora: datetime | None = None, modelo: str = "auto", solo: str | None = None) -> dict:
     """Anota una ejecución nueva antes de encolar el trabajo. Conflicto si ya hay una en curso (y reciente); NoExiste si la oferta aún no está preparada."""
     motor_id = O._id(motor_id)
     ahora = _ahora(ahora)
+    if solo is not None and solo not in _PASO:
+        raise O.ErrorOferta("Ese paso no existe: " + ", ".join(_PASO))
     o = await O.leer(motor_id, con_contenido=False)
     if not o["existe"]:
         raise O.NoExiste("Esta licitación aún no tiene la oferta preparada")
@@ -122,10 +142,17 @@ async def reservar(motor_id: str, usuario: str, rehacer: bool = False, ahora: da
                 await conn.execute("UPDATE ofertas_ejecuciones SET estado = 'error', error = %s, terminada = %s WHERE id = %s",
                                    ["La ejecución anterior no terminó (¿se reinició el servidor?)", ahora, vieja["id"]])
             from .redaccion_externa import modelo_pedido
+            pasos = pasos_iniciales(o["secciones"], bool(rehacer))
+            if solo is not None:
+                cur = await conn.execute("SELECT pasos FROM ofertas_ejecuciones WHERE motor_id = %s ORDER BY id DESC LIMIT 1", [motor_id])
+                previa = await cur.fetchone()
+                if not previa:
+                    raise O.NoExiste("Todavía no se ha preparado la oferta con los agentes: pulsa primero «Preparar la oferta con los agentes»")
+                pasos = pasos_de_repeticion(pasos, list(previa["pasos"] or []), solo)
             cur = await conn.execute("INSERT INTO ofertas_ejecuciones (motor_id, por, rehacer, pasos, creada, modelo) VALUES (%s,%s,%s,%s,%s,%s) RETURNING *",
-                                     [motor_id, str(usuario)[:200], bool(rehacer), Jsonb(pasos_iniciales(o["secciones"], bool(rehacer))), ahora, modelo_pedido(modelo)])
+                                     [motor_id, str(usuario)[:200], bool(rehacer), Jsonb(pasos), ahora, modelo_pedido(modelo)])
             f = await cur.fetchone()
-    log.info("oferta: %s pide que los agentes redacten la oferta de %s (ejecución %s, rehacer=%s)", usuario, motor_id, f["id"], bool(rehacer))
+    log.info("oferta: %s pide que los agentes %s la oferta de %s (ejecución %s, rehacer=%s)", usuario, f"repitan el paso «{solo}» de" if solo else "redacten", motor_id, f["id"], bool(rehacer))
     return _ejecucion(f)
 
 
