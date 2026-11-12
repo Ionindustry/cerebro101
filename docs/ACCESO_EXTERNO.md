@@ -46,18 +46,29 @@ La cadena completa tiene varios eslabones, y cada uno se arregla solo o lo vigil
 | Docker Desktop | el motor no arranca | la tarea «Cerebro - arranque» y el vigilante de `scripts/windows/autoarranque.ps1` |
 | Servicios del Cerebro (panel, API, Keycloak…) | están parados | `scripts/arrancar.sh` (lo lanzan las tareas anteriores) |
 | Reenviador y proxy (contenedores `reenvio` y `proxy`) | se paran | `restart: unless-stopped` |
-| **Regla de Windows (`netsh portproxy`) sin escuchar tras arrancar** | desde fuera no se llega (el servicio «Ayudante de IP» arranca antes que la red) | **`scripts/windows/reenvio_https.ps1 -Instalar`**: tarea como SYSTEM que al arrancar y cada 5 minutos comprueba que Windows escucha en el 443 y, si no, reinicia `iphlpsvc` |
+| **Regla de Windows (`netsh portproxy`) sin escuchar tras arrancar** | desde fuera no se llega (el servicio «Ayudante de IP» arranca antes que la red) | **`scripts/windows/reenvio_https.ps1 -Instalar -Dominios …`**: tarea como SYSTEM que al arrancar y cada 5 minutos comprueba que Windows escucha en el 443 y, si no, reinicia `iphlpsvc`; además pide la página de verdad y, si no responde, la repara por escalones (ver abajo) |
 | Dirección interna del PC | la regla apunta a otra | reserva de la dirección en el router; el vigilante lo anota en su registro |
 | Suspensión del PC | todo se para | «Suspensión: Nunca» |
 
 Instalar el vigilante del reenvío (PowerShell COMO ADMINISTRADOR):
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File \\wsl.localhost\Ubuntu\home\pc\cerebro101\scripts\windows\reenvio_https.ps1 -Instalar
+powershell -ExecutionPolicy Bypass -File \\wsl.localhost\Ubuntu\home\pc\cerebro101\scripts\windows\reenvio_https.ps1 -Instalar -Dominios "brain.101.cat,auth.101.cat"
 powershell -ExecutionPolicy Bypass -File C:\ProgramData\Cerebro\reenvio_https.ps1 -Estado
 ```
 
-Copia el script a `C:\ProgramData\Cerebro` (la tarea no depende de WSL para arrancar) y deja su registro en `C:\ProgramData\Cerebro\reenvio-https.log`. Solo actúa si existe una regla del 443; `-Quitar` borra la tarea.
+Copia el script a `C:\ProgramData\Cerebro` (la tarea no depende de WSL para arrancar) y deja su registro en `C:\ProgramData\Cerebro\reenvio-https.log`. Solo actúa si existe una regla del 443; `-Quitar` borra la tarea. `-Estado` hace además una prueba en vivo de la página.
+
+**Qué repara solo, de menos a más** (cada 5 minutos; con `-Dominios`):
+
+1. Windows no escucha en el 443 → reinicia `iphlpsvc`.
+2. Faltan los dominios en el archivo `hosts` → los añade con la IP del PC.
+3. Pide `https://brain.101.cat` de verdad. Si responde (200, 302, 502…), no hace nada más.
+4. Si Docker responde en el 18443 pero Windows no → recrea la regla `netsh` y reinicia `iphlpsvc`.
+5. Si Docker tampoco responde → reinicia los contenedores `reenvio` y `proxy` (como mucho uno cada 10 minutos y 6 al día, para no reiniciar en bucle).
+6. Si aun así no responde, lo anota como `REQUIERE ATENCION` en el registro (lo normal: Docker Desktop cerrado; ábrelo y espera a «Engine running»).
+
+Lo que **no** hace: reiniciar Docker Desktop ni WSL, porque cortaría trabajos largos en curso (como «Preparar la oferta»). Para que Docker Desktop arranque solo, activa en su configuración «Start Docker Desktop when you sign in».
 
 ### Si ya tienes el acceso activado con una «sonda» manual (`sonda-443`)
 
