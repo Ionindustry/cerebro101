@@ -16,6 +16,29 @@ SEL = [{"clave": "descripcion-solucion", "sobre": "tecnico", "titulo": "Descripc
        {"clave": "plan-trabajo", "sobre": "tecnico", "titulo": "Plan de trabajo", "guia": "Fases"}]
 
 
+# La ficha tal como la devuelve la herramienta «licitaciones → ficha» (herramientas/licitaciones.py): `comprador` es el NOMBRE, no un diccionario
+FICHA_REAL = {"id": "0b1f7a3e-1111-4222-8333-444444444441", "titulo": "Suministro de cámaras", "expediente": "EXP-1", "comprador": "Ayuntamiento de Girona", "estado": "abierta",
+              "importe": {"valor": "250000.00", "moneda": "EUR"}, "plazo_presentacion": "2026-12-01T10:00:00Z", "cpv": ["35125300"], "nuts": ["ES512"], "procedimiento": "abierto",
+              "criterios": [{"tipo": "juicio_valor", "descripcion": "Memoria técnica", "peso": 30}, {"tipo": "automatico", "descripcion": "Precio", "peso": 70}],
+              "documentos": [{"nombre": "PPT", "tipo": "pliego", "url": "https://contrataciondelestado.es/a"}]}
+
+
+class TestOrganismo(unittest.TestCase):
+    def test_vale_la_ficha_de_la_herramienta_la_del_motor_y_lo_raro(self):
+        self.assertEqual(R.organismo_de(FICHA_REAL), "Ayuntamiento de Girona")                          # texto (el caso real que antes fallaba con AttributeError)
+        self.assertEqual(R.organismo_de({"comprador": {"nombre": "Diputació de Girona"}}), "Diputació de Girona")
+        self.assertEqual(R.organismo_de({"organismo": "Ayto"}), "Ayto")
+        self.assertEqual(R.organismo_de({"comprador": None}), "")
+        self.assertEqual(R.organismo_de(None), "")
+        self.assertEqual(R.organismo_de({"comprador": 5}), "5")
+
+    def test_la_adaptacion_y_el_prompt_funcionan_con_la_ficha_real(self):
+        a = R.adaptacion(FICHA_REAL, "Texto del pliego")
+        self.assertEqual((a["tipo"], a["sectores"], a["idioma"]), ("suministros", ["35"], "es"))
+        m = R.construir_mensajes("Suministro", R.organismo_de(FICHA_REAL), "pliego", "[R1] x", "c", "- s", "", "perfil", "diseña", FICHA_REAL)
+        self.assertIn("Órgano de contratación: Ayuntamiento de Girona", m[1]["content"])
+
+
 class TestAdaptacion(unittest.TestCase):
     def test_tipo_de_contrato_por_el_cpv_o_por_la_ficha(self):
         self.assertEqual(R.tipo_de_contrato({"cpv": ["35125300"]}), "suministros")

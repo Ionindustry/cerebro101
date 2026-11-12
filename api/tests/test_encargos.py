@@ -21,6 +21,8 @@ URL = os.environ.get("CEREBRO_TEST_PG")
 ESQUEMA = Path(__file__).resolve().parents[2] / "db" / "esquema.sql"
 ID = "0b1f7a3e-1111-4222-8333-444444444444"
 FICHA = {"cpv": ["35125300"], "titulo": "Videovigilancia", "criterios": [{"descripcion": "Memoria técnica", "peso": 30, "tipo": "juicio_valor"}, {"descripcion": "Precio", "peso": 60, "tipo": "automatico"}]}
+FICHA_REAL = {"id": ID, "titulo": "Suministro de cámaras", "expediente": "EXP-1", "comprador": "Ayuntamiento de Girona", "estado": "abierta", "cpv": ["35125300"],
+              "criterios": [{"tipo": "juicio_valor", "descripcion": "Memoria técnica", "peso": 30}, {"tipo": "automatico", "descripcion": "Precio", "peso": 70}]}
 AGENTES = ["arquitecto-solucion", "redactor-memoria", "administrativo-licitaciones", "costes-licitacion", "precio-licitacion", "evaluador-ofertas"]
 
 
@@ -70,6 +72,20 @@ class TestPuros(unittest.TestCase):
         self.assertIn("««««\ntexto del pliego\n»»»»", u)
 
 
+class TestRecorte(unittest.TestCase):
+    def test_un_encargo_corto_no_se_toca_y_uno_largo_se_recorta_por_lineas_avisando(self):
+        corto = "OBJETIVO: hacer lo suyo\n\nENTREGABLES:\n- uno"
+        self.assertEqual(E.recortar(corto, 1800), corto)
+        largo = "\n".join(f"- línea {i} " + "x" * 80 for i in range(100))
+        r = E.recortar(largo, 600)
+        self.assertLessEqual(len(r), 600)
+        self.assertIn("recortado para el modelo local", r)
+        self.assertTrue(r.split("\n")[0].startswith("- línea 0"))
+        self.assertNotIn("línea 99", r)
+        self.assertTrue(all(l.startswith("- línea") or l.startswith("[Encargo") for l in r.split("\n")))     # nunca parte una línea por la mitad
+        self.assertLessEqual(len(E.recortar("x" * 5000, 300)), 300)                                            # una sola línea enorme también se recorta
+
+
 @unittest.skipUnless(URL and hasattr(psycopg, "AsyncConnection"), "sin CEREBRO_TEST_PG")
 class TestFlujo(unittest.TestCase):
     def setUp(self):
@@ -117,7 +133,8 @@ class TestFlujo(unittest.TestCase):
 
         async def docs(motor_id):
             return [{"n": 1, "nombre": "PPT", "paginas": [(1, "Texto del pliego técnico con requisitos.")]}]
-        with mock.patch.object(X, "_documentos_leidos", docs), mock.patch.object(E.externos, "modelo_elegido", mock.AsyncMock(return_value="claude-prueba")):
+        with mock.patch.object(X, "_documentos_leidos", docs), mock.patch.object(X, "conocimiento_de_la_empresa", mock.AsyncMock(return_value="")), \
+                mock.patch.object(E.externos, "modelo_elegido", mock.AsyncMock(return_value="claude-prueba")):
             r = self.preparar(consulta=director)
         self.assertEqual((r["origen"], r["proveedor"], r["modelo"]), ("modelo", "claude", "claude-prueba"))
         d = self.listar()
@@ -125,6 +142,49 @@ class TestFlujo(unittest.TestCase):
         self.assertIn("30 puntos de la memoria", d["redactor-memoria"]["contenido"])
         self.assertEqual(d["costes-licitacion"]["origen"], "plantilla")                      # el modelo no devolvió el suyo: respaldo
         self.assertIn("Se puntúa sobre todo", r["resumen"])
+
+    def test_con_la_ficha_real_el_director_redacta_con_el_modelo_y_no_cae_a_la_plantilla(self):
+        """Regresión: la ficha de la herramienta trae `comprador` como texto; antes eso daba AttributeError y el paso caía a la plantilla («fallo interno»)."""
+        async def director(agente, mensajes, esquema, max_tokens=None, timeout=None, preferido=None):
+            self.assertIn("Órgano de contratación: Ayuntamiento de Girona", mensajes[1]["content"])
+            return {"encargos": [{"agente": "redactor-memoria", "objetivo": "Sacar los 30 puntos", "entregables": ["x"]}]}, "chatgpt"
+
+        async def docs(motor_id):
+            return [{"n": 1, "nombre": "PPT", "paginas": [(1, "Texto del pliego técnico.")]}]
+        with mock.patch.object(X, "_documentos_leidos", docs), mock.patch.object(E.externos, "modelo_elegido", mock.AsyncMock(return_value="gpt-prueba")):
+            r = asyncio.run(E.preparar(ID, "Suministro de cámaras", FICHA_REAL, consulta=director))
+        self.assertEqual((r["origen"], r["proveedor"]), ("modelo", "chatgpt"))
+        self.assertNotIn("fallo interno", r["resumen"])
+
+    def test_la_redaccion_externa_funciona_con_la_ficha_real(self):
+        from cerebro.licitaciones import redaccion as R
+        defin = next(p for p in R.PASOS if p["id"] == "memoria")
+        o = asyncio.run(O.leer(ID))
+        sel = [s for s in o["secciones"] if s["sobre"] == "tecnico"][:1]
+        self.assertTrue(sel)
+
+        async def modelo(agente, mensajes, esquema, max_tokens=None, timeout=None, preferido=None):
+            self.assertIn("Ayuntamiento de Girona", mensajes[1]["content"])
+            return {"secciones": [{"clave": sel[0]["clave"], "contenido": "Texto de la memoria."}], "resumen": "ok"}, "claude"
+
+        async def docs(motor_id):
+            return [{"n": 1, "nombre": "PPT", "paginas": [(1, "Texto del pliego técnico.")]}]
+        with mock.patch.object(X, "_documentos_leidos", docs), mock.patch.object(E.externos, "modelo_elegido", mock.AsyncMock(return_value="claude-prueba")):
+            res, motivo = asyncio.run(X.intentar(ID, defin, sel, "Suministro de cámaras", FICHA_REAL, consulta=modelo))
+        self.assertEqual(motivo, "")
+        self.assertEqual((res["escritas"], res["proveedor"]), ([sel[0]["clave"]], "claude"))
+        despues = {x["clave"]: x for x in asyncio.run(O.leer(ID))["secciones"]}
+        self.assertEqual(despues[sel[0]["clave"]]["contenido"], "Texto de la memoria.")
+
+    def test_los_agentes_locales_reciben_el_encargo_recortado_y_los_externos_el_completo(self):
+        asyncio.run(E.guardar(ID, "redactor-memoria", "OBJETIVO: x\n\n" + "\n".join(f"- punto {i} " + "y" * 90 for i in range(60)), "modelo", "agente:director-oferta", "claude", "m"))
+        completo = asyncio.run(E.texto_para(ID, "redactor-memoria"))
+        local = asyncio.run(E.texto_para(ID, "redactor-memoria", E.MAX_LOCAL))
+        self.assertGreater(len(completo), E.MAX_LOCAL)
+        self.assertLessEqual(len(local), E.MAX_LOCAL + 200)                                           # + la cabecera del encargo
+        self.assertIn("ENCARGO ESPECÍFICO", local)
+        self.assertIn("recortado para el modelo local", local)
+        self.assertNotIn("recortado", completo)
 
     def test_si_el_modelo_externo_falla_se_usa_la_plantilla_y_se_dice_por_que(self):
         async def falla(*a, **k):
