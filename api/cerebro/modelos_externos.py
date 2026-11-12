@@ -200,8 +200,8 @@ async def _chatgpt(cfg: dict, modelo_: str, sistema: str, mensajes: list[dict], 
 LLAMADAS = {"claude": _claude, "chatgpt": _chatgpt}
 
 
-async def _llamar(proveedor: str, mensajes: list[dict], esquema: dict, transporte=None) -> dict:
-    cfg = configuracion()
+async def _llamar(proveedor: str, mensajes: list[dict], esquema: dict, transporte=None, max_tokens: int | None = None, timeout: int | None = None) -> dict:
+    cfg = {**configuracion(), **({"max_tokens": max_tokens} if max_tokens else {}), **({"timeout_segundos": timeout} if timeout else {})}
     sistema = "\n\n".join(m["content"] for m in mensajes if m["role"] == "system")
     datos = await LLAMADAS[proveedor](cfg, modelo(proveedor), sistema, [m for m in mensajes if m["role"] != "system"], esquema, transporte)
     datos = completar_tipo(datos, esquema)
@@ -248,6 +248,41 @@ async def consultar(ficha, mensajes: list[dict], esquema: dict, sensibilidad: st
         await actividad.contar(ficha.id, f"modelo_externo:{p}")
         return anon.desanonimizar(datos, sesion)
     return None
+
+
+async def consultar_publico(agente: str, mensajes: list[dict], esquema: dict, max_tokens: int = 6000, timeout: int = 240, transporte=None) -> tuple[dict, str]:
+    """Una consulta a Claude o ChatGPT sobre un documento PÚBLICO (un pliego de contratación): se envía tal cual, sin anonimizar y sin el límite de tamaño de las consultas de los agentes.
+    Mantiene las demás reglas: solo si Dirección lo ha conectado, con su clave y dentro del tope diario; si un proveedor falla se prueba el siguiente. Devuelve (respuesta, proveedor).
+    Si ninguno puede, lanza ErrorExterno con un motivo legible por la persona. Lo que se envíe aquí NO debe llevar datos privados de la empresa ni de personas."""
+    cfg = configuracion()
+    con_clave = [p for p in cfg["orden"] if clave(p)]
+    if not con_clave:
+        raise ErrorExterno("No hay ninguna clave de Claude ni de ChatGPT: ponla con «python3 scripts/modelos_activar.py claude» (o chatgpt)")
+    conectados = await activos()
+    candidatos = [p for p in con_clave if conectados.get(p)]
+    if not candidatos:
+        raise ErrorExterno("Claude y ChatGPT están desconectados: Dirección los conecta en Agentes → Modelos externos")
+    ultimo = ""
+    for p in candidatos:
+        if await usadas_hoy(p) >= cfg["limite_diario"]:
+            ultimo = f"{cfg['proveedores'][p]['nombre']} ha llegado al tope diario de llamadas"
+            continue
+        try:
+            with generacion(f"externo.{p}", modelo(p), "[texto público de un pliego: no se registra]", tipo="generation", agente=agente) as obs:
+                inicio = time.monotonic()
+                datos = await _llamar(p, mensajes, esquema, transporte, max_tokens=max_tokens, timeout=timeout)
+                anotar(obs, output="[respuesta recibida]", metadata={"segundos": round(time.monotonic() - inicio, 2)})
+        except (ErrorExterno, RespuestaInvalida) as e:
+            ultimo = str(e)
+            log.warning("%s no ha podido analizar el documento público (%s): se prueba el siguiente", p, e)
+            continue
+        except httpx.HTTPError as e:
+            ultimo = f"no se ha podido conectar con {cfg['proveedores'][p]['nombre']} ({type(e).__name__})"
+            log.warning("%s: %s", p, ultimo)
+            continue
+        await actividad.contar(agente, f"modelo_externo:{p}")
+        return datos, p
+    raise ErrorExterno(ultimo or "Ningún modelo externo ha podido responder")
 
 
 # --------------------------------------------------------------------------- estado para el panel (nunca devuelve una clave)

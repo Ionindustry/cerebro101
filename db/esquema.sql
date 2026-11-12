@@ -663,3 +663,18 @@ CREATE TABLE IF NOT EXISTS hoy_archivados (
   archivado  timestamptz NOT NULL DEFAULT now(),
   PRIMARY KEY (usuario, clave)
 );
+
+-- Análisis técnico del pliego (api/cerebro/licitaciones/analisis_tecnico.py): lo que Claude o ChatGPT encuentran en el texto del pliego (puntos fuertes y débiles a nivel técnico, criterios de puntuación y preguntas
+-- para el órgano de contratación), cada uno con su cita y su página comprobadas contra el texto. Una fila por licitación; repetirlo la sustituye. Es un informe de ayuda: no decide nada.
+CREATE TABLE IF NOT EXISTS analisis_tecnico_pliego (
+  motor_id    uuid PRIMARY KEY,
+  estado      text NOT NULL CHECK (estado IN ('en_curso', 'hecho', 'error')),
+  proveedor   text,                                 -- claude | chatgpt
+  modelo      text,
+  contenido   jsonb NOT NULL DEFAULT '{}',          -- resumen, criterios, puntos fuertes y débiles, preguntas, avisos
+  error       text,
+  documentos  jsonb NOT NULL DEFAULT '[]',          -- los documentos leídos: [{n, nombre, paginas}]
+  pedido_por  text,
+  creado      timestamptz NOT NULL DEFAULT now(),
+  actualizado timestamptz NOT NULL DEFAULT now()
+);
