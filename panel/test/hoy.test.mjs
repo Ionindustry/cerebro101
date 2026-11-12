@@ -26,3 +26,11 @@ test("hoy: solo se enlazan rutas internas del panel", () => {
   assert.equal(hrefSeguro("/aprobaciones"), "/aprobaciones");
   for (const malo of ["https://malo.com", "//malo.com", "//malo", "javascript:alert(1)", "/a?x=1", "licitaciones", null, 5]) assert.equal(hrefSeguro(malo), null, String(malo));
 });
+
+import { hoyIndicadores } from "../lib/hoy.js";
+test("hoy: indicadores por urgencia y área", () => {
+  const r = hoyIndicadores({ items: [it("urgente", "a", { categoria: "aprobaciones" }), it("aviso", "b"), it("aviso", "c"), it("info", "d", { categoria: "sistema" })] });
+  assert.deepEqual([r.total, r.urgentes, r.porMirar, r.info], [4, 1, 2, 1]);
+  assert.deepEqual(r.porCategoria.map((g) => [g.valor, g.cuenta]), [["aprobaciones", 1], ["licitaciones", 2], ["sistema", 1]]);
+  assert.deepEqual(hoyIndicadores(null).porNivel.map((g) => g.cuenta), [0, 0, 0]);
+});

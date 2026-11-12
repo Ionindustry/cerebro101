@@ -7,9 +7,14 @@ la pantalla donde se resuelve. Cada fuente que falla se omite con un aviso, sin 
 from __future__ import annotations
 
 import logging
+import re
 from datetime import datetime, timezone
 
+import psycopg
+from psycopg.rows import dict_row
+
 from . import antivirus, copias
+from .ajustes import ajustes
 from .aprobaciones import bandeja
 from .licitaciones import frescura, resumen as resumen_lic
 
@@ -18,8 +23,9 @@ ORDEN = {"urgente": 0, "aviso": 1, "info": 2}
 HORAS_MOTOR_ATRASADO = 3
 
 
-def _it(nivel: str, categoria: str, titulo: str, detalle: str = "", href: str | None = None) -> dict:
-    return {"nivel": nivel, "categoria": categoria, "titulo": titulo, "detalle": detalle, "href": href}
+def _it(nivel: str, categoria: str, titulo: str, detalle: str = "", href: str | None = None, clave: str | None = None) -> dict:
+    """`clave` solo la llevan los elementos que se pueden archivar (los vencidos): identifica el elemento entre una consulta y la siguiente."""
+    return {"nivel": nivel, "categoria": categoria, "titulo": titulo, "detalle": detalle, "href": href, "clave": clave, "archivable": clave is not None}
 
 
 def de_aprobaciones(filas: list[dict], ahora: datetime) -> list[dict]:
@@ -45,7 +51,7 @@ def de_licitaciones(seg: dict | None) -> list[dict]:
         href = f"/licitaciones/expedientes/{i['motor_id']}"
         titulo = str(i.get("titulo") or "(sin título)")[:100]
         if i.get("vencido"):
-            out.append(_it("aviso", "licitaciones", f"Plazo vencido: {titulo}", "Sigue «en estudio» con el plazo de presentación ya pasado: preséntala o descártala", href))
+            out.append(_it("aviso", "licitaciones", f"Plazo vencido: {titulo}", "Sigue «en estudio» con el plazo de presentación ya pasado: preséntala o descártala", href, f"plazo-vencido:{i['motor_id']}"))
         elif i.get("urgente"):
             d = i["dias_plazo"]
             cuando = "HOY" if d == 0 else ("mañana" if d == 1 else f"en {d} días")
@@ -134,3 +140,45 @@ async def construir(roles: set[str], departamentos: set[str], ahora: datetime | 
 
 async def _seguimiento(ahora: datetime) -> dict:
     return await resumen_lic.seguimiento_del_embudo(ahora, resumen_lic.config())
+
+
+# ---- Archivo: lo vencido que una persona da por visto. Es por persona (lo que archivas tú no desaparece para otra) y se puede recuperar. ----
+
+CLAVE_VALIDA = re.compile(r"^[a-z\-]{1,30}:[A-Za-z0-9\-]{1,64}$")
+
+
+def sin_archivados(datos: dict, claves: set[str]) -> dict:
+    """La lista de «Hoy» sin lo archivado, con los contadores recalculados. No toca la copia original (está en caché). Pura."""
+    items = [i for i in datos["items"] if i.get("clave") not in claves]
+    return {**datos, "items": items, "urgentes": sum(1 for i in items if i["nivel"] == "urgente"), "archivados": sum(1 for i in datos["items"] if i.get("clave") in claves)}
+
+
+async def _conectar() -> psycopg.AsyncConnection:
+    return await psycopg.AsyncConnection.connect(ajustes.database_url, connect_timeout=3, row_factory=dict_row)
+
+
+async def archivo(usuario: str) -> list[dict]:
+    async with await _conectar() as conn:
+        cur = await conn.execute("SELECT clave, categoria, titulo, detalle, href, archivado FROM hoy_archivados WHERE usuario = %s ORDER BY archivado DESC LIMIT 500", [usuario])
+        return await cur.fetchall()
+
+
+async def claves_archivadas(usuario: str) -> set[str]:
+    return {f["clave"] for f in await archivo(usuario)}
+
+
+async def archivar(usuario: str, item: dict) -> None:
+    """Archiva un elemento de la lista (con su texto, para poder enseñarlo después). Repetirlo no duplica."""
+    if not item.get("archivable") or not CLAVE_VALIDA.match(item.get("clave") or ""):
+        raise ValueError("Ese elemento no se puede archivar")
+    async with await _conectar() as conn:
+        await conn.execute(
+            """INSERT INTO hoy_archivados (usuario, clave, categoria, titulo, detalle, href) VALUES (%s, %s, %s, %s, %s, %s)
+               ON CONFLICT (usuario, clave) DO NOTHING""",
+            [usuario, item["clave"], item["categoria"], str(item["titulo"])[:300], str(item.get("detalle") or "")[:500], item.get("href")])
+
+
+async def desarchivar(usuario: str, clave: str) -> bool:
+    async with await _conectar() as conn:
+        cur = await conn.execute("DELETE FROM hoy_archivados WHERE usuario = %s AND clave = %s", [usuario, clave])
+        return cur.rowcount > 0

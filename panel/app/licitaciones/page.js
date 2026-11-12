@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { antiguedadTexto, estadoMotor, ESTADOS_EMBUDO, fechaCivilTexto, nombreFuente, sinLeerTexto, tasaExitoTexto, totalesTexto } from "../../lib/licitaciones";
 import { Fallo, Item, Oportunidad, pedir, pedirCerebro } from "./cliente";
+import Panel from "./Panel";
 
 function EstadoDelMotor() {
   const [d, setD] = useState(null);
@@ -120,6 +121,7 @@ export default function Licitaciones() {
         <Link href="/licitaciones/competencia" className="boton no">Competencia: quién gana en cada mercado</Link>
         <Link href="/licitaciones/vencen" className="boton no">Contratos que vencen: cuándo vuelve a salir</Link>
       </p>
+      <Panel />
       <ResumenDelDia />
       <AvisosDeAlertas />
       <EmbudoPropio />

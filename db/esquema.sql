@@ -651,3 +651,15 @@ CREATE TABLE IF NOT EXISTS deuc_base (
   creado    timestamptz NOT NULL DEFAULT now()
 );
 CREATE INDEX IF NOT EXISTS deuc_base_empresa ON deuc_base (empresa, creado DESC);
+
+-- «Hoy»: lo vencido que cada persona ha archivado (api/cerebro/hoy.py). Se guarda una copia del texto para que el archivo siga mostrándolo aunque el elemento ya no salga en la lista.
+CREATE TABLE IF NOT EXISTS hoy_archivados (
+  usuario    text NOT NULL,
+  clave      text NOT NULL,                      -- identifica el elemento (p. ej. plazo-vencido:<id del expediente>)
+  categoria  text NOT NULL,
+  titulo     text NOT NULL,
+  detalle    text NOT NULL DEFAULT '',
+  href       text,
+  archivado  timestamptz NOT NULL DEFAULT now(),
+  PRIMARY KEY (usuario, clave)
+);

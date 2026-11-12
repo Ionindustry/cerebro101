@@ -5,7 +5,7 @@ import { calendarioPlazos, divisionEtiqueta, estadoEtiqueta, hoyMadrid, importeC
 const DIAS = ["D", "L", "M", "X", "J", "V", "S"];
 const n = (v) => new Intl.NumberFormat("es-ES").format(v ?? 0);
 
-function Cifra({ titulo, valor, nota }) {
+export function Cifra({ titulo, valor, nota }) {
   return (
     <div className="tarjeta lic-cifra">
       <span className="lic-cifra-titulo">{titulo}</span>
@@ -16,7 +16,7 @@ function Cifra({ titulo, valor, nota }) {
 }
 
 /** Barras horizontales: si `alElegir` existe, cada fila es un botón que filtra la búsqueda por ese valor. */
-function Barras({ titulo, grupos, etiqueta, alElegir, activo, vacio = "Sin datos", mostrarImporte = false }) {
+export function Barras({ titulo, grupos, etiqueta, alElegir, activo, vacio = "Sin datos", mostrarImporte = false }) {
   const filas = repartoBarras(grupos, etiqueta);
   return (
     <section className="tarjeta lic-grafico" aria-label={titulo}>
@@ -46,7 +46,7 @@ function Barras({ titulo, grupos, etiqueta, alElegir, activo, vacio = "Sin datos
   );
 }
 
-function Calendario({ plazos }) {
+export function Calendario({ plazos }) {
   const dias = useMemo(() => calendarioPlazos(plazos, hoyMadrid(), 60), [plazos]);
   const total = dias.reduce((a, d) => a + d.cuenta, 0);
   return (
