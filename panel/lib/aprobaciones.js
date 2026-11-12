@@ -36,3 +36,14 @@ export function barrasPorDia(serie = [], alto = 100) {
   const max = Math.max(1, ...serie.map((d) => Math.max(d.creadas, d.aprobadas + d.rechazadas)));
   return serie.map((d) => ({ ...d, hCreadas: (d.creadas / max) * alto, hAprobadas: (d.aprobadas / max) * alto, hRechazadas: (d.rechazadas / max) * alto }));
 }
+
+// Antigüedad de lo pendiente: tres tramos con su etiqueta y el máximo para dibujar las barras
+export const TRAMOS_ANTIGUEDAD = [["menos_1d", "Menos de 1 día"], ["de_1_a_3d", "De 1 a 3 días"], ["mas_3d", "Más de 3 días"]];
+export function antiguedadPendientes(resumen) {
+  const a = resumen?.pendientes?.antiguedad || {};
+  const filas = TRAMOS_ANTIGUEDAD.map(([k, nombre]) => ({ id: k, nombre, n: a[k] || 0 }));
+  return { filas, max: Math.max(1, ...filas.map((f) => f.n)) };
+}
+
+export const tasaTexto = (t) => (t === null || t === undefined ? "—" : `${t} %`);
+export const motivoTexto = (m) => (m && String(m).trim() ? String(m).trim() : "Sin motivo");

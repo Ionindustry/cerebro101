@@ -40,3 +40,15 @@ test("las barras por día se escalan al día con más movimiento", () => {
   assert.deepEqual(b.map((x) => [x.hCreadas, x.hAprobadas, x.hRechazadas]), [[50, 25, 0], [100, 50, 50], [0, 0, 0]]);
   assert.deepEqual(barrasPorDia([{ dia: "a", creadas: 0, aprobadas: 0, rechazadas: 0 }])[0].hCreadas, 0);
 });
+
+import { antiguedadPendientes, motivoTexto, tasaTexto } from "../lib/aprobaciones.js";
+test("aprobaciones: antigüedad, tasa y motivo", () => {
+  const a = antiguedadPendientes({ pendientes: { antiguedad: { menos_1d: 2, de_1_a_3d: 1, mas_3d: 0 } } });
+  assert.deepEqual(a.filas.map((f) => f.n), [2, 1, 0]);
+  assert.equal(a.max, 2);
+  assert.equal(antiguedadPendientes(null).max, 1);
+  assert.equal(tasaTexto(67), "67 %");
+  assert.equal(tasaTexto(null), "—");
+  assert.equal(motivoTexto("  Precio  "), "Precio");
+  assert.equal(motivoTexto(""), "Sin motivo");
+});

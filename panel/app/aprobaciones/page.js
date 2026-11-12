@@ -1,7 +1,7 @@
 "use client";
 import { useCallback, useEffect, useState } from "react";
 import Objetivos from "./Objetivos";
-import { barrasPorDia, contarPorDepartamento, esperaTexto, filtrarPorDepartamento, nombreDepartamento, repartoPorDepartamento } from "../../lib/aprobaciones";
+import { antiguedadPendientes, motivoTexto, tasaTexto, barrasPorDia, contarPorDepartamento, esperaTexto, filtrarPorDepartamento, nombreDepartamento, repartoPorDepartamento } from "../../lib/aprobaciones";
 import { etiquetaDia } from "../../lib/kpi";
 
 // Todo lo que requiere aprobación lo firma Dirección, una sola persona
@@ -91,6 +91,7 @@ function Dashboard({ resumen, deps, dias, setDias, irA }) {
   if (!resumen) return <p className="meta">Cargando el resumen…</p>;
   const { pendientes: p, resueltas: r } = resumen;
   const { filas, max } = repartoPorDepartamento(resumen, deps);
+  const antig = antiguedadPendientes(resumen);
   const serie = barrasPorDia(resumen.por_dia, 90);
   const w = 100 / serie.length;
   const marcas = serie.length > 31 ? 15 : serie.length > 14 ? 5 : 1;
@@ -145,16 +146,44 @@ function Dashboard({ resumen, deps, dias, setDias, irA }) {
         <div className="kp-leyenda"><span><i style={{ background: "#d4d4d8" }} />Solicitadas</span><span><i style={{ background: "#2e7d4f" }} />Aprobadas</span><span><i style={{ background: "#8a8a84" }} />Rechazadas</span></div>
       </section>
 
+      <section className="kp-seccion">
+        <h2>Antigüedad de lo pendiente</h2>
+        {p.total === 0 ? <p className="meta">No hay nada pendiente.</p> : (
+          <ul className="ap-reparto">
+            {antig.filas.map((f) => (
+              <li key={f.id}>
+                <span className="ap-dep-nombre">{f.nombre}</span>
+                <span className="kp-barra" aria-hidden="true"><i style={{ width: `${(f.n / antig.max) * 100}%`, background: f.id === "mas_3d" ? "#b3261e" : "#c98a0b" }} /></span>
+                <span className="ap-reparto-n"><b>{f.n}</b> {f.n === 1 ? "solicitud" : "solicitudes"}</span>
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
+
       <div className="ap-dos">
-        {[["Agentes que más piden", resumen.por_agente, "agente"], ["Acciones más frecuentes", resumen.por_accion, "accion"]].map(([titulo, lista, campo]) => (
-          <section key={titulo} className="kp-seccion">
-            <h2>{titulo}</h2>
-            {lista.length === 0 ? <p className="meta">Sin datos en este periodo.</p> : (
-              <ul className="kp-herr">{lista.map((x) => <li key={x[campo]}><span className="kp-herr-n">{x[campo]}</span><span className="kp-herr-v">{x.total}</span></li>)}</ul>
-            )}
-          </section>
-        ))}
+        <section className="kp-seccion">
+          <h2>Agentes que más piden</h2>
+          {resumen.por_agente.length === 0 ? <p className="meta">Sin datos en este periodo.</p> : (
+            <ul className="kp-herr">{resumen.por_agente.map((x) => <li key={x.agente}><span className="kp-herr-n">{x.agente}</span><span className="kp-herr-v">{x.total} · {x.aprobadas ?? 0} aprobadas · {x.rechazadas ?? 0} rechazadas · aprobación {tasaTexto(x.tasa_aprobacion)}</span></li>)}</ul>
+          )}
+        </section>
+        <section className="kp-seccion">
+          <h2>Acciones más frecuentes</h2>
+          {resumen.por_accion.length === 0 ? <p className="meta">Sin datos en este periodo.</p> : (
+            <ul className="kp-herr">{resumen.por_accion.map((x) => <li key={x.accion}><span className="kp-herr-n">{x.accion}</span><span className="kp-herr-v">{x.total}</span></li>)}</ul>
+          )}
+        </section>
       </div>
+
+      <section className="kp-seccion">
+        <h2>Últimos rechazos y su motivo</h2>
+        {(resumen.rechazos || []).length === 0 ? <p className="meta">No hay rechazos en este periodo.</p> : (
+          <ul className="kp-herr">
+            {resumen.rechazos.map((x, i) => <li key={i}><span className="kp-herr-n">{x.agente} · {x.accion}</span><span className="kp-herr-v">{motivoTexto(x.motivo)} <span className="meta">· {fecha(x.fecha)}</span></span></li>)}
+          </ul>
+        )}
+      </section>
     </div>
   );
 }
