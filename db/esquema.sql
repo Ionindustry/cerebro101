@@ -669,7 +669,7 @@ CREATE TABLE IF NOT EXISTS hoy_archivados (
 -- Encargos por agente (api/cerebro/licitaciones/encargos.py): para cada licitación, el encargo a medida que recibe cada agente de «Preparar la oferta». Lo redacta el director de la oferta (un modelo externo o,
 -- sin él, la plantilla de config/prompts/encargos.yaml) y una persona lo puede editar: lo de una persona (`origen = 'persona'`) no lo pisa nunca una nueva ejecución.
 CREATE TABLE IF NOT EXISTS ofertas_encargos (
-  motor_id    uuid NOT NULL REFERENCES ofertas (motor_id) ON DELETE CASCADE,
+  motor_id    uuid NOT NULL,                        -- la licitación (sin clave ajena a ofertas: el esquema se aplica por trozos en las pruebas; la oferta se comprueba al escribir)
   agente      text NOT NULL,
   contenido   text NOT NULL,
   origen      text NOT NULL CHECK (origen IN ('modelo', 'plantilla', 'persona')),
