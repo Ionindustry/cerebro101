@@ -1253,3 +1253,18 @@ export function claseDePlazo(dias) {
 
 /** A dónde lleva cada licitación en estudio: su ficha si el motor la conoce y, si no, el embudo. */
 export const hrefEnEstudio = (x) => (x?.motor_id && /^[0-9a-f-]{36}$/i.test(String(x.motor_id)) ? `/licitaciones/expedientes/${x.motor_id}` : "/licitaciones/embudo");
+
+/** ¿Se ofrece el botón «Volver a lanzar la preparación»? Cuando la última ejecución terminó con un error, a medias o con pasos sin hacer. Mientras trabajan los agentes, no. Pura. */
+export function puedeRelanzar(ejec) {
+  if (!ejec || ejec.estado === "en_curso") return false;
+  const pasos = Array.isArray(ejec.pasos) ? ejec.pasos : [];
+  return ejec.estado === "error" || ejec.estado === "parcial" || pasos.some((p) => ["error", "parcial", "pendiente"].includes(p.estado));
+}
+
+/** Lo que explica el botón: qué va a repetir y qué no. */
+export function textoRelanzar(ejec) {
+  const pasos = Array.isArray(ejec?.pasos) ? ejec.pasos : [];
+  const n = pasos.filter((p) => ["error", "parcial", "pendiente"].includes(p.estado)).length;
+  const cuantos = n > 0 ? `${n} ${n === 1 ? "paso" : "pasos"}` : "lo que falte";
+  return `Vuelve a lanzar la preparación y repite ${cuantos} (lo que falló o quedó a medias). Lo que ya se hizo y lo que haya escrito o revisado una persona no se toca. Si solo quieres repetir un agente, usa el botón de su paso.`;
+}

@@ -1163,3 +1163,18 @@ test("en estudio: solo las de ese estado, las que cierran antes primero y con en
   assert.equal(hrefEnEstudio({ motor_id: "../x" }), "/licitaciones/embudo");                  // un identificador raro nunca se convierte en una ruta
   assert.equal(hrefEnEstudio({}), "/licitaciones/embudo");
 });
+
+import { puedeRelanzar, textoRelanzar } from "../lib/licitaciones.js";
+test("volver a lanzar la preparación: cuándo se ofrece y qué explica", () => {
+  const e = (estado, ...pasos) => ({ estado, pasos: pasos.map((p) => ({ estado: p })) });
+  assert.equal(puedeRelanzar(e("error", "error", "pendiente")), true);
+  assert.equal(puedeRelanzar(e("parcial", "hecho", "parcial")), true);
+  assert.equal(puedeRelanzar(e("completa", "hecho", "omitido")), false);                 // todo bien: no hace falta
+  assert.equal(puedeRelanzar(e("completa", "hecho", "error")), true);                     // aunque la ejecución diga «completa», un paso con error se puede repetir
+  assert.equal(puedeRelanzar(e("en_curso", "error")), false);                             // mientras trabajan los agentes, no
+  assert.equal(puedeRelanzar(null), false);
+  assert.match(textoRelanzar(e("error", "error", "pendiente", "hecho")), /repite 2 pasos/);
+  assert.match(textoRelanzar(e("error", "error")), /repite 1 paso /);
+  assert.match(textoRelanzar(e("parcial", "hecho")), /repite lo que falte/);
+  assert.match(textoRelanzar(e("error", "error")), /persona no se toca/);
+});
