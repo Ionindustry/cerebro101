@@ -1,6 +1,6 @@
 "use client";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { CONFIRMAR_REHACER, MODELOS_REDACCION, agruparPorAnexo, botonDePaso, clasePaso, clasePlantilla, empresaParaEnviar, mensajeRedaccion, origenTexto, pasoEtiqueta, pendientesQueBloquean, plantillaEtiqueta, redaccionEnCurso, resumenPlantillas, resumenRedaccion } from "../../../../lib/licitaciones";
+import { CONFIRMAR_REHACER, MODELOS_REDACCION, puedeRelanzar, textoRelanzar, agruparPorAnexo, botonDePaso, clasePaso, clasePlantilla, empresaParaEnviar, mensajeRedaccion, origenTexto, pasoEtiqueta, pendientesQueBloquean, plantillaEtiqueta, redaccionEnCurso, resumenPlantillas, resumenRedaccion } from "../../../../lib/licitaciones";
 import { pedirCerebro } from "../../cliente";
 import Comparativa from "./Comparativa";
 import Encargos from "./Encargos";
@@ -148,6 +148,15 @@ export default function Redaccion({ id, o, alCambiar }) {
       {ejec && (
         <div aria-live="polite">
           <p><strong>{resumenRedaccion(ejec)}</strong></p>
+          {puedeRelanzar(ejec) && (
+            <div className="lic-aviso" role="group" aria-label="Volver a lanzar la preparación">
+              <p className="lic-fila">
+                <button className="boton si" onClick={redactar} disabled={trabajando || trabajandoAgentes || (hayVarias && !sociedad)}>Volver a lanzar la preparación de la oferta</button>
+                {hayVarias && !sociedad && <span className="meta">Elige primero la sociedad con la que se presenta.</span>}
+              </p>
+              <p className="meta">{textoRelanzar(ejec)}</p>
+            </div>
+          )}
           <ol className="lic-pasos">
             {ejec.pasos.map((p) => (
               <li key={p.id}>

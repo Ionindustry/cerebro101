@@ -1274,4 +1274,18 @@ export function comprobacionTexto(c) {
   if (c.degradadas_a_sin_datos) p.push(`${c.degradadas_a_sin_datos} pasada${c.degradadas_a_sin_datos === 1 ? "" : "s"} a «sin datos» por no citar evidencia válida`);
   if (c.ventajas_descartadas) p.push(`${c.ventajas_descartadas} ventaja${c.ventajas_descartadas === 1 ? "" : "s"} descartada${c.ventajas_descartadas === 1 ? "" : "s"} por no tener evidencia`);
   return p.join("; ");
+
+/** ¿Se ofrece el botón «Volver a lanzar la preparación»? Cuando la última ejecución terminó con un error, a medias o con pasos sin hacer. Mientras trabajan los agentes, no. Pura. */
+export function puedeRelanzar(ejec) {
+  if (!ejec || ejec.estado === "en_curso") return false;
+  const pasos = Array.isArray(ejec.pasos) ? ejec.pasos : [];
+  return ejec.estado === "error" || ejec.estado === "parcial" || pasos.some((p) => ["error", "parcial", "pendiente"].includes(p.estado));
+}
+
+/** Lo que explica el botón: qué va a repetir y qué no. */
+export function textoRelanzar(ejec) {
+  const pasos = Array.isArray(ejec?.pasos) ? ejec.pasos : [];
+  const n = pasos.filter((p) => ["error", "parcial", "pendiente"].includes(p.estado)).length;
+  const cuantos = n > 0 ? `${n} ${n === 1 ? "paso" : "pasos"}` : "lo que falte";
+  return `Vuelve a lanzar la preparación y repite ${cuantos} (lo que falló o quedó a medias). Lo que ya se hizo y lo que haya escrito o revisado una persona no se toca. Si solo quieres repetir un agente, usa el botón de su paso.`;
 }

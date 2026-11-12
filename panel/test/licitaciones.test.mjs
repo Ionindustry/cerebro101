@@ -1179,3 +1179,18 @@ test("comparativa: etiquetas de cumplimiento, de dónde sale cada evidencia y el
   assert.equal(comprobacionTexto({ comprobadas: 1, degradadas_a_sin_datos: 0, ventajas_descartadas: 0 }), "1 afirmación con evidencia");
   assert.equal(comprobacionTexto(null), "");
 });
+
+import { puedeRelanzar, textoRelanzar } from "../lib/licitaciones.js";
+test("volver a lanzar la preparación: cuándo se ofrece y qué explica", () => {
+  const e = (estado, ...pasos) => ({ estado, pasos: pasos.map((p) => ({ estado: p })) });
+  assert.equal(puedeRelanzar(e("error", "error", "pendiente")), true);
+  assert.equal(puedeRelanzar(e("parcial", "hecho", "parcial")), true);
+  assert.equal(puedeRelanzar(e("completa", "hecho", "omitido")), false);                 // todo bien: no hace falta
+  assert.equal(puedeRelanzar(e("completa", "hecho", "error")), true);                     // aunque la ejecución diga «completa», un paso con error se puede repetir
+  assert.equal(puedeRelanzar(e("en_curso", "error")), false);                             // mientras trabajan los agentes, no
+  assert.equal(puedeRelanzar(null), false);
+  assert.match(textoRelanzar(e("error", "error", "pendiente", "hecho")), /repite 2 pasos/);
+  assert.match(textoRelanzar(e("error", "error")), /repite 1 paso /);
+  assert.match(textoRelanzar(e("parcial", "hecho")), /repite lo que falte/);
+  assert.match(textoRelanzar(e("error", "error")), /persona no se toca/);
+});
