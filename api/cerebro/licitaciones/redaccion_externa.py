@@ -75,6 +75,15 @@ def proveedor_preferido(paso_id: str, pedido: str = "auto") -> str | None:
     return c if c in ("claude", "chatgpt") else None
 
 
+def organismo_de(ficha: dict | None) -> str:
+    """El órgano de contratación de la ficha. La ficha que dan las herramientas trae `comprador` como TEXTO (el nombre); la del motor, como diccionario con `nombre`: vale cualquiera de las dos. Pura."""
+    f = ficha if isinstance(ficha, dict) else {}
+    c = f.get("comprador")
+    if isinstance(c, dict):
+        c = c.get("nombre")
+    return _corto(c or f.get("organismo"), 120)
+
+
 def _corto(t, n: int) -> str:
     return " ".join(str(t or "").split())[:n]
 
@@ -337,7 +346,7 @@ async def intentar(motor_id: str, defin: dict, sel: list[dict], titulo: str, fic
                 conoc = limpios[0]["content"]
         empresa = (perfil + "\n\n" if perfil else "") + (f"Datos de 101.cat (base de conocimiento; las etiquetas entre corchetes son datos protegidos, déjalas tal cual):\n{conoc}" if conoc
                                                        else "No se te da información de producto ni de experiencia de 101.cat: marca [PENDIENTE: dato de 101.cat] allí donde haga falta.")
-        mensajes = construir_mensajes(titulo, str((ficha.get("comprador") or {}).get("nombre") or ficha.get("organismo") or ""), pliego, texto_reqs, criterios, texto_de_secciones(sel),
+        mensajes = construir_mensajes(titulo, organismo_de(ficha), pliego, texto_reqs, criterios, texto_de_secciones(sel),
                                       texto_ya_escrito(todas, {s["clave"] for s in sel}), empresa, defin.get("contexto", ""), ficha)
         preferido = proveedor_preferido(defin["id"], modelo)
         datos, proveedor = await (consulta or externos.consultar_publico)(AGENTE, mensajes, ESQUEMA, max_tokens=int(cfg["max_tokens"]), timeout=300, preferido=preferido)
@@ -363,4 +372,4 @@ async def intentar(motor_id: str, defin: dict, sel: list[dict], titulo: str, fic
         return None, str(e)[:300]
     except Exception as e:      # noqa: BLE001 — cualquier fallo: el paso lo hace el modelo local, y el motivo queda a la vista
         log.warning("redacción externa de %s: %s: %s", motor_id, type(e).__name__, e)
-        return None, f"fallo interno ({type(e).__name__})"
+        return None, f"fallo interno ({type(e).__name__}: {_corto(e, 120)})"

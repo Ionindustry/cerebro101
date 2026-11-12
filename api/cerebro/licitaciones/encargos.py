@@ -237,7 +237,7 @@ async def preparar(motor_id: str, titulo: str, ficha: dict, modelo: str = "auto"
             adapt = X.adaptacion(ficha or {}, pliego)
             _pautas, plan = X.texto_de_adaptacion(adapt)
             from . import redaccion as R
-            mensajes = construir_mensajes(titulo, str(((ficha or {}).get("comprador") or {}).get("nombre") or (ficha or {}).get("organismo") or ""), pliego, texto_reqs,
+            mensajes = construir_mensajes(titulo, X.organismo_de(ficha), pliego, texto_reqs,
                                           R._criterios_texto(ficha or {}), agentes, plan)
             preferido = X.proveedor_preferido("encargos", modelo)
             datos, proveedor = await (consulta or externos.consultar_publico)(AGENTE, mensajes, ESQUEMA, max_tokens=int(cfg["max_tokens"]), timeout=300, preferido=preferido)
@@ -252,7 +252,7 @@ async def preparar(motor_id: str, titulo: str, ficha: dict, modelo: str = "auto"
         motivo = str(e)[:300]
     except Exception as e:      # noqa: BLE001 — cualquier fallo: plantilla, y el motivo queda a la vista
         log.warning("encargos de %s: %s: %s", motor_id, type(e).__name__, e)
-        motivo = f"fallo interno ({type(e).__name__})"
+        motivo = f"fallo interno ({type(e).__name__}: {_linea(e, 120)})"
     guardados, respetados = [], []
     for a in agentes:
         contenido = texto.get(a["agente"]) or texto_encargo(plantilla(a["agente"], criterios, len([r for r in reqs if r.get("estado") == "confirmado"])))
