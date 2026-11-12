@@ -1,6 +1,6 @@
 "use client";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { MODELOS_REDACCION, agruparPorAnexo, clasePaso, clasePlantilla, empresaParaEnviar, mensajeRedaccion, origenTexto, pasoEtiqueta, pendientesQueBloquean, plantillaEtiqueta, redaccionEnCurso, resumenPlantillas, resumenRedaccion } from "../../../../lib/licitaciones";
+import { CONFIRMAR_REHACER, MODELOS_REDACCION, agruparPorAnexo, botonDePaso, clasePaso, clasePlantilla, empresaParaEnviar, mensajeRedaccion, origenTexto, pasoEtiqueta, pendientesQueBloquean, plantillaEtiqueta, redaccionEnCurso, resumenPlantillas, resumenRedaccion } from "../../../../lib/licitaciones";
 import { pedirCerebro } from "../../cliente";
 import Encargos from "./Encargos";
 import { MARCA_REVISION, revisionTitular } from "../../../../lib/licitaciones";
@@ -53,6 +53,18 @@ export default function Redaccion({ id, o, alCambiar }) {
   const sociedad = empresaParaEnviar(elegida, o?.empresa);
   const lista = empresas || [];
   const hayVarias = lista.length > 1;
+  const repetirPaso = async (p, b) => {
+    if (b.confirmar && !window.confirm(CONFIRMAR_REHACER)) return;
+    setTrabajando(true); setMsg(null);
+    try {
+      const r = await pedirCerebro(`licitaciones/ofertas/${id}/redactar/${encodeURIComponent(p.id)}`, enviar({ rehacer: b.rehacer, modelo }));
+      setEjec(r.ejecucion);
+      await alCambiar();
+    } catch (e) {
+      setMsg(mensajeRedaccion(e.status, e.detalle));
+      await cargarEjecucion();
+    } finally { setTrabajando(false); }
+  };
   const redactar = async () => {
     setTrabajando(true); setMsg(null);
     try {
@@ -138,7 +150,10 @@ export default function Redaccion({ id, o, alCambiar }) {
           <ol className="lic-pasos">
             {ejec.pasos.map((p) => (
               <li key={p.id}>
-                <span className="lic-fila"><span className={`lic-etiqueta ${clasePaso(p.estado)}`}>{pasoEtiqueta(p.estado)}</span><strong>{p.titulo}</strong></span>
+                <span className="lic-fila">
+                  <span className={`lic-etiqueta ${clasePaso(p.estado)}`}>{pasoEtiqueta(p.estado)}</span><strong>{p.titulo}</strong>
+                  {(() => { const b = botonDePaso(p, ejec); return b && <button className="boton no" disabled={trabajando || trabajandoAgentes} onClick={() => repetirPaso(p, b)} title="Repite solo esta acción; los demás pasos se quedan como están">{b.texto}</button>; })()}
+                </span>
                 {p.error && <span className="meta lic-aviso">{p.error}</span>}
                 {p.faltan?.length > 0 && <span className="meta">Sin escribir: {p.faltan.join(", ")}</span>}
                 {p.resumen && <details><summary className="meta">Qué ha hecho{p.id === "precio" ? " (precio orientativo: lo fija una persona)" : ""}</summary><p style={{ whiteSpace: "pre-line" }}>{p.resumen}</p></details>}
