@@ -243,6 +243,27 @@ async def cambiar_modelo_externo(proveedor: str, i: Interruptor, usuario: Usuari
     return await modelos_externos.estado()
 
 
+class ElegirModelo(BaseModel):
+    modelo: str = "auto"              # uno de los permitidos del proveedor, o «auto» para volver al de por defecto
+
+
+@app.post("/modelos-externos/{proveedor}/modelo")
+async def elegir_modelo_externo(proveedor: str, e: ElegirModelo, usuario: Usuario = Depends(usuario_actual)):
+    """Dirección elige qué modelo usa un proveedor (p. ej. Claude Opus o Sonnet). Solo entre los permitidos en config/modelos_externos.yaml; queda constancia de quién y cuándo."""
+    _exigir_direccion(usuario)
+    if proveedor not in modelos_externos.CLAVES:
+        raise HTTPException(404, "Proveedor desconocido")
+    try:
+        await modelos_externos.poner_modelo(proveedor, e.modelo, usuario.id)
+    except ValueError as err:
+        raise HTTPException(422, str(err)) from None
+    except Exception as err:  # noqa: BLE001
+        log.exception("No se pudo guardar el modelo de %s", proveedor)
+        raise HTTPException(503, "No se ha podido guardar el cambio (la base de datos no responde)") from err
+    await constancia.dejar_constancia(None, usuario.id, "modelos_externos", "elegir_modelo", None, f"{proveedor}: modelo {e.modelo[:60]} elegido por {usuario.id}")
+    return await modelos_externos.estado()
+
+
 @app.post("/jarvis/mensaje")
 async def mensaje(m: Mensaje, usuario: Usuario = Depends(usuario_actual)):
     hilo = m.hilo or str(uuid.uuid4())
@@ -856,6 +877,7 @@ async def descargar_plantilla_rellenada(motor_id: str, doc_id: int, usuario: Usu
 class RedactarEntrada(BaseModel):
     rehacer: bool = False             # también rehace los borradores de los agentes (nunca lo que haya escrito o revisado una persona)
     empresa: str | None = None        # la sociedad del ERP con la que se presenta; si el ERP tiene varias y no se ha elegido nunca, hay que indicarla
+    modelo: str = "auto"              # con qué modelo externo redactar la memoria técnica: auto (lo que diga la configuración), claude o chatgpt
 
 
 @app.post("/licitaciones/ofertas/{motor_id}/redactar", status_code=202)
@@ -868,7 +890,7 @@ async def redactar_oferta_con_agentes(motor_id: str, entrada: RedactarEntrada | 
         ficha = await motor_lic._get(f"/tenders/{motor_id.strip().lower()}") if motor_lic._UUID.match(motor_id.strip()) else {}
         oferta = await ofertas_licitaciones.plan(motor_id, ficha, usuario.id)
         await _fijar_sociedad(motor_id, oferta, entrada.empresa)
-        ejecucion = await redaccion_ofertas.reservar(motor_id, usuario.id, entrada.rehacer)
+        ejecucion = await redaccion_ofertas.reservar(motor_id, usuario.id, entrada.rehacer, modelo=entrada.modelo)
     except redaccion_ofertas.Conflicto as e:
         raise HTTPException(409, str(e)) from None
     except empresa_erp.VariasEmpresas as e:

@@ -52,5 +52,52 @@ class TestScript(unittest.TestCase):
         self.assertFalse(re.search(patron, otra))
 
 
+class TestEscalones(unittest.TestCase):
+    def test_los_dominios_se_pasan_al_instalar_y_se_guardan_validados(self):
+        self.assertIn('[string]$Dominios = ""', T)
+        self.assertIn("Guardar-Json $Config", T)
+        self.assertIn("[A-Za-z0-9.-]+\\.[A-Za-z]{2,}", T)
+
+    def test_la_prueba_de_punta_a_punta_envia_el_nombre_del_dominio(self):
+        """Sin --resolve y el nombre no hay certificado y Caddy responde con un error TLS: la prueba daria falsos fallos."""
+        self.assertIn("--resolve", T)
+        self.assertIn('-w "%{http_code}"', T)
+        self.assertIn("function Responde", T)
+        patron = re.search(r"-match '(\^\[1-5\][^']+)'", T)
+        self.assertIsNotNone(patron)
+        p = patron.group(1).replace("\\d", r"\d")
+        for bueno in ("200", "302", "502"):
+            self.assertTrue(re.match(p, bueno), bueno)
+        for malo in ("000", "", "20", "600"):
+            self.assertFalse(re.match(p, malo), malo)
+
+    def test_no_reinicia_en_bucle_ni_toca_docker_desktop(self):
+        self.assertIn("$MaxReinicios = 6", T)
+        self.assertIn("$EsperaReinicios = 10", T)
+        self.assertIn("-Timeout $Segundos", T)                       # un Docker colgado no deja la tarea esperando
+        self.assertNotIn("wsl --shutdown", T)
+        self.assertNotIn("Docker Desktop.exe", T)
+        self.assertIn("REQUIERE ATENCION", T)
+
+    def test_solo_reinicia_contenedores_del_cerebro(self):
+        self.assertIn("-match 'cerebro'", T)
+        self.assertIn('"reenvio", "proxy"', T)
+
+    def test_nombres_de_variables_no_chocan_con_los_parametros_del_script(self):
+        """PowerShell no distingue mayusculas: $estado dentro de una funcion y el parametro -Estado se confunden."""
+        for nombre in ("Estado", "Dominios", "Instalar", "Vigilar", "Quitar"):
+            usos = re.findall(r"\$" + nombre + r"\b", T, re.I)
+            permitido = {"Estado": 2, "Dominios": 3, "Instalar": 2, "Vigilar": 2, "Quitar": 2}[nombre]   # param + uso en el despacho final (y el uso al instalar)
+            self.assertLessEqual(len(usos), permitido, nombre)
+
+    def test_lo_que_lee_de_netsh_trae_tambien_el_destino(self):
+        m = re.search(r"-match '(\^\\s\*\(\\d[^']*443[^']*\(\\d\+\))'", T)
+        self.assertIsNotNone(m)
+        p = m.group(1).replace("\\d", r"\d").replace("\\s", r"\s")
+        r = re.match(p, "192.168.1.102   443         127.0.0.1       18443")
+        self.assertEqual((r.group(1), r.group(3), r.group(5)), ("192.168.1.102", "127.0.0.1", "18443"))
+        self.assertIsNone(re.match(p, "0.0.0.0         80          172.19.117.42   80"))
+
+
 if __name__ == "__main__":
     unittest.main()

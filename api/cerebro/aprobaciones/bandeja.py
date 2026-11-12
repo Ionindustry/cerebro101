@@ -70,6 +70,14 @@ async def historial(departamentos: set[str] | None = None, decision: str | None 
     return {"total": total, "pagina": max(0, int(pagina)), "limite": limite, "items": filas}
 
 
+def _motivo_rechazo(f: dict) -> str:
+    """El comentario de quien rechazó (la última decisión negativa), recortado. Vacío si no dejó motivo."""
+    for d in reversed(f.get("decisiones") or []):
+        if d.get("aprobado") is False:
+            return str(d.get("comentario") or "").strip()[:200]
+    return ""
+
+
 def calcular_resumen(filas: list[dict], dias: int = 30, ahora: datetime | None = None, zona: str = "Europe/Madrid") -> dict:
     """Cifras para el dashboard de Aprobaciones a partir de las solicitudes (pendientes y las resueltas en el periodo). Sin base de datos: se prueba sola.
 
@@ -97,17 +105,27 @@ def calcular_resumen(filas: list[dict], dias: int = 30, ahora: datetime | None =
     aprobadas = sum(1 for f in res if f["estado"] == "aprobada")
     antigua = min((f["creado"] for f in pend), default=None)
     top = lambda campo: [{campo: k, "total": n} for k, n in Counter(f[campo] for f in filas).most_common(5)]
+    horas_p = [(ahora - f["creado"]).total_seconds() / 3600 for f in pend]
+    antiguedad = {"menos_1d": sum(1 for h in horas_p if h < 24), "de_1_a_3d": sum(1 for h in horas_p if 24 <= h < 72), "mas_3d": sum(1 for h in horas_p if h >= 72)}
+    por_agente = []
+    for k, n in Counter(f["agente"] for f in filas).most_common(5):
+        suyas = [f for f in filas if f["agente"] == k]
+        ap, rec = sum(1 for f in suyas if f["estado"] == "aprobada"), sum(1 for f in suyas if f["estado"] == "rechazada")
+        por_agente.append({"agente": k, "total": n, "pendientes": sum(1 for f in suyas if f["estado"] == "pendiente"), "aprobadas": ap, "rechazadas": rec,
+                           "tasa_aprobacion": round(ap * 100 / (ap + rec)) if ap + rec else None})
+    rechazos = [{"agente": f["agente"], "accion": f["accion"], "departamento": f["departamento"], "fecha": f["actualizado"].isoformat(), "motivo": _motivo_rechazo(f)}
+                for f in sorted((f for f in res if f["estado"] == "rechazada"), key=lambda f: f["actualizado"], reverse=True)[:5]]
     return {
         "dias": dias,
         "pendientes": {"total": len(pend), "mas_antigua": antigua.isoformat() if antigua else None,
                        "espera_max_horas": round((ahora - antigua).total_seconds() / 3600, 1) if antigua else None,
-                       "por_departamento": dict(por_dep_pend)},
+                       "por_departamento": dict(por_dep_pend), "antiguedad": antiguedad},
         "resueltas": {"total": len(res), "aprobadas": aprobadas, "rechazadas": len(res) - aprobadas,
                       "tasa_aprobacion": round(aprobadas * 100 / len(res)) if res else None,
                       "tiempo_medio_horas": round(sum(esperas) / len(esperas), 1) if esperas else None,
                       "por_departamento": por_dep_res},
         "por_dia": [{"dia": d.isoformat(), **v} for d, v in serie.items()],
-        "por_agente": top("agente"), "por_accion": top("accion"),
+        "por_agente": por_agente, "por_accion": top("accion"), "rechazos": rechazos,
     }
 
 
@@ -119,7 +137,7 @@ async def resumen(departamentos: set[str] | None = None, dias: int = 30) -> dict
         cond, params = "AND departamento = ANY(%s)", [dias, sorted(departamentos)]
     async with await psycopg.AsyncConnection.connect(ajustes.database_url, row_factory=dict_row) as conn:
         cur = await conn.execute(
-            f"""SELECT departamento, agente, accion, estado, creado, actualizado FROM aprobaciones
+            f"""SELECT departamento, agente, accion, estado, creado, actualizado, decisiones FROM aprobaciones
                 WHERE (estado = 'pendiente' OR actualizado >= now() - make_interval(days => %s)) {cond}""", params)
         filas = await cur.fetchall()
     return calcular_resumen(filas, dias, zona=ajustes.zona_horaria)

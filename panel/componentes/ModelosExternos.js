@@ -26,6 +26,16 @@ export default function ModelosExternos() {
     setOcupado(null);
   }
 
+  async function elegirModelo(p, modelo) {
+    setOcupado(p.id); setAviso("");
+    try {
+      const r = await fetch(`/cerebro/modelos-externos/${p.id}/modelo`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ modelo }) });
+      if (r.ok) setD(await r.json());
+      else setAviso(mensajeError(r.status, (await r.json().catch(() => ({}))).detail));
+    } catch { setAviso(mensajeError(0)); }
+    setOcupado(null);
+  }
+
   async function probar(p) {
     setOcupado(p.id); setAviso("");
     await cargar(p.id);
@@ -50,7 +60,14 @@ export default function ModelosExternos() {
                 <i style={{ background: ESTADOS[p.estado].color }} aria-hidden="true" />
                 <div className="mx-texto">
                   <b>{p.nombre}</b> · {ESTADOS[p.estado].texto}
-                  <div className="meta">Modelo {p.modelo}{p.tiene_clave ? ` · ${uso(p)}` : ""}</div>
+                  <div className="meta">
+                    <label>Modelo{" "}
+                      <select value={p.modelo} disabled={ocupado === p.id || !(p.modelos || []).length} onChange={(e) => elegirModelo(p, e.target.value)} aria-label={`Modelo de ${p.nombre}`}>
+                        {(p.modelos || [p.modelo]).map((m) => <option key={m} value={m}>{m}{m === p.modelo_por_defecto ? " (por defecto)" : ""}</option>)}
+                      </select>
+                    </label>
+                    {p.tiene_clave ? ` · ${uso(p)}` : ""}
+                  </div>
                   {p.prueba && <div className="meta" role="status">{p.prueba.ok ? `✓ ${p.prueba.detalle} (${p.prueba.segundos} s)` : `✗ ${p.prueba.detalle}`}</div>}
                   {!p.tiene_clave && <div className="jev-ayuda">Para poner la clave: <code>python3 scripts/modelos_activar.py {p.id}</code></div>}
                 </div>

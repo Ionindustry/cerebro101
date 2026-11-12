@@ -55,7 +55,43 @@ def clave(proveedor: str) -> str:
 
 
 def modelo(proveedor: str) -> str:
+    """El modelo por defecto del proveedor: el del .env o, si no, el de la configuración (el que se elige en el panel va aparte: `modelo_elegido`)."""
     return os.environ.get(MODELOS[proveedor], "").strip() or configuracion()["proveedores"][proveedor]["modelo"]
+
+
+def modelos_posibles(proveedor: str) -> list[str]:
+    """Los modelos que se pueden elegir en el panel (config/modelos_externos.yaml), con el de por defecto siempre incluido. Pura."""
+    lista = [str(m) for m in (configuracion()["proveedores"][proveedor].get("modelos") or []) if str(m).strip()]
+    d = modelo(proveedor)
+    return lista if d in lista else [d] + lista
+
+
+async def modelo_elegido(proveedor: str) -> str:
+    """El modelo que se usa ahora: el que Dirección eligió en el panel (si sigue siendo uno de los permitidos) y, si no, el de por defecto. Si la base no responde, el de por defecto."""
+    try:
+        async with await _conectar() as c:
+            cur = await c.execute("SELECT modelo FROM modelos_externos WHERE proveedor = %s", (proveedor,))
+            f = await cur.fetchone()
+        if f and f[0] and f[0] in modelos_posibles(proveedor):
+            return f[0]
+    except Exception as e:  # noqa: BLE001
+        log.warning("No se pudo leer el modelo elegido de %s (se usa el de por defecto): %s", proveedor, e)
+    return modelo(proveedor)
+
+
+async def poner_modelo(proveedor: str, elegido: str | None, quien: str) -> None:
+    """Dirección elige el modelo de un proveedor entre los permitidos; vacío o «auto» vuelve al de por defecto. No cambia si está conectado."""
+    elegido = (elegido or "").strip()
+    if elegido.lower() in ("", "auto"):
+        elegido = ""
+    elif elegido not in modelos_posibles(proveedor):
+        raise ValueError(f"«{elegido[:60]}» no es uno de los modelos permitidos de {proveedor}: " + ", ".join(modelos_posibles(proveedor)))
+    async with await _conectar() as c:
+        await c.execute(
+            """INSERT INTO modelos_externos (proveedor, activo, modelo, cambiado_por, cambiado) VALUES (%s, false, %s, %s, now())
+               ON CONFLICT (proveedor) DO UPDATE SET modelo = EXCLUDED.modelo, cambiado_por = EXCLUDED.cambiado_por, cambiado = now()""",
+            (proveedor, elegido or None, quien[:120]))
+    log.info("Modelo de %s: %s (por %s)", proveedor, elegido or "el de por defecto", quien)
 
 
 # --------------------------------------------------------------------------- interruptores (en la base: sobreviven a reinicios y valen para la API y el worker)
@@ -200,10 +236,10 @@ async def _chatgpt(cfg: dict, modelo_: str, sistema: str, mensajes: list[dict], 
 LLAMADAS = {"claude": _claude, "chatgpt": _chatgpt}
 
 
-async def _llamar(proveedor: str, mensajes: list[dict], esquema: dict, transporte=None) -> dict:
-    cfg = configuracion()
+async def _llamar(proveedor: str, mensajes: list[dict], esquema: dict, transporte=None, max_tokens: int | None = None, timeout: int | None = None) -> dict:
+    cfg = {**configuracion(), **({"max_tokens": max_tokens} if max_tokens else {}), **({"timeout_segundos": timeout} if timeout else {})}
     sistema = "\n\n".join(m["content"] for m in mensajes if m["role"] == "system")
-    datos = await LLAMADAS[proveedor](cfg, modelo(proveedor), sistema, [m for m in mensajes if m["role"] != "system"], esquema, transporte)
+    datos = await LLAMADAS[proveedor](cfg, await modelo_elegido(proveedor), sistema, [m for m in mensajes if m["role"] != "system"], esquema, transporte)
     datos = completar_tipo(datos, esquema)
     faltan = [k for k in esquema.get("required", []) if k not in datos]
     if faltan:
@@ -238,7 +274,7 @@ async def consultar(ficha, mensajes: list[dict], esquema: dict, sensibilidad: st
         nombre = cfg["proveedores"][p]["nombre"]
         await actividad.marcar(ficha.id, f"Consultando a {nombre} (datos anonimizados)")
         try:
-            with generacion(f"externo.{p}", modelo(p), limpios, tipo="generation", agente=ficha.id) as obs:
+            with generacion(f"externo.{p}", await modelo_elegido(p), limpios, tipo="generation", agente=ficha.id) as obs:
                 inicio = time.monotonic()
                 datos = await _llamar(p, limpios, esquema, transporte)
                 anotar(obs, output=json.dumps(datos, ensure_ascii=False), metadata={"segundos": round(time.monotonic() - inicio, 2)})
@@ -250,6 +286,49 @@ async def consultar(ficha, mensajes: list[dict], esquema: dict, sensibilidad: st
     return None
 
 
+def ordenar(candidatos: list[str], preferido: str | None) -> list[str]:
+    """Los proveedores en el orden en que se prueban: el preferido primero (si está entre los candidatos) y el resto como estaban. Pura."""
+    if preferido in candidatos:
+        return [preferido] + [p for p in candidatos if p != preferido]
+    return list(candidatos)
+
+
+async def consultar_publico(agente: str, mensajes: list[dict], esquema: dict, max_tokens: int = 6000, timeout: int = 240, transporte=None, preferido: str | None = None) -> tuple[dict, str]:
+    """Una consulta a Claude o ChatGPT sobre un documento PÚBLICO (un pliego de contratación): se envía tal cual, sin anonimizar y sin el límite de tamaño de las consultas de los agentes.
+    Mantiene las demás reglas: solo si Dirección lo ha conectado, con su clave y dentro del tope diario; si un proveedor falla se prueba el siguiente. Devuelve (respuesta, proveedor).
+    `preferido` («claude» o «chatgpt») va el primero si está conectado y con clave; si no puede responder, se pasa al otro. Sin preferencia, manda el orden de la configuración.
+    Si ninguno puede, lanza ErrorExterno con un motivo legible por la persona. Lo que se envíe aquí NO debe llevar datos privados de la empresa ni de personas."""
+    cfg = configuracion()
+    con_clave = [p for p in cfg["orden"] if clave(p)]
+    if not con_clave:
+        raise ErrorExterno("No hay ninguna clave de Claude ni de ChatGPT: ponla con «python3 scripts/modelos_activar.py claude» (o chatgpt)")
+    conectados = await activos()
+    candidatos = ordenar([p for p in con_clave if conectados.get(p)], preferido)
+    if not candidatos:
+        raise ErrorExterno("Claude y ChatGPT están desconectados: Dirección los conecta en Agentes → Modelos externos")
+    ultimo = ""
+    for p in candidatos:
+        if await usadas_hoy(p) >= cfg["limite_diario"]:
+            ultimo = f"{cfg['proveedores'][p]['nombre']} ha llegado al tope diario de llamadas"
+            continue
+        try:
+            with generacion(f"externo.{p}", await modelo_elegido(p), "[texto público de un pliego: no se registra]", tipo="generation", agente=agente) as obs:
+                inicio = time.monotonic()
+                datos = await _llamar(p, mensajes, esquema, transporte, max_tokens=max_tokens, timeout=timeout)
+                anotar(obs, output="[respuesta recibida]", metadata={"segundos": round(time.monotonic() - inicio, 2)})
+        except (ErrorExterno, RespuestaInvalida) as e:
+            ultimo = str(e)
+            log.warning("%s no ha podido analizar el documento público (%s): se prueba el siguiente", p, e)
+            continue
+        except httpx.HTTPError as e:
+            ultimo = f"no se ha podido conectar con {cfg['proveedores'][p]['nombre']} ({type(e).__name__})"
+            log.warning("%s: %s", p, ultimo)
+            continue
+        await actividad.contar(agente, f"modelo_externo:{p}")
+        return datos, p
+    raise ErrorExterno(ultimo or "Ningún modelo externo ha podido responder")
+
+
 # --------------------------------------------------------------------------- estado para el panel (nunca devuelve una clave)
 async def estado(probar_proveedor: str | None = None, transporte=None) -> dict:
     cfg = configuracion()
@@ -258,7 +337,7 @@ async def estado(probar_proveedor: str | None = None, transporte=None) -> dict:
     for p in cfg["orden"]:
         tiene = bool(clave(p))
         on = bool(conectados.get(p))
-        item = {"id": p, "nombre": cfg["proveedores"][p]["nombre"], "modelo": modelo(p), "tiene_clave": tiene, "activo": on,
+        item = {"id": p, "nombre": cfg["proveedores"][p]["nombre"], "modelo": await modelo_elegido(p), "modelo_por_defecto": modelo(p), "modelos": modelos_posibles(p), "tiene_clave": tiene, "activo": on,
                 "estado": "sin_clave" if not tiene else "conectado" if on else "desconectado",
                 "usadas_hoy": await usadas_hoy(p) if tiene else 0, "limite_diario": cfg["limite_diario"]}
         if item["usadas_hoy"] >= 10 ** 9:

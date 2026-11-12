@@ -1184,3 +1184,6 @@ export function plazosProximos(plazos, hoy) {
   const hasta = (n) => dias.slice(0, n).reduce((a, d) => a + d.cuenta, 0);
   return { siete: hasta(7), quince: hasta(15), treinta: hasta(30), sesenta: hasta(60) };
 }
+
+/** Con qué modelo externo se redacta la memoria técnica en «Preparar la oferta»: el sistema elige (según la configuración) o la persona fuerza uno; si el elegido no responde, se prueba el otro. */
+export const MODELOS_REDACCION = [["auto", "Automático (el sistema elige)"], ["claude", "Claude"], ["chatgpt", "ChatGPT"]];

@@ -51,8 +51,25 @@ class TestResumen(unittest.TestCase):
         self.assertEqual(s[3], {"dia": "2026-09-29", "creadas": 0, "aprobadas": 0, "rechazadas": 0})
 
     def test_agentes_y_acciones_mas_frecuentes(self):
-        self.assertEqual(self.r["por_agente"][0], {"agente": "cobros", "total": 5})
+        self.assertEqual(self.r["por_agente"][0], {"agente": "cobros", "total": 5, "pendientes": 2, "aprobadas": 2, "rechazadas": 1, "tasa_aprobacion": 67})
+        self.assertEqual(self.r["por_agente"][1], {"agente": "comercial-1", "total": 1, "pendientes": 1, "aprobadas": 0, "rechazadas": 0, "tasa_aprobacion": None})
         self.assertEqual(self.r["por_accion"][0], {"accion": "enviar_correo", "total": 5})
+
+    def test_antiguedad_de_lo_pendiente(self):
+        self.assertEqual(self.r["pendientes"]["antiguedad"], {"menos_1d": 2, "de_1_a_3d": 1, "mas_3d": 0})
+        viejas = calcular_resumen([fila("finanzas", "pendiente", 100), fila("finanzas", "pendiente", 24), fila("finanzas", "pendiente", 72)], 30, AHORA)
+        self.assertEqual(viejas["pendientes"]["antiguedad"], {"menos_1d": 0, "de_1_a_3d": 1, "mas_3d": 2})      # 24 h ya es «de 1 a 3 días»; 72 h, «más de 3»
+
+    def test_rechazos_con_su_motivo_el_mas_reciente_primero(self):
+        a = fila("comercial", "rechazada", 9, 8, agente="x", accion="uno")
+        a["decisiones"] = [{"aprobado": False, "comentario": "  Precio equivocado  "}]
+        b = fila("comercial", "rechazada", 4, 2, agente="y", accion="dos")           # sin motivo
+        b["decisiones"] = [{"aprobado": False, "comentario": ""}]
+        c = fila("comercial", "aprobada", 4, 1)
+        c["decisiones"] = [{"aprobado": True, "comentario": "ok"}]
+        rec = calcular_resumen([a, b, c], 30, AHORA)["rechazos"]
+        self.assertEqual([(x["accion"], x["motivo"]) for x in rec], [("dos", ""), ("uno", "Precio equivocado")])
+        self.assertEqual(calcular_resumen(FILAS, 30, AHORA)["rechazos"][0]["motivo"], "")             # filas sin `decisiones` no rompen
 
     def test_sin_datos_no_inventa_cifras(self):
         r = calcular_resumen([], 7, AHORA)

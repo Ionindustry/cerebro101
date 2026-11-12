@@ -1,6 +1,6 @@
 "use client";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { agruparPorAnexo, clasePaso, clasePlantilla, empresaParaEnviar, mensajeRedaccion, origenTexto, pasoEtiqueta, pendientesQueBloquean, plantillaEtiqueta, redaccionEnCurso, resumenPlantillas, resumenRedaccion } from "../../../../lib/licitaciones";
+import { MODELOS_REDACCION, agruparPorAnexo, clasePaso, clasePlantilla, empresaParaEnviar, mensajeRedaccion, origenTexto, pasoEtiqueta, pendientesQueBloquean, plantillaEtiqueta, redaccionEnCurso, resumenPlantillas, resumenRedaccion } from "../../../../lib/licitaciones";
 import { pedirCerebro } from "../../cliente";
 import { MARCA_REVISION, revisionTitular } from "../../../../lib/licitaciones";
 
@@ -14,6 +14,7 @@ export default function Redaccion({ id, o, alCambiar }) {
   const [errorEmpresas, setErrorEmpresas] = useState("");
   const [elegida, setElegida] = useState("");
   const [rehacer, setRehacer] = useState(false);
+  const [modelo, setModelo] = useState("auto");          // con qué modelo externo se redacta la memoria técnica
   const [ejec, setEjec] = useState(null);
   const [plant, setPlant] = useState(null);
   const [msg, setMsg] = useState(null);
@@ -54,7 +55,7 @@ export default function Redaccion({ id, o, alCambiar }) {
   const redactar = async () => {
     setTrabajando(true); setMsg(null);
     try {
-      const r = await pedirCerebro(`licitaciones/ofertas/${id}/redactar`, enviar({ rehacer, ...(sociedad ? { empresa: sociedad } : {}) }));
+      const r = await pedirCerebro(`licitaciones/ofertas/${id}/redactar`, enviar({ rehacer, modelo, ...(sociedad ? { empresa: sociedad } : {}) }));
       setEjec(r.ejecucion);
       await alCambiar();
     } catch (e) {
@@ -121,6 +122,11 @@ export default function Redaccion({ id, o, alCambiar }) {
         <button className="boton si" onClick={redactar} disabled={trabajando || trabajandoAgentes || (hayVarias && !sociedad)}>
           {trabajandoAgentes ? "Los agentes están trabajando…" : o?.existe ? "Redactar con los agentes lo que falte" : "Preparar la oferta con los agentes"}
         </button>
+        <label>Memoria técnica con{" "}
+          <select value={modelo} onChange={(e) => setModelo(e.target.value)} aria-label="Modelo para redactar la memoria técnica">
+            {MODELOS_REDACCION.map(([k, n]) => <option key={k} value={k}>{n}</option>)}
+          </select>
+        </label>
         {o?.existe && <label className="ap-check"><input type="checkbox" checked={rehacer} onChange={(e) => setRehacer(e.target.checked)} /> Rehacer también los borradores de los agentes</label>}
       </div>
       {errorEmpresas && <p className="meta" role="note">No se han podido leer las sociedades del ERP: {errorEmpresas}</p>}

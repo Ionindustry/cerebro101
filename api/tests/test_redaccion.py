@@ -143,6 +143,56 @@ class TestRedaccion(unittest.TestCase):
         self.assertIn("Memoria técnica (30 puntos)", ev)
         self.assertNotIn("proposicion", ev.lower().replace("proposición económica", ""))
 
+    def test_con_modelo_externo_los_pasos_de_memoria_no_llaman_al_agente_local_y_el_resto_si(self):
+        from cerebro.licitaciones import redaccion_externa as X
+        e = self.reservar()
+
+        async def externo(motor_id, defin, sel, titulo, ficha, consulta=None, modelo="auto"):
+            for s in sel:
+                await O.escribir_seccion(motor_id, s["sobre"], s["clave"], f"Escrito con Claude: {s['clave']}", agente=defin["agente"])
+            return {"escritas": [s["clave"] for s in sel], "omitidas": {}, "resumen": "Redactado con Claude (prueba): bien.", "proveedor": "claude", "modelo": "prueba"}, ""
+        inv = agentes_que_escriben(TODOS)
+        with mock.patch.object(X, "intentar", externo):
+            fin = ejecutar(R.ejecutar(e["id"], inv))
+        self.assertEqual([a for a, _ in inv.llamadas], ["administrativo-licitaciones", "costes-licitacion", "precio-licitacion", "evaluador-ofertas"])    # solucion y memoria: modelo externo
+        p = self.pasos(fin)
+        self.assertEqual((p["solucion"]["estado"], p["memoria"]["estado"]), ("hecho", "hecho"))
+        self.assertIn("Redactado con Claude", p["solucion"]["resumen"])
+        s = {x["clave"]: x for x in ejecutar(O.leer(ID))["secciones"]}
+        self.assertEqual(s["crit-1"]["contenido"], "Escrito con Claude: crit-1")
+        self.assertEqual(s["crit-1"]["estado"], "borrador")                                  # sigue siendo un borrador para una persona
+
+    def test_si_el_modelo_externo_no_procede_lo_hace_el_local_y_el_resumen_lo_dice(self):
+        from cerebro.licitaciones import redaccion_externa as X
+        e = self.reservar()
+
+        async def sin_externo(*a, **k):
+            return None, "Claude y ChatGPT están desconectados"
+        inv = agentes_que_escriben(TODOS)
+        with mock.patch.object(X, "intentar", sin_externo):
+            fin = ejecutar(R.ejecutar(e["id"], inv))
+        self.assertEqual(fin["estado"], "completa")
+        self.assertEqual([a for a, _ in inv.llamadas][:2], ["arquitecto-solucion", "redactor-memoria"])
+        self.assertIn("Se ha usado el modelo local: Claude y ChatGPT están desconectados", self.pasos(fin)["solucion"]["resumen"])
+
+    def test_el_modelo_elegido_se_guarda_en_la_ejecucion_y_llega_a_los_pasos_de_memoria(self):
+        from cerebro.licitaciones import redaccion_externa as X
+        e = ejecutar(R.reservar(ID, "albert", modelo="chatgpt"))
+        self.assertEqual(e["modelo"], "chatgpt")
+        pedidos = []
+
+        async def externo(motor_id, defin, sel, titulo, ficha, consulta=None, modelo="auto"):
+            pedidos.append((defin["id"], modelo))
+            for s in sel:
+                await O.escribir_seccion(motor_id, s["sobre"], s["clave"], "x", agente=defin["agente"])
+            return {"escritas": [], "omitidas": {}, "resumen": "ok", "proveedor": "chatgpt", "modelo": "p"}, ""
+        with mock.patch.object(X, "intentar", externo):
+            ejecutar(R.ejecutar(e["id"], agentes_que_escriben(TODOS)))
+        self.assertEqual(pedidos, [("solucion", "chatgpt"), ("memoria", "chatgpt")])
+
+    def test_un_modelo_raro_se_guarda_como_automatico(self):
+        self.assertEqual(ejecutar(R.reservar(ID, "albert", modelo="gemini"))["modelo"], "auto")
+
     def test_un_agente_que_dice_hecho_sin_guardar_nada_es_un_error_y_la_cadena_sigue(self):
         e = self.reservar()
         ejecutar(O.escribir_seccion(ID, "tecnico", "crit-1", "x", agente="redactor-memoria"))       # ya tenía contenido: no se toca sin «rehacer»
