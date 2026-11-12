@@ -28,7 +28,7 @@ from ..licitaciones import alertas as alertas_licitaciones
 from ..licitaciones import calendario_plazos
 from ..licitaciones import crm as crm_licitaciones
 from ..licitaciones import frescura as frescura_licitaciones
-from ..licitaciones import analisis_pliego, analisis_tecnico, aptitud, revision_previa
+from ..licitaciones import analisis_pliego, aptitud, revision_previa
 from ..licitaciones import pliegos as pliegos_licitaciones
 from ..licitaciones import ofertas as ofertas_licitaciones
 from ..licitaciones import empresa as empresa_erp
@@ -589,44 +589,6 @@ async def analizar_pliegos_de_la_licitacion(motor_id: str, usuario: Usuario = De
     if not _encolar_analisis_pliegos(filas[0]["id"], forzar=True):
         raise HTTPException(503, "No se ha podido encolar el análisis")
     log.info("pliegos: %s pide analizar los pliegos de %s", usuario.id, motor_id)
-    return {"licitacion": motor_id, "encolado": True}
-
-
-# ---- Análisis técnico del pliego (cerebro/licitaciones/analisis_tecnico.py): Claude o ChatGPT leen el pliego y señalan sus puntos fuertes y débiles técnicos, con cita comprobada ----
-
-@app.get("/licitaciones/analisis-tecnico/{motor_id}")
-async def analisis_tecnico_del_pliego(motor_id: str, usuario: Usuario = Depends(usuario_actual)):
-    """El informe (o su estado) y si hay algún modelo externo listo para pedirlo. Solo Dirección y Licitaciones."""
-    _exige_licitaciones(usuario)
-    try:
-        informe = await analisis_tecnico.leer(motor_id)
-    except pliegos_licitaciones.ErrorPliego as e:
-        raise HTTPException(422, str(e)) from None
-    conectados = await modelos_externos.activos()
-    listo = any(modelos_externos.clave(p) and conectados.get(p) for p in modelos_externos.CLAVES)
-    return {"analisis": informe, "modelo_listo": listo}
-
-
-@app.post("/licitaciones/analisis-tecnico/{motor_id}", status_code=202)
-async def pedir_analisis_tecnico(motor_id: str, usuario: Usuario = Depends(usuario_actual)):
-    """«Analizar el pliego»: encola el análisis con Claude o ChatGPT (tarda uno o dos minutos). Repetirlo sustituye el informe."""
-    _exige_licitaciones(usuario)
-    try:
-        motivo = await analisis_tecnico.reservar(motor_id, usuario.id)
-    except pliegos_licitaciones.ErrorPliego as e:
-        raise HTTPException(422, str(e)) from None
-    if motivo == "en_curso":
-        raise HTTPException(409, "Ya se está analizando este pliego: espera a que termine")
-    if motivo == "reciente":
-        raise HTTPException(409, "Se acaba de analizar: espera un par de minutos antes de repetirlo")
-    try:
-        from ..tareas.celery_app import app as celery
-        celery.send_task("cerebro.tareas.celery_app.analizar_pliego_tecnico", args=[motor_id], queue="peticiones")
-    except Exception as e:      # noqa: BLE001
-        log.warning("análisis técnico: no se ha podido encolar %s: %s: %s", motor_id, type(e).__name__, e)
-        await analisis_tecnico._cerrar(motor_id, "error", error="No se ha podido encolar el análisis: inténtalo en unos minutos")
-        raise HTTPException(503, "No se ha podido encolar el análisis") from None
-    log.info("análisis técnico: %s pide analizar el pliego de %s", usuario.id, motor_id)
     return {"licitacion": motor_id, "encolado": True}
 
 

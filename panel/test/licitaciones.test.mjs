@@ -1105,20 +1105,3 @@ test("panel de licitaciones: embudo, fuentes y plazos próximos", () => {
   const p = plazosProximos([{ valor: "2026-11-12", cuenta: 2 }, { valor: "2026-11-25", cuenta: 3 }, { valor: "2026-12-30", cuenta: 4 }], "2026-11-12");
   assert.deepEqual(p, { siete: 2, quince: 5, treinta: 5, sesenta: 9 });
 });
-
-import { citasTexto, estadoAnalisisTecnico, lugarDeCita, mensajeAnalisisTecnico, preguntasParaCopiar, tipoDebilEtiqueta } from "../lib/licitaciones.js";
-test("análisis técnico: etiquetas, citas y preguntas", () => {
-  assert.equal(estadoAnalisisTecnico(null).texto, "Sin analizar");
-  assert.deepEqual([estadoAnalisisTecnico({ estado: "en_curso" }).clase, estadoAnalisisTecnico({ estado: "error" }).clase, estadoAnalisisTecnico({ estado: "hecho" }).clase], ["aviso", "caido", "ok"]);
-  assert.equal(lugarDeCita({ documento: 1, pagina: 12 }), "Documento 1, página 12");
-  assert.equal(lugarDeCita({ documento: null, pagina: 3 }), "");
-  assert.equal(citasTexto({ total: 14, verificadas: 12 }), "12 de 14 citas comprobadas en el texto del pliego");
-  assert.equal(citasTexto({ total: 1, verificadas: 1 }), "1 de 1 cita comprobada en el texto del pliego");
-  assert.equal(citasTexto(null), "Sin citas");
-  assert.equal(tipoDebilEtiqueta("restriccion_dirigida"), "Posible requisito dirigido");
-  assert.equal(tipoDebilEtiqueta("inventado"), "Otro");
-  const q = preguntasParaCopiar({ preguntas_aclaracion: ["¿Qué marca?", " ¿Plazo real? "], puntos_debiles: [{ pregunta_aclaracion: "¿qué marca?" }, { pregunta_aclaracion: "" }, { pregunta_aclaracion: "¿Hay SLA?" }] });
-  assert.equal(q, "1. ¿Qué marca?\n2. ¿Plazo real?\n3. ¿Hay SLA?");
-  assert.equal(preguntasParaCopiar(null), "");
-  assert.match(mensajeAnalisisTecnico(409), /espera/);
-});

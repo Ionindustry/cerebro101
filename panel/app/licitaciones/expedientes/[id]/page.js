@@ -2,7 +2,6 @@
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useEffect, useState } from "react";
-import AnalisisTecnico from "./AnalisisTecnico";
 import Redaccion from "./Redaccion";
 import { aBase64 } from "../../../../lib/adjuntos";
 import { SOBRES_OFERTA, autorSeccionTexto, claseSeccion, estadoSeccionEtiqueta, mensajeOferta, pendientesOferta, precioAEnvio, resumenOfertaTexto, FORMULAS_PRECIO, costeErpTexto, mensajeReglas, reglasAEnvio, reglasAFormulario, cercaniaTexto, mensajeParecidas, motivosTexto, aptitudSimulacion, costeDeTexto, filasDeCurva, mensajeSimulador, probabilidadConRango, porcentaje, CUMPLIMIENTOS, cumplimientoEtiqueta, cumplimientoNecesitaNota, estadoEtiqueta, estadoPliego, estadoRequisito, sugerenciaDe, aptitudTexto, analisisPliegosTexto, etiquetaEmbudo, fechaTexto, fichaOrgHref, importeTexto, lecturaPliego, lugarCita, matrizCsv, matrizDe, mensajeEmbudo, mensajePliegos, mensajeSubidaPliego, validarPliegoSubida, ACCEPT_PLIEGO, resumenMatriz, nombreFuente, puedeBajarOriginal, puedeDescargarPliego, resumenRequisitos, tipoRequisito, urlFicheroPliego, urlSegura } from "../../../../lib/licitaciones";
@@ -563,7 +562,6 @@ export default function Ficha() {
           )}
 
           <Pliegos id={id} />
-          <AnalisisTecnico id={id} />
           <Simulador id={id} />
           <Oferta id={id} />
           <Parecidas id={id} />

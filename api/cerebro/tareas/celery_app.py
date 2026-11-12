@@ -172,14 +172,6 @@ def analizar_pliegos(self, lid: int, forzar: bool = False) -> dict:
         return {"estado": "error", "motivo": "modelo no disponible"}
 
 
-@app.task(name="cerebro.tareas.celery_app.analizar_pliego_tecnico")
-def analizar_pliego_tecnico(motor_id: str) -> dict:
-    """Análisis técnico del pliego con Claude o ChatGPT (cerebro/licitaciones/analisis_tecnico.py). Nunca lanza: el resultado o el motivo del fallo quedan en la tabla para el panel; no se reintenta
-    solo porque cada intento gasta llamadas de pago: lo repite una persona."""
-    from ..licitaciones import analisis_tecnico
-    return asyncio.run(analisis_tecnico.ejecutar(motor_id))
-
-
 @app.task(name="cerebro.tareas.celery_app.redactar_oferta", bind=True, max_retries=4)
 def redactar_oferta(self, ejecucion_id: int) -> dict:
     """Una persona ha pulsado «Preparar la oferta»: los agentes de Licitaciones redactan el borrador, uno detrás de otro (cerebro/licitaciones/redaccion.py). Si el modelo no está
