@@ -73,6 +73,7 @@ x-api: &api
     CLAMD_HOST: "${CLAMD_HOST:-clamav}"                  # antivirus de los pliegos (servicio «clamav», perfil licitaciones); sin él los documentos quedan en cuarentena
     CLAMD_PORT: "${CLAMD_PORT:-3310}"
     PLIEGOS_DIR: "${PLIEGOS_DIR:-/datos/licitaciones/pliegos}"      # dónde se guardan (volumen datos)
+    FICHAS_DIR: "${FICHAS_DIR:-/datos/licitaciones/fichas}"          # fichas técnicas de producto descargadas o subidas (volumen datos)
     SUBIDAS_DIR: "${SUBIDAS_DIR:-/datos/subidas}"                     # documentos que se suben al chat (volumen datos)
     OFERTAS_DIR: "${OFERTAS_DIR:-/datos/licitaciones/ofertas}"       # documentación administrativa rellenada de las ofertas (volumen datos)
     DEUC_DIR: "${DEUC_DIR:-/datos/licitaciones/deuc}"                 # DEUC base de cada sociedad, subido desde Jarvis (volumen datos)
