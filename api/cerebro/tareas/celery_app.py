@@ -203,6 +203,16 @@ def cargar_fichas(carga_id: int) -> dict:
     return asyncio.run(fichas.ejecutar_carga(carga_id))
 
 
+@app.task(name="cerebro.tareas.celery_app.descubrir_opciones")
+def descubrir_opciones(motor_id: str, modelo: str = "auto") -> dict:
+    """Una persona pide buscar en internet más opciones para los parámetros sin cubrir de la tabla de equivalencias (cerebro/licitaciones/descubrimiento.py)."""
+    from ..licitaciones import descubrimiento, redaccion
+    async def _hacer():
+        titulo, _ficha = await redaccion._titulo_y_ficha(motor_id)
+        return await descubrimiento.ejecutar(motor_id, titulo, modelo)
+    return asyncio.run(_hacer())
+
+
 @app.task(name="cerebro.tareas.celery_app.purgar_subidas")
 def purgar_subidas() -> dict:
     """Cada noche borra los documentos subidos al chat que pasan de `subidas.retencion_dias` (config/integraciones.yaml): el fichero y su texto."""

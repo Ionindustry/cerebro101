@@ -2,6 +2,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { VEREDICTO_EQUIVALENCIA, evidenciaTexto, exigidoTexto, fechaTexto, resumenEquivalencia } from "../../../../lib/licitaciones";
 import { pedirCerebro } from "../../cliente";
+import Descubrimiento from "./Descubrimiento";
 
 const CLASE = { supera: "ok", iguala: "ok", no_cumple: "mal", sin_datos: "aviso" };
 
@@ -24,6 +25,7 @@ export default function Equivalencia({ id, version }) {
         <button className="boton no" aria-expanded={abierto} onClick={() => setAbierto((v) => !v)}>{abierto ? "Ocultar" : "Ver"}</button>
       </header>
       <p className="meta">Hecha con {d.proveedor === "claude" ? "Claude" : "ChatGPT"}{d.modelo ? ` (${d.modelo})` : ""} el {fechaTexto(d.actualizado)}. {resumenEquivalencia(c)}. Los números los compara el código con el valor que figura en la ficha; «sin verificar» pide que una persona lo mire.</p>
+      <Descubrimiento id={id} />
       {abierto && (
         <>
           <ul className="lic-lista">

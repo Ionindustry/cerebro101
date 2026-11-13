@@ -735,3 +735,17 @@ CREATE TABLE IF NOT EXISTS ofertas_equivalencia (
   creado      timestamptz NOT NULL DEFAULT now(),
   actualizado timestamptz NOT NULL DEFAULT now()
 );
+
+-- Descubrimiento de más opciones en internet (api/cerebro/licitaciones/descubrimiento.py): pistas de productos que podrían cubrir los parámetros sin cubrir de la tabla de equivalencias. Son PISTAS por verificar, no evidencia:
+-- solo cuentan cuando se carga su ficha técnica. Una fila por licitación (repetir la búsqueda la sustituye).
+CREATE TABLE IF NOT EXISTS ofertas_descubrimiento (
+  motor_id    uuid PRIMARY KEY,                     -- la licitación (sin clave ajena: el esquema se aplica por trozos en las pruebas)
+  estado      text NOT NULL DEFAULT 'en_curso' CHECK (estado IN ('en_curso', 'hecha', 'error')),
+  proveedor   text,
+  modelo      text,
+  contenido   jsonb NOT NULL DEFAULT '{}',
+  error       text NOT NULL DEFAULT '',
+  por         text NOT NULL DEFAULT '',
+  creado      timestamptz NOT NULL DEFAULT now(),
+  actualizado timestamptz NOT NULL DEFAULT now()
+);

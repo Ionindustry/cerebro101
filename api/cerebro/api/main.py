@@ -37,6 +37,7 @@ from ..licitaciones import redaccion as redaccion_ofertas
 from ..licitaciones import encargos as encargos_ofertas
 from ..licitaciones import comparativa as comparativa_ofertas
 from ..licitaciones import equivalencia as equivalencia_ofertas
+from ..licitaciones import descubrimiento as descubrimiento_ofertas
 from ..licitaciones import fichas as fichas_tecnicas
 from ..licitaciones import reglas as reglas_licitaciones
 from ..licitaciones import simulador as simulador_licitaciones
@@ -1042,6 +1043,29 @@ async def equivalencia_de_la_oferta(motor_id: str, usuario: Usuario = Depends(us
         return {"equivalencia": await equivalencia_ofertas.leer(motor_id)}
     except (ofertas_licitaciones.ErrorOferta, LookupError) as e:
         raise _oferta_error(e) from None
+
+
+@app.get("/licitaciones/ofertas/{motor_id}/descubrimiento")
+async def descubrimiento_de_la_oferta(motor_id: str, usuario: Usuario = Depends(usuario_actual)):
+    """Las pistas de más opciones encontradas en internet (null si aún no se ha buscado). Solo Dirección y Licitaciones."""
+    _exige_licitaciones(usuario)
+    try:
+        return {"descubrimiento": await descubrimiento_ofertas.leer(motor_id)}
+    except (ofertas_licitaciones.ErrorOferta, LookupError) as e:
+        raise _oferta_error(e) from None
+
+
+@app.post("/licitaciones/ofertas/{motor_id}/descubrimiento")
+async def buscar_mas_opciones_en_internet(motor_id: str, entrada: RedactarEntrada | None = None, usuario: Usuario = Depends(usuario_actual)):
+    """Lanza en segundo plano la búsqueda en internet de más opciones para los parámetros sin cubrir. Las pistas son por verificar: no son evidencia hasta cargar su ficha."""
+    _exige_licitaciones(usuario)
+    try:
+        await descubrimiento_ofertas.iniciar(motor_id, usuario.id)
+    except (ofertas_licitaciones.ErrorOferta, LookupError) as e:
+        raise _oferta_error(e) from None
+    celery.send_task("cerebro.tareas.celery_app.descubrir_opciones", args=[motor_id, (entrada.modelo if entrada and getattr(entrada, "modelo", None) else "auto")], queue="peticiones")
+    log.info("descubrimiento: %s busca más opciones para %s", usuario.id, motor_id)
+    return {"estado": "en_curso"}
 
 
 @app.get("/licitaciones/ofertas/{motor_id}/comparativa")
