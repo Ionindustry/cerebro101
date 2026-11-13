@@ -17,12 +17,15 @@ export default function Fichas() {
   const [url, setUrl] = useState("");
   const [marca, setMarca] = useState("");
   const [ref, setRef] = useState("");
+  const [ej, setEj] = useState(null);
 
   const cargar = async () => {
     try { setD(await pedirCerebro("licitaciones/fichas")); setError(null); }
     catch (e) { setError(e); setD((x) => (x === undefined ? null : x)); }
   };
   useEffect(() => { cargar(); }, []);
+  const verEjemplos = () => accion(async () => setEj(await pedirCerebro("licitaciones/fichas/ejemplos")));
+  const cargarEjemplos = () => accion(async () => { const r = await pedirCerebro("licitaciones/fichas/ejemplos/cargar", enviar({})); setAviso(`Ejemplos: ${r.cargadas} cargadas · ${r.repetidas} ya estaban · ${r.fallidas.length} fallidas · ${r.omitidas} no descargables`); setEj(await pedirCerebro("licitaciones/fichas/ejemplos")); });
   useEffect(() => {                                              // mientras haya una carga en curso, se refresca sola
     if (!d?.cargas?.some((c) => c.estado === "en_curso")) return undefined;
     const t = setInterval(cargar, 8000);
@@ -87,6 +90,17 @@ export default function Fichas() {
             <button className="boton si" disabled={trabajando || url.length < 8} onClick={porUrl}>Descargar</button>
           </div>
           <label className="boton no">Subir un PDF<input type="file" accept="application/pdf,.pdf" hidden disabled={trabajando} onChange={subir} /></label>
+        </section>
+        <section className="tarjeta">
+          <h2>3. Modelos de ejemplo del directorio de fabricantes</h2>
+          <p className="meta">Modelos con ficha oficial conocida. Solo se descargan los que son un PDF directo de un dominio autorizado; de los portales se abre la página y se sube el PDF a mano.</p>
+          {!ej && <button className="boton no" disabled={trabajando} onClick={verEjemplos}>Ver modelos de ejemplo</button>}
+          {ej && (<>
+            <ul>{ej.ejemplos.map((x, i) => (
+              <li key={i}><strong>{x.fabricante}</strong> {x.modelo} · {x.categoria} — <span className={x.accion === "descargar" ? "" : "aviso"}>{ej.acciones[x.accion]}</span>
+                {" "}<a href={x.url} target="_blank" rel="noopener noreferrer">abrir ficha o portal</a>{x.accion === "fuera" ? ` · dominio: ${x.dominio}` : ""}</li>))}</ul>
+            <button className="boton si" disabled={trabajando || !ej.ejemplos.some((x) => x.accion === "descargar")} onClick={cargarEjemplos}>Cargar los descargables ({ej.ejemplos.filter((x) => x.accion === "descargar").length})</button>
+          </>)}
         </section>
         {d.cargas?.length > 0 && (
           <section className="tarjeta">

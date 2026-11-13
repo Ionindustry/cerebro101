@@ -996,6 +996,21 @@ async def fichas_cargadas(usuario: Usuario = Depends(usuario_actual)):
     return {**await fichas_tecnicas.listar(), "listas": await fichas_tecnicas.listas(), "cargas": await fichas_tecnicas.cargas(), "dominios": cfg["hosts"]}
 
 
+@app.get("/licitaciones/fichas/ejemplos")
+async def fichas_de_ejemplo(usuario: Usuario = Depends(usuario_actual)):
+    """Modelos de ejemplo del directorio de fabricantes: cuáles se pueden descargar, cuáles piden autorizar el dominio y cuáles hay que subir a mano."""
+    _exige_licitaciones(usuario)
+    return {"ejemplos": fichas_tecnicas.ejemplos(), "acciones": fichas_tecnicas.ACCIONES_EJEMPLO}
+
+
+@app.post("/licitaciones/fichas/ejemplos/cargar")
+async def cargar_fichas_de_ejemplo(usuario: Usuario = Depends(usuario_actual)):
+    """Descarga los ejemplos que son PDF directo de un dominio autorizado (pocos, así que va en la misma petición)."""
+    _exige_licitaciones(usuario)
+    log.info("fichas: %s carga los modelos de ejemplo", usuario.id)
+    return await fichas_tecnicas.cargar_ejemplos(usuario.id)
+
+
 @app.get("/licitaciones/fichas/revisar/{importacion}")
 async def revisar_fichas_de_una_lista(importacion: int, usuario: Usuario = Depends(usuario_actual)):
     """Qué se descargaría de esa lista (sin descargar nada) y qué dominios quedan fuera de la lista autorizada."""
