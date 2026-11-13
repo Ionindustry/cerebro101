@@ -158,7 +158,7 @@ def json_a_csv(contenido: bytes, j: dict) -> bytes:
     """Una lista de objetos JSON a un CSV con las columnas que entiende el lector de tarifas (referencia, coste…). Lo que falta en un objeto queda vacío. Pura."""
     try:
         datos = json.loads(contenido.decode("utf-8-sig"))
-    except (UnicodeDecodeError, ValueError):
+    except (UnicodeDecodeError, ValueError, RecursionError):
         raise ErrorTarifaAuto("La respuesta del servicio no es un JSON válido") from None
     lista = _por_ruta(datos, j.get("lista", ""))
     if not isinstance(lista, list) or not lista:
@@ -167,9 +167,13 @@ def json_a_csv(contenido: bytes, j: dict) -> bytes:
     sal = io.StringIO()
     w = csv.writer(sal, delimiter=";")
     w.writerow(list(cols))
+    filas = 0
     for o in lista[:200_000]:
         if isinstance(o, dict):
             w.writerow([("" if o.get(origen) is None else str(o.get(origen)).replace("\n", " ")) for origen in cols.values()])
+            filas += 1
+    if not filas:
+        raise ErrorTarifaAuto("El JSON no trae ningún producto (la lista no tiene objetos)")
     return sal.getvalue().encode("utf-8")
 
 
@@ -213,6 +217,17 @@ def comparar(anteriores: list[dict] | None, nuevas: list[dict]) -> dict:
 
 
 # ---------------------------------------------------------------- descarga por servicio web
+def comprobar_contenido(datos: bytes, formato: str) -> None:
+    """Lo que baja de un servicio tiene que parecer de verdad una tarifa: no vacío, no una página web (un aviso de sesión caducada suele llegar con 200) y, si es Excel, un .xlsx real. Pura."""
+    if not datos or not datos.strip():
+        raise ErrorTarifaAuto("El servicio ha devuelto un fichero vacío")
+    cabeza = datos[:512].lstrip().lower()
+    if cabeza.startswith((b"<!doctype", b"<html", b"<?xml", b"<head", b"<body")):
+        raise ErrorTarifaAuto("El servicio ha devuelto una página web, no una tarifa (¿sesión caducada o clave rechazada?)")
+    if formato == "xlsx" and not datos.startswith(b"PK\x03\x04"):
+        raise ErrorTarifaAuto("El fichero no es un Excel (.xlsx) válido")
+
+
 async def descargar(p: dict, max_bytes: int, transporte=None, resolver=None) -> tuple[str, bytes]:
     """Baja el fichero de la dirección del proveedor: https, solo sus dominios (cada redirección se revalida), anti-SSRF con la comprobación de «web», tamaño máximo. Devuelve (nombre, bytes)."""
     url = p["url"]
@@ -232,28 +247,39 @@ async def descargar(p: dict, max_bytes: int, transporte=None, resolver=None) -> 
         u = urlparse(url)
         ip = ips[0]
         anclada = f"{esquema}://{f'[{ip}]' if ':' in ip else ip}:{puerto}{u.path or '/'}" + (f"?{u.query}" if u.query else "")
-        async with httpx.AsyncClient(timeout=120, follow_redirects=False, transport=transporte) as c:
-            async with c.stream("GET", anclada, headers={**cab, "Host": host}, extensions={"sni_hostname": host}) as r:
-                if r.status_code in (301, 302, 303, 307, 308) and r.headers.get("location"):
-                    url = urljoin(url, r.headers["location"])
-                    if urlparse(url).hostname != u.hostname:
-                        cab.pop(p["cabecera"], None)                                                          # la clave no viaja a otro dominio
-                    continue
-                if r.status_code != 200:
-                    raise ErrorTarifaAuto(f"El servicio responde con error {r.status_code}")
-                tipo = r.headers.get("content-type", "").split(";")[0].strip().lower()
-                if tipo and tipo not in TIPOS_WEB:
-                    raise ErrorTarifaAuto(f"El servicio ofrece «{tipo}», que no es una tarifa")
-                trozos, total = [], 0
-                async for t in r.aiter_bytes():
-                    total += len(t)
-                    if total > max_bytes:
+        try:
+            async with httpx.AsyncClient(timeout=120, follow_redirects=False, transport=transporte) as c:
+                async with c.stream("GET", anclada, headers={**cab, "Host": host}, extensions={"sni_hostname": host}) as r:
+                    if r.status_code in (301, 302, 303, 307, 308) and r.headers.get("location"):
+                        url = urljoin(url, r.headers["location"])
+                        if urlparse(url).scheme != "https":
+                            raise ErrorTarifaAuto("El servicio redirige a una dirección que no es https: no se sigue")
+                        if urlparse(url).hostname != u.hostname:
+                            cab.pop(p["cabecera"], None)                                                      # la clave no viaja a otro dominio
+                        continue
+                    if r.status_code != 200:
+                        raise ErrorTarifaAuto(f"El servicio responde con error {r.status_code}")
+                    tipo = r.headers.get("content-type", "").split(";")[0].strip().lower()
+                    if tipo and tipo not in TIPOS_WEB:
+                        raise ErrorTarifaAuto(f"El servicio ofrece «{tipo}», que no es una tarifa")
+                    declarado = r.headers.get("content-length", "")
+                    if declarado.isdigit() and int(declarado) > max_bytes:
                         raise ErrorTarifaAuto(f"La tarifa pasa de {max_bytes // 1_000_000} MB: no se descarga")
-                    trozos.append(t)
-                datos = b"".join(trozos)
-                break
+                    trozos, total = [], 0
+                    async for t in r.aiter_bytes():
+                        total += len(t)
+                        if total > max_bytes:
+                            raise ErrorTarifaAuto(f"La tarifa pasa de {max_bytes // 1_000_000} MB: no se descarga")
+                        trozos.append(t)
+                    datos = b"".join(trozos)
+                    break
+        except httpx.TimeoutException:
+            raise ErrorTarifaAuto("El servicio tarda demasiado en responder") from None
+        except httpx.HTTPError as e:                      # corte a medias (respuesta truncada), conexión rechazada, TLS…
+            raise ErrorTarifaAuto(f"No se ha podido leer la tarifa del servicio ({type(e).__name__})") from None
     else:
         raise ErrorTarifaAuto("Demasiadas redirecciones")
+    comprobar_contenido(datos, p["formato"])
     if p["formato"] == "json":
         datos = json_a_csv(datos, p["json"])
         return f"{p['id']}-{datetime.now(timezone.utc):%Y%m%d}.csv", datos
@@ -270,7 +296,7 @@ def ficheros_de_carpeta(base: str, pid: str, ahora: float | None = None) -> list
     cand = []
     for f in carpeta.iterdir():
         try:
-            if f.is_file() and not f.is_symlink() and f.suffix.lower() in EXTENSIONES and ahora - f.stat().st_mtime >= ANTIGUEDAD_MIN_S:
+            if f.is_file() and not f.is_symlink() and f.suffix.lower() in EXTENSIONES and f.stat().st_size > 0 and ahora - f.stat().st_mtime >= ANTIGUEDAD_MIN_S:
                 cand.append((f.stat().st_mtime, f))
         except OSError:
             continue

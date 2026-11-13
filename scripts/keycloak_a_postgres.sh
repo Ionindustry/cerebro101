@@ -21,7 +21,7 @@ URL="http://localhost:8080"
 
 [ -f "$ENV" ] || { echo "No encuentro el fichero .env en $(pwd): ejecuta el script desde la carpeta del proyecto." >&2; exit 1; }
 
-valor_env() { grep -E "^$1=" "$ENV" | tail -1 | cut -d= -f2- || true; }
+valor_env() { grep -E "^$1=" "$ENV" | tail -1 | cut -d= -f2- | tr -d '\r' || true; }     # tr: un .env guardado con saltos de línea de Windows no debe dejar un \r pegado al valor
 poner_env() {                       # poner_env CLAVE VALOR: cambia o añade la línea sin tocar el resto
   local tmp; tmp="$(mktemp)"
   grep -v -E "^$1=" "$ENV" > "$tmp" || true
@@ -36,7 +36,7 @@ sin_fichero() {                     # el COMPOSE_FILE de ahora sin el fichero de
 esperar() {                         # esperar SEGUNDOS: hasta que el realm responda
   local n=$(( $1 / 3 ))
   for _ in $(seq 1 "$n"); do
-    curl -fsS -o /dev/null "$URL/realms/cerebro" 2>/dev/null && return 0
+    curl -fsS --max-time 5 -o /dev/null "$URL/realms/cerebro" 2>/dev/null && return 0
     sleep 3
   done
   return 1
@@ -85,6 +85,7 @@ mkdir -p "$copia/h2" "$export_dir"
 echo "→ Copia de seguridad de los datos actuales en $copia/h2"
 docker cp "$ctr:$RUTA_H2/." "$copia/h2"
 [ -n "$(ls -A "$copia/h2")" ] || { echo "La copia está vacía: no sigo." >&2; volver; }
+chmod -R go-rwx "$copia/h2" 2>/dev/null || true             # la base vieja guarda contraseñas cifradas: que solo la lea quien ejecuta el script
 
 echo "→ Exportando el realm «cerebro» con sus usuarios"
 chmod 777 "$export_dir"

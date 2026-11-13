@@ -71,5 +71,36 @@ class TestScript(unittest.TestCase):
         self.assertIn("ya funciona en modo producción con PostgreSQL", self.t)
 
 
+class TestFuncionesDelScript(unittest.TestCase):
+    """Las funciones que tocan el .env se ejecutan de verdad en bash (sin Docker) contra un .env de prueba."""
+
+    def correr(self, env_texto: str, orden: str) -> str:
+        import tempfile
+        t = SCRIPT.read_text(encoding="utf-8")
+        ini, fin = t.index("valor_env()"), t.index("esperar()")
+        with tempfile.TemporaryDirectory() as d:
+            (Path(d) / ".env").write_bytes(env_texto.encode())
+            prog = f'cd "{d}"; ENV=.env; FICHERO="despliegue/docker-compose.keycloak-postgres.yml"\n{t[ini:fin]}\n{orden}'
+            r = subprocess.run(["bash", "-c", prog], capture_output=True, text=True)
+            self.assertEqual(r.returncode, 0, r.stderr)
+            return r.stdout
+
+    def test_un_env_con_saltos_de_windows_no_deja_barra_r_en_los_valores(self):
+        self.assertEqual(self.correr("A=uno\r\nCOMPOSE_FILE=docker-compose.yml\r\n", 'valor_env COMPOSE_FILE | od -c | head -2'), self.correr("A=uno\nCOMPOSE_FILE=docker-compose.yml\n", 'valor_env COMPOSE_FILE | od -c | head -2'))
+
+    def test_poner_env_cambia_o_anade_sin_tocar_el_resto(self):
+        out = self.correr("A=1\nB=2\n", 'poner_env B 3; poner_env C 4; cat .env')
+        self.assertEqual(out.split(), ["A=1", "B=3", "C=4"])
+
+    def test_con_fichero_y_sin_fichero(self):
+        f = "despliegue/docker-compose.keycloak-postgres.yml"
+        self.assertEqual(self.correr(f"COMPOSE_FILE=docker-compose.yml:{f}\n", f'con_fichero && echo si; sin_fichero').split(), ["si", "docker-compose.yml"])
+        self.assertEqual(self.correr("COMPOSE_FILE=docker-compose.yml\n", 'con_fichero && echo si || echo no').strip(), "no")
+        self.assertEqual(self.correr("A=1\n", 'valor_env COMPOSE_FILE; echo fin').strip(), "fin")
+
+    def test_la_copia_vieja_solo_la_lee_quien_ejecuta(self):
+        self.assertIn('chmod -R go-rwx "$copia/h2"', SCRIPT.read_text(encoding="utf-8"))
+
+
 if __name__ == "__main__":
     unittest.main()
