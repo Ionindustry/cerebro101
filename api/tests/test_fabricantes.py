@@ -112,7 +112,9 @@ class TestScript(unittest.TestCase):
 
     def test_el_fichero_de_configuracion_real_lo_entiende_el_script(self):
         t = (RAIZ / "config" / "fichas.yaml").read_text(encoding="utf-8")
-        self.assertEqual(S.hosts_actuales(t), [])                                          # de serie no hay ningún dominio autorizado
+        hosts = S.hosts_actuales(t)                                                        # los que Dirección haya autorizado
+        self.assertEqual(hosts, sorted(set(hosts)))
+        self.assertTrue(all("." in h and "/" not in h for h in hosts))
 
 
 if __name__ == "__main__":

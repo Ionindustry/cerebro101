@@ -65,7 +65,9 @@ class TestPuros(unittest.TestCase):
 
     def test_la_configuracion_por_defecto_no_autoriza_ningun_dominio(self):
         self.assertEqual(F.DEFECTO["hosts"], [])
-        self.assertEqual(F.configuracion()["hosts"], [])
+        hosts = F.configuracion()["hosts"]                          # los que Dirección haya autorizado en config/fichas.yaml
+        self.assertEqual(hosts, sorted(set(hosts)))
+        self.assertTrue(all("." in h and "/" not in h for h in hosts))
 
 
 @unittest.skipUnless(URL and hasattr(psycopg, "AsyncConnection"), "sin CEREBRO_TEST_PG")
