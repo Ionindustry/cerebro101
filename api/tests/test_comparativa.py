@@ -169,7 +169,7 @@ class TestFlujo(unittest.TestCase):
     def test_con_evidencia_y_modelo_se_guarda_la_comparativa_comprobada(self):
         visto = {}
 
-        async def modelo(agente, mensajes, esquema, max_tokens=None, timeout=None, preferido=None):
+        async def modelo(agente, mensajes, esquema, max_tokens=None, timeout=None, preferido=None, normalizar=None):
             visto["m"] = mensajes
             return {"estrategia": "Se puntúa por la memoria.", "requisitos": [{"requisito": "Visión nocturna 30 m", "candidatos": [
                 {"producto": "DS-2CD", "cumple": "si", "detalle": "30 m", "evidencia": ["P1"]}, {"producto": "X", "cumple": "si", "evidencia": ["P5"]}], "recomendado": "DS-2CD"}],
@@ -232,7 +232,7 @@ class TestFlujo(unittest.TestCase):
         self.assertIn("Visión nocturna: DS-2CD", t)
         enviado = {}
 
-        async def director(agente, mensajes, esquema, max_tokens=None, timeout=None, preferido=None):
+        async def director(agente, mensajes, esquema, max_tokens=None, timeout=None, preferido=None, normalizar=None):
             enviado["u"] = mensajes[1]["content"]
             return {"encargos": []}, "claude"
         with mock.patch.object(E.externos, "modelo_elegido", mock.AsyncMock(return_value="m")):

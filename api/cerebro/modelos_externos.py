@@ -40,6 +40,10 @@ class ErrorExterno(RuntimeError):
     """El proveedor no ha podido responder; el texto lo puede leer la persona."""
 
 
+class RespuestaCortada(RespuestaInvalida):
+    """El modelo se quedó sin espacio para terminar la respuesta (límite de tamaño): reintentar con más espacio puede bastar."""
+
+
 @lru_cache(maxsize=1)
 def _configuracion(dir_config: str) -> dict:
     with open(Path(dir_config) / "modelos_externos.yaml", encoding="utf-8") as fh:
@@ -210,7 +214,10 @@ async def _claude(cfg: dict, modelo_: str, sistema: str, mensajes: list[dict], e
             r = await c.post("/v1/messages", json=cuerpo, headers=cabeceras)
     if r.status_code != 200:
         raise _error_http("Claude", r)
-    for bloque in r.json().get("content", []):
+    cuerpo_r = r.json()
+    if cuerpo_r.get("stop_reason") == "max_tokens":
+        raise RespuestaCortada(f"Claude cortó la respuesta: el límite de tamaño ({cfg['max_tokens']} tokens) se quedó corto")
+    for bloque in cuerpo_r.get("content", []):
         if bloque.get("type") == "tool_use" and isinstance(bloque.get("input"), dict):
             return bloque["input"]
     raise RespuestaInvalida("Claude no devolvió la respuesta en el formato pedido")
@@ -225,8 +232,11 @@ async def _chatgpt(cfg: dict, modelo_: str, sistema: str, mensajes: list[dict], 
     if r.status_code != 200:
         raise _error_http("ChatGPT", r)
     try:
-        datos = json.loads(r.json()["choices"][0]["message"]["content"])
+        eleccion = r.json()["choices"][0]
+        datos = json.loads(eleccion["message"]["content"])
     except (KeyError, IndexError, ValueError) as e:
+        if (r.json().get("choices") or [{}])[0].get("finish_reason") == "length":
+            raise RespuestaCortada(f"ChatGPT cortó la respuesta: el límite de tamaño ({cfg['max_tokens']} tokens) se quedó corto") from e
         raise RespuestaInvalida("ChatGPT no devolvió JSON válido") from e
     if not isinstance(datos, dict):
         raise RespuestaInvalida("ChatGPT no devolvió un objeto JSON")
@@ -236,14 +246,16 @@ async def _chatgpt(cfg: dict, modelo_: str, sistema: str, mensajes: list[dict], 
 LLAMADAS = {"claude": _claude, "chatgpt": _chatgpt}
 
 
-async def _llamar(proveedor: str, mensajes: list[dict], esquema: dict, transporte=None, max_tokens: int | None = None, timeout: int | None = None) -> dict:
+async def _llamar(proveedor: str, mensajes: list[dict], esquema: dict, transporte=None, max_tokens: int | None = None, timeout: int | None = None, normalizar=None) -> dict:
     cfg = {**configuracion(), **({"max_tokens": max_tokens} if max_tokens else {}), **({"timeout_segundos": timeout} if timeout else {})}
     sistema = "\n\n".join(m["content"] for m in mensajes if m["role"] == "system")
     datos = await LLAMADAS[proveedor](cfg, await modelo_elegido(proveedor), sistema, [m for m in mensajes if m["role"] != "system"], esquema, transporte)
     datos = completar_tipo(datos, esquema)
+    if normalizar is not None:                 # quien llama puede aceptar otras formas razonables de la misma respuesta (p. ej. una sola sección «plana»)
+        datos = normalizar(datos)
     faltan = [k for k in esquema.get("required", []) if k not in datos]
     if faltan:
-        raise RespuestaInvalida(f"Faltan campos en la respuesta: {faltan}")
+        raise RespuestaInvalida(f"Faltan campos en la respuesta: {faltan} (llegaron: {sorted(str(k) for k in datos)[:8]})")
     return datos
 
 
@@ -293,7 +305,7 @@ def ordenar(candidatos: list[str], preferido: str | None) -> list[str]:
     return list(candidatos)
 
 
-async def consultar_publico(agente: str, mensajes: list[dict], esquema: dict, max_tokens: int = 6000, timeout: int = 240, transporte=None, preferido: str | None = None) -> tuple[dict, str]:
+async def consultar_publico(agente: str, mensajes: list[dict], esquema: dict, max_tokens: int = 6000, timeout: int = 240, transporte=None, preferido: str | None = None, normalizar=None) -> tuple[dict, str]:
     """Una consulta a Claude o ChatGPT sobre un documento PÚBLICO (un pliego de contratación): se envía tal cual, sin anonimizar y sin el límite de tamaño de las consultas de los agentes.
     Mantiene las demás reglas: solo si Dirección lo ha conectado, con su clave y dentro del tope diario; si un proveedor falla se prueba el siguiente. Devuelve (respuesta, proveedor).
     `preferido` («claude» o «chatgpt») va el primero si está conectado y con clave; si no puede responder, se pasa al otro. Sin preferencia, manda el orden de la configuración.
@@ -314,7 +326,16 @@ async def consultar_publico(agente: str, mensajes: list[dict], esquema: dict, ma
         try:
             with generacion(f"externo.{p}", await modelo_elegido(p), "[texto público de un pliego: no se registra]", tipo="generation", agente=agente) as obs:
                 inicio = time.monotonic()
-                datos = await _llamar(p, mensajes, esquema, transporte, max_tokens=max_tokens, timeout=timeout)
+                datos = None
+                for mt in dict.fromkeys((max_tokens, min(max_tokens * 2, 32000))):        # si el modelo se queda sin espacio, se repite UNA vez con el doble
+                    try:
+                        datos = await _llamar(p, mensajes, esquema, transporte, max_tokens=mt, timeout=timeout, normalizar=normalizar)
+                        break
+                    except RespuestaCortada as e:
+                        ultimo = str(e)
+                        log.warning("%s: %s", p, e)
+                if datos is None:
+                    raise RespuestaInvalida(ultimo)
                 anotar(obs, output="[respuesta recibida]", metadata={"segundos": round(time.monotonic() - inicio, 2)})
         except (ErrorExterno, RespuestaInvalida) as e:
             ultimo = str(e)

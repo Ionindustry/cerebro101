@@ -1135,7 +1135,9 @@ test("repetir un paso: qué botón sale en cada estado y cuándo pide confirmaci
   assert.deepEqual(b("memoria", "error"), { texto: "Reintentar", rehacer: false, confirmar: false });
   assert.deepEqual(b("solucion", "parcial"), { texto: "Completar lo que falta", rehacer: false, confirmar: false });
   assert.equal(b("costes", "pendiente").texto, "Hacer este paso");
-  assert.equal(b("administrativo", "omitido").texto, "Hacer este paso");
+  assert.deepEqual(b("memoria", "omitido"), { texto: "Rehacer este paso", rehacer: true, confirmar: true });       // «Nada que escribir» porque ya hay borradores: rehacerlos, con confirmación
+  assert.equal(b("administrativo", "omitido").texto, "Rehacer este paso");
+  assert.equal(b("precio", "omitido").texto, "Hacer este paso");                                                     // un informe no tiene borradores que rehacer
   assert.deepEqual(b("memoria", "hecho"), { texto: "Rehacer este paso", rehacer: true, confirmar: true });          // rehacer borradores pide confirmación
   assert.deepEqual(b("precio", "hecho"), { texto: "Repetir el informe", rehacer: false, confirmar: false });         // un informe no pisa nada
   assert.deepEqual(b("comparativa", "hecho"), { texto: "Repetir este paso", rehacer: false, confirmar: false });    // no hay borradores que pisar

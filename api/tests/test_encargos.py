@@ -125,7 +125,7 @@ class TestFlujo(unittest.TestCase):
         self.assertIn("OBJETIVO", d["costes-licitacion"]["contenido"])
 
     def test_con_modelo_el_encargo_sale_del_modelo_y_los_que_no_devuelve_caen_a_la_plantilla(self):
-        async def director(agente, mensajes, esquema, max_tokens=None, timeout=None, preferido=None):
+        async def director(agente, mensajes, esquema, max_tokens=None, timeout=None, preferido=None, normalizar=None):
             self.assertEqual(agente, "director-oferta")
             self.assertIn("««««", mensajes[1]["content"])
             return ({"encargos": [{"agente": "redactor-memoria", "objetivo": "Sacar los 30 puntos de la memoria con los requisitos [R1] y [R2]", "entregables": ["Una sección por criterio"]}],
@@ -145,7 +145,7 @@ class TestFlujo(unittest.TestCase):
 
     def test_con_la_ficha_real_el_director_redacta_con_el_modelo_y_no_cae_a_la_plantilla(self):
         """Regresión: la ficha de la herramienta trae `comprador` como texto; antes eso daba AttributeError y el paso caía a la plantilla («fallo interno»)."""
-        async def director(agente, mensajes, esquema, max_tokens=None, timeout=None, preferido=None):
+        async def director(agente, mensajes, esquema, max_tokens=None, timeout=None, preferido=None, normalizar=None):
             self.assertIn("Órgano de contratación: Ayuntamiento de Girona", mensajes[1]["content"])
             return {"encargos": [{"agente": "redactor-memoria", "objetivo": "Sacar los 30 puntos", "entregables": ["x"]}]}, "chatgpt"
 
@@ -163,7 +163,7 @@ class TestFlujo(unittest.TestCase):
         sel = [s for s in o["secciones"] if s["sobre"] == "tecnico"][:1]
         self.assertTrue(sel)
 
-        async def modelo(agente, mensajes, esquema, max_tokens=None, timeout=None, preferido=None):
+        async def modelo(agente, mensajes, esquema, max_tokens=None, timeout=None, preferido=None, normalizar=None):
             self.assertIn("Ayuntamiento de Girona", mensajes[1]["content"])
             return {"secciones": [{"clave": sel[0]["clave"], "contenido": "Texto de la memoria."}], "resumen": "ok"}, "claude"
 

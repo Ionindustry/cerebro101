@@ -1223,6 +1223,8 @@ export function botonDePaso(paso, ejec) {
   if (paso.estado === "en_curso") return null;
   if (paso.estado === "error") return { texto: "Reintentar", rehacer: false, confirmar: false };
   if (paso.estado === "parcial") return { texto: "Completar lo que falta", rehacer: false, confirmar: false };
+  const escribe = ["solucion", "memoria", "administrativo", "costes"].includes(paso.id);            // los pasos que escriben secciones del sobre
+  if (paso.estado === "omitido" && escribe) return { texto: "Rehacer este paso", rehacer: true, confirmar: true };   // «nada que escribir» = ya hay borradores: hay que rehacerlos (con confirmación)
   if (paso.estado === "pendiente" || paso.estado === "omitido") return { texto: "Hacer este paso", rehacer: false, confirmar: false };
   if (paso.id === "comparativa" || paso.id === "encargos") return { texto: "Repetir este paso", rehacer: false, confirmar: false };   // se vuelven a generar; no hay borradores de la oferta que pisar
   const informe = paso.id === "precio" || paso.id === "evaluacion";

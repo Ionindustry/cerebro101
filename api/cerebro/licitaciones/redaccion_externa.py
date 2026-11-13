@@ -293,6 +293,31 @@ def construir_mensajes(titulo: str, organismo: str, pliego: str, requisitos: str
     return [{"role": "system", "content": sistema}, {"role": "user", "content": usuario}]
 
 
+def normalizar_secciones(datos: dict, sel: list[dict]) -> dict:
+    """Acepta las formas razonables en que un modelo devuelve las secciones y las lleva a {«secciones»: [{clave, contenido, citas}]}: la lista de siempre, un diccionario por clave, o UNA sección «plana»
+    ({clave?, contenido, citas?}) cuando solo se pidió una. Lo que no entiende lo deja como está (y se rechazará por falta de campos). Pura."""
+    if isinstance(datos.get("secciones"), list):
+        return datos
+    claves = [s["clave"] for s in sel]
+    sec = datos.get("secciones")
+    if isinstance(sec, dict):
+        sec_por_clave = sec
+    elif any(k in claves for k in datos):
+        sec_por_clave = {k: datos[k] for k in claves if k in datos}
+    elif isinstance(datos.get("contenido"), str):
+        clave = datos.get("clave") if datos.get("clave") in claves else (claves[0] if len(claves) == 1 else None)
+        return {**datos, "secciones": [{"clave": clave, "contenido": datos["contenido"], "citas": datos.get("citas") or []}]} if clave else datos
+    else:
+        return datos
+    lista = []
+    for k, v in sec_por_clave.items():
+        if isinstance(v, str):
+            lista.append({"clave": k, "contenido": v})
+        elif isinstance(v, dict) and isinstance(v.get("contenido"), str):
+            lista.append({"clave": k, "contenido": v["contenido"], "citas": v.get("citas") or []})
+    return {**datos, "secciones": lista}
+
+
 # ---- Lo que se guarda ----
 
 async def aplicar(respuesta: dict, sel: list[dict], ids_validos: set[int], escribir) -> tuple[list[str], dict[str, str]]:
@@ -349,7 +374,8 @@ async def intentar(motor_id: str, defin: dict, sel: list[dict], titulo: str, fic
         mensajes = construir_mensajes(titulo, organismo_de(ficha), pliego, texto_reqs, criterios, texto_de_secciones(sel),
                                       texto_ya_escrito(todas, {s["clave"] for s in sel}), empresa, defin.get("contexto", ""), ficha)
         preferido = proveedor_preferido(defin["id"], modelo)
-        datos, proveedor = await (consulta or externos.consultar_publico)(AGENTE, mensajes, ESQUEMA, max_tokens=int(cfg["max_tokens"]), timeout=300, preferido=preferido)
+        datos, proveedor = await (consulta or externos.consultar_publico)(AGENTE, mensajes, ESQUEMA, max_tokens=int(cfg["max_tokens"]), timeout=300, preferido=preferido,
+                                                                     normalizar=lambda d: normalizar_secciones(d, sel))
         datos = anon.desanonimizar(datos, sesion) if sesion else datos
 
         async def escribir(sobre, clave, contenido, citas):
