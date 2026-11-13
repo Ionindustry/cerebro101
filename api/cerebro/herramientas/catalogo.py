@@ -123,14 +123,13 @@ async def tarifas_pendientes() -> dict:
 
 registrar(Herramienta(
     nombre="catalogo",
-    descripcion="Consulta el catálogo de productos de los proveedores ya cargados (solo lectura): busca un producto, compara lo que cuesta en cada proveedor (coste ya en euros, con logística y cambio), mira si tiene ficha técnica "
-                "y qué tarifas nuevas están pendientes de revisar. Las cifras las calcula el sistema: no las recalcules ni inventes otras. CONFIDENCIAL: son tarifas de proveedor.",
+    descripcion="Catálogo de productos de proveedores ya cargados (solo lectura): buscar, comparar costes por proveedor, fichas técnicas y tarifas nuevas pendientes. Las cifras las calcula el sistema: no las recalcules. Confidencial.",
     operaciones={"buscar": buscar, "proveedores_de": proveedores_de, "ficha": ficha, "fichas_pendientes": fichas_pendientes, "tarifas_pendientes": tarifas_pendientes},
-    ayuda={"buscar": "artículos cuyo código, referencia, descripción, marca o familia contienen TODAS las palabras de «consulta» (o de una marca o familia): con su mejor coste en euros, proveedor, stock y si trae enlace de ficha",
-           "proveedores_de": "todos los proveedores de un artículo (por «codigo» o por «referencia») ordenados por coste en euros, con moneda, canal, stock y avisos",
-           "ficha": "las fichas técnicas ya cargadas de una referencia (y marca): estado y de dónde vienen",
-           "fichas_pendientes": "cuántos artículos de las tarifas traen enlace a ficha y cuántas fichas se podrían cargar, y qué dominios quedan sin autorizar",
-           "tarifas_pendientes": "tarifas nuevas de proveedores pendientes de revisar por Dirección (con sus cambios) y proveedores cuya comprobación ha fallado"},
-    ejemplos={"buscar": {"consulta": "MS-C8573", "marca": "Milesight"}, "proveedores_de": {"referencia": "MS-C8573"}, "ficha": {"referencia": "MS-C8573"}},
+    ayuda={"buscar": "artículos con TODAS las palabras de «consulta» (o de una marca/familia): mejor coste en euros, proveedor y stock",
+           "proveedores_de": "lo que ofrece cada proveedor de un artículo («codigo» o «referencia»), por coste en euros",
+           "ficha": "fichas técnicas ya cargadas de una referencia",
+           "fichas_pendientes": "cuántas fichas se podrían cargar y qué dominios faltan por autorizar",
+           "tarifas_pendientes": "tarifas nuevas por revisar por Dirección y proveedores con fallo"},
+    ejemplos={"buscar": {"consulta": "MS-C8573"}},
     confidencial=True,
 ))

@@ -1,6 +1,7 @@
 # Fichas técnicas de producto (api/cerebro/licitaciones/fichas.py).
 # Solo se descargan fichas de los dominios de esta lista (https; también sus subdominios). Está VACÍA a propósito: añade aquí los dominios OFICIALES de cada fabricante
-# (por ejemplo «milesight.com»). Lo que no esté en la lista no se descarga nunca: el informe de la carga te dice qué dominios han quedado fuera para que decidas.
+# (por ejemplo «milesight.com»). Lo que no esté en la lista no se descarga nunca: el informe de la carga te dice qué dominios han quedado fuera, con lo que dice el directorio de fabricantes
+# (config/fabricantes_seguridad.csv), para que decidas. Se edita con  python3 scripts/fichas_autorizar.py <dominio>  (te dice si el dominio está comprobado; los no comprobados piden --forzar).
 hosts: []
 max_mb: 30          # tamaño máximo de una ficha
 max_diarias: 200    # descargas por día (todas las cargas juntas)

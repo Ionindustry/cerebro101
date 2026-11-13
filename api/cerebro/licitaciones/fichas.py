@@ -20,7 +20,7 @@ from psycopg.rows import dict_row
 
 from ..ajustes import ajustes
 from ..herramientas import conocimiento
-from . import pliegos
+from . import fabricantes, pliegos
 
 log = logging.getLogger("cerebro.fichas")
 RAIZ = Path(__import__("os").environ.get("FICHAS_DIR", "/datos/licitaciones/fichas"))
@@ -83,6 +83,15 @@ def candidatas(lineas: list[dict], hosts: list[str]) -> dict:
 
 def texto_de(res: dict) -> str:
     return "\n\n".join(p["texto"] for p in res.get("paginas", []) if (p.get("texto") or "").strip())[:MAX_TEXTO]
+
+
+def sugerencias_de(fuera: dict, maximo: int = 30) -> list[dict]:
+    """Los dominios sin autorizar con lo que dice el directorio de fabricantes. «www.2n.com» y «2n.com» son el mismo dominio a efectos de autorizar (autorizar 2n.com cubre sus subdominios). Pura."""
+    juntos: dict[str, int] = {}
+    for host, n in fuera.items():
+        d = fabricantes.dominio_de(host) or host
+        juntos[d] = juntos.get(d, 0) + n
+    return [fabricantes.sugerencia(d, n) for d, n in sorted(juntos.items(), key=lambda x: -x[1])[:maximo]]
 
 
 # ---------------------------------------------------------------- una ficha
@@ -183,7 +192,8 @@ async def revisar_lista(importacion: int, cfg: dict | None = None, lineas: list[
     """Qué se descargaría de una lista, sin descargar nada: cuántas fichas, de qué dominios autorizados y cuáles quedan fuera (para que se decida si se autorizan)."""
     cfg = cfg or configuracion()
     c = candidatas(lineas if lineas is not None else await _lineas(importacion), cfg["hosts"])
-    return {"fichas": len(c["permitidas"]), "dominios_fuera": c["fuera"], "lineas_sin_enlace": c["sin_enlace"], "dominios_autorizados": cfg["hosts"]}
+    return {"fichas": len(c["permitidas"]), "dominios_fuera": c["fuera"], "lineas_sin_enlace": c["sin_enlace"], "dominios_autorizados": cfg["hosts"],
+            "sugerencias": sugerencias_de(c["fuera"])}
 
 
 async def cargar_lista(importacion: int, por: str, cfg: dict | None = None, lineas: list[dict] | None = None, descargar=None, **kw) -> dict:
@@ -209,6 +219,7 @@ async def cargar_lista(importacion: int, por: str, cfg: dict | None = None, line
         else:
             inf["fallidas"].append({"url": cand["url"][:200], "motivo": r["motivo"][:200]})
     inf["fallidas"] = inf["fallidas"][:30]
+    inf["sugerencias"] = sugerencias_de(c["fuera"])
     return inf
 
 

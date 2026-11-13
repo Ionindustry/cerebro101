@@ -57,10 +57,10 @@ class TestConfig(unittest.TestCase):
         with tempfile.TemporaryDirectory() as d:
             ruta = Path(d) / "tarifas.env"
             ruta.write_text("# c\nDIST_X='abc123'\nOTRA=zzz\n", encoding="utf-8")
-            with mock.patch.object(T, "RUTA_SECRETOS", str(ruta)):
+            with mock.patch.object(T, "RUTA_TARIFAS_ENV", str(ruta)):
                 self.assertEqual(T.secreto("DIST_X"), "abc123")
                 self.assertEqual(T.secreto("NO_EXISTE"), "")
-            with mock.patch.object(T, "RUTA_SECRETOS", str(Path(d) / "no.env")):
+            with mock.patch.object(T, "RUTA_TARIFAS_ENV", str(Path(d) / "no.env")):
                 self.assertEqual(T.secreto("DIST_X"), "")
 
 
@@ -132,7 +132,7 @@ class TestDescarga(unittest.TestCase):
         with tempfile.TemporaryDirectory() as d:
             ruta = Path(d) / "t.env"
             ruta.write_text("DIST_X=secreto-de-prueba\n", encoding="utf-8")
-            with mock.patch.object(T, "RUTA_SECRETOS", str(ruta)):
+            with mock.patch.object(T, "RUTA_TARIFAS_ENV", str(ruta)):
                 return ejecutar(T.descargar(p, kw.get("max_bytes", 1_000_000), httpx.MockTransport(handler), resolver))
 
     def test_baja_el_fichero_con_la_clave_en_la_cabecera_sin_mostrarla_en_ningun_lado(self):
@@ -161,7 +161,7 @@ class TestDescarga(unittest.TestCase):
     def test_sin_la_clave_en_secretos_no_se_pide(self):
         async def resolver(url):
             return ("https", "api.dist-x.com", 443, ["93.184.216.34"])
-        with mock.patch.object(T, "RUTA_SECRETOS", "/no/existe"):
+        with mock.patch.object(T, "RUTA_TARIFAS_ENV", "/no/existe"):
             with self.assertRaisesRegex(T.ErrorTarifaAuto, "Falta la clave"):
                 ejecutar(T.descargar(PROV_URL, 1000, httpx.MockTransport(lambda r: httpx.Response(200)), resolver))
 

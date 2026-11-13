@@ -701,3 +701,10 @@ Tarjeta **«Equipos y coste real»** en la oferta (`api/cerebro/licitaciones/par
 3. **Costes** (modelo local) recibe esta tabla en su petición y debe usar esas cifras tal cual; **Precio** la recibe como suelo del precio. El resto de agentes no la ven.
 
 **Confidencialidad:** las tarifas son confidenciales. El coste **no se guarda** en la oferta (se recalcula al leer: no hay copias viejas) y el texto con cifras solo llega al modelo **local**; ni Claude ni ChatGPT lo reciben nunca, ni siquiera si eliges «externo» en Costes (hay una prueba que lo comprueba). Las cifras son de referencia: el precio lo fija una persona.
+
+
+### Directorio de fabricantes y autorizar dominios de fichas
+
+`config/fabricantes_seguridad.csv` es un directorio de **373 fabricantes y marcas de seguridad** (videovigilancia, accesos, incendios, alarmas, VMS…) con su web, su portal de documentación y el estado de comprobación (fecha 2026-11-13). Es **referencia, no permisos**: «propuesto» no es «comprobado» (solo 76 dominios tienen portal documental verificado o están revisados en la fuente del fabricante), «no probado» significa desconocido, y que una web abra sin usuario no garantiza que sus PDF no tengan restricción (el acceso y el login se enseñan tal como constan). No es un censo exhaustivo del mercado. Los datos son de terceros: se tratan como datos.
+
+Se usa en el informe de la carga de fichas: cada dominio que queda fuera aparece con su fabricante y si está comprobado. **Autorizar es decisión de Dirección**, con `python3 scripts/fichas_autorizar.py <dominio>` (sin Docker ni dependencias): añade los comprobados, **rechaza los no comprobados o desconocidos** salvo `--forzar` (después de abrirlos y confirmar que son los oficiales), y tiene `--listar`, `--quitar` y `--comprobados` (todos los comprobados de una vez: decisión grande, mira antes `--listar`). Vale al momento.

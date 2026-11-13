@@ -47,7 +47,7 @@ EXTENSIONES = (".xlsx", ".csv")
 ORIGENES = ("carpeta", "url")
 FORMATOS = ("csv", "xlsx", "json")
 COLUMNAS_JSON = ("referencia", "descripcion", "coste", "marca", "familia", "stock", "ean", "estado", "pvp")
-RUTA_SECRETOS = "/run/secretos/tarifas.env"
+RUTA_TARIFAS_ENV = "/run/secretos/tarifas.env"
 ANTIGUEDAD_MIN_S = 60                         # un fichero que se está copiando todavía no se toca
 UMBRAL_RETIRADOS = Decimal("0.33")
 UMBRAL_VARIACION = Decimal("40")
@@ -129,7 +129,7 @@ def secreto(nombre: str) -> str:
     """La clave de un servicio web: de `secretos/tarifas.env` (se relee si cambia). Nunca de la configuración."""
     if not nombre:
         return ""
-    ruta = Path(RUTA_SECRETOS)
+    ruta = Path(RUTA_TARIFAS_ENV)
     try:
         mtime = ruta.stat().st_mtime_ns
     except OSError:

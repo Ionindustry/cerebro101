@@ -31,6 +31,17 @@ def limpio(_datos):
     return f
 
 
+class TestSugerencias(unittest.TestCase):
+    def test_los_dominios_fuera_vienen_con_lo_que_se_sabe_del_fabricante(self):
+        lineas = [{"ref": "A", "enlaces": {"d": "https://www.2n.com/a.pdf"}}, {"ref": "B", "enlaces": {"d": "https://www.milesight.com/b.pdf"}}, {"ref": "C", "enlaces": {"d": "https://rarisimo.example/c.pdf"}}]
+        r = asyncio.run(F.revisar_lista(0, CFG | {"hosts": []}, lineas))
+        por = {s["dominio"]: s for s in r["sugerencias"]}
+        self.assertTrue(por["2n.com"]["comprobado"])
+        self.assertFalse(por["milesight.com"]["comprobado"])
+        self.assertFalse(por["rarisimo.example"]["conocido"])
+        self.assertEqual(r["fichas"], 0)                                                   # nada se descarga: solo se sugiere
+
+
 class TestPuros(unittest.TestCase):
     def test_candidatas_separa_autorizadas_de_fuera_y_no_repite(self):
         lineas = [{"ref": "A1", "marca": "Milesight", "enlaces": {"datasheet": "https://www.milesight.com/a.pdf", "web": "https://otra.com/x.pdf"}},
