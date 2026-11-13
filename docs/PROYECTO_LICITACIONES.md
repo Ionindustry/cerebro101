@@ -708,3 +708,9 @@ Tarjeta **«Equipos y coste real»** en la oferta (`api/cerebro/licitaciones/par
 `config/fabricantes_seguridad.csv` es un directorio de **373 fabricantes y marcas de seguridad** (videovigilancia, accesos, incendios, alarmas, VMS…) con su web, su portal de documentación y el estado de comprobación (fecha 2026-11-13). Es **referencia, no permisos**: «propuesto» no es «comprobado» (solo 76 dominios tienen portal documental verificado o están revisados en la fuente del fabricante), «no probado» significa desconocido, y que una web abra sin usuario no garantiza que sus PDF no tengan restricción (el acceso y el login se enseñan tal como constan). No es un censo exhaustivo del mercado. Los datos son de terceros: se tratan como datos.
 
 Se usa en el informe de la carga de fichas: cada dominio que queda fuera aparece con su fabricante y si está comprobado. **Autorizar es decisión de Dirección**, con `python3 scripts/fichas_autorizar.py <dominio>` (sin Docker ni dependencias): añade los comprobados, **rechaza los no comprobados o desconocidos** salvo `--forzar` (después de abrirlos y confirmar que son los oficiales), y tiene `--listar`, `--quitar` y `--comprobados` (todos los comprobados de una vez: decisión grande, mira antes `--listar`). Vale al momento.
+
+
+## Guía por familia de producto y modelos de ejemplo
+
+`config/familias_equivalencia.csv` dice qué datos suelen decidir en cada familia (vídeo, intrusión, control de accesos, incendio, intercomunicación, redes PoE, VMS). La tabla de equivalencias detecta la familia por palabras del pliego y se la pasa al modelo como GUÍA: sirve para fijarse en parámetros que el pliego ya pide y para saber qué ficha falta, no añade requisitos y no decide nada (el veredicto lo fija el código con los números de las fichas).
+`config/fichas_semillas.csv` son 28 modelos de ejemplo con su ficha oficial, como referencia de dónde buscar; no son fichas cargadas ni autorizan dominios.

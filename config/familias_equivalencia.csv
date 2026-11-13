@@ -1,0 +1,61 @@
+familia,campo,descripcion
+comun,fabricante_origen,Marca origen
+comun,modelo_origen,Modelo preciso y variante
+comun,fabricante_alternativo,Marca candidata
+comun,modelo_alternativo,Modelo candidato preciso
+comun,familia,Clase homogénea de producto
+comun,ambito_geografico,País / región de comercialización
+comun,fecha,Fecha de cotejo
+comun,estado,PENDIENTE / INCOMPATIBLE / PARCIAL / CANDIDATO / VALIDADO
+comun,criterios_bloqueantes,Restricciones legales/eléctricas/protocolos
+comun,specs_confirmadas,Campos extraídos de documentos por modelo
+comun,diferencias,"Ausencias, mejoras y compromisos"
+comun,url_ficha_origen,Ficha oficial exacta
+comun,url_ficha_alternativa,Ficha oficial exacta
+comun,version_doc_origen,Fecha o revisión
+comun,version_doc_alternativa,Fecha o revisión
+comun,nivel_confianza,"Alta/media/baja, sustentada en evidencias"
+comun,revisor,Persona que valida antes de prescribir
+cctv,resolucion_mp,"MP efectiva, no interpolada"
+cctv,sensor_pulgadas,Tipo y tamaño de sensor
+cctv,focal_y_angulo,"Focal, zoom, H/FOV"
+cctv,iluminacion_lux,Condiciones de medida
+cctv,alcance_ir_m,Rango nominal y condiciones
+cctv,wdr_db,WDR real
+cctv,codec,"H.264, H.265, etc."
+cctv,onvif_perfiles,S/G/T/M u otros
+cctv,alimentacion_y_consumo,"PoE estándar, W y alternativa"
+cctv,ip_ik,Protección IP/IK
+cctv,analiticas,Funciones y licencias
+intrusion,grado_en50131,Grado del sistema y componentes
+intrusion,zonas,Cableadas/inalámbricas
+intrusion,radio_frecuencia_y_protocolo,Frecuencia y radio; compatibilidad por familia
+intrusion,en50136_transmision,ATS/SP/DP y homologación
+intrusion,baterias_autonomia,Tipo y autonomía
+control_acceso,tecnologia_credencial,MIFARE DESFire/Seos/NFC/BLE/etc.
+control_acceso,interfaz_lector,"OSDP (secure channel), Wiegand, otras"
+control_acceso,capacidad_puertas,Puertas/lectores por controladora
+control_acceso,integracion,API y certificaciones
+control_acceso,anti_passback,Modos y limitaciones
+control_acceso,grado_ip_ik,IP/IK
+incendio,norma_en54,Partes pertinentes y certificado
+incendio,protocolo_lazo,Propietario / compatible y fabricante
+incendio,cantidad_lazos,Lazos y dispositivos por lazo
+incendio,notificacion_y_energia,Salidas supervisadas y potencia
+incendio,instalacion_certificada,Compatibilidad de sistema y país
+intercom,sip,Versión y codecs
+intercom,onvif,Perfil / versión
+intercom,poe,802.3af/at y consumo
+intercom,salida_rele,Canales y ratings
+intercom,n_unidades,"Unidades, extensiones, licencias"
+redes_poe,puertos_y_velocidad,"Conteo de puertos, 10/100/1000/10G"
+redes_poe,presupuesto_poe,Total W y máximo/puerto
+redes_poe,temperatura,Rango ambiental
+redes_poe,proteccion,Surge / industrial / IP
+redes_poe,funciones_l2_l3,"VLAN, QoS, RSTP, multicast"
+vms,modelo_licenciamiento,"Por cámara, servidor, SaaS, etc."
+vms,version_especifica,Versión mayor y fecha
+vms,limite_canales,Licencias y canales
+vms,compatibilidad_dispositivos,Lista verificada de dispositivos
+vms,api_sdk,API y protocolo
+vms,sistemas_operativos,SO y requisitos del servidor

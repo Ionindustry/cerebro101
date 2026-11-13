@@ -1,0 +1,29 @@
+fabricante,modelo_o_familia,categoria,url_fuente,evidencia,estado_acceso
+Axis Communications,AXIS P3265-LVE-3 License Plate Verifier Kit,Cámara / LPR,https://www.axis.com/dam/public/f0/dd/fb/datasheet-axis-p3265-lve-3-license-plate-verifier-kit-en-US-398168.pdf,PDF de ficha técnica oficial,PUBLICO_PDF
+Paxton,Net2 Plus (TDS-1038),Controladora de acceso,https://www.paxton-access.com/install-paxton/resources/datasheets/,Referencia incluida en índice de fichas,PUBLICO_INDICE
+Suprema,BioEntry P2 (BEP2-OD / BEP2-OA),Lector biométrico,https://docs.supremainc.com/en/dochub/,Documentación por modelo en DocHub,PUBLICO_INDICE
+2N,2N IP Verso 2.0,Videoportero IP,https://www.2n.com/es-ES/download-center/,Hoja de datos en español mencionada en portal,PUBLICO_INDICE
+Hanwha Vision,XNV-A9085RZ,Cámara,https://supportportal.hanwhavision.com/in/download,Ficha visible en listado de descargas,PUBLICO_INDICE
+Dahua Technology,Cámaras IP (modelo a especificar),Cámara,https://www.dahuasecurity.com/download-center/product-resources,Buscador por referencia y tipo de documento,PUBLICO_INDICE
+Kentec Electronics,Taktis UL S793 / DS298,Módulo de notificación incendio,https://kentec.co.uk/resources/product-resources/,Ficha incluida en portal de productos,PUBLICO_INDICE
+Satel,INTEGRA 256 Plus,Central de intrusión,https://www.satel.eu/en/installer,Manuales por versión y fecha en sitio oficial,PUBLICO_INDICE
+AETEK,C60-244-30-370X,Switch PoE,https://www.aetektec.com/Document/Index/New-Product,Ficha de modelo listada; ciertos recursos pueden requerir permiso,MIXTO
+Vivotek,FE9391-EHV-V2,Cámara ojo de pez,https://www.vivotek.com/en-US/resource/download-center/product,Especificaciones por modelo e idioma listadas,PUBLICO_INDICE
+Uniview,OEC-W2D-M,Lector / control acceso,https://global.uniview.com/us/Support/Download_Center/Product_Resource/Access_Control/,Referencia listada en catálogo; descarga específica sin probar,MIXTO
+Advanced,MxPro 5,Central de incendios,https://www.advancedco.com/advanced-fire-protection-products/datasheets/,Familia de producto disponible en índice de fichas,PUBLICO_INDICE
+Fike,CIE-A-400,Central de incendios,https://www.fike.com/product-documents/cie-a-400-fire-alarm-system/,"Fichas, manuales y certificados por modelo",PUBLICO_INDICE
+Fermax,Catálogo general 2025/2026,Videoporteros,https://fermax.com/spain/documentacion,Catálogo técnico y tablas de versiones/equivalencias,PUBLICO_INDICE
+Genetec,Security Center 5.14,VMS / control de acceso,https://techdocs.genetec.com/r/en-US/Security-Center-Administrator-Guide-5.14,Guía de administración pública; instalador desde portal con login,MIXTO
+Milestone Systems,XProtect 2026 R2,VMS,https://doc.milestonesys.com/en/xprotect/,Documentación por edición y versión,PUBLICO_INDICE
+HID,Biblioteca de documentos HID,Control de acceso / identidad,https://www.hidglobal.com/documents,Biblioteca incluye fichas y tablas comparativas,PUBLICO_INDICE
+DSC / Johnson Controls,Biblioteca técnica DSC,Intrusión,https://www.dsc.com/index.php?n=library,Manuales y fichas; algunos recursos restringidos,MIXTO
+Paradox,Esprit / Digiplex,Intrusión,https://www.paradox.com/Products/CAT_ARCHIVES/Esprit.asp?CATID=17&SUBCATID=99,Varias guías requieren login,MIXTO
+Kisi,Kisi API / Controllers,Control de accesos,https://api.getkisi.com/docs,Especificación API oficial visible; operaciones requieren autenticación,MIXTO
+SimonsVoss,System 3060,Cierre electrónico,https://www.simons-voss.com/en/documents.html,Índice por sistema y clase de documento,PUBLICO_INDICE
+SALTO Systems,NCoder,Codificador de credenciales,https://saltosystems.com/sites/default/files/downloads/products/NCoder_Datasheet_en.pdf,Ficha técnica oficial en PDF,PUBLICO_PDF
+Inim Electronics,SmartLiving,Central de intrusión,https://www.inim.biz/en/files/smartliving-data-sheet-pdf,El fabricante indica que el PDF requiere login o registro,LOGIN_REQUERIDO_PDF
+Optex,AP2-20N,Detector cortina interior,https://www.optex-europe.com/es/soporte/descargas,Ficha y manual listados en portal oficial,PUBLICO_INDICE
+Apollo Fire Detectors,XP95,Detectores incendio direccionables,https://apollo-fire.co.uk/products/,Familia e indicación oficial de fichas en páginas de producto,PUBLICO_INDICE
+Det-Tronics,X3301,Detector de llama IR,https://www.det-tronics.com/resources/specification-sheets/,Especificación localizada en índice oficial,PUBLICO_INDICE
+Nittan,NFU-7000,Central de incendio,https://www.nittan.com/english/downloads/,Familia y manuales/certificados indexados por modelo,PUBLICO_INDICE
+Siemens Smart Infrastructure,Cerberus PRO,Central de incendio,https://sid.siemens.com/v/u/A6V13562767,Archivo oficial con acceso declarado Internet,PUBLICO_INDICE

@@ -18,6 +18,7 @@ import re
 from .. import anonimizacion as anon
 from .. import modelos_externos as externos
 from . import comparativa as C
+from . import familias as F
 from . import ofertas as O
 from . import pliegos
 from . import redaccion_externa as X
@@ -125,7 +126,7 @@ ESQUEMA = {
 }
 
 
-def construir_mensajes(titulo: str, organismo: str, pliego: str, requisitos: str, evidencias: str) -> list[dict]:
+def construir_mensajes(titulo: str, organismo: str, pliego: str, requisitos: str, evidencias: str, guia: str = "") -> list[dict]:
     sistema = (
         "Eres un ingeniero de preventa de 101.cat que prepara una licitación pública. Tu tarea: de los requisitos técnicos del pliego, sacar los parámetros MEDIBLES y, para cada uno, decir qué productos de 101.cat "
         "lo IGUALAN o SUPERAN, según la EVIDENCIA que se te da. Respondes en español.\n"
@@ -143,7 +144,8 @@ def construir_mensajes(titulo: str, organismo: str, pliego: str, requisitos: str
         f"Licitación: {C._corto(titulo, 200)}\nÓrgano de contratación: {C._corto(organismo, 120) or 'no indicado'}\n\n"
         f"Requisitos técnicos confirmados del pliego:\n{requisitos}\n\n"
         f"EVIDENCIA de producto de 101.cat (lo único en que puedes apoyarte):\n{evidencias}\n\n"
-        f"Texto de los pliegos (cada página lleva su marca [Documento N · página P]):\n««««\n{pliego}\n»»»»\n"
+        + (f"{guia}\n\n" if guia else "")
+        + f"Texto de los pliegos (cada página lleva su marca [Documento N · página P]):\n««««\n{pliego}\n»»»»\n"
     )
     return [{"role": "system", "content": sistema}, {"role": "user", "content": usuario}]
 
@@ -315,7 +317,7 @@ async def preparar(motor_id: str, titulo: str, ficha: dict, modelo: str = "auto"
         if motivos:
             return {"estado": "omitida", "resumen": "Sin tabla de equivalencias: los datos de producto no se pueden anonimizar con garantías, así que no salen a la nube (" + "; ".join(motivos)[:150] + ")."}
         pliego, avisos = X.texto_de_pliegos(docs, int(X.configuracion()["max_caracteres_pliego"]))
-        mensajes = construir_mensajes(titulo, X.organismo_de(ficha), pliego, texto_reqs, limpios[0]["content"])
+        mensajes = construir_mensajes(titulo, X.organismo_de(ficha), pliego, texto_reqs, limpios[0]["content"], F.guia(texto_reqs + "\n" + pliego))
         preferido = X.proveedor_preferido("equivalencia", modelo)
         datos, proveedor = await (consulta or externos.consultar_publico)(AGENTE, mensajes, ESQUEMA, max_tokens=int(X.configuracion()["max_tokens"]), timeout=300, preferido=preferido)
         datos = anon.desanonimizar(datos, sesion) if sesion else datos
