@@ -202,5 +202,31 @@ class TestRechazos(unittest.TestCase):
         self.assertTrue(any("más de una vez" in a for a in t.avisos))
 
 
+class TestEnlaces(unittest.TestCase):
+    """Las columnas de enlaces (ficha técnica, catálogo, página del producto) se guardan; las de imágenes, no."""
+    CAB = ["Model", "Name", "EXW", "Datasheet", "Product Image URL", "Picture", "Link", "Web page", "Notas"]
+
+    def test_se_guardan_los_enlaces_de_ficha_y_pagina_y_no_las_imagenes_ni_lo_que_no_es_url(self):
+        fila = ["DS-2CD", "Cam", "10", "https://x.com/ds.pdf", "https://x.com/img.jpg", "https://x.com/p.png", "https://x.com/producto/ds", "no es url", "hola"]
+        self.assertEqual(T._enlaces(fila, self.CAB), {"Datasheet": "https://x.com/ds.pdf", "Link": "https://x.com/producto/ds"})
+
+    def test_solo_http_y_https_y_con_limite(self):
+        cab = ["Datasheet", "Link", "URL", "Catalog", "Manual", "Brochure", "PDF"]
+        fila = ["ftp://x.com/a.pdf", "javascript:alert(1)", "https://x.com/1", "https://x.com/2", "https://x.com/3", "https://x.com/4", "https://x.com/5"]
+        r = T._enlaces(fila, cab)
+        self.assertNotIn("Datasheet", r)
+        self.assertNotIn("Link", r)
+        self.assertEqual(len(r), T.MAX_ENLACES)
+        self.assertEqual(T._enlaces(["https://" + "x" * 600], ["Datasheet"]), {})                  # una URL absurdamente larga no vale
+
+    def test_llega_al_producto_y_a_la_linea_de_la_importacion(self):
+        csv_ = ("Model,Name,Price,Datasheet,Image\nDS-2CD,Cámara domo,12.50,https://www.example.com/ds/2cd.pdf,https://img.example.com/a.jpg\nNVR-8,Grabador,30,,https://img.example.com/b.jpg\n").encode("utf-8")
+        t = T.leer(csv_, "products.csv", moneda="EUR")
+        por_ref = {p.referencia: p for p in t.productos}
+        self.assertEqual(por_ref["DS-2CD"].enlaces, {"Datasheet": "https://www.example.com/ds/2cd.pdf"})
+        self.assertEqual(por_ref["NVR-8"].enlaces, {})
+        self.assertNotIn("Image", por_ref["DS-2CD"].especificaciones)                               # y la imagen tampoco es una característica
+
+
 if __name__ == "__main__":
     unittest.main()
