@@ -117,5 +117,45 @@ class TestScript(unittest.TestCase):
         self.assertTrue(all("." in h and "/" not in h for h in hosts))
 
 
+class TestRankingFabricantes(unittest.TestCase):
+    FILAS = (
+        {"sector": "Vídeo", "posicion": 1, "fabricante": "A", "web": "https://www.a.com", "dominio": "a.com", "ventas_musd": None, "otros_ingresos": "", "empleados": "", "nota": "", "fuentes": [], "sin_validar": True},
+        {"sector": "Vídeo", "posicion": 2, "fabricante": "B", "web": "https://b.com", "dominio": "b.com", "ventas_musd": 50.0, "otros_ingresos": "", "empleados": "", "nota": "", "fuentes": [], "sin_validar": False},
+        {"sector": "Vídeo", "posicion": 3, "fabricante": "C", "web": "https://c.com", "dominio": "c.com", "ventas_musd": 500.0, "otros_ingresos": "", "empleados": "", "nota": "", "fuentes": [], "sin_validar": False},
+        {"sector": "Acceso", "posicion": 1, "fabricante": "D", "web": "https://d.com", "dominio": "d.com", "ventas_musd": 1.0, "otros_ingresos": "", "empleados": "", "nota": "", "fuentes": [], "sin_validar": False},
+    )
+    DIR = ({"fabricante": "B", "marcas": "", "especialidad": "", "dominios": ["b.com"], "comprobado": True, "estado": "", "acceso": "", "login_area_documental": ""},)
+
+    def test_orden_de_seleccion_y_por_ventas(self):
+        r = F.top_por_sector("Vídeo", "seleccion", self.FILAS, self.DIR)
+        self.assertEqual([f["fabricante"] for f in r["sectores"][0]["fabricantes"]], ["A", "B", "C"])
+        r = F.top_por_sector("Vídeo", "ventas", self.FILAS, self.DIR)
+        self.assertEqual([f["fabricante"] for f in r["sectores"][0]["fabricantes"]], ["C", "B", "A"])   # sin dato, al final
+        self.assertEqual(r["sectores"][0]["con_ventas"], 2)
+
+    def test_directorio_y_todos_los_sectores(self):
+        r = F.top_por_sector("", "seleccion", self.FILAS, self.DIR)
+        self.assertEqual([s["sector"] for s in r["sectores"]], ["Vídeo", "Acceso"])
+        b = r["sectores"][0]["fabricantes"][1]
+        self.assertTrue(b["en_directorio"] and b["comprobado"])
+        self.assertFalse(r["sectores"][0]["fabricantes"][0]["en_directorio"])
+
+    def test_errores(self):
+        with self.assertRaises(ValueError):
+            F.top_por_sector("Inventado", "seleccion", self.FILAS, self.DIR)
+        with self.assertRaises(ValueError):
+            F.top_por_sector("", "raro", self.FILAS, self.DIR)
+
+    def test_el_fichero_real(self):
+        r = F.top_por_sector()
+        self.assertEqual(len(r["sectores"]), 10)
+        self.assertTrue(all(len(s["fabricantes"]) == 10 for s in r["sectores"]))
+        hik = next(f for s in r["sectores"] for f in s["fabricantes"] if f["fabricante"] == "Hikvision")
+        self.assertEqual(hik["ventas_musd"], 12976.6)
+        self.assertIn("no el ranking mundial exacto", r["aviso"])
+        tp = next(f for s in r["sectores"] for f in s["fabricantes"] if f["fabricante"] == "TP-Link")
+        self.assertIsNone(tp["ventas_musd"])                        # N/D es «no verificado», no cero
+
+
 if __name__ == "__main__":
     unittest.main()

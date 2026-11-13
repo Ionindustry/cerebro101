@@ -30,6 +30,7 @@ from ..licitaciones import crm as crm_licitaciones
 from ..licitaciones import frescura as frescura_licitaciones
 from ..licitaciones import analisis_pliego, aptitud, revision_previa
 from ..licitaciones import pliegos as pliegos_licitaciones
+from ..licitaciones import fabricantes as fabricantes_dir
 from ..licitaciones import ofertas as ofertas_licitaciones
 from ..licitaciones import empresa as empresa_erp
 from ..licitaciones import plantillas as plantillas_ofertas
@@ -995,6 +996,21 @@ async def fichas_cargadas(usuario: Usuario = Depends(usuario_actual)):
     _exige_licitaciones(usuario)
     cfg = fichas_tecnicas.configuracion()
     return {**await fichas_tecnicas.listar(), "listas": await fichas_tecnicas.listas(), "cargas": await fichas_tecnicas.cargas(), "dominios": cfg["hosts"]}
+
+
+@app.get("/licitaciones/fabricantes/ranking")
+async def ranking_de_fabricantes(sector: str = "", orden: str = "seleccion", usuario: Usuario = Depends(usuario_actual)):
+    """Los 10 fabricantes principales de cada sector de seguridad con sus ventas y plantilla publicadas (referencia, no ranking mundial exacto) y si su dominio está autorizado para fichas."""
+    _exige_licitaciones(usuario)
+    try:
+        r = fabricantes_dir.top_por_sector(sector, orden)
+    except ValueError as e:
+        raise HTTPException(422, str(e)) from None
+    hosts = fichas_tecnicas.configuracion()["hosts"]
+    for s in r["sectores"]:
+        for f in s["fabricantes"]:
+            f["autorizado"] = bool(f["dominio"] and pliegos_licitaciones.host_permitido(f["web"], hosts))
+    return {**r, "todos_los_sectores": fabricantes_dir.sectores()}
 
 
 @app.get("/licitaciones/fichas/ejemplos")
