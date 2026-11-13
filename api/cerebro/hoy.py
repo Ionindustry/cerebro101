@@ -13,7 +13,7 @@ from datetime import datetime, timezone
 import psycopg
 from psycopg.rows import dict_row
 
-from . import antivirus, copias, tarifas_auto
+from . import antivirus, copias, precios_venta, tarifas_auto
 from .ajustes import ajustes
 from .aprobaciones import bandeja
 from .licitaciones import frescura, resumen as resumen_lic
@@ -49,6 +49,36 @@ def de_tarifas(filas: list[dict] | None) -> list[dict]:
     prov = ", ".join(sorted({str(f.get("proveedor_id")) for f in filas})[:3])
     return [_it("urgente" if sospechosas else "aviso", "precios", f"{n} {'tarifa nueva de proveedor pendiente' if n == 1 else 'tarifas nuevas de proveedores pendientes'} de revisar",
                 f"{prov}." + (f" {len(sospechosas)} con cambios sospechosos: míralo antes de aplicar." if sospechosas else " Nada se aplica hasta que la firmes."), "/precios")]
+
+
+DIAS_PROPUESTA_VIEJA = 7
+DIAS_PROPUESTA_MUY_VIEJA = 14
+MAX_PROPUESTAS_HOY = 3
+
+
+def de_precios(filas: list[dict] | None, ahora: datetime) -> list[dict]:
+    """Un elemento por propuesta de precios de venta que espera a Dirección (las 3 más nuevas), con enlace directo a ella: con error al aplicar, con artículos por debajo del margen mínimo, con costes
+    provisionales o sin revisar hace días (los costes y el cambio pueden haberse quedado atrás). Urgente si dio error o lleva más de 14 días; si no, aviso. Solo Dirección. Pura."""
+    out = []
+    for f in (filas or [])[:MAX_PROPUESTAS_HOY]:
+        r = f.get("resumen") or {}
+        dias = max(int((ahora - f["creado"]).total_seconds() // 86400), 0) if f.get("creado") else 0
+        partes, urgente = [], False
+        if f.get("estado") == "error":
+            partes.append("Falló al aplicarse en el ERP: se puede repetir desde la pantalla")
+            urgente = True
+        if r.get("bajo_minimo"):
+            n = r["bajo_minimo"]
+            partes.append(f"{n} {'artículo' if n == 1 else 'artículos'} por debajo del margen mínimo")
+        if r.get("provisional"):
+            partes.append("con costes provisionales o de respaldo")
+        if dias >= DIAS_PROPUESTA_VIEJA:
+            partes.append(f"sin revisar desde hace {dias} días: sus costes y el cambio pueden estar desactualizados; conviene proponer de nuevo")
+            urgente = urgente or dias >= DIAS_PROPUESTA_MUY_VIEJA
+        if not partes:
+            partes.append(f"{r.get('incluidos', 0)} artículos listos para revisar" + (f" ({r.get('sube', 0)} suben, {r.get('baja', 0)} bajan)" if r.get("sube") or r.get("baja") else ""))
+        out.append(_it("urgente" if urgente else "aviso", "precios", f"Propuesta de precios #{f['id']} pendiente de revisar", ". ".join(partes) + ".", f"/precios?propuesta={f['id']}"))
+    return out
 
 
 def de_licitaciones(seg: dict | None) -> list[dict]:
@@ -141,6 +171,7 @@ async def construir(roles: set[str], departamentos: set[str], ahora: datetime | 
     items = de_aprobaciones(await leer("aprobaciones", bandeja.pendientes, deps) or [], ahora)
     if es_direccion:
         items += de_tarifas(await leer("tarifas", tarifas_auto.pendientes))
+        items += de_precios(await leer("precios_venta", precios_venta.pendientes_de_revisar), ahora)
     if ve_lic:
         items += de_licitaciones(await leer("seguimiento", _seguimiento, ahora))
         items += de_novedades(await leer("ultimo_resumen", resumen_lic.leer))

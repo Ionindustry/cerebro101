@@ -96,6 +96,21 @@ async def listar(doctype: str, departamento: str, filtros: list | None = None,
     return r.json()["data"]
 
 
+async def lineas_de_pedidos(departamento: str, desde: str, hasta: str, limite: int = 20000) -> list[dict]:
+    """Las líneas (artículos) de los pedidos de venta confirmados entre dos fechas (aaaa-mm-dd, `hasta` excluido): artículo, grupo, marca, cantidad e importe neto en la moneda de la empresa.
+    Solo lectura; requiere poder leer «Sales Order». Lo usa el ranking de ventas (cerebro/ranking_ventas.py), no los agentes."""
+    comprobar_acceso(departamento, "Sales Order", "leer")
+    hijo = "`tabSales Order Item`"
+    campos = ["name", "transaction_date", f"{hijo}.item_code as item_code", f"{hijo}.item_name as item_name", f"{hijo}.item_group as item_group",
+              f"{hijo}.brand as brand", f"{hijo}.qty as qty", f"{hijo}.base_net_amount as importe"]
+    filtros = [["docstatus", "=", 1], ["transaction_date", ">=", desde], ["transaction_date", "<", hasta]]
+    params = {"limit_page_length": int(limite), "fields": json.dumps(campos), "filters": json.dumps(filtros)}
+    async with httpx.AsyncClient(base_url=ajustes.erpnext_url, timeout=60) as c:
+        r = await c.get("/api/resource/Sales Order", params=params, headers=_cabeceras(departamento))
+    r.raise_for_status()
+    return r.json()["data"]
+
+
 async def leer(doctype: str, nombre: str, departamento: str) -> dict:
     comprobar_acceso(departamento, doctype, "leer", nombre)
     async with httpx.AsyncClient(base_url=ajustes.erpnext_url, timeout=30) as c:

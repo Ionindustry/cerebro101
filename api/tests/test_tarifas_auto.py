@@ -165,6 +165,57 @@ class TestDescarga(unittest.TestCase):
             with self.assertRaisesRegex(T.ErrorTarifaAuto, "Falta la clave"):
                 ejecutar(T.descargar(PROV_URL, 1000, httpx.MockTransport(lambda r: httpx.Response(200)), resolver))
 
+    def test_los_ficheros_vacios_de_la_carpeta_no_se_leen(self):
+        with tempfile.TemporaryDirectory() as d:
+            carpeta = Path(d) / "dist-x"
+            carpeta.mkdir()
+            (carpeta / "vacia.csv").write_bytes(b"")
+            (carpeta / "buena.csv").write_bytes(b"referencia;coste\nA;1\n")
+            r = T.ficheros_de_carpeta(d, "dist-x", ahora=time.time() + 3600)
+        self.assertEqual([n for n, _ in r], ["buena.csv"])
+
+    def test_cortes_y_fallos_de_red_son_errores_claros(self):
+        def corta(r):
+            raise httpx.RemoteProtocolError("peer closed connection without sending complete message body")
+
+        def lenta(r):
+            raise httpx.ReadTimeout("lento")
+
+        def rechaza(r):
+            raise httpx.ConnectError("no")
+        with self.assertRaisesRegex(T.ErrorTarifaAuto, "No se ha podido leer.*RemoteProtocolError"):
+            self.llamar(corta)
+        with self.assertRaisesRegex(T.ErrorTarifaAuto, "tarda demasiado"):
+            self.llamar(lenta)
+        with self.assertRaisesRegex(T.ErrorTarifaAuto, "No se ha podido leer.*ConnectError"):
+            self.llamar(rechaza)
+
+    def test_content_length_enorme_se_rechaza_sin_leer(self):
+        with self.assertRaisesRegex(T.ErrorTarifaAuto, "pasa de"):
+            self.llamar(lambda r: httpx.Response(200, content=b"x", headers={"content-type": "text/csv", "content-length": "99999999"}), max_bytes=1000)
+
+    def test_vacio_y_paginas_web_disfrazadas(self):
+        for cuerpo, texto in ((b"", "vacío"), (b"  \n ", "vacío"), (b"<!DOCTYPE html><title>Login</title>", "página web"), (b"\n <html><body>sesion caducada", "página web")):
+            with self.assertRaisesRegex(T.ErrorTarifaAuto, texto):
+                self.llamar(lambda r, c=cuerpo: httpx.Response(200, content=c, headers={"content-type": "text/plain"}))
+
+    def test_un_xlsx_tiene_que_ser_un_zip(self):
+        p = {**PROV_URL, "formato": "xlsx"}
+        with self.assertRaisesRegex(T.ErrorTarifaAuto, "no es un Excel"):
+            self.llamar(lambda r: httpx.Response(200, content=b"referencia;coste\nA;1", headers={"content-type": "application/octet-stream"}), p)
+        _n, datos = self.llamar(lambda r: httpx.Response(200, content=b"PK\x03\x04resto", headers={"content-type": "application/octet-stream"}), p)
+        self.assertTrue(datos.startswith(b"PK"))
+
+    def test_una_redireccion_a_http_no_se_sigue(self):
+        with self.assertRaisesRegex(T.ErrorTarifaAuto, "no es https|dominio"):
+            self.llamar(lambda r: httpx.Response(302, headers={"location": "http://api.dist-x.com/t.csv"}))
+
+    def test_json_raro_no_rompe(self):
+        p = {**PROV_URL, "formato": "json", "json": {"lista": "", "columnas": {"referencia": "sku", "coste": "price"}}}
+        for cuerpo, texto in ((b"[" * 50000, "JSON válido"), (b"[1, 2, 3]", "ningún producto"), (b"{}", "lista de productos")):
+            with self.assertRaisesRegex(T.ErrorTarifaAuto, texto):
+                self.llamar(lambda r, c=cuerpo: httpx.Response(200, content=c, headers={"content-type": "application/json"}), p)
+
     def test_un_json_se_convierte_a_csv(self):
         p = {**PROV_URL, "formato": "json", "json": {"lista": "", "columnas": {"referencia": "sku", "coste": "price"}}}
         _n, datos = self.llamar(lambda r: httpx.Response(200, content=json.dumps([{"sku": "A", "price": 3}]).encode(), headers={"content-type": "application/json"}), p)

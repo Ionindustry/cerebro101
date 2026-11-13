@@ -714,3 +714,8 @@ Se usa en el informe de la carga de fichas: cada dominio que queda fuera aparece
 
 `config/familias_equivalencia.csv` dice qué datos suelen decidir en cada familia (vídeo, intrusión, control de accesos, incendio, intercomunicación, redes PoE, VMS). La tabla de equivalencias detecta la familia por palabras del pliego y se la pasa al modelo como GUÍA: sirve para fijarse en parámetros que el pliego ya pide y para saber qué ficha falta, no añade requisitos y no decide nada (el veredicto lo fija el código con los números de las fichas).
 `config/fichas_semillas.csv` son 28 modelos de ejemplo con su ficha oficial, como referencia de dónde buscar; no son fichas cargadas ni autorizan dominios.
+
+
+## Ranking de fabricantes por sector y modelos de ejemplo
+- **Fabricantes por sector** (panel: Licitaciones → Fichas técnicas → «Fabricantes por sector»; `config/fabricantes_ranking.csv`): 10 actores principales en cada uno de 10 sectores, con ventas de seguridad (a&s Security 50, 2026, ejercicio 2025), otros ingresos y plantilla con su ámbito y fuente. NO es el ranking mundial exacto: muchas empresas son privadas y los grupos no desglosan; una celda vacía es «no verificado», no cero; no se ordenan ni se suman cifras de monedas distintas. Cada fabricante muestra si su dominio está autorizado para fichas, comprobado en el directorio o no, y la pantalla propone el comando para autorizar los comprobados.
+- **Modelos de ejemplo** (Fichas técnicas → apartado 3): 28 modelos con ficha oficial. Se descargan solo los que son PDF directo de un dominio autorizado; de los portales se abre la página y se sube el PDF a mano; los que piden usuario se suben a mano.

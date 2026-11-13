@@ -204,5 +204,32 @@ class TestFlujo(unittest.TestCase):
             asyncio.run(F.subir(b"x" * ((5 << 20) + 1), "f.pdf", "M", "R", "albert", CFG))
 
 
+class TestEjemplos(unittest.TestCase):
+    FILAS = (
+        {"fabricante": "Axis", "modelo": "P3265", "categoria": "Cámara", "url": "https://www.axis.com/dam/ficha.pdf", "acceso": "PUBLICO_PDF"},
+        {"fabricante": "2N", "modelo": "Verso", "categoria": "Videoportero", "url": "https://www.2n.com/download-center/", "acceso": "PUBLICO_INDICE"},
+        {"fabricante": "Otro", "modelo": "X1", "categoria": "Cámara", "url": "https://otro.com/x1.pdf", "acceso": "PUBLICO_PDF"},
+        {"fabricante": "HID", "modelo": "Lib", "categoria": "Acceso", "url": "https://www.axis.com/hid.pdf", "acceso": "LOGIN_REQUERIDO_PDF"},
+    )
+    CFG = {"hosts": ["axis.com", "2n.com"], "max_mb": 30, "max_diarias": 200, "max_por_carga": 100}
+
+    def test_acciones(self):
+        r = {e["modelo"]: e["accion"] for e in F.ejemplos(self.CFG, self.FILAS)}
+        self.assertEqual(r, {"P3265": "descargar", "Verso": "indice", "X1": "fuera", "Lib": "login"})
+
+    def test_sin_dominios_autorizados_nada_se_descarga(self):
+        self.assertTrue(all(e["accion"] != "descargar" for e in F.ejemplos({**self.CFG, "hosts": []}, self.FILAS)))
+
+    def test_los_ejemplos_reales_se_leen(self):
+        e = F.ejemplos({**self.CFG, "hosts": []})
+        self.assertGreaterEqual(len(e), 20)
+        self.assertTrue(all(x["accion"] in F.ACCIONES_EJEMPLO for x in e))
+
+    def test_cargar_solo_toca_los_descargables(self):
+        import asyncio
+        r = asyncio.run(F.cargar_ejemplos("u", {**self.CFG, "hosts": ["2n.com"]}, self.FILAS))
+        self.assertEqual((r["cargadas"], r["omitidas"], r["fallidas"]), (0, 4, []))
+
+
 if __name__ == "__main__":
     unittest.main()

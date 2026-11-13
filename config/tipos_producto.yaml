@@ -1,0 +1,36 @@
+# Tipos de producto para el ranking de ventas (Jarvis → Ventas): cada línea de venta del ERP se asigna a UN tipo.
+# Primero se mira el «Grupo de artículo» de ERPNext (grupos, sin importar mayúsculas ni acentos) y, si no encaja,
+# las palabras en el nombre o descripción del artículo. Lo que no encaja va a «Otros». Se edita aquí y vale al reiniciar la API.
+tipos:
+  cctv:
+    nombre: Videovigilancia (CCTV)
+    grupos: [cctv, videovigilancia, camaras, camaras ip, grabadores]
+    palabras: [camara, camera, nvr, dvr, videograbador, ptz, domo, bullet, videovigilancia]
+  control_acceso:
+    nombre: Control de accesos
+    grupos: [control de accesos, control de acceso, accesos, lectores, cerraduras]
+    palabras: [control de acceso, lector, controladora, torno, cerradura, electrocerradura, tarjeta rfid, biometric, huella, osdp, wiegand]
+  intrusion:
+    nombre: Intrusión y alarmas
+    grupos: [intrusion, alarmas, alarma, seguridad]
+    palabras: [alarma, intrusion, detector volumetrico, sirena, central de alarma, contacto magnetico, sensor pir]
+  incendio:
+    nombre: Detección de incendios
+    grupos: [incendio, incendios, deteccion de incendios, pci]
+    palabras: [incendio, detector de humo, pulsador de alarma, central de incendios, extintor, en 54, sirena de incendio]
+  intercom:
+    nombre: Videoporteros e intercomunicación
+    grupos: [videoportero, videoporteros, intercomunicacion, interfonia]
+    palabras: [videoportero, interfono, portero automatico, intercomunicador, placa de calle]
+  redes:
+    nombre: Redes y PoE
+    grupos: [redes, networking, switches, comunicaciones]
+    palabras: [switch, poe, router, punto de acceso, access point, fibra, latiguillo, cable utp, patch panel]
+  software:
+    nombre: Software y licencias
+    grupos: [software, licencias, vms]
+    palabras: [licencia, vms, software, suscripcion]
+  servicios:
+    nombre: Servicios e instalación
+    grupos: [servicios, instalacion, mantenimiento, mano de obra]
+    palabras: [instalacion, mantenimiento, mano de obra, puesta en marcha, hora de tecnico]

@@ -30,6 +30,7 @@ from ..licitaciones import crm as crm_licitaciones
 from ..licitaciones import frescura as frescura_licitaciones
 from ..licitaciones import analisis_pliego, aptitud, revision_previa
 from ..licitaciones import pliegos as pliegos_licitaciones
+from ..licitaciones import fabricantes as fabricantes_dir
 from ..licitaciones import ofertas as ofertas_licitaciones
 from ..licitaciones import empresa as empresa_erp
 from ..licitaciones import plantillas as plantillas_ofertas
@@ -39,6 +40,7 @@ from ..licitaciones import encargos as encargos_ofertas
 from ..licitaciones import comparativa as comparativa_ofertas
 from ..licitaciones import equivalencia as equivalencia_ofertas
 from .. import precios_venta as precios_venta_pantalla
+from .. import ranking_ventas
 from .. import tarifas_auto as tarifas_automaticas
 from .. import listas_precios as listas_precios_mod
 from ..licitaciones import partidas as partidas_ofertas
@@ -996,6 +998,36 @@ async def fichas_cargadas(usuario: Usuario = Depends(usuario_actual)):
     return {**await fichas_tecnicas.listar(), "listas": await fichas_tecnicas.listas(), "cargas": await fichas_tecnicas.cargas(), "dominios": cfg["hosts"]}
 
 
+@app.get("/licitaciones/fabricantes/ranking")
+async def ranking_de_fabricantes(sector: str = "", orden: str = "seleccion", usuario: Usuario = Depends(usuario_actual)):
+    """Los 10 fabricantes principales de cada sector de seguridad con sus ventas y plantilla publicadas (referencia, no ranking mundial exacto) y si su dominio está autorizado para fichas."""
+    _exige_licitaciones(usuario)
+    try:
+        r = fabricantes_dir.top_por_sector(sector, orden)
+    except ValueError as e:
+        raise HTTPException(422, str(e)) from None
+    hosts = fichas_tecnicas.configuracion()["hosts"]
+    for s in r["sectores"]:
+        for f in s["fabricantes"]:
+            f["autorizado"] = bool(f["dominio"] and pliegos_licitaciones.host_permitido(f["web"], hosts))
+    return {**r, "todos_los_sectores": fabricantes_dir.sectores()}
+
+
+@app.get("/licitaciones/fichas/ejemplos")
+async def fichas_de_ejemplo(usuario: Usuario = Depends(usuario_actual)):
+    """Modelos de ejemplo del directorio de fabricantes: cuáles se pueden descargar, cuáles piden autorizar el dominio y cuáles hay que subir a mano."""
+    _exige_licitaciones(usuario)
+    return {"ejemplos": fichas_tecnicas.ejemplos(), "acciones": fichas_tecnicas.ACCIONES_EJEMPLO}
+
+
+@app.post("/licitaciones/fichas/ejemplos/cargar")
+async def cargar_fichas_de_ejemplo(usuario: Usuario = Depends(usuario_actual)):
+    """Descarga los ejemplos que son PDF directo de un dominio autorizado (pocos, así que va en la misma petición)."""
+    _exige_licitaciones(usuario)
+    log.info("fichas: %s carga los modelos de ejemplo", usuario.id)
+    return await fichas_tecnicas.cargar_ejemplos(usuario.id)
+
+
 @app.get("/licitaciones/fichas/revisar/{importacion}")
 async def revisar_fichas_de_una_lista(importacion: int, usuario: Usuario = Depends(usuario_actual)):
     """Qué se descargaría de esa lista (sin descargar nada) y qué dominios quedan fuera de la lista autorizada."""
@@ -1542,6 +1574,20 @@ def _error_precios(e: Exception):
     if isinstance(e, listas_precios_mod.NoExiste):
         return HTTPException(404, str(e))
     return HTTPException(422, str(e))
+
+
+@app.get("/ventas/ranking")
+async def ranking_de_ventas(dias: int = 365, top: int = 10, usuario: Usuario = Depends(usuario_actual)):
+    """Los artículos y fabricantes que más venden en cada tipo de producto (CCTV, accesos, intrusión…) en un periodo. Solo Dirección: son ventas de la empresa."""
+    if "direccion" not in usuario.roles:
+        raise HTTPException(403, "Las ventas de la empresa las ve Dirección")
+    try:
+        return await ranking_ventas.obtener(dias, top)
+    except ValueError as e:
+        raise HTTPException(422, str(e)) from None
+    except Exception as e:  # noqa: BLE001 — el ERP puede fallar de muchas formas; se dice sin enseñar detalles internos
+        log.warning("ventas: no se ha podido leer el ERP: %s", type(e).__name__)
+        raise HTTPException(502, "No se han podido leer los pedidos de venta del ERP (¿está en marcha y con permiso de lectura para Dirección?)") from None
 
 
 @app.get("/precios/propuestas")

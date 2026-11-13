@@ -10,6 +10,7 @@ const SECCIONES = [
   { ruta: "/licitaciones", nombre: "Licitaciones" },
   { ruta: "/aprobaciones", nombre: "Aprobaciones" },
   { ruta: "/precios", nombre: "Precios" },
+  { ruta: "/ventas", nombre: "Ventas" },
   { ruta: "/agentes", nombre: "Agentes" },
 ];
 

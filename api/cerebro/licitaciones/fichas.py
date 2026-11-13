@@ -20,7 +20,7 @@ from psycopg.rows import dict_row
 
 from ..ajustes import ajustes
 from ..herramientas import conocimiento
-from . import fabricantes, pliegos
+from . import fabricantes, familias, pliegos
 
 log = logging.getLogger("cerebro.fichas")
 RAIZ = Path(__import__("os").environ.get("FICHAS_DIR", "/datos/licitaciones/fichas"))
@@ -274,3 +274,53 @@ async def cargas(limite: int = 10) -> list[dict]:
     async with await _conectar() as conn:
         cur = await conn.execute("SELECT id, importacion, estado, informe, por, creado, terminada FROM fichas_cargas ORDER BY id DESC LIMIT %s", [min(max(int(limite), 1), 50)])
         return await cur.fetchall()
+
+
+# ---- Modelos de ejemplo (config/fichas_semillas.csv): de dónde sacar fichas oficiales, sin cargar nada a ciegas ----
+ACCIONES_EJEMPLO = {"descargar": "Se puede descargar", "fuera": "Dominio sin autorizar", "indice": "Portal de descargas: abre y sube el PDF a mano", "login": "Pide usuario: súbelo a mano"}
+
+
+def ejemplos(cfg: dict | None = None, filas: tuple[dict, ...] | None = None) -> list[dict]:
+    """Los modelos de ejemplo con lo que se puede hacer con cada uno: descargar (PDF directo de un dominio autorizado), autorizar su dominio, o abrir su portal y subir el PDF a mano. Pura sobre `cfg` y `filas`."""
+    hosts = (cfg or configuracion())["hosts"]
+    out = []
+    for f in filas if filas is not None else familias.semillas():
+        url = f["url"]
+        pdf = urlparse(url).path.lower().endswith(".pdf")
+        autorizado = pliegos.host_permitido(url, hosts)
+        if "LOGIN" in f["acceso"].upper():
+            accion = "login"
+        elif pdf and autorizado:
+            accion = "descargar"
+        elif not autorizado:
+            accion = "fuera"
+        else:
+            accion = "indice"
+        out.append({**f, "dominio": dominio(url), "autorizado": autorizado, "pdf_directo": pdf, "accion": accion})
+    return out
+
+
+async def cargar_ejemplos(por: str, cfg: dict | None = None, filas: tuple[dict, ...] | None = None, descargar=None, **kw) -> dict:
+    """Descarga los ejemplos que son PDF directo de un dominio autorizado (los demás no se tocan). Informe: cargadas, repetidas y fallidas con el motivo."""
+    cfg = cfg or configuracion()
+    inf = {"cargadas": 0, "repetidas": 0, "sin_texto": 0, "fallidas": [], "omitidas": 0}
+    for e in ejemplos(cfg, filas):
+        if e["accion"] != "descargar":
+            inf["omitidas"] += 1
+            continue
+        try:
+            r = await desde_url(e["url"], e["fabricante"], e["modelo"][:60], "web", por, cfg, descargar, **kw)
+        except ErrorFicha as x:
+            inf["fallidas"].append({"url": e["url"][:200], "motivo": str(x)[:200]})
+            if "máximo de" in str(x):
+                break
+            continue
+        if r.get("repetida"):
+            inf["repetidas"] += 1
+        elif r["estado"] == "indexada":
+            inf["cargadas"] += 1
+        elif r["estado"] == "sin_texto":
+            inf["sin_texto"] += 1
+        else:
+            inf["fallidas"].append({"url": e["url"][:200], "motivo": r["motivo"][:200]})
+    return inf
