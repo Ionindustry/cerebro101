@@ -689,3 +689,15 @@ En «Preparar la oferta» (y en el botón de repetir de cada paso) hay un select
 **Costes** con Claude o ChatGPT es deliberadamente más limitado: **no reciben costes internos, tarifas de proveedor ni datos del ERP** (siguen siendo confidenciales), solo redactan la estructura de la justificación del precio con lo que dice el pliego y dejan `[PENDIENTE: cifra]` en cada importe; tienen prohibido inventar cifras. Las cifras reales las pone una persona o el modelo local.
 
 **Registro:** antes de cada envío se anota en `ofertas_envios_externos` quién lo confirmó, qué paso, qué proveedor respondió y cuántos caracteres privados (anonimizados) viajaron, y después si llegó a enviarse. **No se guarda el contenido enviado.** El panel lo muestra en «Qué ha salido a Claude o ChatGPT en los pasos sensibles» (`GET /licitaciones/ofertas/{id}/envios-externos`).
+
+
+## Equipos y coste real: Costes y Precio con las tarifas de proveedor
+
+Tarjeta **«Equipos y coste real»** en la oferta (`api/cerebro/licitaciones/partidas.py`). El flujo:
+
+1. **«Calcular desde la tabla de equivalencias»** crea una partida por cada producto que la tabla recomienda (ya verificado por el código). Se pueden **añadir productos a mano** (marca y referencia) y **excluir** los que no van.
+2. **Tú pones la cantidad** de cada partida (el pliego dice cuántas unidades; el sistema no las adivina).
+3. El código casa cada producto con las **tarifas de proveedor cargadas** por su referencia (la más larga que aparezca en el texto; si dos artículos empatan no elige ninguno: mejor «sin coste» que el producto equivocado) y calcula el **mejor coste ya en euros**, con el cambio del día, la logística del canal y la preferencia por proveedor con stock (el mismo cálculo que la lista de venta). Salen el coste unitario, el proveedor, el subtotal y los avisos (cambio de respaldo, provisional…). Los totales **solo suman lo completo**: lo «sin coste en las tarifas» o «sin cantidad» se dice, no se estima.
+3. **Costes** (modelo local) recibe esta tabla en su petición y debe usar esas cifras tal cual; **Precio** la recibe como suelo del precio. El resto de agentes no la ven.
+
+**Confidencialidad:** las tarifas son confidenciales. El coste **no se guarda** en la oferta (se recalcula al leer: no hay copias viejas) y el texto con cifras solo llega al modelo **local**; ni Claude ni ChatGPT lo reciben nunca, ni siquiera si eliges «externo» en Costes (hay una prueba que lo comprueba). Las cifras son de referencia: el precio lo fija una persona.

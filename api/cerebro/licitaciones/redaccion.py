@@ -440,7 +440,12 @@ async def _paso_escritor(ejecucion_id: int, indice: int, e: dict, defin: dict, i
             externa = f"Se ha usado el modelo local: {motivo}."
             log.info("redacción: el paso %s de %s lo hace el modelo local (%s)", defin["id"], motor_id, motivo)
     if estado is None:
-        estado = await invocar(defin["agente"], peticion_escritor(defin, motor_id, titulo, sel) + adicional)
+        # El coste real de los equipos (tarifas de proveedor, CONFIDENCIAL) solo lo ve el modelo LOCAL de Costes: va aquí, nunca en `adicional` (que, si se elige Claude/ChatGPT, es lo que sale anonimizado)
+        costes_equipos = ""
+        if defin["id"] == "costes":
+            from . import partidas as partidas_mod
+            costes_equipos = await partidas_mod.texto_para(motor_id)
+        estado = await invocar(defin["agente"], peticion_escritor(defin, motor_id, titulo, sel) + adicional + (f"\n\n{costes_equipos}" if costes_equipos else ""))
     despues = {s["clave"]: s for s in (await O.leer(motor_id, con_contenido=False))["secciones"]}
     escritas = [s["clave"] for s in sel if despues.get(s["clave"], {}).get("estado") != "vacia" and despues[s["clave"]]["por"] == f"agente:{defin['agente']}"]
     faltan = [s["clave"] for s in sel if s["clave"] not in escritas]
@@ -479,6 +484,10 @@ async def _paso_informe(ejecucion_id: int, indice: int, e: dict, defin: dict, in
     motor_id = e["licitacion"]
     if defin["informe"] == "precio":
         peticion = peticion_precio(motor_id, titulo)
+        from . import partidas as partidas_mod
+        costes_equipos = await partidas_mod.texto_para(motor_id)         # los informes los hace siempre el modelo local: aquí sí puede ver el coste real de los equipos
+        if costes_equipos:
+            peticion = f"{peticion}\n\n{costes_equipos}\nUsa este coste como suelo del precio: no propongas un precio por debajo del coste ni inventes cifras."
     else:
         con_texto = [s for s in (await O.leer(motor_id, True, 1500))["secciones"] if s["contenido"].strip() and s["clave"] != O.PROPOSICION]
         if not con_texto:

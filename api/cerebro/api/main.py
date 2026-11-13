@@ -38,6 +38,7 @@ from ..licitaciones import redaccion_externa as redaccion_externa_ofertas
 from ..licitaciones import encargos as encargos_ofertas
 from ..licitaciones import comparativa as comparativa_ofertas
 from ..licitaciones import equivalencia as equivalencia_ofertas
+from ..licitaciones import partidas as partidas_ofertas
 from ..licitaciones import descubrimiento as descubrimiento_ofertas
 from ..licitaciones import fichas as fichas_tecnicas
 from ..licitaciones import reglas as reglas_licitaciones
@@ -1048,6 +1049,71 @@ async def envios_externos_de_la_oferta(motor_id: str, usuario: Usuario = Depends
     _exige_licitaciones(usuario)
     try:
         return {"envios": await redaccion_externa_ofertas.envios(motor_id), "pasos_elegibles": {p: s for p, s in redaccion_externa_ofertas.PASOS_A_ELEGIR.items()}}
+    except (ofertas_licitaciones.ErrorOferta, LookupError) as e:
+        raise _oferta_error(e) from None
+
+
+class PartidaEntrada(BaseModel):
+    producto: str = Field(min_length=2, max_length=160)
+    cantidad: str | None = Field(default=None, max_length=20)
+
+
+class PartidaCambio(BaseModel):
+    cantidad: str | None = Field(default=None, max_length=20)       # vacío = quitar la cantidad
+    excluida: bool | None = None
+
+
+def _error_partida(e: Exception):
+    if isinstance(e, partidas_ofertas.ErrorPartida):
+        return HTTPException(422, str(e))
+    return _oferta_error(e)
+
+
+@app.get("/licitaciones/ofertas/{motor_id}/partidas")
+async def partidas_de_la_oferta(motor_id: str, usuario: Usuario = Depends(usuario_actual)):
+    """Las partidas de equipos de la oferta con su coste real calculado con las tarifas de proveedor (CONFIDENCIAL: solo Dirección y Licitaciones) y los totales."""
+    _exige_licitaciones(usuario)
+    try:
+        return await partidas_ofertas.listar(motor_id)
+    except (ofertas_licitaciones.ErrorOferta, LookupError) as e:
+        raise _oferta_error(e) from None
+
+
+@app.post("/licitaciones/ofertas/{motor_id}/partidas/proponer")
+async def proponer_partidas_de_la_oferta(motor_id: str, usuario: Usuario = Depends(usuario_actual)):
+    """Rellena las partidas con los productos que recomienda la tabla de equivalencias (lo que una persona ya haya tocado se conserva)."""
+    _exige_licitaciones(usuario)
+    try:
+        return await partidas_ofertas.proponer(motor_id, usuario.id)
+    except (partidas_ofertas.ErrorPartida, ofertas_licitaciones.ErrorOferta, LookupError) as e:
+        raise _error_partida(e) from None
+
+
+@app.post("/licitaciones/ofertas/{motor_id}/partidas")
+async def anadir_partida_a_la_oferta(motor_id: str, entrada: PartidaEntrada, usuario: Usuario = Depends(usuario_actual)):
+    """Añade un producto a mano (marca y referencia, para casarlo con las tarifas) con su cantidad."""
+    _exige_licitaciones(usuario)
+    try:
+        return await partidas_ofertas.anadir(motor_id, entrada.producto, entrada.cantidad, usuario.id)
+    except (partidas_ofertas.ErrorPartida, ofertas_licitaciones.ErrorOferta, LookupError) as e:
+        raise _error_partida(e) from None
+
+
+@app.post("/licitaciones/ofertas/{motor_id}/partidas/{partida}")
+async def cambiar_partida_de_la_oferta(motor_id: str, partida: int, entrada: PartidaCambio, usuario: Usuario = Depends(usuario_actual)):
+    """Pone o quita la cantidad de una partida y/o la excluye o recupera."""
+    _exige_licitaciones(usuario)
+    try:
+        return await partidas_ofertas.ajustar(motor_id, partida, entrada.cantidad if "cantidad" in entrada.model_fields_set else ..., entrada.excluida, usuario.id)
+    except (partidas_ofertas.ErrorPartida, ofertas_licitaciones.ErrorOferta, LookupError) as e:
+        raise _error_partida(e) from None
+
+
+@app.post("/licitaciones/ofertas/{motor_id}/partidas/{partida}/quitar")      # POST: la pasarela del panel solo reenvía GET y POST
+async def quitar_partida_de_la_oferta(motor_id: str, partida: int, usuario: Usuario = Depends(usuario_actual)):
+    _exige_licitaciones(usuario)
+    try:
+        return await partidas_ofertas.quitar(motor_id, partida)
     except (ofertas_licitaciones.ErrorOferta, LookupError) as e:
         raise _oferta_error(e) from None
 

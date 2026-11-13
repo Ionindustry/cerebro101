@@ -1414,3 +1414,25 @@ export function envioTexto(x) {
   const estado = x?.estado === "enviado" ? "" : x?.estado === "no_enviado" ? " · no llegó a enviarse" : " · intentado";
   return `${paso} → ${quien}${x?.modelo ? ` (${x.modelo})` : ""} · lo confirmó ${x?.confirmado_por || "?"} · ${Number(x?.caracteres_privados || 0).toLocaleString("es-ES")} caracteres privados anonimizados${estado}`;
 }
+
+// ---- Partidas de equipos y coste real (GET licitaciones/ofertas/{id}/partidas) ----
+/** «1.234,56 €» a partir de un importe en texto («1234.56»). Pura. */
+export function eurosTexto(v) {
+  const n = Number(v);
+  return v === null || v === undefined || v === "" || Number.isNaN(n) ? "—" : `${n.toLocaleString("es-ES", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €`;
+}
+
+/** Lo que falta para que el total de las partidas esté completo, en una frase. Pura. */
+export function faltaEnPartidasTexto(t) {
+  if (!t || !t.partidas) return "";
+  const partes = [];
+  if (t.sin_coste?.length) partes.push(`sin coste en las tarifas: ${t.sin_coste.join(", ")}`);
+  if (t.sin_cantidad?.length) partes.push(`sin cantidad: ${t.sin_cantidad.join(", ")}`);
+  return partes.length ? `Total incompleto (${partes.join(" · ")}).` : "";
+}
+
+/** La cantidad escrita en el cuadro a lo que se envía: vacío = null (quitarla). Pura. */
+export function cantidadAEnvio(texto) {
+  const t = String(texto ?? "").trim();
+  return t === "" ? null : t;
+}

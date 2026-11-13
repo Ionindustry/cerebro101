@@ -1258,3 +1258,13 @@ test("cuerpoModos: solo lo distinto de local, y «externo» exige confirmación"
   assert.deepEqual(cuerpoModos({ administrativo: "externo" }, {}, "costes"), { modos: {}, confirmados: [] });           // repetir Costes no mira lo de Administrativo
   assert.match(envioTexto({ paso: "costes", proveedor: "claude", modelo: "opus", confirmado_por: "albert", caracteres_privados: 0, estado: "no_enviado" }), /Costes → Claude \(opus\) · lo confirmó albert · 0 caracteres.*no llegó a enviarse/);
 });
+
+test("partidas: importes, lo que falta y cantidad en blanco", async () => {
+  const { eurosTexto, faltaEnPartidasTexto, cantidadAEnvio } = await import("../lib/licitaciones.js");
+  assert.equal(eurosTexto("1234.5").replace(/\s/g, " "), "1234,50 €");
+  assert.equal(eurosTexto(null), "—");
+  assert.equal(faltaEnPartidasTexto({ partidas: 2, sin_coste: ["X"], sin_cantidad: ["Y"] }), "Total incompleto (sin coste en las tarifas: X · sin cantidad: Y).");
+  assert.equal(faltaEnPartidasTexto({ partidas: 2, sin_coste: [], sin_cantidad: [] }), "");
+  assert.equal(cantidadAEnvio("  "), null);
+  assert.equal(cantidadAEnvio(" 12 "), "12");
+});

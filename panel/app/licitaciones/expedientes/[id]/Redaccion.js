@@ -4,6 +4,7 @@ import { fechaTexto, MODOS_PASO, MODO_ETIQUETA, PASOS_ELEGIBLES, cuerpoModos, en
 import { pedirCerebro } from "../../cliente";
 import Comparativa from "./Comparativa";
 import Equivalencia from "./Equivalencia";
+import Partidas from "./Partidas";
 import Encargos from "./Encargos";
 import { MARCA_REVISION, revisionTitular } from "../../../../lib/licitaciones";
 
@@ -239,6 +240,7 @@ export default function Redaccion({ id, o, alCambiar }) {
       )}
       <Comparativa id={id} version={ejec ? `${ejec.id}:${ejec.estado}:${(ejec.pasos || []).filter((p) => p.estado === "hecho" || p.estado === "parcial").length}` : "sin-ejecucion"} />
       <Equivalencia id={id} version={ejec ? `${ejec.id}:${ejec.estado}:${(ejec.pasos || []).filter((p) => p.estado === "hecho" || p.estado === "parcial").length}` : "sin-ejecucion"} />
+      <Partidas id={id} version={ejec ? `${ejec.id}:${ejec.estado}:${(ejec.pasos || []).filter((p) => p.estado === "hecho" || p.estado === "parcial").length}` : "sin-ejecucion"} />
       <Encargos id={id} version={ejec ? `${ejec.id}:${ejec.estado}:${(ejec.pasos || []).filter((p) => p.estado === "hecho" || p.estado === "parcial").length}` : "sin-ejecucion"} />
 
       <h3>Documentación administrativa {plant?.documentos?.length > 0 && <span className="meta">· {resumenPlantillas(plant)}</span>}</h3>

@@ -767,3 +767,20 @@ CREATE TABLE IF NOT EXISTS ofertas_envios_externos (
   creado        timestamptz NOT NULL DEFAULT now()
 );
 CREATE INDEX IF NOT EXISTS ofertas_envios_externos_motor ON ofertas_envios_externos (motor_id, id DESC);
+
+-- Partidas de equipos de una oferta (api/cerebro/licitaciones/partidas.py): los productos que la tabla de equivalencias recomienda (o una persona añade), con la cantidad que pone una persona. El COSTE no se guarda aquí:
+-- se calcula al leer, con las tarifas de proveedor cargadas y el cambio del día (son confidenciales y así nunca quedan copias desactualizadas). Una fila por producto y licitación.
+CREATE TABLE IF NOT EXISTS ofertas_partidas (
+  id         bigserial PRIMARY KEY,
+  motor_id   uuid NOT NULL,                         -- sin clave ajena: el esquema se aplica por trozos en las pruebas
+  clave      text NOT NULL,                         -- el producto normalizado (para no duplicar)
+  producto   text NOT NULL,
+  parametros jsonb NOT NULL DEFAULT '[]',           -- qué parámetros del pliego cubre
+  cantidad   numeric,                               -- NULL = sin poner todavía
+  origen     text NOT NULL CHECK (origen IN ('equivalencia', 'manual')),
+  excluida   boolean NOT NULL DEFAULT false,
+  por        text NOT NULL DEFAULT '',
+  creado     timestamptz NOT NULL DEFAULT now(),
+  actualizado timestamptz NOT NULL DEFAULT now(),
+  UNIQUE (motor_id, clave)
+);
