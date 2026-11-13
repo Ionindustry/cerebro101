@@ -38,6 +38,6 @@ redaccion:
   pasos: [solucion, memoria]          # qué pasos de «Preparar la oferta» se redactan con el modelo externo
   max_caracteres_pliego: 90000        # lo que se envía del texto de los pliegos (si es más largo se reparte entre los documentos y se avisa)
   max_tokens: 10000                   # tamaño máximo de lo que escribe el modelo (todas las secciones del paso)
-  proveedor_por_paso: {}              # a quién se le pregunta primero en cada paso cuando la persona deja «Automático»; p. ej. {solucion: claude, memoria: chatgpt}. Vacío = el orden general
+  proveedor_por_paso: {}              # a quién se le pregunta primero en cada paso cuando la persona deja «Automático»; pasos: comparativa, encargos, solucion, memoria; p. ej. {comparativa: claude, memoria: chatgpt}. Vacío = el orden general
   fragmentos_conocimiento: 6          # cuántos fragmentos de la base de conocimiento de 101.cat se envían por consulta
   max_caracteres_conocimiento: 8000

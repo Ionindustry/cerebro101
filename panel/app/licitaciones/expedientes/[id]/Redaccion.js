@@ -2,6 +2,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { CONFIRMAR_REHACER, MODELOS_REDACCION, agruparPorAnexo, botonDePaso, clasePaso, clasePlantilla, empresaParaEnviar, mensajeRedaccion, origenTexto, pasoEtiqueta, pendientesQueBloquean, plantillaEtiqueta, redaccionEnCurso, resumenPlantillas, resumenRedaccion } from "../../../../lib/licitaciones";
 import { pedirCerebro } from "../../cliente";
+import Comparativa from "./Comparativa";
 import Encargos from "./Encargos";
 import { MARCA_REVISION, revisionTitular } from "../../../../lib/licitaciones";
 
@@ -163,6 +164,7 @@ export default function Redaccion({ id, o, alCambiar }) {
           {ejec.error && <p role="alert" className="lic-error">{ejec.error}</p>}
         </div>
       )}
+      <Comparativa id={id} version={ejec ? `${ejec.id}:${ejec.estado}:${(ejec.pasos || []).filter((p) => p.estado === "hecho" || p.estado === "parcial").length}` : "sin-ejecucion"} />
       <Encargos id={id} version={ejec ? `${ejec.id}:${ejec.estado}:${(ejec.pasos || []).filter((p) => p.estado === "hecho" || p.estado === "parcial").length}` : "sin-ejecucion"} />
 
       <h3>Documentación administrativa {plant?.documentos?.length > 0 && <span className="meta">· {resumenPlantillas(plant)}</span>}</h3>

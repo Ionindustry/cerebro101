@@ -1138,6 +1138,8 @@ test("repetir un paso: qué botón sale en cada estado y cuándo pide confirmaci
   assert.equal(b("administrativo", "omitido").texto, "Hacer este paso");
   assert.deepEqual(b("memoria", "hecho"), { texto: "Rehacer este paso", rehacer: true, confirmar: true });          // rehacer borradores pide confirmación
   assert.deepEqual(b("precio", "hecho"), { texto: "Repetir el informe", rehacer: false, confirmar: false });         // un informe no pisa nada
+  assert.deepEqual(b("comparativa", "hecho"), { texto: "Repetir este paso", rehacer: false, confirmar: false });    // no hay borradores que pisar
+  assert.deepEqual(b("encargos", "omitido"), { texto: "Hacer este paso", rehacer: false, confirmar: false });
   assert.deepEqual(b("evaluacion", "error"), { texto: "Reintentar", rehacer: false, confirmar: false });
   assert.equal(b("memoria", "error", { estado: "en_curso" }), null);                   // mientras trabajan los agentes no se repite nada
   assert.equal(b("memoria", "en_curso"), null);
@@ -1162,4 +1164,18 @@ test("en estudio: solo las de ese estado, las que cierran antes primero y con en
   assert.equal(hrefEnEstudio({ motor_id: "0b1f7a3e-1111-4222-8333-444444444441" }), "/licitaciones/expedientes/0b1f7a3e-1111-4222-8333-444444444441");
   assert.equal(hrefEnEstudio({ motor_id: "../x" }), "/licitaciones/embudo");                  // un identificador raro nunca se convierte en una ruta
   assert.equal(hrefEnEstudio({}), "/licitaciones/embudo");
+});
+
+import { comprobacionTexto, cumpleEtiqueta, evidenciaTexto } from "../lib/licitaciones.js";
+test("comparativa: etiquetas de cumplimiento, de dónde sale cada evidencia y el recuento", () => {
+  assert.deepEqual(cumpleEtiqueta("si"), ["Cumple", "abierta"]);
+  assert.deepEqual(cumpleEtiqueta("no"), ["No cumple", "anulada"]);
+  assert.deepEqual(cumpleEtiqueta("raro"), ["Sin datos", ""]);                                  // lo desconocido es «sin datos»
+  const ev = [{ id: "P1", origen: "ficha", titulo: "Ficha DS-2CD" }, { id: "P2", origen: "lista de proveedor", titulo: "NVR-8" }];
+  assert.equal(evidenciaTexto("P1", ev), "Ficha DS-2CD (ficha)");
+  assert.equal(evidenciaTexto("P9", ev), "P9");
+  assert.equal(evidenciaTexto("P1", null), "P1");
+  assert.equal(comprobacionTexto({ comprobadas: 3, degradadas_a_sin_datos: 2, ventajas_descartadas: 1 }), "3 afirmaciones con evidencia; 2 pasadas a «sin datos» por no citar evidencia válida; 1 ventaja descartada por no tener evidencia");
+  assert.equal(comprobacionTexto({ comprobadas: 1, degradadas_a_sin_datos: 0, ventajas_descartadas: 0 }), "1 afirmación con evidencia");
+  assert.equal(comprobacionTexto(null), "");
 });

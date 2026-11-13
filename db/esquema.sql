@@ -680,3 +680,15 @@ CREATE TABLE IF NOT EXISTS ofertas_encargos (
   actualizado timestamptz NOT NULL DEFAULT now(),
   PRIMARY KEY (motor_id, agente)
 );
+
+-- Comparativa de productos y ventaja competitiva (api/cerebro/licitaciones/comparativa.py): para cada oferta, lo que Claude o ChatGPT concluyen al cruzar los requisitos y criterios del pliego con la EVIDENCIA de producto de 101.cat
+-- (fichas técnicas de la base de conocimiento y líneas de listas de proveedores, sin precios). Cada afirmación cita su evidencia y el código lo comprueba. Una fila por licitación; repetir el paso la sustituye.
+CREATE TABLE IF NOT EXISTS ofertas_comparativa (
+  motor_id    uuid PRIMARY KEY,                     -- la licitación (sin clave ajena: el esquema se aplica por trozos en las pruebas)
+  proveedor   text NOT NULL,                        -- claude | chatgpt
+  modelo      text,
+  contenido   jsonb NOT NULL,                       -- estrategia, requisitos con candidatos, ventajas, riesgos, pendientes y el recuento de lo comprobado
+  evidencias  jsonb NOT NULL DEFAULT '[]',          -- [{id, origen, titulo, fuente}] (sin el texto): para que una persona vea de dónde sale cada [P1]
+  creado      timestamptz NOT NULL DEFAULT now(),
+  actualizado timestamptz NOT NULL DEFAULT now()
+);

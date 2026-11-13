@@ -117,7 +117,7 @@ def plantilla(agente: str, criterios: list[dict] | None = None, n_requisitos: in
             "entrega_al_siguiente": base.get("entrega", "")}
 
 
-def construir_mensajes(titulo: str, organismo: str, pliego: str, requisitos: str, criterios: str, agentes: list[dict], plan: str) -> list[dict]:
+def construir_mensajes(titulo: str, organismo: str, pliego: str, requisitos: str, criterios: str, agentes: list[dict], plan: str, comparativa: str = "") -> list[dict]:
     """Las instrucciones al director y el material público. El pliego es de terceros: va marcado como DATOS. Pura."""
     cfg = config()
     sistema = (
@@ -136,7 +136,8 @@ def construir_mensajes(titulo: str, organismo: str, pliego: str, requisitos: str
         f"Licitación: {_linea(titulo, 200)}\nÓrgano de contratación: {_linea(organismo, 120) or 'no indicado'}\n\n"
         f"Agentes a los que tienes que encargar trabajo (en este orden de trabajo):\n{lista}\n\n"
         f"{plan}\n\n"
-        f"Criterios de adjudicación (ficha de la licitación):\n{criterios}\n\n"
+        + (f"{comparativa}\n\nTen en cuenta esta comparativa al repartir el trabajo: lo «sin datos» o «pendiente» no está comprobado.\n\n" if comparativa else "")
+        + f"Criterios de adjudicación (ficha de la licitación):\n{criterios}\n\n"
         f"Requisitos confirmados del pliego (cítalos por su id):\n{requisitos}\n\n"
         f"Texto de los pliegos (cada página lleva su marca [Documento N · página P]):\n««««\n{pliego}\n»»»»\n"
     )
@@ -253,8 +254,9 @@ async def preparar(motor_id: str, titulo: str, ficha: dict, modelo: str = "auto"
             adapt = X.adaptacion(ficha or {}, pliego)
             _pautas, plan = X.texto_de_adaptacion(adapt)
             from . import redaccion as R
+            from . import comparativa as comparativa_mod
             mensajes = construir_mensajes(titulo, X.organismo_de(ficha), pliego, texto_reqs,
-                                          R._criterios_texto(ficha or {}), agentes, plan)
+                                          R._criterios_texto(ficha or {}), agentes, plan, await comparativa_mod.texto_para(motor_id, 3000))
             preferido = X.proveedor_preferido("encargos", modelo)
             datos, proveedor = await (consulta or externos.consultar_publico)(AGENTE, mensajes, ESQUEMA, max_tokens=int(cfg["max_tokens"]), timeout=300, preferido=preferido)
             texto = aplicar(datos, agentes)

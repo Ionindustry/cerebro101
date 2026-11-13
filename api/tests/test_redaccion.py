@@ -80,7 +80,7 @@ class TestRedaccion(unittest.TestCase):
 
     def test_reservar_prepara_los_pasos_y_omite_lo_que_no_hay_que_escribir(self):
         e = self.reservar()
-        self.assertEqual([p["id"] for p in e["pasos"]], ["encargos", "solucion", "memoria", "administrativo", "costes", "precio", "evaluacion"])
+        self.assertEqual([p["id"] for p in e["pasos"]], ["comparativa", "encargos", "solucion", "memoria", "administrativo", "costes", "precio", "evaluacion"])
         self.assertEqual(e["estado"], "en_curso")
         p = self.pasos(e)
         self.assertEqual(p["solucion"]["secciones"], ["descripcion-solucion"])
@@ -107,7 +107,8 @@ class TestRedaccion(unittest.TestCase):
         self.assertEqual(fin["estado"], "completa")
         self.assertEqual([a for a, _ in inv.llamadas], ["arquitecto-solucion", "redactor-memoria", "administrativo-licitaciones", "costes-licitacion", "precio-licitacion", "evaluador-ofertas"])
         p = self.pasos(fin)
-        self.assertEqual({k: v["estado"] for k, v in p.items()}, {k: "hecho" for k in p})
+        self.assertEqual({k: v["estado"] for k, v in p.items()}, {**{k: "hecho" for k in p}, "comparativa": "omitido"})        # sin pliegos ni fichas no se compara: omitido, con su motivo
+        self.assertIn("Sin comparativa", p["comparativa"]["resumen"])
         self.assertEqual(p["solucion"]["escritas"], 1)
         self.assertIn("Resumen de precio-licitacion", p["precio"]["resumen"])
         self.assertIn("1 con datos pendientes", p["administrativo"]["resumen"])
@@ -397,9 +398,9 @@ class TestTextos(unittest.TestCase):
         self.assertNotIn("Pendientes:", t)                                                  # lo que no bloquea (la fecha) no se le pide al agente
 
     def test_las_pasos_estan_en_el_orden_del_trabajo_y_los_informes_no_escriben(self):
-        self.assertEqual([p["id"] for p in R.PASOS], ["encargos", "solucion", "memoria", "administrativo", "costes", "precio", "evaluacion"])
+        self.assertEqual([p["id"] for p in R.PASOS], ["comparativa", "encargos", "solucion", "memoria", "administrativo", "costes", "precio", "evaluacion"])
         self.assertEqual([p["id"] for p in R.PASOS if p.get("informe")], ["precio", "evaluacion"])
-        self.assertEqual(R.seleccion(R.PASOS[5], [{"sobre": "economico", "clave": "x", "estado": "vacia", "por": "", "version": 0}], False), [])
+        self.assertEqual(R.seleccion(R.PASOS[6], [{"sobre": "economico", "clave": "x", "estado": "vacia", "por": "", "version": 0}], False), [])
 
 
 if __name__ == "__main__":

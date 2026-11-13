@@ -1224,6 +1224,7 @@ export function botonDePaso(paso, ejec) {
   if (paso.estado === "error") return { texto: "Reintentar", rehacer: false, confirmar: false };
   if (paso.estado === "parcial") return { texto: "Completar lo que falta", rehacer: false, confirmar: false };
   if (paso.estado === "pendiente" || paso.estado === "omitido") return { texto: "Hacer este paso", rehacer: false, confirmar: false };
+  if (paso.id === "comparativa" || paso.id === "encargos") return { texto: "Repetir este paso", rehacer: false, confirmar: false };   // se vuelven a generar; no hay borradores de la oferta que pisar
   const informe = paso.id === "precio" || paso.id === "evaluacion";
   return { texto: informe ? "Repetir el informe" : "Rehacer este paso", rehacer: !informe, confirmar: !informe };   // un informe no pisa nada; los borradores sí se rehacen
 }
@@ -1253,3 +1254,24 @@ export function claseDePlazo(dias) {
 
 /** A dónde lleva cada licitación en estudio: su ficha si el motor la conoce y, si no, el embudo. */
 export const hrefEnEstudio = (x) => (x?.motor_id && /^[0-9a-f-]{36}$/i.test(String(x.motor_id)) ? `/licitaciones/expedientes/${x.motor_id}` : "/licitaciones/embudo");
+
+
+// ---- Comparativa de productos y ventaja competitiva (GET licitaciones/ofertas/{id}/comparativa) ----
+
+export const CUMPLE_ETIQUETA = { si: ["Cumple", "abierta"], parcial: ["Cumple en parte", "aviso"], no: ["No cumple", "anulada"], sin_datos: ["Sin datos", ""] };
+export const cumpleEtiqueta = (c) => CUMPLE_ETIQUETA[c] || CUMPLE_ETIQUETA.sin_datos;
+
+/** «P1» → «Ficha DS-2CD (ficha)»: de dónde sale cada evidencia que cita la comparativa, para que una persona la compruebe. Si no la conocemos, el id tal cual. */
+export function evidenciaTexto(id, evidencias) {
+  const e = (Array.isArray(evidencias) ? evidencias : []).find((x) => x.id === id);
+  return e ? `${e.titulo}${e.origen ? ` (${e.origen})` : ""}` : String(id);
+}
+
+/** «12 afirmaciones con evidencia; 2 pasadas a «sin datos»; 1 ventaja descartada». */
+export function comprobacionTexto(c) {
+  if (!c) return "";
+  const p = [`${c.comprobadas ?? 0} ${c.comprobadas === 1 ? "afirmación con evidencia" : "afirmaciones con evidencia"}`];
+  if (c.degradadas_a_sin_datos) p.push(`${c.degradadas_a_sin_datos} pasada${c.degradadas_a_sin_datos === 1 ? "" : "s"} a «sin datos» por no citar evidencia válida`);
+  if (c.ventajas_descartadas) p.push(`${c.ventajas_descartadas} ventaja${c.ventajas_descartadas === 1 ? "" : "s"} descartada${c.ventajas_descartadas === 1 ? "" : "s"} por no tener evidencia`);
+  return p.join("; ");
+}
