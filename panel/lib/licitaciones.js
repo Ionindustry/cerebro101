@@ -1274,6 +1274,7 @@ export function comprobacionTexto(c) {
   if (c.degradadas_a_sin_datos) p.push(`${c.degradadas_a_sin_datos} pasada${c.degradadas_a_sin_datos === 1 ? "" : "s"} a «sin datos» por no citar evidencia válida`);
   if (c.ventajas_descartadas) p.push(`${c.ventajas_descartadas} ventaja${c.ventajas_descartadas === 1 ? "" : "s"} descartada${c.ventajas_descartadas === 1 ? "" : "s"} por no tener evidencia`);
   return p.join("; ");
+}
 
 /** ¿Se ofrece el botón «Volver a lanzar la preparación»? Cuando la última ejecución terminó con un error, a medias o con pasos sin hacer. Mientras trabajan los agentes, no. Pura. */
 export function puedeRelanzar(ejec) {
