@@ -39,6 +39,7 @@ from ..licitaciones import encargos as encargos_ofertas
 from ..licitaciones import comparativa as comparativa_ofertas
 from ..licitaciones import equivalencia as equivalencia_ofertas
 from .. import precios_venta as precios_venta_pantalla
+from .. import ranking_ventas
 from .. import tarifas_auto as tarifas_automaticas
 from .. import listas_precios as listas_precios_mod
 from ..licitaciones import partidas as partidas_ofertas
@@ -1557,6 +1558,20 @@ def _error_precios(e: Exception):
     if isinstance(e, listas_precios_mod.NoExiste):
         return HTTPException(404, str(e))
     return HTTPException(422, str(e))
+
+
+@app.get("/ventas/ranking")
+async def ranking_de_ventas(dias: int = 365, top: int = 10, usuario: Usuario = Depends(usuario_actual)):
+    """Los artículos y fabricantes que más venden en cada tipo de producto (CCTV, accesos, intrusión…) en un periodo. Solo Dirección: son ventas de la empresa."""
+    if "direccion" not in usuario.roles:
+        raise HTTPException(403, "Las ventas de la empresa las ve Dirección")
+    try:
+        return await ranking_ventas.obtener(dias, top)
+    except ValueError as e:
+        raise HTTPException(422, str(e)) from None
+    except Exception as e:  # noqa: BLE001 — el ERP puede fallar de muchas formas; se dice sin enseñar detalles internos
+        log.warning("ventas: no se ha podido leer el ERP: %s", type(e).__name__)
+        raise HTTPException(502, "No se han podido leer los pedidos de venta del ERP (¿está en marcha y con permiso de lectura para Dirección?)") from None
 
 
 @app.get("/precios/propuestas")

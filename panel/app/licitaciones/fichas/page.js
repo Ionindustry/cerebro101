@@ -53,7 +53,7 @@ export default function Fichas() {
       <p className="lic-vuelve"><Link href="/licitaciones">← Licitaciones</Link></p>
       <h1>Fichas técnicas de producto</h1>
       <p className="meta">Las fichas de fabricante son la evidencia con la que la comparativa y la tabla de equivalencias demuestran que un producto cumple. Cada PDF pasa por el antivirus y se lee en un proceso aparte.</p>
-      {error && <Fallo error={error} />}
+      {error && <Fallo e={error} />}
       {aviso && <p className="aviso" role="status">{aviso}</p>}
       {d && (<>
         <section className="tarjeta">
