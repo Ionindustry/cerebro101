@@ -2,7 +2,7 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { aBase64 } from "../../../lib/adjuntos";
-import { ESTADO_FICHA, ORIGEN_FICHA, informeFichasTexto } from "../../../lib/licitaciones";
+import { ESTADO_FICHA, ORIGEN_FICHA, comandoAutorizar, informeFichasTexto } from "../../../lib/licitaciones";
 import { Fallo, pedirCerebro } from "../cliente";
 
 const enviar = (cuerpo) => ({ method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(cuerpo) });
@@ -63,7 +63,15 @@ export default function Fichas() {
           {revision && (
             <div className="meta">
               <p>{revision.fichas} fichas descargables de dominios autorizados · {revision.lineas_sin_enlace} líneas sin enlace.</p>
-              {Object.keys(revision.dominios_fuera).length > 0 && <p>Dominios sin autorizar: {Object.entries(revision.dominios_fuera).map(([k, n]) => `${k} (${n})`).join(", ")}</p>}
+              {revision.sugerencias?.length > 0 && (
+                <div>
+                  <p>Dominios sin autorizar (los decides tú; el directorio de fabricantes dice lo que se sabe):</p>
+                  <ul>{revision.sugerencias.map((x) => (
+                    <li key={x.dominio}><strong>{x.dominio}</strong> ({x.enlaces} enlaces){x.conocido ? ` · ${x.fabricante}` : ""} — <span className={x.comprobado ? "" : "aviso"}>{x.recomendacion}</span>{x.conocido && x.login && x.login !== "NO_CONFIRMADO" ? ` · login en su área documental: ${x.login}` : ""}</li>
+                  ))}</ul>
+                  <p>Para autorizar los comprobados, en Ubuntu: <code>{comandoAutorizar(revision.sugerencias)}</code></p>
+                </div>
+              )}
               <button className="boton si" disabled={trabajando || revision.fichas === 0} onClick={lanzar}>Cargar {revision.fichas} fichas</button>
             </div>
           )}

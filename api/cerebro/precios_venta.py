@@ -62,7 +62,7 @@ async def _ofertas() -> tuple[dict[str, dict[str, dict]], int]:
         for l in f["lineas"]:
             ofertas.setdefault(l["codigo"], {})[f["lista"]] = {
                 "proveedor": f["proveedor"]["nombre"], "lista": f["lista"], "canal": canal, "coste": l["precio"], "moneda": f["moneda"], "stock": l.get("stock"), "ref": l["ref"], "desc": l["desc"],
-                "familia": l.get("familia") or "", "marca": l.get("marca") or "", "pvp": l.get("pvp")}
+                "familia": l.get("familia") or "", "marca": l.get("marca") or "", "pvp": l.get("pvp"), "enlaces": l.get("enlaces") or {}}
     return ofertas, sin_tarifa
 
 
@@ -338,3 +338,62 @@ async def aplicar(propuesta: int, departamento: str) -> dict:
         raise ErrorVenta("La aplicación no ha terminado: " + "; ".join(res["errores"][:3]) + f". Se ha guardado lo hecho ({res['precios_nuevos']} precios nuevos y {res['precios_actualizados']} actualizados); se puede repetir sin duplicar.")
     log.info("precios de venta: propuesta %s aplicada: %s", propuesta, res)
     return {"propuesta": propuesta, "estado": "aplicada", **res}
+
+
+# ---------------------------------------------------------------- pantalla de revisión (panel «Precios»)
+PAGINA = 50
+
+
+async def propuestas(limite: int = 20) -> list[dict]:
+    """Las últimas propuestas de precios de venta (sin sus líneas), para elegir cuál revisar."""
+    async with await LP._conectar() as conn:
+        cur = await conn.execute("SELECT id, agente, estado, lista, resumen, creado, aplicada_en FROM propuestas_venta ORDER BY id DESC LIMIT %s", [min(max(int(limite), 1), 100)])
+        filas = await cur.fetchall()
+    return [{"id": f["id"], "agente": f["agente"], "estado": f["estado"], "lista": f["lista"], "resumen": f["resumen"], "creado": f["creado"].isoformat(),
+             "aplicada_en": f["aplicada_en"].isoformat() if f["aplicada_en"] else None} for f in filas]
+
+
+def filtrar_lineas(lineas: list[dict], familia: str = "", cambio: str = "", texto: str = "", solo_bajo_minimo: bool = False, minimo: Decimal | None = None) -> list[dict]:
+    """Las líneas que pasan los filtros de la pantalla (familia, tipo de cambio, texto en código, referencia o descripción, o margen bajo el mínimo). Pura."""
+    fam, t = precios.norm(familia), precios.norm(texto)
+    out = []
+    for l in lineas:
+        if fam and precios.norm(l.get("familia")) != fam:
+            continue
+        if cambio and l.get("cambio") != cambio:
+            continue
+        if t and t not in precios.norm(f"{l.get('codigo')} {l.get('ref')} {l.get('desc')} {l.get('marca')}"):
+            continue
+        if solo_bajo_minimo and not (minimo is not None and Decimal(l["margen"]) < minimo and not l["excluida"]):
+            continue
+        out.append(l)
+    return out
+
+
+async def ver(propuesta: int, departamento: str = "operaciones", familia: str = "", cambio: str = "", texto: str = "", solo_bajo_minimo: bool = False, pagina: int = 1) -> dict:
+    """Una propuesta para revisarla: resumen, avisos, familias y estrategias disponibles, la vista previa de lo que se aplicaría y una página de líneas con los filtros pedidos."""
+    f = await _cargar(propuesta)
+    cfg = await cambio_cfg()
+    todas = f["lineas"]
+    filtradas = filtrar_lineas(todas, familia, cambio, texto, solo_bajo_minimo, cfg["margen"]["minimo"])
+    pagina = max(int(pagina or 1), 1)
+    trozo = filtradas[(pagina - 1) * PAGINA:pagina * PAGINA]
+    try:
+        vista = await vista_aplicar(propuesta, departamento) if f["estado"] in ("propuesta", "error") else None
+    except ErrorVenta:
+        vista = None
+    return {"propuesta": f["id"], "estado": f["estado"], "lista": f["lista"], "agente": f["agente"], "creado": f["creado"].isoformat(), "resumen": f["resumen"], "avisos": f["avisos"],
+            "resultado": f["resultado"], "margen_minimo": str(cfg["margen"]["minimo"]), "familias": sorted({l.get("familia") or "" for l in todas}),
+            "estrategias": sorted({n for l in todas for n in (l.get("estrategias") or {})}), "total": len(filtradas), "pagina": pagina, "por_pagina": PAGINA,
+            "lineas": [_linea_publica(l) for l in trozo], "vista": vista, "editable": f["estado"] in ("propuesta", "error")}
+
+
+async def cambio_cfg() -> dict:
+    return await cambio.configuracion_de_precios()
+
+
+def _linea_publica(l: dict) -> dict:
+    """Lo que enseña la pantalla de cada línea (con el coste, que es confidencial: la pantalla es solo de Dirección)."""
+    est = {n: v.get("precio") for n, v in (l.get("estrategias") or {}).items()}
+    return {k: l.get(k) for k in ("codigo", "ref", "desc", "familia", "marca", "proveedor", "coste_eur", "calculado", "venta", "ajustado", "excluida", "margen", "actual", "cambio", "variacion_pct", "avisos",
+                                  "mercado", "pvp_fabricante")} | {"estrategias": est}

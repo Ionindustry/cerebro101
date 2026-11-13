@@ -34,9 +34,28 @@ Lo que Dirección ha pedido y cómo se construye, por pasos (cada uno, su PR). *
    con su fuente y su fecha** (`anotar_mercado`; sin fuente no se anota; los precios de tienda llevan IVA y se les quita; los de más de 90 días no cuentan; las adjudicaciones son un importe de contrato, no un precio unitario: solo contexto).
    Con ellos el código calcula, para cada artículo, las estrategias de `config/precios.yaml` (competitivo, alineado, premium: parten del mínimo o la mediana de la competencia con un ajuste) **sin bajar nunca del margen mínimo**.
    La propuesta de precios de venta lleva por artículo el precio con tu margen, el PVP del fabricante, el mercado (mínimo, mediana, máximo, fecha) y las estrategias; Dirección elige con `elegir_estrategia` (todos, una familia o códigos)
-   o ajusta a mano, y aprueba como siempre. Tabla `referencias_mercado`. Pendiente: pantalla propia de revisión en el panel.
+   o ajusta a mano, y aprueba como siempre. Tabla `referencias_mercado`. **Pantalla «Precios» del panel, hecha** (solo Dirección): ver las propuestas con filtros (familia, cambio, texto, bajo el margen mínimo), ajustar un precio a mano, excluir artículos, aplicar una estrategia a todo o a una familia, ver la vista previa y **aplicar en el ERP con confirmación expresa** (firma única de Dirección, como en la bandeja; queda constancia de quién firmó). Ajustes y estrategias también dejan constancia. Nada llega al ERP sin ese paso.
 5. Documentación del proveedor y fichas técnicas (descarga de internet y subida a mano).
-6. Que Costes, Precio y Catálogo usen todo esto al preparar ofertas y licitaciones. **Hecho para Costes y Precio de licitaciones** (`cerebro/licitaciones/partidas.py`, ver `docs/PROYECTO_LICITACIONES.md`): las partidas de equipos salen de la tabla de equivalencias, una persona pone las cantidades y el código calcula el coste real con las tarifas; el modelo local de Costes y de Precio recibe esas cifras. Pendiente: Catálogo.
-7. Actualización periódica de precios por archivo y por webservice.
+6. Que Costes, Precio y Catálogo usen todo esto al preparar ofertas y licitaciones. **Hecho para Costes y Precio de licitaciones** (`cerebro/licitaciones/partidas.py`, ver `docs/PROYECTO_LICITACIONES.md`): las partidas de equipos salen de la tabla de equivalencias, una persona pone las cantidades y el código calcula el coste real con las tarifas; el modelo local de Costes y de Precio recibe esas cifras. **Catálogo, hecho** (herramienta `catalogo`, ver abajo).
+7. Actualización periódica de precios por archivo y por webservice. **Hecho** (`cerebro/tarifas_auto.py`, `config/tarifas_auto.yaml`; ver más abajo).
 
 Las tarifas reales de los proveedores son confidenciales: **no se guardan en el repositorio**; las pruebas usan ficheros sintéticos con la misma estructura.
+
+
+## Actualización periódica de tarifas (por carpeta y por servicio web)
+
+Cada día a las 6:40 (y al pulsar «Comprobar ahora» en **Jarvis → Precios → Tarifas de proveedores**) el sistema mira cada proveedor de `config/tarifas_auto.yaml`. La lista viene **vacía**: añade tus proveedores (el fichero trae un ejemplo comentado).
+
+- **Por carpeta:** deja el Excel o CSV en `/datos/tarifas/<id>/` con `./scripts/tarifa_subir.sh <id> /ruta/a/la_tarifa.xlsx` (ventana Ubuntu; en WSL tus ficheros de Windows están en `/mnt/c/Users/TU_USUARIO/Downloads/`). Cualquier fichero con contenido nuevo cuenta; los ya vistos no se repiten.
+- **Por servicio web:** una dirección `https` de un dominio de `hosts` (cada redirección se revalida; anti-SSRF, tamaño máximo). Formatos `csv`, `xlsx` o `json` (la lista y las columnas del JSON se indican en la configuración). Si pide clave, en la configuración solo va el **nombre** (`clave_secreto`); la clave va en `secretos/tarifas.env` (una línea `NOMBRE=valor`, fuera de git; no la pegues en ningún chat) y no sale en ningún registro.
+
+Cada fichero nuevo pasa por la **misma tubería** que una tarifa subida a mano (cuarentena, antivirus, lectura aislada, coste en euros con cambio y logística) y deja **una propuesta de importación** con su resumen frente a la última cargada: artículos nuevos y retirados, cuántos suben y bajan, variación media y los mayores cambios. Si parece **sospechosa** (desaparece más de un tercio de los artículos, o la mayoría cambia más de un 40 %: lo típico de una columna movida o un fichero a medias) se avisa con fuerza, y aparece como urgente en «Hoy».
+
+**Nada se aplica solo.** En la pantalla «Precios» Dirección ve la vista previa, firma (confirmación expresa, queda constancia) y se cargan en el ERP el proveedor, los artículos nuevos y sus costes. **Cargar costes no cambia ningún precio de venta**: después se calcula una propuesta de precios y se aprueba aparte. Un fallo de un proveedor (descarga rota, clave que falta) no frena a los demás y se ve en su línea.
+
+
+## Catálogo de Proveedores con todo esto
+
+El agente **Catálogo de Proveedores** (que trabaja cada noche a la 1:00 y a petición) tiene ahora la herramienta `catalogo`, de **solo lectura**: `buscar` (por referencia, nombre, marca o familia: mejor coste en euros, proveedor, stock y si trae enlace de ficha), `proveedores_de` (lo que ofrece cada proveedor del mismo artículo, ordenado por coste, con moneda, canal, stock y avisos), `ficha` (fichas técnicas ya cargadas de una referencia), `fichas_pendientes` (cuántas se podrían cargar y qué dominios quedan sin autorizar) y `tarifas_pendientes` (tarifas nuevas por revisar y proveedores cuya comprobación ha fallado). Así su trabajo diario es avisar a Dirección de las tarifas nuevas y de lo que falla. **Los costes los calcula el código** (mismo cálculo que la lista de venta); el agente no escribe cifras ni aplica nada.
+
+**Confidencialidad:** las herramientas con tarifas o costes (`catalogo` y `listas_precios`) están marcadas como confidenciales: **en cuanto el agente usa una con éxito, el resto de esa petición solo va a modelos locales** (nunca a Claude ni a ChatGPT, aunque la consulta sea «compleja»).

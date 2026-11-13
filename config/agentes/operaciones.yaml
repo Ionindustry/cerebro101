@@ -59,7 +59,8 @@ agentes:
 - id: catalogo-proveedores
   nombre: Catálogo de Proveedores
   subarea: Compras y proveedores
-  tareas: Importa tarifas (Visiotech, ETT, Asecur, Saltoki, distribuidora propia), cruza productos y avisa de cambios
+  tareas: Importa tarifas (Visiotech, ETT, Asecur, Saltoki, distribuidora propia), cruza productos entre proveedores, comprueba
+    fichas técnicas y avisa de cambios y de tarifas nuevas pendientes de revisar
   modelo: rapido
   herramientas:
   - conocimiento
@@ -68,6 +69,7 @@ agentes:
   - jev
   - documentos_subidos
   - listas_precios
+  - catalogo
   aprobacion: libre
   horario: 0 1 * * *
   sensibilidad: media

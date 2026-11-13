@@ -784,3 +784,30 @@ CREATE TABLE IF NOT EXISTS ofertas_partidas (
   actualizado timestamptz NOT NULL DEFAULT now(),
   UNIQUE (motor_id, clave)
 );
+
+-- Actualización periódica de tarifas de proveedor (api/cerebro/tarifas_auto.py): cada fichero nuevo (de una carpeta o bajado de una dirección autorizada) genera UNA propuesta de importación con su resumen de cambios
+-- frente a la última aplicada. Nada se aplica solo: la firma Dirección en la pantalla «Precios». Un mismo fichero (mismo contenido) no se procesa dos veces.
+CREATE TABLE IF NOT EXISTS tarifas_actualizaciones (
+  id            bigserial PRIMARY KEY,
+  proveedor_id  text NOT NULL,
+  origen        text NOT NULL CHECK (origen IN ('carpeta', 'url')),
+  nombre        text NOT NULL,
+  sha256        text NOT NULL,
+  importacion   bigint,                             -- la propuesta en importaciones_precios (sin clave ajena: el esquema se aplica por trozos en las pruebas)
+  estado        text NOT NULL DEFAULT 'pendiente' CHECK (estado IN ('pendiente', 'aplicada', 'descartada', 'rechazada', 'error')),
+  motivo        text NOT NULL DEFAULT '',
+  cambios       jsonb NOT NULL DEFAULT '{}',
+  creado        timestamptz NOT NULL DEFAULT now(),
+  decidido_por  text,
+  decidido      timestamptz,
+  UNIQUE (proveedor_id, sha256)
+);
+CREATE INDEX IF NOT EXISTS tarifas_actualizaciones_estado ON tarifas_actualizaciones (estado, id DESC);
+-- Cuándo se comprobó por última vez cada proveedor y si falló (para ver a simple vista que una descarga se ha roto).
+CREATE TABLE IF NOT EXISTS tarifas_vigilancia (
+  proveedor_id  text PRIMARY KEY,
+  ultimo_intento timestamptz,
+  ultimo_ok     timestamptz,
+  error         text NOT NULL DEFAULT '',
+  novedades     integer NOT NULL DEFAULT 0
+);

@@ -11,12 +11,14 @@ Sin evidencia el paso no se hace. Sin precios: Costes y Precio siguen siendo de 
 """
 from __future__ import annotations
 
+import itertools
 import logging
 import re
 
 from .. import anonimizacion as anon
 from .. import modelos_externos as externos
 from . import comparativa as C
+from . import familias as F
 from . import ofertas as O
 from . import pliegos
 from . import redaccion_externa as X
@@ -124,7 +126,7 @@ ESQUEMA = {
 }
 
 
-def construir_mensajes(titulo: str, organismo: str, pliego: str, requisitos: str, evidencias: str) -> list[dict]:
+def construir_mensajes(titulo: str, organismo: str, pliego: str, requisitos: str, evidencias: str, guia: str = "") -> list[dict]:
     sistema = (
         "Eres un ingeniero de preventa de 101.cat que prepara una licitación pública. Tu tarea: de los requisitos técnicos del pliego, sacar los parámetros MEDIBLES y, para cada uno, decir qué productos de 101.cat "
         "lo IGUALAN o SUPERAN, según la EVIDENCIA que se te da. Respondes en español.\n"
@@ -135,15 +137,90 @@ def construir_mensajes(titulo: str, organismo: str, pliego: str, requisitos: str
         "NUNCA uses lo que creas saber de marcas o modelos: una ficha con datos falsos excluye la oferta.\n"
         "4. El veredicto lo comprobará el código con los números: tú propón «supera», «iguala», «no_cumple» o «sin_datos». «Más es mejor» solo cuando el pliego pide un MÍNIMO (>=); si pide un máximo (<=), mejor es menos.\n"
         "5. No hables de precios ni de costes. Pocos parámetros bien apoyados mejor que muchos vagos; prioriza los que puntúan o pueden excluir.\n"
-        "6. Es un INFORME DE AYUDA: una persona lo revisa."
+        "6. Para cada producto que propongas, evalúalo en TODOS los parámetros en los que la evidencia lo permita (no solo en el que lo encontraste): así el sistema puede proponer el MENOR número de productos que cubra todo el pliego.\n"
+        "7. Es un INFORME DE AYUDA: una persona lo revisa."
     )
     usuario = (
         f"Licitación: {C._corto(titulo, 200)}\nÓrgano de contratación: {C._corto(organismo, 120) or 'no indicado'}\n\n"
         f"Requisitos técnicos confirmados del pliego:\n{requisitos}\n\n"
         f"EVIDENCIA de producto de 101.cat (lo único en que puedes apoyarte):\n{evidencias}\n\n"
-        f"Texto de los pliegos (cada página lleva su marca [Documento N · página P]):\n««««\n{pliego}\n»»»»\n"
+        + (f"{guia}\n\n" if guia else "")
+        + f"Texto de los pliegos (cada página lleva su marca [Documento N · página P]):\n««««\n{pliego}\n»»»»\n"
     )
     return [{"role": "system", "content": sistema}, {"role": "user", "content": usuario}]
+
+
+def _clave_producto(nombre: str) -> str:
+    return re.sub(r"[^a-z0-9]", "", C._norm(nombre))
+
+
+MAX_PRODUCTOS_EN_SOLUCION = 6
+MAX_COMBINACIONES = 60_000
+
+
+def seleccionar_solucion(parametros: list[dict]) -> dict:
+    """El MENOR conjunto de productos que cubre todos los parámetros con candidato verificado (iguala o supera, comprobado por el código), y qué producto se asigna a cada parámetro.
+    «Un mismo producto» se reconoce aunque el modelo lo escriba distinto («MS-C8573» y «Milesight MS-C8573»: una referencia contenida en el otro, de 4 caracteres o más). Entre varios conjuntos del mismo
+    tamaño gana el que más veces SUPERA lo pedido y, a igualdad, el de nombres menores (determinista). Si ningún conjunto de hasta 6 productos lo cubre todo, se elige el que más cubre (voraz). Pura."""
+    por_param: list[dict[str, str]] = []              # por parámetro: {clave canónica: veredicto del mejor}
+    nombres: dict[str, str] = {}
+    claves = sorted({_clave_producto(c["producto"]) for p in parametros for c in p["candidatos"] if c["veredicto"] in ("supera", "iguala") and c["verificado"]} - {""}, key=len, reverse=True)
+    canon: dict[str, str] = {}
+    for k in claves:                                   # las largas primero: la corta se une a la larga que la contiene
+        destino = next((g for g in canon.values() if len(k) >= 4 and k in g), None)
+        canon[k] = destino or k
+    for p in parametros:
+        d: dict[str, str] = {}
+        for c in p["candidatos"]:
+            if c["veredicto"] in ("supera", "iguala") and c["verificado"] and _clave_producto(c["producto"]):
+                k = canon[_clave_producto(c["producto"])]
+                if len(c["producto"]) >= len(nombres.get(k, "")):
+                    nombres[k] = c["producto"]
+                if d.get(k) != "supera":
+                    d[k] = c["veredicto"]
+        por_param.append(d)
+    universo = {i for i, d in enumerate(por_param) if d}
+    sin_cubrir = [p["parametro"] for i, p in enumerate(parametros) if i not in universo]
+    productos = sorted({k for d in por_param for k in d})
+    cubre = {k: {i for i, d in enumerate(por_param) if k in d} for k in productos}
+    superan = {k: sum(1 for d in por_param if d.get(k) == "supera") for k in productos}
+
+    def puntuacion(conjunto):
+        return (-sum(superan[k] for k in conjunto), tuple(nombres[k] for k in sorted(conjunto)))
+    elegido: tuple[str, ...] | None = None
+    exacto = False
+    if universo:
+        limite, probadas = min(len(productos), MAX_PRODUCTOS_EN_SOLUCION), 0
+        for n in range(1, limite + 1):
+            mejores = []
+            for combo in itertools.combinations(productos, n):
+                probadas += 1
+                if probadas > MAX_COMBINACIONES:
+                    break
+                if set().union(*(cubre[k] for k in combo)) >= universo:
+                    mejores.append(combo)
+            if mejores:
+                elegido, exacto = min(mejores, key=puntuacion), True
+                break
+            if probadas > MAX_COMBINACIONES:
+                break
+        if elegido is None:                            # voraz: lo que más cubre, repetidamente
+            faltan, voraz = set(universo), []
+            while faltan:
+                k = max(productos, key=lambda x: (len(cubre[x] & faltan), superan[x], [-ord(c) for c in nombres[x]]))
+                if not cubre[k] & faltan:
+                    break
+                voraz.append(k)
+                faltan -= cubre[k]
+            elegido = tuple(voraz)
+    elegido = elegido or ()
+    asignacion: dict[int, str] = {}
+    for i, d in enumerate(por_param):
+        dentro = [k for k in elegido if k in d]
+        if dentro:
+            asignacion[i] = nombres[sorted(dentro, key=lambda k: (d[k] != "supera", nombres[k]))[0]]
+    lista = [{"producto": nombres[k], "cubre": [parametros[i]["parametro"] for i in sorted(cubre[k] & universo)], "supera": superan[k]} for k in sorted(elegido, key=lambda k: (-len(cubre[k]), nombres[k]))]
+    return {"productos": lista, "asignacion": asignacion, "sin_cubrir": sin_cubrir, "minimo": exacto, "total_candidatos": len(productos)}
 
 
 def verificar(datos: dict, textos: dict[str, str], texto_pliego: str = "") -> dict:
@@ -186,8 +263,12 @@ def verificar(datos: dict, textos: dict[str, str], texto_pliego: str = "") -> di
                            "cita_en_pliego": bool(cita) and (not pliego_n or pliegos.normalizar(cita)[:80] in pliego_n),
                            "candidatos": cands, "cubierto": bool(buenos), "recomendado": next((c["producto"] for c in cands if c["veredicto"] in ("supera", "iguala") and c["verificado"]), "")})
     pend = [C._corto(x, 300) for x in (datos.get("pendientes") or []) if C._corto(x, 300)][:15]
+    sol = seleccionar_solucion(parametros)
+    for i, p in enumerate(parametros):                 # el recomendado de cada parámetro sale de la solución con el menor número de productos; el individual (el mejor de su fila) se conserva
+        p["recomendado_individual"] = p["recomendado"]
+        p["recomendado"] = sol["asignacion"].get(i, "")
     cubiertos = sum(1 for p in parametros if p["cubierto"])
-    return {"parametros": parametros, "pendientes": pend,
+    return {"parametros": parametros, "pendientes": pend, "solucion": {k: v for k, v in sol.items() if k != "asignacion"},
             "comprobacion": {"parametros": len(parametros), "cubiertos": cubiertos, "sin_cubrir": len(parametros) - cubiertos, "corregidos_por_codigo": corregidas,
                              "degradados_a_sin_datos": degradadas, "sin_verificar": sin_verificar}}
 
@@ -236,7 +317,7 @@ async def preparar(motor_id: str, titulo: str, ficha: dict, modelo: str = "auto"
         if motivos:
             return {"estado": "omitida", "resumen": "Sin tabla de equivalencias: los datos de producto no se pueden anonimizar con garantías, así que no salen a la nube (" + "; ".join(motivos)[:150] + ")."}
         pliego, avisos = X.texto_de_pliegos(docs, int(X.configuracion()["max_caracteres_pliego"]))
-        mensajes = construir_mensajes(titulo, X.organismo_de(ficha), pliego, texto_reqs, limpios[0]["content"])
+        mensajes = construir_mensajes(titulo, X.organismo_de(ficha), pliego, texto_reqs, limpios[0]["content"], F.guia(texto_reqs + "\n" + pliego))
         preferido = X.proveedor_preferido("equivalencia", modelo)
         datos, proveedor = await (consulta or externos.consultar_publico)(AGENTE, mensajes, ESQUEMA, max_tokens=int(X.configuracion()["max_tokens"]), timeout=300, preferido=preferido)
         datos = anon.desanonimizar(datos, sesion) if sesion else datos
@@ -246,6 +327,7 @@ async def preparar(motor_id: str, titulo: str, ficha: dict, modelo: str = "auto"
         c = contenido["comprobacion"]
         quien = "Claude" if proveedor == "claude" else "ChatGPT"
         resumen = (f"Tabla de equivalencias hecha con {quien} ({nombre_modelo}): {c['parametros']} parámetros medibles, {c['cubiertos']} con producto que iguala o supera, {c['sin_cubrir']} sin cubrir. "
+                   f"Solución con {len(contenido['solucion']['productos'])} producto(s) para cubrir todo lo cubrible. "
                    f"Veredictos fijados por el código: {c['corregidos_por_codigo']} corregidos al modelo, {c['degradados_a_sin_datos']} pasados a «sin datos» por no figurar el valor en la evidencia"
                    + (f", {c['sin_verificar']} sin poder comparar números (revisar)" if c["sin_verificar"] else "") + "." + "".join(f" {a}." for a in avisos))
         return {"estado": "hecha", "proveedor": proveedor, "modelo": nombre_modelo, "resumen": resumen}

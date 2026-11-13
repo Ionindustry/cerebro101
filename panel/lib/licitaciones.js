@@ -1436,3 +1436,16 @@ export function cantidadAEnvio(texto) {
   const t = String(texto ?? "").trim();
   return t === "" ? null : t;
 }
+
+/** «Solución con 2 productos» / «Sin productos»: el titular de la solución mínima de la tabla de equivalencias. Pura. */
+export function solucionTitulo(s) {
+  const n = s?.productos?.length || 0;
+  if (!n) return "Sin productos que cubran lo pedido";
+  return `Solución con ${n} ${n === 1 ? "producto" : "productos"}${s.minimo ? " (el mínimo posible)" : " (lo que más cubre: no cabe en 6)"}`;
+}
+
+/** El comando para autorizar los dominios COMPROBADOS de una lista de sugerencias (los no comprobados exigen --forzar y que Dirección los confirme a mano: no se ofrecen aquí). Pura. */
+export function comandoAutorizar(sugerencias) {
+  const ok = (sugerencias || []).filter((x) => x.comprobado && /^[a-z0-9.-]+$/.test(x.dominio)).map((x) => x.dominio);
+  return ok.length ? `python3 scripts/fichas_autorizar.py ${ok.join(" ")}` : "(ninguno de estos dominios está comprobado en el directorio: ábrelos y confirma cuáles son los oficiales antes de autorizarlos)";
+}

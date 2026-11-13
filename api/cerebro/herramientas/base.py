@@ -33,6 +33,7 @@ class Herramienta:
     campos: dict[str, dict[str, str]] = field(default_factory=dict)   # operación con **campos → {campo: descripción}
     ejemplos: dict[str, dict] = field(default_factory=dict)   # operación → argumentos de ejemplo (el primero va al prompt)
     vistas: dict[str, Funcion] = field(default_factory=dict)  # operación externa → vista previa para quien aprueba (mismos argumentos)
+    confidencial: bool = False        # sus resultados llevan datos que no pueden salir de la empresa (costes y tarifas de proveedor): tras usarla, el agente solo trabaja con modelos locales
 
 
 _REGISTRO: dict[str, Herramienta] = {}
@@ -53,6 +54,12 @@ def validar_llamada(ficha: Ficha, nombre: str, operacion: str, argumentos: dict,
     except (ValueError, LookupError, PermissionError) as e:
         return str(e)
     return None
+
+
+def es_confidencial(nombre: str) -> bool:
+    """¿Los resultados de esta herramienta son confidenciales (tarifas, costes)? Entonces el agente deja de usar modelos externos en esa petición."""
+    h = _REGISTRO.get(nombre)
+    return bool(h and h.confidencial)
 
 
 def es_externa(nombre: str, operacion: str) -> bool:

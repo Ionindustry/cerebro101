@@ -13,7 +13,7 @@ from datetime import datetime, timezone
 import psycopg
 from psycopg.rows import dict_row
 
-from . import antivirus, copias
+from . import antivirus, copias, tarifas_auto
 from .ajustes import ajustes
 from .aprobaciones import bandeja
 from .licitaciones import frescura, resumen as resumen_lic
@@ -38,6 +38,17 @@ def de_aprobaciones(filas: list[dict], ahora: datetime) -> list[dict]:
     resumen = "; ".join(str((f.get("datos") or {}).get("resumen") or f.get("accion") or "")[:80] for f in filas[:2] if f)
     return [_it("urgente" if horas > 24 else "aviso", "aprobaciones", f"{n} {'aprobación pendiente' if n == 1 else 'aprobaciones pendientes'}",
                 (f"La más antigua espera desde hace {horas:.0f} h. " if horas >= 2 else "") + resumen, "/aprobaciones")]
+
+
+def de_tarifas(filas: list[dict] | None) -> list[dict]:
+    """Un elemento con las tarifas de proveedor nuevas pendientes de revisar (aviso; urgente si alguna parece sospechosa: fichero a medias o columna movida). Solo Dirección. Pura."""
+    if not filas:
+        return []
+    n = len(filas)
+    sospechosas = [f for f in filas if (f.get("cambios") or {}).get("sospechosa")]
+    prov = ", ".join(sorted({str(f.get("proveedor_id")) for f in filas})[:3])
+    return [_it("urgente" if sospechosas else "aviso", "precios", f"{n} {'tarifa nueva de proveedor pendiente' if n == 1 else 'tarifas nuevas de proveedores pendientes'} de revisar",
+                f"{prov}." + (f" {len(sospechosas)} con cambios sospechosos: míralo antes de aplicar." if sospechosas else " Nada se aplica hasta que la firmes."), "/precios")]
 
 
 def de_licitaciones(seg: dict | None) -> list[dict]:
@@ -128,6 +139,8 @@ async def construir(roles: set[str], departamentos: set[str], ahora: datetime | 
             return None
 
     items = de_aprobaciones(await leer("aprobaciones", bandeja.pendientes, deps) or [], ahora)
+    if es_direccion:
+        items += de_tarifas(await leer("tarifas", tarifas_auto.pendientes))
     if ve_lic:
         items += de_licitaciones(await leer("seguimiento", _seguimiento, ahora))
         items += de_novedades(await leer("ultimo_resumen", resumen_lic.leer))

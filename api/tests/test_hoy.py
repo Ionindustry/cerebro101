@@ -82,7 +82,7 @@ class TestPuros(unittest.TestCase):
 
 class TestConstruir(unittest.TestCase):
     def lista(self, roles, deps, **kw):
-        base = {"aprobaciones": fuente(APROB), "seguimiento": fuente(SEG), "ultimo_resumen": fuente(None), "antivirus": fuente(AV_MAL), "copias": fuente(COP_MAL), "motor": fuente(MOTOR_OK)}
+        base = {"aprobaciones": fuente(APROB), "seguimiento": fuente(SEG), "ultimo_resumen": fuente(None), "antivirus": fuente(AV_MAL), "copias": fuente(COP_MAL), "motor": fuente(MOTOR_OK), "tarifas": fuente([])}
         return ejecutar(H.construir(roles, deps, AHORA, **{**base, **kw}))
 
     def test_direccion_lo_ve_todo_ordenado_por_urgencia(self):

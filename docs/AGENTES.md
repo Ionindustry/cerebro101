@@ -75,7 +75,7 @@
 | Entrega | Entrega | rapido | simple | bajo petición | Checklists de entrega al cliente y confirmación de cierre |
 | Calidad | Calidad | principal | libre | bajo petición | Registra incidencias, analiza causas y propone mejoras de proceso |
 | Compras | Compras y proveedores | principal | doble | bajo petición | Compara proveedores, prepara pedidos en borrador y controla plazos |
-| Catálogo de Proveedores | Compras y proveedores | rapido | libre | 0 1 * * * | Importa tarifas (Visiotech, ETT, Asecur, Saltoki, distribuidora propia), cruza productos y avisa de cambios |
+| Catálogo de Proveedores | Compras y proveedores | rapido | libre | 0 1 * * * | Importa tarifas (Visiotech, ETT, Asecur, Saltoki, distribuidora propia), cruza productos entre proveedores, comprueba fichas técnicas y avisa de cambios y de tarifas nuevas pendientes de revisar |
 | Explorador de Fabricantes | Compras y proveedores | principal | libre | 0 2 * * 3 | Busca y evalúa fabricantes nuevos; tarifas y acuerdos vía la distribuidora propia |
 | Inventario y Recursos | Compras y proveedores | rapido | libre | 0 6 * * * | Control de stock, licencias y material |
 | Cotizador | Cotización de instalaciones | principal | doble | bajo petición | Aplica el motor del contador y deja el presupuesto en borrador en el ERP |
