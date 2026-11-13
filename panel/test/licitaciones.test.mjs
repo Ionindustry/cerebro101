@@ -1194,3 +1194,33 @@ test("volver a lanzar la preparación: cuándo se ofrece y qué explica", () => 
   assert.match(textoRelanzar(e("parcial", "hecho")), /repite lo que falte/);
   assert.match(textoRelanzar(e("error", "error")), /persona no se toca/);
 });
+
+import { progresoGeneral, progresoPaso, seccionesEscritas, transcurrido } from "../lib/licitaciones.js";
+test("progreso de la preparación: porcentaje real por secciones y «trabajando» donde no se puede medir", () => {
+  const ahora = Date.parse("2026-11-13T10:30:00Z");
+  const inicio = "2026-11-13T10:20:00Z";
+  const sec = [{ clave: "a", estado: "borrador", actualizado: "2026-11-13T10:25:00Z" }, { clave: "b", estado: "vacia", actualizado: null },
+               { clave: "c", estado: "borrador", actualizado: "2026-11-12T08:00:00Z" }];                    // «c» ya estaba escrita de antes: no cuenta para esta ejecución
+  const paso = { id: "memoria", estado: "en_curso", inicio, secciones: ["a", "b", "c"] };
+  assert.equal(seccionesEscritas(paso, sec), 1);
+  assert.equal(seccionesEscritas({ ...paso, inicio: null }, sec), 0);                                      // sin empezar no cuenta nada
+  const g = progresoPaso(paso, sec, ahora);
+  assert.deepEqual([g.pct, g.indeterminado, g.clase], [33, false, "aviso"]);
+  assert.equal(g.texto, "1 de 3 secciones · 33 % · empezó hace 10 min");
+  const informe = progresoPaso({ id: "precio", estado: "en_curso", inicio, secciones: [] }, sec, ahora);
+  assert.deepEqual([informe.pct, informe.indeterminado], [null, true]);                                    // no se inventa un porcentaje
+  assert.equal(informe.texto, "Trabajando · empezó hace 10 min");
+  assert.deepEqual(progresoPaso({ estado: "hecho" }, sec).pct, 100);
+  assert.deepEqual([progresoPaso({ estado: "pendiente" }, sec).pct, progresoPaso({ estado: "pendiente" }, sec).texto], [0, "En espera"]);
+  assert.equal(progresoPaso({ estado: "omitido" }, sec).texto, "Sin nada que hacer");
+  const err = progresoPaso({ estado: "error", secciones: ["a", "b"], escritas: 1 }, sec);
+  assert.deepEqual([err.pct, err.clase, err.texto], [50, "error", "1 de 2 secciones · 50 %"]);
+  assert.equal(progresoPaso({ estado: "error", secciones: [] }, sec).texto, "No se completó");
+  assert.equal(transcurrido("2026-11-13T10:29:40Z", ahora), "hace menos de 1 min");
+  assert.equal(transcurrido("2026-11-13T09:25:00Z", ahora), "hace 1 h 5 min");
+  assert.equal(transcurrido(null, ahora), "");
+  const ejec = { pasos: [{ estado: "hecho" }, { estado: "omitido" }, paso, { estado: "pendiente" }] };
+  assert.deepEqual(progresoGeneral(ejec, sec), { pct: Math.round((100 * (2 + 1 / 3)) / 4), terminados: 2, total: 4 });   // 2 terminados + 1/3 del que trabaja
+  assert.deepEqual(progresoGeneral({ pasos: [] }, sec), { pct: 0, terminados: 0, total: 0 });
+  assert.equal(progresoGeneral({ pasos: [{ estado: "en_curso", secciones: [] }] }, sec).pct, 0);                           // lo que no se puede medir cuenta 0, no 50
+});

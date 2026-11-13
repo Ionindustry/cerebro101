@@ -444,6 +444,12 @@ ul.lic-fila, ol.lic-fila { list-style: none; margin: 0; padding: 0; }
 .lic-pasos { margin: 0; padding-left: 20px; display: grid; gap: 8px; }
 .lic-pasos li { display: grid; gap: 2px; }
 .lic-pasos details p { margin: 6px 0 0; }
+.lic-prog { width: 180px; max-width: 100%; height: 8px; accent-color: var(--tinta); }
+.lic-prog.ok { accent-color: #2e7d4f; }
+.lic-prog.aviso { accent-color: #c98a0b; }
+.lic-prog.error { accent-color: #b3261e; }
+.lic-prog-general { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin: 4px 0 8px; }
+.lic-prog-general .lic-prog { width: 260px; height: 10px; }
 .lic-etiqueta.aviso { background: var(--senal-suave); color: #7a5206; }
 
 /* Aviso de actualización de las licitaciones al abrir la aplicación */

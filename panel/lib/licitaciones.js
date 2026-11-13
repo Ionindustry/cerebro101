@@ -1290,3 +1290,59 @@ export function textoRelanzar(ejec) {
   const cuantos = n > 0 ? `${n} ${n === 1 ? "paso" : "pasos"}` : "lo que falte";
   return `Vuelve a lanzar la preparación y repite ${cuantos} (lo que falló o quedó a medias). Lo que ya se hizo y lo que haya escrito o revisado una persona no se toca. Si solo quieres repetir un agente, usa el botón de su paso.`;
 }
+
+// ---- Progreso de «Preparar la oferta»: una barra por paso y otra general ----
+// Un paso que escribe secciones tiene un porcentaje REAL: las secciones que ha escrito en esta ejecución entre las que le tocan. Un paso que no escribe secciones (informes, encargos, comparativa) no tiene
+// medida honesta mientras trabaja: se enseña «trabajando» y el tiempo transcurrido, nunca un porcentaje inventado.
+
+const t = (iso) => { const n = iso ? Date.parse(iso) : NaN; return Number.isNaN(n) ? null : n; };
+
+/** Cuántas de las secciones de este paso se han escrito DURANTE esta ejecución (actualizadas desde que empezó el paso). Un paso que aún no ha empezado cuenta 0. Pura. */
+export function seccionesEscritas(paso, secciones) {
+  const inicio = t(paso?.inicio);
+  if (inicio === null) return 0;
+  const por = new Map((Array.isArray(secciones) ? secciones : []).map((s) => [s.clave, s]));
+  return (paso.secciones || []).filter((c) => { const s = por.get(c); return s && s.estado !== "vacia" && (t(s.actualizado) ?? 0) >= inicio - 2000; }).length;
+}
+
+/** «hace 3 min», «hace 1 h 5 min»; vacío si no se sabe cuándo empezó. Pura. */
+export function transcurrido(inicio, ahora = Date.now()) {
+  const i = t(inicio);
+  if (i === null) return "";
+  const s = Math.max(0, Math.round((ahora - i) / 1000));
+  if (s < 60) return "hace menos de 1 min";
+  const m = Math.floor(s / 60);
+  return m < 60 ? `hace ${m} min` : `hace ${Math.floor(m / 60)} h ${m % 60} min`;
+}
+
+/** Lo que enseña la barra de un paso: {pct (0-100 o null si no se puede medir), indeterminado, clase, texto}. Pura. */
+export function progresoPaso(paso, secciones, ahora = Date.now()) {
+  const e = paso?.estado;
+  const claves = paso?.secciones || [];
+  const n = seccionesEscritas(paso, secciones);
+  const medible = claves.length > 0;
+  if (e === "hecho" || e === "omitido") return { pct: 100, indeterminado: false, clase: e === "hecho" ? "ok" : "", texto: e === "hecho" ? "100 %" : "Sin nada que hacer" };
+  if (e === "pendiente" || !e) return { pct: 0, indeterminado: false, clase: "", texto: "En espera" };
+  if (e === "en_curso") {
+    const cuando = transcurrido(paso.inicio, ahora);
+    if (medible) return { pct: Math.round((100 * n) / claves.length), indeterminado: false, clase: "aviso", texto: `${n} de ${claves.length} ${claves.length === 1 ? "sección" : "secciones"} · ${Math.round((100 * n) / claves.length)} %${cuando ? ` · empezó ${cuando}` : ""}` };
+    return { pct: null, indeterminado: true, clase: "aviso", texto: `Trabajando${cuando ? ` · empezó ${cuando}` : ""}` };
+  }
+  // parcial o error: lo que sí se llegó a escribir
+  const hechas = medible ? (paso.escritas ?? n) : 0;
+  const pct = medible ? Math.round((100 * hechas) / claves.length) : 0;
+  return { pct, indeterminado: false, clase: e === "error" ? "error" : "aviso", texto: medible ? `${hechas} de ${claves.length} ${claves.length === 1 ? "sección" : "secciones"} · ${pct} %` : (e === "error" ? "No se completó" : "A medias") };
+}
+
+/** El progreso de toda la preparación: los pasos terminados cuentan enteros y el que trabaja cuenta lo que lleve escrito (si no se puede medir, 0). {pct, terminados, total}. Pura. */
+export function progresoGeneral(ejec, secciones) {
+  const pasos = Array.isArray(ejec?.pasos) ? ejec.pasos : [];
+  if (pasos.length === 0) return { pct: 0, terminados: 0, total: 0 };
+  const hecho = (p) => ["hecho", "omitido", "error", "parcial"].includes(p.estado);
+  const suma = pasos.reduce((a, p) => {
+    if (hecho(p)) return a + 1;
+    if (p.estado === "en_curso" && (p.secciones || []).length > 0) return a + seccionesEscritas(p, secciones) / p.secciones.length;
+    return a;
+  }, 0);
+  return { pct: Math.round((100 * suma) / pasos.length), terminados: pasos.filter(hecho).length, total: pasos.length };
+}
