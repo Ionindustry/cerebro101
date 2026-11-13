@@ -2,7 +2,7 @@
 # Solo se descargan fichas de los dominios de esta lista (https; también sus subdominios). Está VACÍA a propósito: añade aquí los dominios OFICIALES de cada fabricante
 # (por ejemplo «milesight.com»). Lo que no esté en la lista no se descarga nunca: el informe de la carga te dice qué dominios han quedado fuera, con lo que dice el directorio de fabricantes
 # (config/fabricantes_seguridad.csv), para que decidas. Se edita con  python3 scripts/fichas_autorizar.py <dominio>  (te dice si el dominio está comprobado; los no comprobados piden --forzar).
-hosts: []
+hosts: [2n.com, advancis.net, aiphone.net, ajax.systems, apollo-fire.co.uk, avigilon.com, axis.com, brivo.com, dahuasecurity.com, dormakaba.com, dsc.com, fermax.com, fike.com, genetec.com, hanwhavision.com, hikvision.com, hochikieurope.com, milestonesys.com, networkoptix.com, optex-europe.com, pyronix.com, saltosystems.com, security.gallagher.com, siemens.com, supremainc.com, texe.com, zkteco.com]
 max_mb: 30          # tamaño máximo de una ficha
 max_diarias: 200    # descargas por día (todas las cargas juntas)
 max_por_carga: 100  # fichas por carga desde una lista
