@@ -191,6 +191,58 @@ def _estado_final(pasos: list[dict]) -> str:
     return "parcial" if any(p["estado"] in (HECHO, PARCIAL) for p in pasos) else "error"
 
 
+def ultima_actividad(f: dict) -> datetime:
+    """Cuándo se movió por última vez una ejecución: la hora en que se creó o la última vez que un paso empezó o terminó. Pura."""
+    marcas = [f["creada"]]
+    for p in f.get("pasos") or []:
+        for k in ("inicio", "fin"):
+            try:
+                if p.get(k):
+                    marcas.append(datetime.fromisoformat(p[k]))
+            except (TypeError, ValueError):
+                pass
+    return max(marcas)
+
+
+async def interrumpir_huerfanas(ahora: datetime | None = None, gracia_s: int = 90) -> list[int]:
+    """Al arrancar el worker: toda ejecución «en curso» se quedó sin tarea (el reinicio la mató), así que se cierra como interrumpida y se puede volver a lanzar. Las creadas hace menos de `gracia_s`
+    segundos se dejan: pueden estar esperando en la cola del worker nuevo."""
+    ahora = _ahora(ahora)
+    async with await O._conectar() as conn:
+        cur = await conn.execute("SELECT id FROM ofertas_ejecuciones WHERE estado = 'en_curso' AND creada < %s", [ahora - timedelta(seconds=gracia_s)])
+        ids = [f["id"] for f in await cur.fetchall()]
+    for i in ids:
+        await cerrar(i, "Interrumpida: el servidor se reinició mientras trabajaban los agentes. Vuelve a lanzarla: lo ya escrito se conserva.", ahora)
+    return ids
+
+
+async def caducar_inactivas(ahora: datetime | None = None, minutos: int = 60) -> list[int]:
+    """Cierra como interrumpidas las ejecuciones «en curso» sin ninguna actividad desde hace `minutos` (un paso del modelo local tarda como mucho unos 25 minutos): así no se quedan «trabajando» para siempre."""
+    ahora = _ahora(ahora)
+    async with await O._conectar() as conn:
+        cur = await conn.execute("SELECT * FROM ofertas_ejecuciones WHERE estado = 'en_curso'")
+        filas = await cur.fetchall()
+    ids = []
+    for f in filas:
+        parado = (ahora - ultima_actividad(f)).total_seconds() / 60
+        if parado >= minutos:
+            await cerrar(f["id"], f"Sin actividad desde hace {int(parado)} min: se da por interrumpida. Puedes volver a lanzarla; lo ya escrito se conserva.", ahora)
+            ids.append(f["id"])
+    return ids
+
+
+async def cancelar(motor_id: str, usuario: str, ahora: datetime | None = None) -> dict:
+    """Una persona cancela la preparación en curso. No se puede parar al agente a mitad de un paso: termina ese paso y no empieza ninguno más; lo ya escrito se conserva."""
+    motor_id = O._id(motor_id)
+    async with await O._conectar() as conn:
+        cur = await conn.execute("SELECT id FROM ofertas_ejecuciones WHERE motor_id = %s AND estado = 'en_curso' ORDER BY id DESC LIMIT 1", [motor_id])
+        f = await cur.fetchone()
+    if not f:
+        raise O.NoExiste("No hay ninguna preparación en marcha en esta oferta")
+    log.info("oferta: %s cancela la preparación de %s (ejecución %s)", usuario, motor_id, f["id"])
+    return await cerrar(f["id"], f"Cancelada por {str(usuario)[:60]}. El agente que estuviera trabajando termina su paso y no empieza ninguno más; lo ya escrito se conserva.", _ahora(ahora))
+
+
 async def cerrar(ejecucion_id: int, error: str = "", ahora: datetime | None = None) -> dict:
     """Termina la ejecución con lo que haya: «completa» si todo salió, «parcial» si algo salió, «error» si nada. Lo ya escrito se conserva siempre."""
     ahora = _ahora(ahora)
@@ -419,6 +471,10 @@ async def ejecutar(ejecucion_id: int, invocar) -> dict:
     for i, paso in enumerate(e["pasos"]):
         if paso["estado"] in TERMINADOS:
             continue
+        actual = await _cargar(ejecucion_id)
+        if not actual or actual["estado"] != "en_curso":            # la han cancelado (o se dio por perdida): no se empieza ningún paso más
+            log.info("redacción: la ejecución %s ya no está en curso (%s): se detiene antes del paso %s", ejecucion_id, (actual or {}).get("estado"), paso["id"])
+            return actual or {}
         defin = _PASO[paso["id"]]
         await _marcar(ejecucion_id, i, estado=EN_CURSO, inicio=_iso(_ahora(None)), error="")
         try:

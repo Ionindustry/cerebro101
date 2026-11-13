@@ -1348,3 +1348,5 @@ export function progresoGeneral(ejec, secciones) {
   }, 0);
   return { pct: Math.round((100 * suma) / pasos.length), terminados: pasos.filter(hecho).length, total: pasos.length };
 }
+
+export const CONFIRMAR_CANCELAR = "Se cancelará la preparación de la oferta. El agente que esté trabajando terminará su paso actual y no empezará ninguno más; lo ya escrito se conserva y podrás volver a lanzarla. ¿Cancelar?";

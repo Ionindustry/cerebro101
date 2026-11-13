@@ -1226,3 +1226,9 @@ test("progreso de la preparación: porcentaje real por secciones y «trabajando�
   assert.deepEqual(progresoGeneral({ pasos: [] }, sec), { pct: 0, terminados: 0, total: 0 });
   assert.equal(progresoGeneral({ pasos: [{ estado: "en_curso", secciones: [] }] }, sec).pct, 0);                           // lo que no se puede medir cuenta 0, no 50
 });
+
+import { CONFIRMAR_CANCELAR } from "../lib/licitaciones.js";
+test("cancelar la preparación: la confirmación avisa de lo que pasa", () => {
+  assert.match(CONFIRMAR_CANCELAR, /terminará su paso actual/);
+  assert.match(CONFIRMAR_CANCELAR, /lo ya escrito se conserva/);
+});

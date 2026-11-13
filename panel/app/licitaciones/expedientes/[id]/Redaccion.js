@@ -1,6 +1,6 @@
 "use client";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { CONFIRMAR_REHACER, MODELOS_REDACCION, progresoGeneral, progresoPaso, puedeRelanzar, textoRelanzar, agruparPorAnexo, botonDePaso, clasePaso, clasePlantilla, empresaParaEnviar, mensajeRedaccion, origenTexto, pasoEtiqueta, pendientesQueBloquean, plantillaEtiqueta, redaccionEnCurso, resumenPlantillas, resumenRedaccion } from "../../../../lib/licitaciones";
+import { CONFIRMAR_CANCELAR, CONFIRMAR_REHACER, MODELOS_REDACCION, progresoGeneral, progresoPaso, puedeRelanzar, textoRelanzar, agruparPorAnexo, botonDePaso, clasePaso, clasePlantilla, empresaParaEnviar, mensajeRedaccion, origenTexto, pasoEtiqueta, pendientesQueBloquean, plantillaEtiqueta, redaccionEnCurso, resumenPlantillas, resumenRedaccion } from "../../../../lib/licitaciones";
 import { pedirCerebro } from "../../cliente";
 import Comparativa from "./Comparativa";
 import Encargos from "./Encargos";
@@ -67,6 +67,16 @@ export default function Redaccion({ id, o, alCambiar }) {
       setMsg(mensajeRedaccion(e.status, e.detalle));
       await cargarEjecucion();
     } finally { setTrabajando(false); }
+  };
+  const cancelar = async () => {
+    if (!window.confirm(CONFIRMAR_CANCELAR)) return;
+    setTrabajando(true); setMsg(null);
+    try {
+      const r = await pedirCerebro(`licitaciones/ofertas/${id}/cancelar`, { method: "POST" });
+      setEjec(r.ejecucion);
+      await alCambiar();
+    } catch (e) { setMsg(mensajeRedaccion(e.status, e.detalle)); await cargarEjecucion(); }
+    finally { setTrabajando(false); }
   };
   const redactar = async () => {
     setTrabajando(true); setMsg(null);
@@ -153,6 +163,12 @@ export default function Redaccion({ id, o, alCambiar }) {
           {(() => { const g = progresoGeneral(ejec, o?.secciones); return g.total > 0 && (
             <p className="lic-prog-general"><progress className="lic-prog" max={100} value={g.pct} aria-label="Progreso de la preparación de la oferta" /> <span className="meta">{g.pct} % · {g.terminados} de {g.total} pasos terminados</span></p>
           ); })()}
+          {trabajandoAgentes && (
+            <p className="lic-fila">
+              <button className="boton no" onClick={cancelar} disabled={trabajando} title="El agente que esté trabajando termina su paso y no empieza ninguno más">Cancelar la preparación</button>
+              <span className="meta">Si lleva mucho rato sin avanzar, cancélala y vuelve a lanzarla: lo ya escrito se conserva.</span>
+            </p>
+          )}
           {puedeRelanzar(ejec) && (
             <div className="lic-aviso" role="group" aria-label="Volver a lanzar la preparación">
               <p className="lic-fila">

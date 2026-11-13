@@ -56,6 +56,7 @@ class TestRedaccion(unittest.TestCase):
             t = ESQUEMA.read_text(encoding="utf-8")
             c.execute(t[t.index("-- Pliegos y otros documentos de una licitación"):])
         sep = "&" if "?" in URL else "?"
+        self.url_esquema = f"{URL}{sep}options=-csearch_path%3D{self.schema}"
         ajustes = SimpleNamespace(database_url=f"{URL}{sep}options=-csearch_path%3D{self.schema}")
         from cerebro.licitaciones import pliegos
         self.plantillas = mock.AsyncMock(return_value={"documentos": [{"documento": 1, "nombre": "Anexo I", "estado": "faltan_datos", "rellenados": [{}] * 5,
@@ -290,6 +291,72 @@ class TestRedaccion(unittest.TestCase):
         self.assertEqual({p["id"]: p["estado"] for p in e["pasos"]}["memoria"], "pendiente")
         self.assertEqual({p["id"]: p["estado"] for p in e["pasos"]}["solucion"], "hecho")
 
+    def test_una_ejecucion_huerfana_se_cierra_al_arrancar_el_worker_y_se_puede_volver_a_lanzar(self):
+        e = self.reservar()
+        self.assertEqual(ejecutar(R.interrumpir_huerfanas()), [])                              # recién creada: puede estar esperando en la cola del worker nuevo
+        with psycopg.connect(self.url_esquema, autocommit=True) as c:
+            c.execute("UPDATE ofertas_ejecuciones SET creada = now() - interval '10 minutes' WHERE id = %s", [e["id"]])
+        self.assertEqual(ejecutar(R.interrumpir_huerfanas()), [e["id"]])
+        u = ejecutar(R.ultima(ID))
+        self.assertEqual(u["estado"], "error")
+        self.assertIn("el servidor se reinició", u["error"])
+        e2 = self.reservar()                                                                   # ya no hay «una en curso»: se puede lanzar otra
+        self.assertEqual(e2["estado"], "en_curso")
+        self.assertEqual(ejecutar(R.interrumpir_huerfanas()), [])
+
+    def test_una_ejecucion_sin_actividad_caduca_y_una_con_actividad_reciente_no(self):
+        e = self.reservar()
+        with psycopg.connect(self.url_esquema, autocommit=True) as c:
+            c.execute("UPDATE ofertas_ejecuciones SET creada = now() - interval '3 hours' WHERE id = %s", [e["id"]])
+        ahora = datetime.now(timezone.utc)
+        ejecutar(R._marcar(e["id"], 2, estado="en_curso", inicio=(ahora - timedelta(minutes=5)).isoformat()))       # un paso empezó hace 5 min: hay actividad
+        self.assertEqual(ejecutar(R.caducar_inactivas(minutos=60)), [])
+        ejecutar(R._marcar(e["id"], 2, estado="en_curso", inicio=(ahora - timedelta(minutes=90)).isoformat()))      # ahora lleva 90 min sin moverse
+        self.assertEqual(ejecutar(R.caducar_inactivas(minutos=60)), [e["id"]])
+        u = ejecutar(R.ultima(ID))
+        self.assertEqual(u["estado"], "error")
+        self.assertIn("Sin actividad desde hace", u["error"])
+        self.assertEqual(self.pasos(u)["memoria"]["estado"], "pendiente")                       # el paso en curso vuelve a «pendiente»
+
+    def test_cancelar_detiene_la_cadena_entre_pasos_y_conserva_lo_escrito(self):
+        e = self.reservar()
+        llamadas = []
+
+        async def invocar(agente, peticion):
+            llamadas.append(agente)
+            if agente == "arquitecto-solucion":
+                await O.escribir_seccion(ID, "tecnico", "descripcion-solucion", "Lo ya escrito", agente=agente)
+                await R.cancelar(ID, "marta")                                                    # una persona cancela mientras trabaja el primer agente
+            return {"respuesta": "hecho"}
+        fin = ejecutar(R.ejecutar(e["id"], invocar))
+        self.assertEqual(llamadas, ["arquitecto-solucion"])                                      # termina su paso y no empieza ningún otro
+        self.assertEqual(fin["estado"], "parcial" if any(p["estado"] == "hecho" for p in fin["pasos"]) else "error")
+        self.assertIn("Cancelada por marta", fin["error"])
+        s = {x["clave"]: x for x in ejecutar(O.leer(ID))["secciones"]}
+        self.assertEqual(s["descripcion-solucion"]["contenido"], "Lo ya escrito")                # lo escrito se conserva
+        self.assertEqual(ejecutar(R.reservar(ID, "marta"))["estado"], "en_curso")                # y se puede volver a lanzar
+
+    def test_cancelar_sin_nada_en_marcha_lo_dice(self):
+        with self.assertRaises(O.NoExiste):
+            ejecutar(R.cancelar(ID, "marta"))
+
+    def test_el_endpoint_de_cancelar_valida_permisos(self):
+        from cerebro.api import main
+        from cerebro.api.main import Usuario, usuario_actual
+        from fastapi.testclient import TestClient
+        c = TestClient(main.app)
+        try:
+            main.app.dependency_overrides[usuario_actual] = lambda: Usuario("pepe", {"usuario"}, {"finanzas"})
+            self.assertEqual(c.post(f"/licitaciones/ofertas/{ID}/cancelar").status_code, 403)
+            main.app.dependency_overrides[usuario_actual] = lambda: Usuario("marta", {"usuario"}, {"licitaciones"})
+            self.assertEqual(c.post(f"/licitaciones/ofertas/{ID}/cancelar").status_code, 404)    # nada en marcha
+            self.reservar()
+            r = c.post(f"/licitaciones/ofertas/{ID}/cancelar")
+            self.assertEqual(r.status_code, 200)
+            self.assertIn("Cancelada por marta", r.json()["ejecucion"]["error"])
+        finally:
+            main.app.dependency_overrides.clear()
+
     def test_un_agente_que_dice_hecho_sin_guardar_nada_es_un_error_y_la_cadena_sigue(self):
         e = self.reservar()
         ejecutar(O.escribir_seccion(ID, "tecnico", "crit-1", "x", agente="redactor-memoria"))       # ya tenía contenido: no se toca sin «rehacer»
@@ -387,6 +454,14 @@ class TestRedaccion(unittest.TestCase):
         fin = ejecutar(R.ejecutar(e["id"], inv))
         self.assertEqual(self.pasos(fin)["evaluacion"]["estado"], "omitido")
         self.assertNotIn("evaluador-ofertas", [a for a, _ in inv.llamadas])
+
+
+class TestActividad(unittest.TestCase):
+    def test_la_ultima_actividad_es_la_marca_mas_reciente_y_tolera_basura(self):
+        creada = datetime(2026, 11, 13, 10, 0, tzinfo=timezone.utc)
+        f = {"creada": creada, "pasos": [{"inicio": "2026-11-13T10:20:00+00:00", "fin": "2026-11-13T10:30:00+00:00"}, {"inicio": "no es una fecha"}, {"inicio": None}, {}]}
+        self.assertEqual(R.ultima_actividad(f), datetime(2026, 11, 13, 10, 30, tzinfo=timezone.utc))
+        self.assertEqual(R.ultima_actividad({"creada": creada, "pasos": None}), creada)
 
 
 class TestTextos(unittest.TestCase):

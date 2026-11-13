@@ -69,7 +69,7 @@ def _rastreo_embudo() -> dict:
     return {"rastreo-embudo": {"task": "cerebro.tareas.celery_app.rastreo_embudo", "schedule": crontab(minute=minuto, hour=hora)}}
 
 
-app.conf.beat_schedule = {**_calendario(), **_resumen_licitaciones(), **_rastreo_embudo(),
+app.conf.beat_schedule = {"vigilar-ejecuciones": {"task": "cerebro.tareas.celery_app.vigilar_ejecuciones", "schedule": 600.0}, **_calendario(), **_resumen_licitaciones(), **_rastreo_embudo(),
                           "avisos-por-correo": {"task": "cerebro.tareas.celery_app.enviar_avisos_correo", "schedule": 300.0},
                           "hoy-por-correo": {"task": "cerebro.tareas.celery_app.enviar_hoy_por_correo", "schedule": 3600.0},
                           "vigilar-antivirus": {"task": "cerebro.tareas.celery_app.vigilar_antivirus", "schedule": 10800.0},
@@ -172,6 +172,13 @@ def analizar_pliegos(self, lid: int, forzar: bool = False) -> dict:
         return {"estado": "error", "motivo": "modelo no disponible"}
 
 
+@app.task(name="cerebro.tareas.celery_app.vigilar_ejecuciones")
+def vigilar_ejecuciones() -> dict:
+    """Cada 10 minutos: las preparaciones de oferta «en curso» sin actividad desde hace una hora se dan por interrumpidas (para que no se queden «trabajando» para siempre)."""
+    from ..licitaciones import redaccion
+    return {"caducadas": asyncio.run(redaccion.caducar_inactivas())}
+
+
 @app.task(name="cerebro.tareas.celery_app.redactar_oferta", bind=True, max_retries=4)
 def redactar_oferta(self, ejecucion_id: int) -> dict:
     """Una persona ha pulsado «Preparar la oferta»: los agentes de Licitaciones redactan el borrador, uno detrás de otro (cerebro/licitaciones/redaccion.py). Si el modelo no está
@@ -253,3 +260,19 @@ def enviar_avisos_correo() -> dict:
     lo que falla se reintenta en el siguiente ciclo (cerebro/licitaciones/avisos_correo.py)."""
     from ..licitaciones.avisos_correo import enviar_pendientes
     return asyncio.run(enviar_pendientes())
+
+
+from celery.signals import worker_ready  # noqa: E402
+
+
+@worker_ready.connect
+def _al_arrancar_el_worker(**_):
+    """Un worker que arranca no tiene ninguna tarea en marcha: las preparaciones de oferta que quedaron «en curso» eran de la vida anterior (el reinicio las mató) y se cierran como interrumpidas."""
+    import logging
+    try:
+        from ..licitaciones import redaccion
+        ids = asyncio.run(redaccion.interrumpir_huerfanas())
+        if ids:
+            logging.getLogger("cerebro.tareas").warning("worker: %d preparación(es) de oferta interrumpidas por el reinicio: %s", len(ids), ids)
+    except Exception as e:      # noqa: BLE001 — no impedir que el worker arranque
+        logging.getLogger("cerebro.tareas").warning("worker: no se han podido revisar las preparaciones huérfanas: %s: %s", type(e).__name__, e)

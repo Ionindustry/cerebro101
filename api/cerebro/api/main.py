@@ -947,6 +947,16 @@ async def revision_previa_de_la_oferta(motor_id: str, usuario: Usuario = Depends
     return await revision_previa.revisar(motor_id)
 
 
+@app.post("/licitaciones/ofertas/{motor_id}/cancelar")
+async def cancelar_la_preparacion(motor_id: str, usuario: Usuario = Depends(usuario_actual)):
+    """Cancela la preparación de la oferta en curso. El agente que esté trabajando termina su paso y no empieza ninguno más; lo ya escrito se conserva y se puede volver a lanzar."""
+    _exige_licitaciones(usuario)
+    try:
+        return {"ejecucion": await redaccion_ofertas.cancelar(motor_id, usuario.id)}
+    except (ofertas_licitaciones.ErrorOferta, LookupError) as e:
+        raise _oferta_error(e) from None
+
+
 @app.get("/licitaciones/ofertas/{motor_id}/comparativa")
 async def comparativa_de_la_oferta(motor_id: str, usuario: Usuario = Depends(usuario_actual)):
     """La comparativa de productos y ventaja competitiva de la oferta (null si aún no se ha hecho), con la evidencia en que se apoya cada afirmación. Solo Dirección y Licitaciones."""
