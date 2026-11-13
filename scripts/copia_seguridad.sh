@@ -25,6 +25,13 @@ docker compose exec -T postgres pg_dump -U cerebro --no-owner cerebro | gzip > "
 echo "→ PostgreSQL de Langfuse"
 docker compose exec -T langfuse-db pg_dump -U langfuse --no-owner langfuse | gzip > "$DESTINO/langfuse.sql.gz"
 
+# Keycloak (el inicio de sesión: usuarios, roles, clientes), si funciona con su base PostgreSQL (scripts/keycloak_a_postgres.sh, docs/KEYCLOAK_POSTGRES.md). En el modo antiguo (base H2 en un
+# volumen) no hay volcado: se copia con keycloak_conservar.sh / keycloak_a_postgres.sh.
+if docker compose ps --status running --services 2>/dev/null | grep -qx 'keycloak-db'; then
+  echo "→ PostgreSQL de Keycloak (usuarios del inicio de sesión)"
+  docker compose exec -T keycloak-db pg_dump -U keycloak --no-owner keycloak | gzip > "$DESTINO/keycloak.sql.gz"
+fi
+
 # Motor de licitaciones (si está en marcha): su base de datos (estado de la ingesta y modelo de lectura). Los originales de las licitaciones están en el
 # almacén S3 del motor (RustFS), que no se copia aquí por su tamaño: con los originales el modelo de lectura se puede regenerar (ADR 0003).
 if docker ps --format '{{.Names}}' | grep -qx 'licitaciones-lic-db-1'; then

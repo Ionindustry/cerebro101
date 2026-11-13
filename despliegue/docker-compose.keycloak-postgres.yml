@@ -1,0 +1,35 @@
+# Keycloak en MODO PRODUCCIÓN con su propia base de datos PostgreSQL, para UNA instalación local (la de un PC con Docker Desktop).
+#
+# Hasta ahora Keycloak arrancaba en modo desarrollo (`start-dev`) con una base H2 en un fichero: vale para probar, pero no se recomienda para producción (es más frágil ante cortes y no aguanta
+# bien actualizaciones). Este añadido lo pasa a `start` (modo optimizado) con PostgreSQL, SIN perder usuarios ni ajustes: lo activa  scripts/keycloak_a_postgres.sh  (que antes hace una copia, exporta el
+# realm «cerebro» con sus usuarios y comprueba el resultado). No usar a mano ni junto a despliegue/docker-compose.produccion.yml (el servidor completo, que ya lleva lo mismo).
+#
+# No cambia ni la dirección ni los puertos: Keycloak sigue en 127.0.0.1:8080 y detrás del proxy de despliegue/docker-compose.externo.yml si el acceso externo está activo.
+services:
+  keycloak-db:
+    image: postgres:16-alpine
+    environment: {POSTGRES_USER: keycloak, POSTGRES_PASSWORD: "${KEYCLOAK_DB_PASSWORD:?define KEYCLOAK_DB_PASSWORD}", POSTGRES_DB: keycloak}
+    volumes: ["keycloak-db:/var/lib/postgresql/data"]
+    healthcheck: {test: ["CMD-SHELL", "pg_isready -U keycloak"], interval: 3s, timeout: 3s, retries: 20}
+    networks: [cerebro]
+    restart: unless-stopped
+
+  keycloak:
+    image: "${KEYCLOAK_IMAGEN:-quay.io/keycloak/keycloak:latest}"      # el script fija aquí la versión exacta con la que se exportó (que una actualización no cambie la base sin avisar)
+    command: start --import-realm
+    environment:
+      KC_HTTP_ENABLED: "true"                 # el TLS lo termina Caddy (o no hay TLS en el acceso local)
+      KC_PROXY_HEADERS: xforwarded
+      KC_HEALTH_ENABLED: "true"
+      KC_DB: postgres
+      KC_DB_URL: jdbc:postgresql://keycloak-db:5432/keycloak
+      KC_DB_USERNAME: keycloak
+      KC_DB_PASSWORD: "${KEYCLOAK_DB_PASSWORD}"
+    volumes:
+      # Solo la primera vez, con la base vacía, se importa el realm; después ya existe y se salta. El script apunta esta carpeta a la exportación hecha del Keycloak anterior (con sus usuarios).
+      - "${KEYCLOAK_IMPORT_DIR:-./config/keycloak}:/opt/keycloak/data/import:ro"
+    depends_on:
+      keycloak-db: {condition: service_healthy}
+
+volumes:
+  keycloak-db: {}

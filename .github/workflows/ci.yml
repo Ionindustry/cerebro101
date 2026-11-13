@@ -79,6 +79,8 @@ jobs:
         run: python3 scripts/comprobar_secretos.py --historial
       - name: docker-compose.yml válido
         run: docker compose --env-file .env.example config -q
+      - name: Keycloak con PostgreSQL (compose) válido
+        run: docker compose -f docker-compose.yml -f despliegue/docker-compose.keycloak-postgres.yml --env-file .env.example config -q
       - name: ERPNext (docker-compose) válido
         run: docker compose -f erpnext/docker-compose.yml --env-file .env.example config -q
       - name: Infraestructura de licitaciones (compose) válida
