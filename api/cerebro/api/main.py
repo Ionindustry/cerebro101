@@ -34,6 +34,7 @@ from ..licitaciones import ofertas as ofertas_licitaciones
 from ..licitaciones import empresa as empresa_erp
 from ..licitaciones import plantillas as plantillas_ofertas
 from ..licitaciones import redaccion as redaccion_ofertas
+from ..licitaciones import redaccion_externa as redaccion_externa_ofertas
 from ..licitaciones import encargos as encargos_ofertas
 from ..licitaciones import comparativa as comparativa_ofertas
 from ..licitaciones import equivalencia as equivalencia_ofertas
@@ -883,6 +884,8 @@ class RedactarEntrada(BaseModel):
     rehacer: bool = False             # también rehace los borradores de los agentes (nunca lo que haya escrito o revisado una persona)
     empresa: str | None = None        # la sociedad del ERP con la que se presenta; si el ERP tiene varias y no se ha elegido nunca, hay que indicarla
     modelo: str = "auto"              # con qué modelo externo redactar la memoria técnica: auto (lo que diga la configuración), claude o chatgpt
+    modos: dict[str, str] = {}        # cómo se hace, en este caso, cada paso elegible (administrativo, costes): local, externo (Claude/ChatGPT con datos anonimizados) o manual (lo escribe una persona)
+    confirmados: list[str] = []       # los pasos en «externo» que la persona ha confirmado expresamente (sin esto, «externo» se rechaza)
 
 
 @app.post("/licitaciones/ofertas/{motor_id}/redactar", status_code=202)
@@ -895,7 +898,8 @@ async def redactar_oferta_con_agentes(motor_id: str, entrada: RedactarEntrada | 
         ficha = await motor_lic._get(f"/tenders/{motor_id.strip().lower()}") if motor_lic._UUID.match(motor_id.strip()) else {}
         oferta = await ofertas_licitaciones.plan(motor_id, ficha, usuario.id)
         await _fijar_sociedad(motor_id, oferta, entrada.empresa)
-        ejecucion = await redaccion_ofertas.reservar(motor_id, usuario.id, entrada.rehacer, modelo=entrada.modelo)
+        modos = redaccion_externa_ofertas.validar_modos(entrada.modos, entrada.confirmados, usuario.id)
+        ejecucion = await redaccion_ofertas.reservar(motor_id, usuario.id, entrada.rehacer, modelo=entrada.modelo, modos=modos)
     except redaccion_ofertas.Conflicto as e:
         raise HTTPException(409, str(e)) from None
     except empresa_erp.VariasEmpresas as e:
@@ -915,6 +919,8 @@ async def redactar_oferta_con_agentes(motor_id: str, entrada: RedactarEntrada | 
 class RepetirPaso(BaseModel):
     rehacer: bool = False             # también rehace los borradores que ya escribió este agente (nunca lo que haya escrito o revisado una persona)
     modelo: str = "auto"              # con qué modelo externo, si el paso lo redacta uno: auto, claude o chatgpt
+    modos: dict[str, str] = {}        # cómo se hace este paso si es elegible (administrativo, costes): local, externo o manual
+    confirmados: list[str] = []       # el paso, si se manda a Claude o ChatGPT, confirmado expresamente
 
 
 @app.post("/licitaciones/ofertas/{motor_id}/redactar/{paso}", status_code=202)
@@ -924,7 +930,8 @@ async def repetir_paso_de_la_oferta(motor_id: str, paso: str, entrada: RepetirPa
     _exige_licitaciones(usuario)
     entrada = entrada or RepetirPaso()
     try:
-        ejecucion = await redaccion_ofertas.reservar(motor_id, usuario.id, entrada.rehacer, modelo=entrada.modelo, solo=paso)
+        modos = redaccion_externa_ofertas.validar_modos(entrada.modos, entrada.confirmados, usuario.id)
+        ejecucion = await redaccion_ofertas.reservar(motor_id, usuario.id, entrada.rehacer, modelo=entrada.modelo, solo=paso, modos=modos)
     except redaccion_ofertas.Conflicto as e:
         raise HTTPException(409, str(e)) from None
     except (ofertas_licitaciones.ErrorOferta, MotorNoDisponible, LookupError) as e:
@@ -1033,6 +1040,16 @@ async def subir_ficha_a_mano(entrada: SubidaFicha, usuario: Usuario = Depends(us
         return await fichas_tecnicas.subir(datos, entrada.nombre, entrada.marca, entrada.referencia, usuario.id, cfg)
     except fichas_tecnicas.ErrorFicha as e:
         raise HTTPException(422, str(e)) from None
+
+
+@app.get("/licitaciones/ofertas/{motor_id}/envios-externos")
+async def envios_externos_de_la_oferta(motor_id: str, usuario: Usuario = Depends(usuario_actual)):
+    """El registro de lo que ha salido a Claude o ChatGPT en los pasos sensibles (quién lo confirmó, qué paso, cuánto texto anonimizado). No contiene el texto enviado."""
+    _exige_licitaciones(usuario)
+    try:
+        return {"envios": await redaccion_externa_ofertas.envios(motor_id), "pasos_elegibles": {p: s for p, s in redaccion_externa_ofertas.PASOS_A_ELEGIR.items()}}
+    except (ofertas_licitaciones.ErrorOferta, LookupError) as e:
+        raise _oferta_error(e) from None
 
 
 @app.get("/licitaciones/ofertas/{motor_id}/equivalencia")

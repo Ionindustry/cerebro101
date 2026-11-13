@@ -103,7 +103,7 @@ def pasos_iniciales(secciones: list[dict], rehacer: bool) -> list[dict]:
 
 
 def _ejecucion(f: dict) -> dict:
-    return {"id": f["id"], "licitacion": str(f["motor_id"]), "estado": f["estado"], "por": f["por"], "rehacer": f["rehacer"], "modelo": f.get("modelo") or "auto", "pasos": list(f["pasos"] or []), "error": f["error"],
+    return {"id": f["id"], "licitacion": str(f["motor_id"]), "estado": f["estado"], "por": f["por"], "rehacer": f["rehacer"], "modelo": f.get("modelo") or "auto", "modos": dict(f.get("modos") or {}), "pasos": list(f["pasos"] or []), "error": f["error"],
             "creada": _iso(f["creada"]), "terminada": _iso(f["terminada"])}
 
 
@@ -125,7 +125,7 @@ def pasos_de_repeticion(inicial: list[dict], anteriores: list[dict] | None, solo
     return out
 
 
-async def reservar(motor_id: str, usuario: str, rehacer: bool = False, ahora: datetime | None = None, modelo: str = "auto", solo: str | None = None) -> dict:
+async def reservar(motor_id: str, usuario: str, rehacer: bool = False, ahora: datetime | None = None, modelo: str = "auto", solo: str | None = None, modos: dict | None = None) -> dict:
     """Anota una ejecución nueva antes de encolar el trabajo. Conflicto si ya hay una en curso (y reciente); NoExiste si la oferta aún no está preparada."""
     motor_id = O._id(motor_id)
     ahora = _ahora(ahora)
@@ -151,8 +151,8 @@ async def reservar(motor_id: str, usuario: str, rehacer: bool = False, ahora: da
                 if not previa:
                     raise O.NoExiste("Todavía no se ha preparado la oferta con los agentes: pulsa primero «Preparar la oferta con los agentes»")
                 pasos = pasos_de_repeticion(pasos, list(previa["pasos"] or []), solo)
-            cur = await conn.execute("INSERT INTO ofertas_ejecuciones (motor_id, por, rehacer, pasos, creada, modelo) VALUES (%s,%s,%s,%s,%s,%s) RETURNING *",
-                                     [motor_id, str(usuario)[:200], bool(rehacer), Jsonb(pasos), ahora, modelo_pedido(modelo)])
+            cur = await conn.execute("INSERT INTO ofertas_ejecuciones (motor_id, por, rehacer, pasos, creada, modelo, modos) VALUES (%s,%s,%s,%s,%s,%s,%s) RETURNING *",
+                                     [motor_id, str(usuario)[:200], bool(rehacer), Jsonb(pasos), ahora, modelo_pedido(modelo), Jsonb(modos or {})])
             f = await cur.fetchone()
     log.info("oferta: %s pide que los agentes %s la oferta de %s (ejecución %s, rehacer=%s)", usuario, f"repitan el paso «{solo}» de" if solo else "redacten", motor_id, f["id"], bool(rehacer))
     return _ejecucion(f)
@@ -378,6 +378,13 @@ async def _paso_escritor(ejecucion_id: int, indice: int, e: dict, defin: dict, i
             motivo = str(ex)[:200] or type(ex).__name__
             log.warning("redacción: no se han podido preparar las plantillas de %s: %s: %s", motor_id, type(ex).__name__, ex)
             adicional, resumen_plantillas = texto_plantillas(None, motivo), f"Plantillas del concurso: no se han podido rellenar ({motivo})."
+    eleccion = (e.get("modos") or {}).get(defin["id"]) or {}
+    modo = eleccion.get("modo") if eleccion.get("modo") in ("externo", "manual") else "local"
+    if modo == "manual":                                  # la persona ha elegido escribirlo ella: ningún modelo toca este paso (las plantillas, que no usan modelo, sí se rellenan)
+        quien = eleccion.get("confirmado_por") or "una persona"
+        await _marcar(ejecucion_id, indice, estado=OMITIDO, error="", modo="manual", secciones=[], fin=_iso(_ahora(None)),
+                      resumen=((resumen_plantillas + "\n") if resumen_plantillas else "") + f"A mano: este paso lo escribe una persona (elegido por {quien}). Las secciones quedan para rellenarlas; puedes volver a pedirlo con un agente cuando quieras.")
+        return
     antes = (await O.leer(motor_id, con_contenido=False))["secciones"]
     sel = seleccion(defin, antes, e["rehacer"])           # se recalcula: desde que se pidió, una persona puede haber escrito alguna
     if not sel:
@@ -412,12 +419,23 @@ async def _paso_escritor(ejecucion_id: int, indice: int, e: dict, defin: dict, i
             defin = {**defin, "contexto": f"{defin.get('contexto', '')}\n\n{bloque[:700]}".strip()}
     estado, externa = None, ""
     from . import redaccion_externa as externa_mod
-    if externa_mod.paso_activo(defin["id"]):
+    if modo == "externo" and not externa_mod.configuracion()["activa"]:
+        externa = "Se ha usado el modelo local: Claude y ChatGPT están desactivados por Dirección."
+    elif modo == "externo" or externa_mod.paso_activo(defin["id"]):
         # Claude o ChatGPT, si Dirección los ha conectado: redactan el paso de una vez, con todo el material. Si no procede o falla, lo hace el modelo local como siempre.
+        privado, envio = "", None
+        if modo == "externo":
+            # Elegido en este caso y confirmado por una persona: lo que lleva datos de 101.cat sale SOLO anonimizado (si no se puede garantizar, no sale) y queda registrado antes de enviarlo
+            privado = adicional.strip()
+            defin_externo = {**defin_externo, "contexto": f"{externa_mod.CONTEXTO_EXTERNO.get(defin['id'], defin.get('contexto', ''))}\n\n{encargo}".strip() if defin["id"] in externa_mod.CONTEXTO_EXTERNO
+                             else defin_externo.get("contexto", "")}
+            envio = await externa_mod.registrar_envio(motor_id, ejecucion_id, defin["id"], eleccion.get("confirmado_por") or "", len(privado))
         await _marcar(ejecucion_id, indice, resumen="Redactando con Claude o ChatGPT…")
-        res, motivo = await externa_mod.intentar(motor_id, defin_externo, sel, titulo, ficha or {}, modelo=e.get("modelo") or "auto")
+        res, motivo = await externa_mod.intentar(motor_id, defin_externo, sel, titulo, ficha or {}, modelo=e.get("modelo") or "auto", **({"privado": privado} if privado else {}))
+        if envio is not None:
+            await externa_mod.cerrar_envio(envio, "enviado" if res else "no_enviado", (res or {}).get("proveedor"), (res or {}).get("modelo"), "" if res else motivo)
         if res:
-            estado = {"respuesta": res["resumen"]}
+            estado = {"respuesta": res["resumen"] + ("\nSalió anonimizado y queda registrado quién lo confirmó." if modo == "externo" else "")}
         else:
             externa = f"Se ha usado el modelo local: {motivo}."
             log.info("redacción: el paso %s de %s lo hace el modelo local (%s)", defin["id"], motor_id, motivo)
@@ -427,7 +445,7 @@ async def _paso_escritor(ejecucion_id: int, indice: int, e: dict, defin: dict, i
     escritas = [s["clave"] for s in sel if despues.get(s["clave"], {}).get("estado") != "vacia" and despues[s["clave"]]["por"] == f"agente:{defin['agente']}"]
     faltan = [s["clave"] for s in sel if s["clave"] not in escritas]
     resumen = (resumen_plantillas + "\n" if resumen_plantillas else "") + (externa + "\n" if externa else "") + _respuesta(estado)
-    campos = {"secciones": [s["clave"] for s in sel], "escritas": len(escritas), "faltan": faltan, "resumen": resumen[:MAX_RESUMEN], "fin": _iso(_ahora(None))}
+    campos = {"secciones": [s["clave"] for s in sel], "escritas": len(escritas), "faltan": faltan, "resumen": resumen[:MAX_RESUMEN], "fin": _iso(_ahora(None)), "modo": modo}
     if (estado or {}).get("error") and not escritas:
         await _marcar(ejecucion_id, indice, estado=ERROR, error=str(estado["error"])[:300], **campos)
     elif not escritas:

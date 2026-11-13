@@ -1247,3 +1247,14 @@ test("la tabla de equivalencias se resume y se escribe el valor exigido", async 
   assert.equal(resumenEquivalencia({ comprobacion: { parametros: 7, cubiertos: 5, sin_cubrir: 2 } }), "7 parámetros · 5 con producto que iguala o supera · 2 sin cubrir");
   assert.equal(resumenEquivalencia(null), "");
 });
+
+test("cuerpoModos: solo lo distinto de local, y «externo» exige confirmación", async () => {
+  const { cuerpoModos, envioTexto } = await import("../lib/licitaciones.js");
+  assert.deepEqual(cuerpoModos({}, {}), { modos: {}, confirmados: [] });
+  assert.deepEqual(cuerpoModos({ administrativo: "manual", costes: "local" }, {}), { modos: { administrativo: "manual" }, confirmados: [] });
+  assert.match(cuerpoModos({ costes: "externo" }, {}).error, /confirmación/);
+  assert.match(cuerpoModos({ costes: "externo" }, { administrativo: true }).error, /Costes/);
+  assert.deepEqual(cuerpoModos({ costes: "externo", administrativo: "externo" }, { costes: true, administrativo: true }, "costes"), { modos: { costes: "externo" }, confirmados: ["costes"] });
+  assert.deepEqual(cuerpoModos({ administrativo: "externo" }, {}, "costes"), { modos: {}, confirmados: [] });           // repetir Costes no mira lo de Administrativo
+  assert.match(envioTexto({ paso: "costes", proveedor: "claude", modelo: "opus", confirmado_por: "albert", caracteres_privados: 0, estado: "no_enviado" }), /Costes → Claude \(opus\) · lo confirmó albert · 0 caracteres.*no llegó a enviarse/);
+});

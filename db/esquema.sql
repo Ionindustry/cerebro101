@@ -556,6 +556,7 @@ CREATE TABLE IF NOT EXISTS ofertas_ejecuciones (
   creada    timestamptz NOT NULL DEFAULT now(),
   terminada timestamptz
 );
+ALTER TABLE ofertas_ejecuciones ADD COLUMN IF NOT EXISTS modos jsonb NOT NULL DEFAULT '{}';        -- cómo se hace cada paso elegible: {administrativo: {modo: local|externo|manual, confirmado_por}}
 ALTER TABLE ofertas_ejecuciones ADD COLUMN IF NOT EXISTS modelo text NOT NULL DEFAULT 'auto';     -- con qué modelo externo redactar: auto | claude | chatgpt
 CREATE UNIQUE INDEX IF NOT EXISTS ofertas_ejecuciones_una_en_curso ON ofertas_ejecuciones (motor_id) WHERE estado = 'en_curso';
 CREATE INDEX IF NOT EXISTS ofertas_ejecuciones_motor ON ofertas_ejecuciones (motor_id, id DESC);
@@ -749,3 +750,20 @@ CREATE TABLE IF NOT EXISTS ofertas_descubrimiento (
   creado      timestamptz NOT NULL DEFAULT now(),
   actualizado timestamptz NOT NULL DEFAULT now()
 );
+
+-- Registro de lo que sale a Claude o ChatGPT en los pasos sensibles de «Preparar la oferta» (Administrativo, Costes): quién lo confirmó, qué paso, qué proveedor y cuánto texto privado (anonimizado) viajó. NO guarda el contenido.
+CREATE TABLE IF NOT EXISTS ofertas_envios_externos (
+  id            bigserial PRIMARY KEY,
+  motor_id      uuid NOT NULL,                      -- sin clave ajena: el esquema se aplica por trozos en las pruebas
+  ejecucion_id  bigint,
+  paso          text NOT NULL,
+  sensibilidad  text NOT NULL,
+  confirmado_por text NOT NULL,
+  proveedor     text,                               -- el que respondió (claude | chatgpt)
+  modelo        text,
+  caracteres_privados integer NOT NULL DEFAULT 0,   -- texto de 101.cat que viajó, ya anonimizado
+  estado        text NOT NULL DEFAULT 'intentado' CHECK (estado IN ('intentado', 'enviado', 'no_enviado')),
+  detalle       text NOT NULL DEFAULT '',
+  creado        timestamptz NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS ofertas_envios_externos_motor ON ofertas_envios_externos (motor_id, id DESC);

@@ -674,3 +674,18 @@ Tres piezas que se apoyan una en otra (todo en la pantalla **Licitaciones → Fi
 3. **Más opciones en internet** (`descubrimiento.py`, botón en la tarjeta de equivalencias, tarea en segundo plano). Para los parámetros sin cubrir busca en la web (SearXNG; las consultas salen solo del pliego, que es público) y el modelo propone pistas leyendo los resultados. La dirección de cada pista la pone el código (el modelo solo elige un resultado por su número) y el valor declarado debe figurar en ese resultado. Son **pistas por verificar, nunca evidencia**: cuentan solo cuando se carga la ficha del fabricante (botón «Cargar la ficha» si el dominio está autorizado) y se repite la tabla.
 
 Lo que sigue siendo de una persona: elegir qué dominios se autorizan, revisar la tabla antes de usarla y todo lo de precios y costes.
+
+
+## Elegir en cada caso cómo se hacen Administrativo y Costes
+
+En «Preparar la oferta» (y en el botón de repetir de cada paso) hay un selector para los dos pasos con datos privados. Se elige **cada vez**; si no se toca nada, todo sigue como antes (modelo local):
+
+| Opción | Qué pasa |
+|---|---|
+| **Modelo local de 101.cat** | Lo de siempre: el agente local, con sus herramientas (ERP, cotizador, plantillas). Nada sale de la empresa. |
+| **Claude o ChatGPT con datos anonimizados** | Hay que **marcar la confirmación expresa** de ese paso (sin ella la API lo rechaza con 422). El texto con datos de 101.cat (en Administrativo, el estado de las plantillas rellenadas con los datos de la sociedad) pasa por la anonimización local; **si no se puede garantizar, no sale nada** y lo hace el modelo local, y el resumen del paso lo dice. Si Dirección ha desactivado los modelos externos, tampoco. |
+| **Lo escribo yo** | Ningún modelo toca el paso (las plantillas, que no usan modelo, sí se rellenan). Las secciones quedan para escribirlas a mano y el paso se puede volver a pedir cuando se quiera. |
+
+**Costes** con Claude o ChatGPT es deliberadamente más limitado: **no reciben costes internos, tarifas de proveedor ni datos del ERP** (siguen siendo confidenciales), solo redactan la estructura de la justificación del precio con lo que dice el pliego y dejan `[PENDIENTE: cifra]` en cada importe; tienen prohibido inventar cifras. Las cifras reales las pone una persona o el modelo local.
+
+**Registro:** antes de cada envío se anota en `ofertas_envios_externos` quién lo confirmó, qué paso, qué proveedor respondió y cuántos caracteres privados (anonimizados) viajaron, y después si llegó a enviarse. **No se guarda el contenido enviado.** El panel lo muestra en «Qué ha salido a Claude o ChatGPT en los pasos sensibles» (`GET /licitaciones/ofertas/{id}/envios-externos`).

@@ -75,6 +75,59 @@ def proveedor_preferido(paso_id: str, pedido: str = "auto") -> str | None:
     return c if c in ("claude", "chatgpt") else None
 
 
+# Pasos cuyo modo se elige en cada caso, y la sensibilidad de lo que tocan. «externo» manda el texto (anonimizado) a Claude o ChatGPT y exige confirmarlo expresamente cada vez.
+PASOS_A_ELEGIR = {"administrativo": "media", "costes": "alta"}
+MODOS = ("local", "externo", "manual")
+CONTEXTO_EXTERNO = {
+    "costes": ("Claude/ChatGPT NO recibe costes internos, tarifas de proveedor ni datos del ERP (son confidenciales). Redacta la ESTRUCTURA de la justificación del precio: partidas, criterios de cálculo y por qué "
+               "el precio es viable, con lo que dice el pliego, y marca [PENDIENTE: cifra] cada importe que deba poner una persona. NO inventes ninguna cifra."),
+}
+
+
+def validar_modos(modos, confirmados, usuario: str) -> dict:
+    """Lo que elige la persona para cada paso elegible: {paso: {modo, confirmado_por?}} (lo «local» no se anota: es lo de siempre). «externo» solo vale si ese paso está en `confirmados`: la persona ha
+    aceptado expresamente que el texto, anonimizado, salga a Claude o ChatGPT. Cualquier cosa rara es un error, nunca un «local» silencioso. Pura."""
+    out = {}
+    conf = {str(c) for c in (confirmados or [])} if isinstance(confirmados, (list, tuple, set)) else set()
+    if modos in (None, {}):
+        return out
+    if not isinstance(modos, dict):
+        raise O.ErrorOferta("modos debe indicar, para cada paso, local, externo o manual")
+    for paso, modo in modos.items():
+        if paso not in PASOS_A_ELEGIR:
+            raise O.ErrorOferta(f"El modo solo se elige en: {', '.join(PASOS_A_ELEGIR)}")
+        if modo not in MODOS:
+            raise O.ErrorOferta(f"El modo de «{paso}» debe ser: {', '.join(MODOS)}")
+        if modo == "externo":
+            if paso not in conf:
+                raise O.ErrorOferta(f"Para enviar «{paso}» a Claude o ChatGPT hay que confirmarlo expresamente (el texto saldrá anonimizado)")
+            out[paso] = {"modo": "externo", "confirmado_por": str(usuario)[:200]}
+        elif modo == "manual":
+            out[paso] = {"modo": "manual", "confirmado_por": str(usuario)[:200]}
+    return out
+
+
+async def registrar_envio(motor_id: str, ejecucion_id: int | None, paso: str, por: str, caracteres: int) -> int:
+    """Deja constancia ANTES de enviar nada: quién lo confirmó, qué paso y cuánto texto privado (anonimizado) viaja. No guarda el contenido."""
+    async with await O._conectar() as conn:
+        cur = await conn.execute("INSERT INTO ofertas_envios_externos (motor_id, ejecucion_id, paso, sensibilidad, confirmado_por, caracteres_privados) VALUES (%s,%s,%s,%s,%s,%s) RETURNING id",
+                                 [motor_id, ejecucion_id, paso, PASOS_A_ELEGIR.get(paso, "media"), str(por)[:200], int(caracteres)])
+        return (await cur.fetchone())["id"]
+
+
+async def cerrar_envio(envio_id: int, estado: str, proveedor: str | None = None, modelo: str | None = None, detalle: str = "") -> None:
+    async with await O._conectar() as conn:
+        await conn.execute("UPDATE ofertas_envios_externos SET estado = %s, proveedor = %s, modelo = %s, detalle = %s WHERE id = %s", [estado, proveedor, modelo, detalle[:300], envio_id])
+
+
+async def envios(motor_id: str, limite: int = 30) -> list[dict]:
+    motor_id = O._id(motor_id)
+    async with await O._conectar() as conn:
+        cur = await conn.execute("SELECT id, ejecucion_id, paso, sensibilidad, confirmado_por, proveedor, modelo, caracteres_privados, estado, detalle, creado FROM ofertas_envios_externos "
+                                 "WHERE motor_id = %s ORDER BY id DESC LIMIT %s", [motor_id, min(max(int(limite), 1), 100)])
+        return [{**f, "creado": f["creado"].isoformat()} for f in await cur.fetchall()]
+
+
 def organismo_de(ficha: dict | None) -> str:
     """El órgano de contratación de la ficha. La ficha que dan las herramientas trae `comprador` como TEXTO (el nombre); la del motor, como diccionario con `nombre`: vale cualquiera de las dos. Pura."""
     f = ficha if isinstance(ficha, dict) else {}
@@ -344,9 +397,10 @@ async def aplicar(respuesta: dict, sel: list[dict], ids_validos: set[int], escri
 
 # ---- El paso ----
 
-async def intentar(motor_id: str, defin: dict, sel: list[dict], titulo: str, ficha: dict, consulta=None, modelo: str = "auto") -> tuple[dict | None, str]:
+async def intentar(motor_id: str, defin: dict, sel: list[dict], titulo: str, ficha: dict, consulta=None, modelo: str = "auto", privado: str = "") -> tuple[dict | None, str]:
     """Redacta las secciones `sel` del paso con Claude o ChatGPT. Devuelve (resultado, ""): {escritas, omitidas, resumen, proveedor, modelo}; o (None, motivo) si no procede o no se ha podido
-    (el paso lo hará entonces el modelo local). Nunca lanza por un fallo del modelo externo. `consulta` solo para pruebas."""
+    (el paso lo hará entonces el modelo local). Nunca lanza por un fallo del modelo externo. `consulta` solo para pruebas.
+    `privado`: texto de 101.cat (datos de la sociedad, etc.) que la persona ha autorizado a enviar: se anonimiza JUNTO con el conocimiento (una sola sesión de etiquetas) y, si no se puede garantizar, NO sale nada."""
     cfg = configuracion()
     try:
         docs = await _documentos_leidos(motor_id)
@@ -362,13 +416,21 @@ async def intentar(motor_id: str, defin: dict, sel: list[dict], titulo: str, fic
         perfil = rastreo.texto_perfil(resumen_mod.config().get("perfil_licitador"))
         conoc = await conocimiento_de_la_empresa([f"{s['titulo']} {titulo}" for s in sel], int(cfg["fragmentos_conocimiento"]), int(cfg["max_caracteres_conocimiento"]))
         sesion, nota = {}, ""
-        if conoc:
-            limpios, sesion, motivos = await externos._preparar([{"role": "user", "content": conoc}])
+        bruto = [t for t in (conoc, privado) if t]
+        if bruto:
+            limpios, sesion, motivos = await externos._preparar([{"role": "user", "content": t} for t in bruto])
+            if motivos and privado:
+                log.info("redacción externa: los datos privados no se envían (%s)", "; ".join(motivos))
+                return None, "los datos no se pueden anonimizar con garantías y no salen de la empresa (" + "; ".join(motivos)[:150] + ")"
             if motivos:
                 log.info("redacción externa: los datos de 101.cat no se envían (%s)", "; ".join(motivos))
                 conoc, nota = "", "no se han enviado datos de la base de conocimiento porque no se podían anonimizar"
             else:
-                conoc = limpios[0]["content"]
+                it = iter(limpios)
+                conoc = next(it)["content"] if conoc else ""
+                privado = next(it)["content"] if privado else ""
+        if privado:
+            defin = {**defin, "contexto": f"{defin.get('contexto', '')}\n\nDatos de la sociedad que se presenta (las etiquetas entre corchetes son datos protegidos, déjalas tal cual):\n{privado}".strip()}
         empresa = (perfil + "\n\n" if perfil else "") + (f"Datos de 101.cat (base de conocimiento; las etiquetas entre corchetes son datos protegidos, déjalas tal cual):\n{conoc}" if conoc
                                                        else "No se te da información de producto ni de experiencia de 101.cat: marca [PENDIENTE: dato de 101.cat] allí donde haga falta.")
         mensajes = construir_mensajes(titulo, organismo_de(ficha), pliego, texto_reqs, criterios, texto_de_secciones(sel),

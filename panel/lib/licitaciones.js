@@ -1382,3 +1382,35 @@ export function resumenEquivalencia(c) {
   if (!k) return "";
   return `${k.parametros} parámetros · ${k.cubiertos} con producto que iguala o supera · ${k.sin_cubrir} sin cubrir`;
 }
+
+// ---- Cómo se hace, en cada caso, un paso sensible (Administrativo y Costes) ----
+// Tres opciones: el modelo local de 101.cat (lo de siempre), Claude o ChatGPT con los datos anonimizados (hay que confirmarlo expresamente cada vez y queda registrado) o a mano (no interviene ningún modelo).
+export const PASOS_ELEGIBLES = {
+  administrativo: { nombre: "Administrativo", aviso: "Claude o ChatGPT reciben el pliego y los datos de la sociedad con los nombres, NIF y demás datos de personas y empresas sustituidos por etiquetas. Si no se puede garantizar, no sale nada y lo hace el modelo local." },
+  costes: { nombre: "Costes", aviso: "Claude o ChatGPT NO reciben costes internos, tarifas de proveedor ni datos del ERP: solo redactan la estructura de la justificación con lo que dice el pliego y dejan [PENDIENTE] cada cifra." },
+};
+export const MODOS_PASO = [["local", "Modelo local de 101.cat"], ["externo", "Claude o ChatGPT con datos anonimizados"], ["manual", "Lo escribo yo"]];
+
+/** Lo que se envía a la API: {modos, confirmados} solo con lo elegido distinto de «local». Con `solo` (repetir un paso) únicamente ese paso. Si algo está en «externo» sin confirmar devuelve {error}. Pura. */
+export function cuerpoModos(modos, confirmados, solo = null) {
+  const out = { modos: {}, confirmados: [] };
+  for (const paso of Object.keys(PASOS_ELEGIBLES)) {
+    if (solo && paso !== solo) continue;
+    const m = (modos || {})[paso] || "local";
+    if (m === "local") continue;
+    if (m === "externo" && !(confirmados || {})[paso]) return { error: `Para enviar «${PASOS_ELEGIBLES[paso].nombre}» a Claude o ChatGPT marca la confirmación: el texto saldrá anonimizado y quedará registrado.` };
+    out.modos[paso] = m;
+    if (m === "externo") out.confirmados.push(paso);
+  }
+  return out;
+}
+
+export const MODO_ETIQUETA = { externo: "Claude/ChatGPT (anonimizado)", manual: "A mano" };
+
+/** Una línea del registro de envíos: «Costes → Claude (opus) · lo confirmó albert · 1.240 caracteres anonimizados». Pura. */
+export function envioTexto(x) {
+  const paso = PASOS_ELEGIBLES[x?.paso]?.nombre || x?.paso || "";
+  const quien = x?.proveedor === "claude" ? "Claude" : x?.proveedor === "chatgpt" ? "ChatGPT" : "ningún modelo";
+  const estado = x?.estado === "enviado" ? "" : x?.estado === "no_enviado" ? " · no llegó a enviarse" : " · intentado";
+  return `${paso} → ${quien}${x?.modelo ? ` (${x.modelo})` : ""} · lo confirmó ${x?.confirmado_por || "?"} · ${Number(x?.caracteres_privados || 0).toLocaleString("es-ES")} caracteres privados anonimizados${estado}`;
+}
