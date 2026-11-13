@@ -157,8 +157,10 @@ async def _paso_del_agente(ficha, estado: dict, mensajes: list[dict]) -> dict:
     origen = estado.get("origen", "peticion")
     entrada = recortar(mensajes, presupuesto)
     # Consulta compleja: si Dirección ha conectado Claude o ChatGPT (y los datos se pueden anonimizar), responde un modelo externo
-    # Los documentos que una persona sube al chat se tratan SIEMPRE en local: su texto (contratos, tarifas, nóminas…) no sale de la empresa ni anonimizado
-    if not subidas.hay_adjuntos(estado["peticion"]) and modelos_externos.es_compleja(estado["peticion"]):
+    # Se trata SIEMPRE en local: los documentos que una persona sube al chat (contratos, tarifas, nóminas…) y, una vez que el agente ha usado una herramienta confidencial (tarifas y costes de proveedor),
+    # todo lo que sigue de esa petición. Su texto no sale de la empresa ni anonimizado
+    solo_local = subidas.hay_adjuntos(estado["peticion"]) or bool(estado.get("solo_local"))
+    if not solo_local and modelos_externos.es_compleja(estado["peticion"]):
         d = await modelos_externos.consultar(ficha, entrada, ESQUEMA_AGENTE, estado.get("sensibilidad"))
         if _paso_valido(d):
             return d
@@ -175,7 +177,7 @@ async def _paso_del_agente(ficha, estado: dict, mensajes: list[dict]) -> dict:
             return await chat(asignar(ficha, origen, dificil=True), entrada, esquema=ESQUEMA_AGENTE, max_tokens=PASO_MAX_TOKENS)
         except RespuestaInvalida:
             # Ni el modelo principal local ha dado una respuesta válida: último recurso, un modelo externo (si procede y si no hay documentos subidos)
-            d = None if subidas.hay_adjuntos(estado["peticion"]) else await modelos_externos.consultar(ficha, entrada, ESQUEMA_AGENTE, estado.get("sensibilidad"))
+            d = None if solo_local else await modelos_externos.consultar(ficha, entrada, ESQUEMA_AGENTE, estado.get("sensibilidad"))
             if _paso_valido(d):
                 return d
             raise
@@ -194,6 +196,7 @@ async def _ejecutar_agente(estado: Estado, ficha) -> Estado:
     mensajes = [{"role": "system", "content": sistema_agente(ficha, disponibles)},
                 {"role": "user", "content": estado["peticion"]}]
     pasos: list[dict] = []
+    solo_local = False
     t0 = time.perf_counter()
     t_modelo = t_herramientas = 0.0
     maximo = MAX_PASOS_AGENTE.get(ficha.id, MAX_PASOS)
@@ -206,7 +209,7 @@ async def _ejecutar_agente(estado: Estado, ficha) -> Estado:
     for n in range(1, maximo + 1):
         await actividad.marcar(ficha.id, "Pensando")
         t1 = time.perf_counter()
-        d = await _paso_del_agente(ficha, estado, mensajes)
+        d = await _paso_del_agente(ficha, {**estado, "solo_local": True} if solo_local else estado, mensajes)
         dt = time.perf_counter() - t1
         t_modelo += dt
         log.info("agente %s: paso %d/%d · modelo %.1f s (contexto ≈ %d caracteres) → %s", ficha.id, n, maximo, dt, sum(len(m["content"]) for m in mensajes),
@@ -231,6 +234,8 @@ async def _ejecutar_agente(estado: Estado, ficha) -> Estado:
         await actividad.contar(ficha.id, ("error:" if isinstance(resultado, dict) and "error" in resultado else "uso:") + clave)
         pasos.append({"herramienta": d.get("herramienta"), "operacion": d.get("operacion"),
                       "ok": not (isinstance(resultado, dict) and "error" in resultado)})
+        if pasos[-1]["ok"] and H.es_confidencial(d.get("herramienta", "")):
+            solo_local = True                                                         # ya hay datos confidenciales en la conversación: desde aquí, solo modelos locales
         mensajes += [{"role": "assistant", "content": json.dumps(d, ensure_ascii=False)},
                      {"role": "user", "content": "Resultado: " + json.dumps(resultado, ensure_ascii=False,
                                                                             default=str)[:limite_resultado()]}]

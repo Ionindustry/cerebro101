@@ -1,6 +1,6 @@
 "use client";
 import { useCallback, useEffect, useState } from "react";
-import { VEREDICTO_EQUIVALENCIA, evidenciaTexto, exigidoTexto, fechaTexto, resumenEquivalencia } from "../../../../lib/licitaciones";
+import { VEREDICTO_EQUIVALENCIA, evidenciaTexto, exigidoTexto, fechaTexto, resumenEquivalencia, solucionTitulo } from "../../../../lib/licitaciones";
 import { pedirCerebro } from "../../cliente";
 import Descubrimiento from "./Descubrimiento";
 
@@ -25,6 +25,14 @@ export default function Equivalencia({ id, version }) {
         <button className="boton no" aria-expanded={abierto} onClick={() => setAbierto((v) => !v)}>{abierto ? "Ocultar" : "Ver"}</button>
       </header>
       <p className="meta">Hecha con {d.proveedor === "claude" ? "Claude" : "ChatGPT"}{d.modelo ? ` (${d.modelo})` : ""} el {fechaTexto(d.actualizado)}. {resumenEquivalencia(c)}. Los números los compara el código con el valor que figura en la ficha; «sin verificar» pide que una persona lo mire.</p>
+      {c.solucion && (
+        <div role="group" aria-label="Solución propuesta">
+          <p><strong>{solucionTitulo(c.solucion)}</strong></p>
+          <ul>{c.solucion.productos.map((p, i) => <li key={i}><strong>{p.producto}</strong> <span className="meta">cubre: {p.cubre.join(", ")}</span></li>)}</ul>
+          {c.solucion.sin_cubrir.length > 0 && <p className="aviso" role="note">Sin producto acreditado para: {c.solucion.sin_cubrir.join(", ")}.</p>}
+          <p className="meta">Los equipos y su coste (tarjeta «Equipos y coste real») parten de esta solución: cuantos menos productos distintos, más sencillo el presupuesto y el mantenimiento.</p>
+        </div>
+      )}
       <Descubrimiento id={id} />
       {abierto && (
         <>

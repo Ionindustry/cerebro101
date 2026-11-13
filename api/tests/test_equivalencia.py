@@ -124,6 +124,64 @@ class TestVerificar(unittest.TestCase):
         self.assertIn("SIN PRODUCTO", E.texto_equivalencia({"parametros": [{"parametro": "IP", "operador": ">=", "valor_exigido": "IP68", "recomendado": ""}]}))
 
 
+def par(nombre, *cands):
+    """Un parámetro con candidatos [(producto, veredicto, verificado)]."""
+    return {"parametro": nombre, "candidatos": [{"producto": p, "veredicto": v, "verificado": ver} for p, v, ver in cands]}
+
+
+class TestSolucion(unittest.TestCase):
+    def test_un_producto_que_cubre_varios_gana_a_uno_por_parametro(self):
+        r = E.seleccionar_solucion([par("Resolución", ("X", "iguala", True), ("Y", "iguala", True)), par("IP", ("X", "supera", True))])
+        self.assertEqual([p["producto"] for p in r["productos"]], ["X"])
+        self.assertEqual(r["asignacion"], {0: "X", 1: "X"})
+        self.assertTrue(r["minimo"])
+
+    def test_elige_el_menor_numero_de_productos_que_lo_cubre_todo(self):
+        r = E.seleccionar_solucion([par("A", ("P1", "iguala", True), ("P2", "iguala", True)), par("B", ("P2", "iguala", True), ("P3", "iguala", True)), par("C", ("P3", "iguala", True))])
+        self.assertEqual(len(r["productos"]), 2)
+        self.assertEqual(set(r["asignacion"]), {0, 1, 2})
+        self.assertEqual(r["sin_cubrir"], [])
+
+    def test_entre_empates_gana_el_que_mas_supera_y_es_determinista(self):
+        pars = [par("A", ("P1", "iguala", True), ("P2", "supera", True)), par("B", ("P1", "iguala", True), ("P2", "supera", True))]
+        r = E.seleccionar_solucion(pars)
+        self.assertEqual([p["producto"] for p in r["productos"]], ["P2"])
+        self.assertEqual(E.seleccionar_solucion(pars), r)
+
+    def test_el_mismo_producto_escrito_de_dos_formas_cuenta_como_uno(self):
+        r = E.seleccionar_solucion([par("A", ("MS-C8573", "iguala", True)), par("B", ("Milesight MS-C8573", "iguala", True))])
+        self.assertEqual(len(r["productos"]), 1)
+        self.assertEqual(r["productos"][0]["producto"], "Milesight MS-C8573")                 # se muestra el nombre más completo
+        self.assertEqual(r["asignacion"], {0: "Milesight MS-C8573", 1: "Milesight MS-C8573"})
+
+    def test_lo_no_verificado_o_que_no_cumple_no_cuenta(self):
+        r = E.seleccionar_solucion([par("A", ("X", "iguala", False), ("Y", "no_cumple", True), ("Z", "sin_datos", True)), par("B", ("W", "supera", True))])
+        self.assertEqual([p["producto"] for p in r["productos"]], ["W"])
+        self.assertEqual(r["sin_cubrir"], ["A"])
+
+    def test_sin_ningun_candidato_no_hay_solucion_y_todo_queda_sin_cubrir(self):
+        r = E.seleccionar_solucion([par("A"), par("B", ("X", "no_cumple", True))])
+        self.assertEqual((r["productos"], r["asignacion"], r["sin_cubrir"]), ([], {}, ["A", "B"]))
+
+    def test_si_no_cabe_en_seis_productos_elige_lo_que_mas_cubre(self):
+        pars = [par(f"P{i}", (f"PROD{i:02d}", "iguala", True)) for i in range(8)]
+        r = E.seleccionar_solucion(pars)
+        self.assertFalse(r["minimo"])
+        self.assertEqual((len(r["productos"]), len(r["asignacion"])), (8, 8))
+
+    def test_verificar_recomienda_la_solucion_y_conserva_el_individual(self):
+        textos = {"P1": "Cámara X: 8 MP, IP67", "P2": "Cámara Y: 4 MP"}
+        datos = {"parametros": [
+            {"parametro": "Resolución", "operador": ">=", "valor_exigido": "4 MP", "candidatos": [{"producto": "Y", "valor_producto": "4 MP", "veredicto": "iguala", "evidencia": ["P2"]},
+                                                                                              {"producto": "X", "valor_producto": "8 MP", "veredicto": "supera", "evidencia": ["P1"]}]},
+            {"parametro": "IP", "operador": ">=", "valor_exigido": "IP66", "candidatos": [{"producto": "X", "valor_producto": "IP67", "veredicto": "supera", "evidencia": ["P1"]}]}]}
+        r = E.verificar(datos, textos)
+        self.assertEqual([p["recomendado"] for p in r["parametros"]], ["X", "X"])
+        self.assertEqual([p["producto"] for p in r["solucion"]["productos"]], ["X"])
+        self.assertEqual(r["parametros"][0]["recomendado_individual"], "X")
+        self.assertNotIn("asignacion", r["solucion"])
+
+
 @unittest.skipUnless(URL and hasattr(psycopg, "AsyncConnection"), "sin CEREBRO_TEST_PG")
 class TestPaso(unittest.TestCase):
     def setUp(self):

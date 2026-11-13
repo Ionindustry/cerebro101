@@ -62,7 +62,7 @@ async def _ofertas() -> tuple[dict[str, dict[str, dict]], int]:
         for l in f["lineas"]:
             ofertas.setdefault(l["codigo"], {})[f["lista"]] = {
                 "proveedor": f["proveedor"]["nombre"], "lista": f["lista"], "canal": canal, "coste": l["precio"], "moneda": f["moneda"], "stock": l.get("stock"), "ref": l["ref"], "desc": l["desc"],
-                "familia": l.get("familia") or "", "marca": l.get("marca") or "", "pvp": l.get("pvp")}
+                "familia": l.get("familia") or "", "marca": l.get("marca") or "", "pvp": l.get("pvp"), "enlaces": l.get("enlaces") or {}}
     return ofertas, sin_tarifa
 
 

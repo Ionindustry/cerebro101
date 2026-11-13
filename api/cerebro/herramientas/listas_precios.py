@@ -107,6 +107,7 @@ registrar(Herramienta(
                 "proponer_venta": proponer_venta, "ajustar_venta": ajustar_venta, "estado_venta": estado_venta, "aplicar_venta": aplicar_venta,
                 "elegir_estrategia": elegir_estrategia, "anotar_mercado": anotar_mercado, "listar_mercado": listar_mercado, "retirar_mercado": retirar_mercado},
     externas=frozenset({"aplicar", "aplicar_venta"}),
+    confidencial=True,
     vistas={"aplicar": vista_aplicar, "aplicar_venta": vista_aplicar_venta},
     ayuda={"tabla": "las primeras filas de una página (u hoja) del documento subido tal como las leerá el sistema, con sus celdas; úsalo para decidir qué columna es cada cosa y en qué fila está la cabecera",
            "proponer": "lee TODAS las filas del documento y guarda la propuesta (sin escribir en el ERP). proveedor = {nombre, nif, email, telefono, pais} (lo que conste en el documento); "

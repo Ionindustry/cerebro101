@@ -22,6 +22,7 @@ herramientas:
   plantillas:                {local: true,  sensibilidad_max: alta,  nota: "rellena las plantillas administrativas del concurso con los datos de la sociedad del ERP y de la ficha; el agente solo elige qué dato va en cada hueco, nunca el valor; no sale ningún dato y nada se firma"}
   documentos_subidos:        {local: true,  sensibilidad_max: alta,  nota: "lee el TEXTO de los documentos que una persona sube al chat (tras cuarentena y antivirus); nunca devuelve el fichero"}
   listas_precios:            {local: true,  sensibilidad_max: alta,  nota: "importa listas de precios de proveedores desde un documento subido: propone, y solo escribe en el ERP (proveedor, artículos, precios) tras la aprobación de una persona"}
+  catalogo:                  {local: true,  sensibilidad_max: alta,  nota: "catálogo de productos de proveedores ya cargados (solo lectura): buscar, comparar costes en euros, fichas técnicas y tarifas pendientes; confidencial, solo modelos locales"}
   mayorista:                 {local: false, sensibilidad_max: alta,  nota: "portal o API del mayorista de telecom"}
 
 # Si una herramienta externa no admite la sensibilidad del agente, se usa esta alternativa local.

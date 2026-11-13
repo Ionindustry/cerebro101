@@ -1436,3 +1436,10 @@ export function cantidadAEnvio(texto) {
   const t = String(texto ?? "").trim();
   return t === "" ? null : t;
 }
+
+/** «Solución con 2 productos» / «Sin productos»: el titular de la solución mínima de la tabla de equivalencias. Pura. */
+export function solucionTitulo(s) {
+  const n = s?.productos?.length || 0;
+  if (!n) return "Sin productos que cubran lo pedido";
+  return `Solución con ${n} ${n === 1 ? "producto" : "productos"}${s.minimo ? " (el mínimo posible)" : " (lo que más cubre: no cabe en 6)"}`;
+}

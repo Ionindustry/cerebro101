@@ -1268,3 +1268,11 @@ test("partidas: importes, lo que falta y cantidad en blanco", async () => {
   assert.equal(cantidadAEnvio("  "), null);
   assert.equal(cantidadAEnvio(" 12 "), "12");
 });
+
+test("solucionTitulo describe la solución de la tabla de equivalencias", async () => {
+  const { solucionTitulo } = await import("../lib/licitaciones.js");
+  assert.equal(solucionTitulo({ productos: [{ producto: "X" }], minimo: true }), "Solución con 1 producto (el mínimo posible)");
+  assert.equal(solucionTitulo({ productos: [{}, {}], minimo: false }), "Solución con 2 productos (lo que más cubre: no cabe en 6)");
+  assert.equal(solucionTitulo({ productos: [] }), "Sin productos que cubran lo pedido");
+  assert.equal(solucionTitulo(undefined), "Sin productos que cubran lo pedido");
+});
