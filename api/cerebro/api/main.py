@@ -38,6 +38,8 @@ from ..licitaciones import redaccion_externa as redaccion_externa_ofertas
 from ..licitaciones import encargos as encargos_ofertas
 from ..licitaciones import comparativa as comparativa_ofertas
 from ..licitaciones import equivalencia as equivalencia_ofertas
+from .. import precios_venta as precios_venta_pantalla
+from .. import listas_precios as listas_precios_mod
 from ..licitaciones import partidas as partidas_ofertas
 from ..licitaciones import descubrimiento as descubrimiento_ofertas
 from ..licitaciones import fichas as fichas_tecnicas
@@ -1508,3 +1510,115 @@ async def cotizar(datos: dict, usuario: Usuario = Depends(usuario_actual)):
 async def comparar(datos: dict, usuario: Usuario = Depends(usuario_actual)):
     ofertas = [Oferta(**o) for o in datos.get("ofertas", [])]
     return [p.__dict__ for p in puntuar(ofertas, datos.get("pesos"))]
+
+# ---------------------------------------------------------------- Precios de venta: pantalla de revisión (solo Dirección)
+class PrecioAjustes(BaseModel):
+    ajustes: dict[str, float] = {}          # {código: precio de venta sin IVA}
+    excluir: list[str] = []
+    incluir: list[str] = []
+
+
+class PrecioEstrategia(BaseModel):
+    estrategia: str = Field(min_length=2, max_length=40)
+    codigos: list[str] | None = None
+    familia: str | None = Field(default=None, max_length=80)
+
+
+class PrecioProponer(BaseModel):
+    solo_marca: str | None = Field(default=None, max_length=60)
+
+
+class PrecioAplicar(BaseModel):
+    confirmo: bool = False                  # Dirección ha visto la vista previa y firma la aplicación en el ERP
+
+
+def _exige_direccion(usuario: Usuario) -> None:
+    if "direccion" not in usuario.roles:
+        raise HTTPException(403, "Los precios de venta los revisa y aprueba Dirección")
+
+
+def _error_precios(e: Exception):
+    if isinstance(e, listas_precios_mod.NoExiste):
+        return HTTPException(404, str(e))
+    return HTTPException(422, str(e))
+
+
+@app.get("/precios/propuestas")
+async def propuestas_de_precios(usuario: Usuario = Depends(usuario_actual)):
+    """Las últimas propuestas de precios de venta (sin líneas). Solo Dirección: llevan costes de proveedor, que son confidenciales."""
+    _exige_direccion(usuario)
+    return {"propuestas": await precios_venta_pantalla.propuestas()}
+
+
+@app.post("/precios/propuestas")
+async def proponer_precios_de_venta(entrada: PrecioProponer, usuario: Usuario = Depends(usuario_actual)):
+    """Calcula una propuesta nueva con los costes cargados (no escribe nada en el ERP)."""
+    _exige_direccion(usuario)
+    try:
+        r = await precios_venta_pantalla.proponer(f"usuario:{usuario.id}", "operaciones", solo_marca=entrada.solo_marca)
+    except (precios_venta_pantalla.ErrorVenta, listas_precios_mod.ErrorImportacion, listas_precios_mod.NoExiste) as e:
+        raise _error_precios(e) from None
+    log.info("precios: %s propone precios de venta (propuesta %s)", usuario.id, r.get("propuesta"))
+    return r
+
+
+@app.get("/precios/propuestas/{propuesta}")
+async def ver_propuesta_de_precios(propuesta: int, familia: str = "", cambio: str = "", q: str = "", bajo_minimo: bool = False, pagina: int = 1, usuario: Usuario = Depends(usuario_actual)):
+    _exige_direccion(usuario)
+    try:
+        return await precios_venta_pantalla.ver(propuesta, "operaciones", familia[:80], cambio[:12], q[:80], bajo_minimo, pagina)
+    except (precios_venta_pantalla.ErrorVenta, listas_precios_mod.NoExiste) as e:
+        raise _error_precios(e) from None
+
+
+@app.post("/precios/propuestas/{propuesta}/ajustar")
+async def ajustar_propuesta_de_precios(propuesta: int, entrada: PrecioAjustes, usuario: Usuario = Depends(usuario_actual)):
+    """Corrige precios a mano, saca o mete artículos. No escribe en el ERP."""
+    _exige_direccion(usuario)
+    try:
+        r = await precios_venta_pantalla.ajustar(propuesta, entrada.ajustes, entrada.excluir, entrada.incluir)
+    except (precios_venta_pantalla.ErrorVenta, listas_precios_mod.NoExiste) as e:
+        raise _error_precios(e) from None
+    await constancia.dejar_constancia(None, f"usuario:{usuario.id}", "listas_precios", "ajustar_venta", None,
+                                      f"propuesta {propuesta}: {len(entrada.ajustes)} precios a mano, {len(entrada.excluir)} excluidos, {len(entrada.incluir)} incluidos")
+    return r
+
+
+@app.post("/precios/propuestas/{propuesta}/estrategia")
+async def elegir_estrategia_de_precios(propuesta: int, entrada: PrecioEstrategia, usuario: Usuario = Depends(usuario_actual)):
+    """Aplica una estrategia de precio (competitivo, alineado, premium…) a todos los artículos, a una familia o a los códigos indicados. No escribe en el ERP."""
+    _exige_direccion(usuario)
+    try:
+        r = await precios_venta_pantalla.elegir_estrategia(propuesta, entrada.estrategia, entrada.codigos, entrada.familia)
+    except (precios_venta_pantalla.ErrorVenta, listas_precios_mod.NoExiste) as e:
+        raise _error_precios(e) from None
+    await constancia.dejar_constancia(None, f"usuario:{usuario.id}", "listas_precios", "elegir_estrategia", None,
+                                      f"propuesta {propuesta}: estrategia {entrada.estrategia} en {r.get('articulos')} artículos")
+    return r
+
+
+@app.post("/precios/propuestas/{propuesta}/descartar")
+async def descartar_propuesta_de_precios(propuesta: int, usuario: Usuario = Depends(usuario_actual)):
+    _exige_direccion(usuario)
+    try:
+        return await precios_venta_pantalla.descartar(propuesta)
+    except (precios_venta_pantalla.ErrorVenta, listas_precios_mod.NoExiste) as e:
+        raise _error_precios(e) from None
+
+
+@app.post("/precios/propuestas/{propuesta}/aplicar")
+async def aplicar_propuesta_de_precios(propuesta: int, entrada: PrecioAplicar, usuario: Usuario = Depends(usuario_actual)):
+    """Escribe en el ERP los precios de venta que han cambiado. Es una acción que sale de la empresa: la firma Dirección (una sola persona, como en la bandeja) y exige la confirmación expresa tras ver la vista previa.
+    Queda constancia de quién firmó y qué se aplicó. Repetible: lo que ya está igual no se toca."""
+    _exige_direccion(usuario)
+    if not entrada.confirmo:
+        raise HTTPException(422, "Falta la confirmación: revisa la vista previa y confirma que aplicas estos precios en el ERP")
+    try:
+        vista = await precios_venta_pantalla.vista_aplicar(propuesta, "operaciones")
+        resultado = await precios_venta_pantalla.aplicar(propuesta, "operaciones")
+    except (precios_venta_pantalla.ErrorVenta, listas_precios_mod.NoExiste) as e:
+        raise _error_precios(e) from None
+    await constancia.dejar_constancia(None, f"usuario:{usuario.id}", "listas_precios", "aplicar_venta", f"firmado en el panel por {usuario.id}",
+                                      f"propuesta {propuesta}: {vista['titulo']}; resultado: {str(resultado)[:600]}")
+    log.info("precios: %s aplica la propuesta %s en el ERP", usuario.id, propuesta)
+    return {"propuesta": propuesta, "resultado": resultado}
