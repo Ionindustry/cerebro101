@@ -1350,3 +1350,18 @@ export function progresoGeneral(ejec, secciones) {
 }
 
 export const CONFIRMAR_CANCELAR = "Se cancelará la preparación de la oferta. El agente que esté trabajando terminará su paso actual y no empezará ninguno más; lo ya escrito se conserva y podrás volver a lanzarla. ¿Cancelar?";
+
+/** Fichas técnicas de producto (/licitaciones/fichas): el informe de una carga en una frase para personas. */
+export function informeFichasTexto(inf) {
+  if (!inf) return "";
+  if (inf.error) return inf.error;
+  const partes = [`${inf.cargadas || 0} cargadas`];
+  if (inf.repetidas) partes.push(`${inf.repetidas} ya estaban`);
+  if (inf.sin_texto) partes.push(`${inf.sin_texto} sin texto legible`);
+  if (inf.fallidas?.length) partes.push(`${inf.fallidas.length} con fallo`);
+  if (inf.pendientes) partes.push(`${inf.pendientes} pendientes (repite la carga)`);
+  return partes.join(" · ");
+}
+
+export const ESTADO_FICHA = { indexada: "Lista", sin_texto: "Sin texto legible", infectada: "Rechazada (antivirus)", no_analizable: "No analizable", error: "Con error" };
+export const ORIGEN_FICHA = { csv: "Enlace de la lista", web: "Dirección web", manual: "Subida a mano" };

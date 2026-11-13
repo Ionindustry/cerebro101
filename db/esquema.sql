@@ -692,3 +692,35 @@ CREATE TABLE IF NOT EXISTS ofertas_comparativa (
   creado      timestamptz NOT NULL DEFAULT now(),
   actualizado timestamptz NOT NULL DEFAULT now()
 );
+
+-- Fichas técnicas de producto (api/cerebro/licitaciones/fichas.py): PDF de fabricante cargados desde los enlaces de las listas CSV, desde webs de dominios autorizados o a mano. Cada uno pasa por el antivirus, se lee
+-- en un proceso aparte y su texto se indexa en la base de conocimiento (departamento «licitaciones»), que es de donde la comparativa saca la evidencia de producto. Sin claves ajenas (el esquema se aplica por trozos en las pruebas).
+CREATE TABLE IF NOT EXISTS fichas_tecnicas (
+  id         bigserial PRIMARY KEY,
+  sha256     text NOT NULL UNIQUE,
+  marca      text NOT NULL DEFAULT '',
+  referencia text NOT NULL DEFAULT '',
+  nombre     text NOT NULL,
+  origen     text NOT NULL CHECK (origen IN ('csv', 'web', 'manual')),
+  url        text NOT NULL DEFAULT '',
+  formato    text NOT NULL,
+  bytes      bigint NOT NULL,
+  estado     text NOT NULL CHECK (estado IN ('indexada', 'sin_texto', 'infectada', 'no_analizable', 'error')),
+  motivo     text NOT NULL DEFAULT '',
+  paginas    integer,
+  trozos     integer NOT NULL DEFAULT 0,
+  por        text NOT NULL DEFAULT '',
+  creado     timestamptz NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS fichas_tecnicas_ref ON fichas_tecnicas (lower(marca), lower(referencia));
+
+-- Cargas de fichas desde una lista de proveedor (tarea en segundo plano de fichas.py): una fila por carga con su informe.
+CREATE TABLE IF NOT EXISTS fichas_cargas (
+  id          bigserial PRIMARY KEY,
+  importacion bigint NOT NULL,
+  estado      text NOT NULL DEFAULT 'en_curso' CHECK (estado IN ('en_curso', 'terminada', 'error')),
+  informe     jsonb NOT NULL DEFAULT '{}',
+  por         text NOT NULL,
+  creado      timestamptz NOT NULL DEFAULT now(),
+  terminada   timestamptz
+);

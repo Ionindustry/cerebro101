@@ -15,7 +15,7 @@ from fastapi import Depends, FastAPI, HTTPException
 from fastapi.responses import JSONResponse, Response
 from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
 from langgraph.types import Command
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from .. import subidas
 from ..ajustes import ajustes
@@ -36,6 +36,7 @@ from ..licitaciones import plantillas as plantillas_ofertas
 from ..licitaciones import redaccion as redaccion_ofertas
 from ..licitaciones import encargos as encargos_ofertas
 from ..licitaciones import comparativa as comparativa_ofertas
+from ..licitaciones import fichas as fichas_tecnicas
 from ..licitaciones import reglas as reglas_licitaciones
 from ..licitaciones import simulador as simulador_licitaciones
 from ..licitaciones import embudo as embudo_licitaciones
@@ -955,6 +956,81 @@ async def cancelar_la_preparacion(motor_id: str, usuario: Usuario = Depends(usua
         return {"ejecucion": await redaccion_ofertas.cancelar(motor_id, usuario.id)}
     except (ofertas_licitaciones.ErrorOferta, LookupError) as e:
         raise _oferta_error(e) from None
+
+
+class SubidaFicha(BaseModel):
+    nombre: str = Field(min_length=1, max_length=200)
+    marca: str = Field(default="", max_length=60)
+    referencia: str = Field(default="", max_length=60)
+    base64: str = Field(min_length=1)
+
+
+class CargaFichas(BaseModel):
+    importacion: int = Field(ge=1)
+
+
+class FichaPorDireccion(BaseModel):
+    url: str = Field(min_length=8, max_length=500)
+    marca: str = Field(default="", max_length=60)
+    referencia: str = Field(default="", max_length=60)
+
+
+@app.get("/licitaciones/fichas")
+async def fichas_cargadas(usuario: Usuario = Depends(usuario_actual)):
+    """Fichas técnicas cargadas, las listas de proveedor de las que se pueden cargar, las últimas cargas y los dominios autorizados."""
+    _exige_licitaciones(usuario)
+    cfg = fichas_tecnicas.configuracion()
+    return {**await fichas_tecnicas.listar(), "listas": await fichas_tecnicas.listas(), "cargas": await fichas_tecnicas.cargas(), "dominios": cfg["hosts"]}
+
+
+@app.get("/licitaciones/fichas/revisar/{importacion}")
+async def revisar_fichas_de_una_lista(importacion: int, usuario: Usuario = Depends(usuario_actual)):
+    """Qué se descargaría de esa lista (sin descargar nada) y qué dominios quedan fuera de la lista autorizada."""
+    _exige_licitaciones(usuario)
+    try:
+        return await fichas_tecnicas.revisar_lista(importacion)
+    except fichas_tecnicas.ErrorFicha as e:
+        raise HTTPException(404, str(e)) from None
+
+
+@app.post("/licitaciones/fichas/cargar")
+async def cargar_fichas_de_una_lista(entrada: CargaFichas, usuario: Usuario = Depends(usuario_actual)):
+    """Lanza en segundo plano la carga de las fichas de los enlaces autorizados de una lista de proveedor."""
+    _exige_licitaciones(usuario)
+    try:
+        carga = await fichas_tecnicas.iniciar_carga(entrada.importacion, usuario.id)
+    except fichas_tecnicas.ErrorFicha as e:
+        raise HTTPException(409 if "en curso" in str(e) else 404, str(e)) from None
+    celery.send_task("cerebro.tareas.celery_app.cargar_fichas", args=[carga], queue="peticiones")
+    log.info("fichas: %s lanza la carga %s (lista %s)", usuario.id, carga, entrada.importacion)
+    return {"carga": carga}
+
+
+@app.post("/licitaciones/fichas/url")
+async def cargar_ficha_por_direccion(entrada: FichaPorDireccion, usuario: Usuario = Depends(usuario_actual)):
+    """Descarga una ficha de una dirección de un dominio autorizado."""
+    _exige_licitaciones(usuario)
+    try:
+        return await fichas_tecnicas.desde_url(entrada.url, entrada.marca, entrada.referencia, "web", usuario.id)
+    except fichas_tecnicas.ErrorFicha as e:
+        raise HTTPException(422, str(e)) from None
+
+
+@app.post("/licitaciones/fichas/subir")
+async def subir_ficha_a_mano(entrada: SubidaFicha, usuario: Usuario = Depends(usuario_actual)):
+    """Una ficha en PDF subida a mano: antivirus, lectura e indexado como las demás."""
+    _exige_licitaciones(usuario)
+    cfg = fichas_tecnicas.configuracion()
+    if len(entrada.base64) > cfg["max_mb"] * 1_400_000:
+        raise HTTPException(413, f"La ficha pesa más de {cfg['max_mb']} MB")
+    try:
+        datos = base64.b64decode(entrada.base64, validate=True)
+    except ValueError:
+        raise HTTPException(422, "La ficha no se ha recibido bien") from None
+    try:
+        return await fichas_tecnicas.subir(datos, entrada.nombre, entrada.marca, entrada.referencia, usuario.id, cfg)
+    except fichas_tecnicas.ErrorFicha as e:
+        raise HTTPException(422, str(e)) from None
 
 
 @app.get("/licitaciones/ofertas/{motor_id}/comparativa")

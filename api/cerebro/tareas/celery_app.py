@@ -196,6 +196,13 @@ def redactar_oferta(self, ejecucion_id: int) -> dict:
         return asyncio.run(redaccion.cerrar(ejecucion_id, f"No se ha podido terminar la redacción ({type(e).__name__})"))
 
 
+@app.task(name="cerebro.tareas.celery_app.cargar_fichas")
+def cargar_fichas(carga_id: int) -> dict:
+    """Una persona ha pedido cargar las fichas técnicas de una lista de proveedor: se descargan de los dominios autorizados, pasan por el antivirus y se indexan (cerebro/licitaciones/fichas.py)."""
+    from ..licitaciones import fichas
+    return asyncio.run(fichas.ejecutar_carga(carga_id))
+
+
 @app.task(name="cerebro.tareas.celery_app.purgar_subidas")
 def purgar_subidas() -> dict:
     """Cada noche borra los documentos subidos al chat que pasan de `subidas.retencion_dias` (config/integraciones.yaml): el fichero y su texto."""

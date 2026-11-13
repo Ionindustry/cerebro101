@@ -1232,3 +1232,10 @@ test("cancelar la preparación: la confirmación avisa de lo que pasa", () => {
   assert.match(CONFIRMAR_CANCELAR, /terminará su paso actual/);
   assert.match(CONFIRMAR_CANCELAR, /lo ya escrito se conserva/);
 });
+
+test("informeFichasTexto resume una carga de fichas", async () => {
+  const { informeFichasTexto } = await import("../lib/licitaciones.js");
+  assert.equal(informeFichasTexto({ cargadas: 3, repetidas: 1, sin_texto: 0, fallidas: [{}, {}], pendientes: 0 }), "3 cargadas · 1 ya estaban · 2 con fallo");
+  assert.equal(informeFichasTexto({ error: "No se ha podido" }), "No se ha podido");
+  assert.equal(informeFichasTexto(null), "");
+});
