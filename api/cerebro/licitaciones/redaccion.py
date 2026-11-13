@@ -32,6 +32,7 @@ TERMINADOS = (HECHO, PARCIAL, OMITIDO, ERROR)
 # La proposición económica y «criterios-automaticos» no las escribe ningún agente: la primera sale sola del precio y la segunda son compromisos que decide una persona.
 PASOS = (
     {"id": "comparativa", "agente": "comparador-productos", "titulo": "Comparativa de productos y ventaja competitiva", "comparativa": True},
+    {"id": "equivalencia", "agente": "comparador-productos", "titulo": "Tabla de equivalencias · «iguala o supera» frente al catálogo", "equivalencia": True},
     {"id": "encargos", "agente": "director-oferta", "titulo": "Director de la oferta · encargo a cada agente", "encargos": True},
     {"id": "solucion", "agente": "arquitecto-solucion", "titulo": "Arquitecto de Solución · descripción de la solución", "sobre": "tecnico", "claves": ("descripcion-solucion",),
      "contexto": "Diseña la mejor solución, criterio a criterio, dentro del presupuesto: qué se instala o presta, con qué equipos, cómo cubre cada requisito técnico del pliego."},
@@ -73,7 +74,7 @@ def editable_por_agente(s: dict, rehacer: bool) -> bool:
 
 def seleccion(paso: dict, secciones: list[dict], rehacer: bool) -> list[dict]:
     """Las secciones que este paso tiene que escribir. Los pasos de informe no escriben ninguna."""
-    if paso.get("informe") or paso.get("encargos") or paso.get("comparativa"):
+    if paso.get("informe") or paso.get("encargos") or paso.get("comparativa") or paso.get("equivalencia"):
         return []
     out = []
     for s in secciones:
@@ -92,7 +93,7 @@ def pasos_iniciales(secciones: list[dict], rehacer: bool) -> list[dict]:
     for p in PASOS:
         paso = {"id": p["id"], "agente": p["agente"], "titulo": p["titulo"], "estado": PENDIENTE, "resumen": "", "error": "", "secciones": [], "escritas": 0, "faltan": [],
                 "inicio": None, "fin": None}
-        if not p.get("informe") and not p.get("encargos") and not p.get("comparativa"):
+        if not p.get("informe") and not p.get("encargos") and not p.get("comparativa") and not p.get("equivalencia"):
             sel = seleccion(p, secciones, rehacer)
             paso["secciones"] = [s["clave"] for s in sel]
             if not sel and not p.get("antes"):
@@ -102,7 +103,7 @@ def pasos_iniciales(secciones: list[dict], rehacer: bool) -> list[dict]:
 
 
 def _ejecucion(f: dict) -> dict:
-    return {"id": f["id"], "licitacion": str(f["motor_id"]), "estado": f["estado"], "por": f["por"], "rehacer": f["rehacer"], "modelo": f.get("modelo") or "auto", "pasos": list(f["pasos"] or []), "error": f["error"],
+    return {"id": f["id"], "licitacion": str(f["motor_id"]), "estado": f["estado"], "por": f["por"], "rehacer": f["rehacer"], "modelo": f.get("modelo") or "auto", "modos": dict(f.get("modos") or {}), "pasos": list(f["pasos"] or []), "error": f["error"],
             "creada": _iso(f["creada"]), "terminada": _iso(f["terminada"])}
 
 
@@ -124,7 +125,7 @@ def pasos_de_repeticion(inicial: list[dict], anteriores: list[dict] | None, solo
     return out
 
 
-async def reservar(motor_id: str, usuario: str, rehacer: bool = False, ahora: datetime | None = None, modelo: str = "auto", solo: str | None = None) -> dict:
+async def reservar(motor_id: str, usuario: str, rehacer: bool = False, ahora: datetime | None = None, modelo: str = "auto", solo: str | None = None, modos: dict | None = None) -> dict:
     """Anota una ejecución nueva antes de encolar el trabajo. Conflicto si ya hay una en curso (y reciente); NoExiste si la oferta aún no está preparada."""
     motor_id = O._id(motor_id)
     ahora = _ahora(ahora)
@@ -150,8 +151,8 @@ async def reservar(motor_id: str, usuario: str, rehacer: bool = False, ahora: da
                 if not previa:
                     raise O.NoExiste("Todavía no se ha preparado la oferta con los agentes: pulsa primero «Preparar la oferta con los agentes»")
                 pasos = pasos_de_repeticion(pasos, list(previa["pasos"] or []), solo)
-            cur = await conn.execute("INSERT INTO ofertas_ejecuciones (motor_id, por, rehacer, pasos, creada, modelo) VALUES (%s,%s,%s,%s,%s,%s) RETURNING *",
-                                     [motor_id, str(usuario)[:200], bool(rehacer), Jsonb(pasos), ahora, modelo_pedido(modelo)])
+            cur = await conn.execute("INSERT INTO ofertas_ejecuciones (motor_id, por, rehacer, pasos, creada, modelo, modos) VALUES (%s,%s,%s,%s,%s,%s,%s) RETURNING *",
+                                     [motor_id, str(usuario)[:200], bool(rehacer), Jsonb(pasos), ahora, modelo_pedido(modelo), Jsonb(modos or {})])
             f = await cur.fetchone()
     log.info("oferta: %s pide que los agentes %s la oferta de %s (ejecución %s, rehacer=%s)", usuario, f"repitan el paso «{solo}» de" if solo else "redacten", motor_id, f["id"], bool(rehacer))
     return _ejecucion(f)
@@ -189,6 +190,58 @@ def _estado_final(pasos: list[dict]) -> str:
     if all(p["estado"] in (HECHO, OMITIDO) for p in pasos):
         return "completa"
     return "parcial" if any(p["estado"] in (HECHO, PARCIAL) for p in pasos) else "error"
+
+
+def ultima_actividad(f: dict) -> datetime:
+    """Cuándo se movió por última vez una ejecución: la hora en que se creó o la última vez que un paso empezó o terminó. Pura."""
+    marcas = [f["creada"]]
+    for p in f.get("pasos") or []:
+        for k in ("inicio", "fin"):
+            try:
+                if p.get(k):
+                    marcas.append(datetime.fromisoformat(p[k]))
+            except (TypeError, ValueError):
+                pass
+    return max(marcas)
+
+
+async def interrumpir_huerfanas(ahora: datetime | None = None, gracia_s: int = 90) -> list[int]:
+    """Al arrancar el worker: toda ejecución «en curso» se quedó sin tarea (el reinicio la mató), así que se cierra como interrumpida y se puede volver a lanzar. Las creadas hace menos de `gracia_s`
+    segundos se dejan: pueden estar esperando en la cola del worker nuevo."""
+    ahora = _ahora(ahora)
+    async with await O._conectar() as conn:
+        cur = await conn.execute("SELECT id FROM ofertas_ejecuciones WHERE estado = 'en_curso' AND creada < %s", [ahora - timedelta(seconds=gracia_s)])
+        ids = [f["id"] for f in await cur.fetchall()]
+    for i in ids:
+        await cerrar(i, "Interrumpida: el servidor se reinició mientras trabajaban los agentes. Vuelve a lanzarla: lo ya escrito se conserva.", ahora)
+    return ids
+
+
+async def caducar_inactivas(ahora: datetime | None = None, minutos: int = 60) -> list[int]:
+    """Cierra como interrumpidas las ejecuciones «en curso» sin ninguna actividad desde hace `minutos` (un paso del modelo local tarda como mucho unos 25 minutos): así no se quedan «trabajando» para siempre."""
+    ahora = _ahora(ahora)
+    async with await O._conectar() as conn:
+        cur = await conn.execute("SELECT * FROM ofertas_ejecuciones WHERE estado = 'en_curso'")
+        filas = await cur.fetchall()
+    ids = []
+    for f in filas:
+        parado = (ahora - ultima_actividad(f)).total_seconds() / 60
+        if parado >= minutos:
+            await cerrar(f["id"], f"Sin actividad desde hace {int(parado)} min: se da por interrumpida. Puedes volver a lanzarla; lo ya escrito se conserva.", ahora)
+            ids.append(f["id"])
+    return ids
+
+
+async def cancelar(motor_id: str, usuario: str, ahora: datetime | None = None) -> dict:
+    """Una persona cancela la preparación en curso. No se puede parar al agente a mitad de un paso: termina ese paso y no empieza ninguno más; lo ya escrito se conserva."""
+    motor_id = O._id(motor_id)
+    async with await O._conectar() as conn:
+        cur = await conn.execute("SELECT id FROM ofertas_ejecuciones WHERE motor_id = %s AND estado = 'en_curso' ORDER BY id DESC LIMIT 1", [motor_id])
+        f = await cur.fetchone()
+    if not f:
+        raise O.NoExiste("No hay ninguna preparación en marcha en esta oferta")
+    log.info("oferta: %s cancela la preparación de %s (ejecución %s)", usuario, motor_id, f["id"])
+    return await cerrar(f["id"], f"Cancelada por {str(usuario)[:60]}. El agente que estuviera trabajando termina su paso y no empieza ninguno más; lo ya escrito se conserva.", _ahora(ahora))
 
 
 async def cerrar(ejecucion_id: int, error: str = "", ahora: datetime | None = None) -> dict:
@@ -325,6 +378,13 @@ async def _paso_escritor(ejecucion_id: int, indice: int, e: dict, defin: dict, i
             motivo = str(ex)[:200] or type(ex).__name__
             log.warning("redacción: no se han podido preparar las plantillas de %s: %s: %s", motor_id, type(ex).__name__, ex)
             adicional, resumen_plantillas = texto_plantillas(None, motivo), f"Plantillas del concurso: no se han podido rellenar ({motivo})."
+    eleccion = (e.get("modos") or {}).get(defin["id"]) or {}
+    modo = eleccion.get("modo") if eleccion.get("modo") in ("externo", "manual") else "local"
+    if modo == "manual":                                  # la persona ha elegido escribirlo ella: ningún modelo toca este paso (las plantillas, que no usan modelo, sí se rellenan)
+        quien = eleccion.get("confirmado_por") or "una persona"
+        await _marcar(ejecucion_id, indice, estado=OMITIDO, error="", modo="manual", secciones=[], fin=_iso(_ahora(None)),
+                      resumen=((resumen_plantillas + "\n") if resumen_plantillas else "") + f"A mano: este paso lo escribe una persona (elegido por {quien}). Las secciones quedan para rellenarlas; puedes volver a pedirlo con un agente cuando quieras.")
+        return
     antes = (await O.leer(motor_id, con_contenido=False))["secciones"]
     sel = seleccion(defin, antes, e["rehacer"])           # se recalcula: desde que se pidió, una persona puede haber escrito alguna
     if not sel:
@@ -346,24 +406,51 @@ async def _paso_escritor(ejecucion_id: int, indice: int, e: dict, defin: dict, i
             defin_externo = {**defin_externo, "contexto": f"{defin_externo.get('contexto', '')}\n\n{completa}".strip()}
             corta = await comparativa_mod.texto_para(motor_id, 1500)
             defin = {**defin, "contexto": f"{defin.get('contexto', '')}\n\n{corta}".strip()}
+        from . import equivalencia as equivalencia_mod
+        try:
+            eq = await equivalencia_mod.leer(motor_id)
+        except Exception as ex:      # noqa: BLE001 — sin la tabla se sigue igual
+            log.warning("redacción: no se ha podido leer la tabla de equivalencias de %s: %s", motor_id, type(ex).__name__)
+            eq = None
+        tabla = equivalencia_mod.texto_equivalencia((eq or {}).get("contenido") or {}, 1200)
+        if tabla:                                                       # un producto por parámetro medible, ya comprobado por el código: coherencia entre solución y memoria
+            bloque = "Equivalencias comprobadas (parámetro del pliego → producto que lo iguala o supera; no propongas otro sin evidencia):\n" + tabla
+            defin_externo = {**defin_externo, "contexto": f"{defin_externo.get('contexto', '')}\n\n{bloque}".strip()}
+            defin = {**defin, "contexto": f"{defin.get('contexto', '')}\n\n{bloque[:700]}".strip()}
     estado, externa = None, ""
     from . import redaccion_externa as externa_mod
-    if externa_mod.paso_activo(defin["id"]):
+    if modo == "externo" and not externa_mod.configuracion()["activa"]:
+        externa = "Se ha usado el modelo local: Claude y ChatGPT están desactivados por Dirección."
+    elif modo == "externo" or externa_mod.paso_activo(defin["id"]):
         # Claude o ChatGPT, si Dirección los ha conectado: redactan el paso de una vez, con todo el material. Si no procede o falla, lo hace el modelo local como siempre.
+        privado, envio = "", None
+        if modo == "externo":
+            # Elegido en este caso y confirmado por una persona: lo que lleva datos de 101.cat sale SOLO anonimizado (si no se puede garantizar, no sale) y queda registrado antes de enviarlo
+            privado = adicional.strip()
+            defin_externo = {**defin_externo, "contexto": f"{externa_mod.CONTEXTO_EXTERNO.get(defin['id'], defin.get('contexto', ''))}\n\n{encargo}".strip() if defin["id"] in externa_mod.CONTEXTO_EXTERNO
+                             else defin_externo.get("contexto", "")}
+            envio = await externa_mod.registrar_envio(motor_id, ejecucion_id, defin["id"], eleccion.get("confirmado_por") or "", len(privado))
         await _marcar(ejecucion_id, indice, resumen="Redactando con Claude o ChatGPT…")
-        res, motivo = await externa_mod.intentar(motor_id, defin_externo, sel, titulo, ficha or {}, modelo=e.get("modelo") or "auto")
+        res, motivo = await externa_mod.intentar(motor_id, defin_externo, sel, titulo, ficha or {}, modelo=e.get("modelo") or "auto", **({"privado": privado} if privado else {}))
+        if envio is not None:
+            await externa_mod.cerrar_envio(envio, "enviado" if res else "no_enviado", (res or {}).get("proveedor"), (res or {}).get("modelo"), "" if res else motivo)
         if res:
-            estado = {"respuesta": res["resumen"]}
+            estado = {"respuesta": res["resumen"] + ("\nSalió anonimizado y queda registrado quién lo confirmó." if modo == "externo" else "")}
         else:
             externa = f"Se ha usado el modelo local: {motivo}."
             log.info("redacción: el paso %s de %s lo hace el modelo local (%s)", defin["id"], motor_id, motivo)
     if estado is None:
-        estado = await invocar(defin["agente"], peticion_escritor(defin, motor_id, titulo, sel) + adicional)
+        # El coste real de los equipos (tarifas de proveedor, CONFIDENCIAL) solo lo ve el modelo LOCAL de Costes: va aquí, nunca en `adicional` (que, si se elige Claude/ChatGPT, es lo que sale anonimizado)
+        costes_equipos = ""
+        if defin["id"] == "costes":
+            from . import partidas as partidas_mod
+            costes_equipos = await partidas_mod.texto_para(motor_id)
+        estado = await invocar(defin["agente"], peticion_escritor(defin, motor_id, titulo, sel) + adicional + (f"\n\n{costes_equipos}" if costes_equipos else ""))
     despues = {s["clave"]: s for s in (await O.leer(motor_id, con_contenido=False))["secciones"]}
     escritas = [s["clave"] for s in sel if despues.get(s["clave"], {}).get("estado") != "vacia" and despues[s["clave"]]["por"] == f"agente:{defin['agente']}"]
     faltan = [s["clave"] for s in sel if s["clave"] not in escritas]
     resumen = (resumen_plantillas + "\n" if resumen_plantillas else "") + (externa + "\n" if externa else "") + _respuesta(estado)
-    campos = {"secciones": [s["clave"] for s in sel], "escritas": len(escritas), "faltan": faltan, "resumen": resumen[:MAX_RESUMEN], "fin": _iso(_ahora(None))}
+    campos = {"secciones": [s["clave"] for s in sel], "escritas": len(escritas), "faltan": faltan, "resumen": resumen[:MAX_RESUMEN], "fin": _iso(_ahora(None)), "modo": modo}
     if (estado or {}).get("error") and not escritas:
         await _marcar(ejecucion_id, indice, estado=ERROR, error=str(estado["error"])[:300], **campos)
     elif not escritas:
@@ -379,6 +466,13 @@ async def _paso_comparativa(ejecucion_id: int, indice: int, e: dict, defin: dict
     await _marcar(ejecucion_id, indice, estado=HECHO if res["estado"] == "hecha" else OMITIDO, error="", resumen=res["resumen"][:MAX_RESUMEN], secciones=[], fin=_iso(_ahora(None)))
 
 
+async def _paso_equivalencia(ejecucion_id: int, indice: int, e: dict, defin: dict, titulo: str, ficha: dict) -> None:
+    """La tabla de equivalencias «iguala o supera» (parámetros medibles del pliego frente al catálogo). Sin evidencia o sin modelo externo no se hace: el paso queda «omitido» con el motivo."""
+    from . import equivalencia
+    res = await equivalencia.preparar(e["licitacion"], titulo, ficha or {}, modelo=e.get("modelo") or "auto")
+    await _marcar(ejecucion_id, indice, estado=HECHO if res["estado"] == "hecha" else OMITIDO, error="", resumen=res["resumen"][:MAX_RESUMEN], secciones=[], fin=_iso(_ahora(None)))
+
+
 async def _paso_encargos(ejecucion_id: int, indice: int, e: dict, defin: dict, titulo: str, ficha: dict) -> None:
     """El director de la oferta redacta el encargo de cada agente (con Claude o ChatGPT si están conectados; si no, con la plantilla). Respeta lo que haya escrito una persona."""
     from . import encargos
@@ -390,6 +484,10 @@ async def _paso_informe(ejecucion_id: int, indice: int, e: dict, defin: dict, in
     motor_id = e["licitacion"]
     if defin["informe"] == "precio":
         peticion = peticion_precio(motor_id, titulo)
+        from . import partidas as partidas_mod
+        costes_equipos = await partidas_mod.texto_para(motor_id)         # los informes los hace siempre el modelo local: aquí sí puede ver el coste real de los equipos
+        if costes_equipos:
+            peticion = f"{peticion}\n\n{costes_equipos}\nUsa este coste como suelo del precio: no propongas un precio por debajo del coste ni inventes cifras."
     else:
         con_texto = [s for s in (await O.leer(motor_id, True, 1500))["secciones"] if s["contenido"].strip() and s["clave"] != O.PROPOSICION]
         if not con_texto:
@@ -419,11 +517,17 @@ async def ejecutar(ejecucion_id: int, invocar) -> dict:
     for i, paso in enumerate(e["pasos"]):
         if paso["estado"] in TERMINADOS:
             continue
+        actual = await _cargar(ejecucion_id)
+        if not actual or actual["estado"] != "en_curso":            # la han cancelado (o se dio por perdida): no se empieza ningún paso más
+            log.info("redacción: la ejecución %s ya no está en curso (%s): se detiene antes del paso %s", ejecucion_id, (actual or {}).get("estado"), paso["id"])
+            return actual or {}
         defin = _PASO[paso["id"]]
         await _marcar(ejecucion_id, i, estado=EN_CURSO, inicio=_iso(_ahora(None)), error="")
         try:
             if defin.get("comparativa"):
                 await _paso_comparativa(ejecucion_id, i, e, defin, titulo, ficha)
+            elif defin.get("equivalencia"):
+                await _paso_equivalencia(ejecucion_id, i, e, defin, titulo, ficha)
             elif defin.get("encargos"):
                 await _paso_encargos(ejecucion_id, i, e, defin, titulo, ficha)
             elif defin.get("informe"):

@@ -1226,3 +1226,45 @@ test("progreso de la preparación: porcentaje real por secciones y «trabajando�
   assert.deepEqual(progresoGeneral({ pasos: [] }, sec), { pct: 0, terminados: 0, total: 0 });
   assert.equal(progresoGeneral({ pasos: [{ estado: "en_curso", secciones: [] }] }, sec).pct, 0);                           // lo que no se puede medir cuenta 0, no 50
 });
+
+import { CONFIRMAR_CANCELAR } from "../lib/licitaciones.js";
+test("cancelar la preparación: la confirmación avisa de lo que pasa", () => {
+  assert.match(CONFIRMAR_CANCELAR, /terminará su paso actual/);
+  assert.match(CONFIRMAR_CANCELAR, /lo ya escrito se conserva/);
+});
+
+test("informeFichasTexto resume una carga de fichas", async () => {
+  const { informeFichasTexto } = await import("../lib/licitaciones.js");
+  assert.equal(informeFichasTexto({ cargadas: 3, repetidas: 1, sin_texto: 0, fallidas: [{}, {}], pendientes: 0 }), "3 cargadas · 1 ya estaban · 2 con fallo");
+  assert.equal(informeFichasTexto({ error: "No se ha podido" }), "No se ha podido");
+  assert.equal(informeFichasTexto(null), "");
+});
+
+test("la tabla de equivalencias se resume y se escribe el valor exigido", async () => {
+  const { exigidoTexto, resumenEquivalencia } = await import("../lib/licitaciones.js");
+  assert.equal(exigidoTexto({ operador: ">=", valor_exigido: "4 MP" }), "mínimo 4 MP");
+  assert.equal(exigidoTexto({ operador: "texto", valor_exigido: "H.265" }), "H.265");
+  assert.equal(resumenEquivalencia({ comprobacion: { parametros: 7, cubiertos: 5, sin_cubrir: 2 } }), "7 parámetros · 5 con producto que iguala o supera · 2 sin cubrir");
+  assert.equal(resumenEquivalencia(null), "");
+});
+
+test("cuerpoModos: solo lo distinto de local, y «externo» exige confirmación", async () => {
+  const { cuerpoModos, envioTexto } = await import("../lib/licitaciones.js");
+  assert.deepEqual(cuerpoModos({}, {}), { modos: {}, confirmados: [] });
+  assert.deepEqual(cuerpoModos({ administrativo: "manual", costes: "local" }, {}), { modos: { administrativo: "manual" }, confirmados: [] });
+  assert.match(cuerpoModos({ costes: "externo" }, {}).error, /confirmación/);
+  assert.match(cuerpoModos({ costes: "externo" }, { administrativo: true }).error, /Costes/);
+  assert.deepEqual(cuerpoModos({ costes: "externo", administrativo: "externo" }, { costes: true, administrativo: true }, "costes"), { modos: { costes: "externo" }, confirmados: ["costes"] });
+  assert.deepEqual(cuerpoModos({ administrativo: "externo" }, {}, "costes"), { modos: {}, confirmados: [] });           // repetir Costes no mira lo de Administrativo
+  assert.match(envioTexto({ paso: "costes", proveedor: "claude", modelo: "opus", confirmado_por: "albert", caracteres_privados: 0, estado: "no_enviado" }), /Costes → Claude \(opus\) · lo confirmó albert · 0 caracteres.*no llegó a enviarse/);
+});
+
+test("partidas: importes, lo que falta y cantidad en blanco", async () => {
+  const { eurosTexto, faltaEnPartidasTexto, cantidadAEnvio } = await import("../lib/licitaciones.js");
+  assert.equal(eurosTexto("1234.5").replace(/\s/g, " "), "1234,50 €");
+  assert.equal(eurosTexto(null), "—");
+  assert.equal(faltaEnPartidasTexto({ partidas: 2, sin_coste: ["X"], sin_cantidad: ["Y"] }), "Total incompleto (sin coste en las tarifas: X · sin cantidad: Y).");
+  assert.equal(faltaEnPartidasTexto({ partidas: 2, sin_coste: [], sin_cantidad: [] }), "");
+  assert.equal(cantidadAEnvio("  "), null);
+  assert.equal(cantidadAEnvio(" 12 "), "12");
+});

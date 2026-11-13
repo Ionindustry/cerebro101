@@ -85,7 +85,9 @@ def lineas_relevantes(lineas: list[dict], consultas: list[str], maximo: int = 15
             continue
         n = len(pedidas & _palabras(f"{l.get('desc')} {l.get('ref') or ''} {l.get('codigo') or ''}"))
         if n > 0:
-            puntuadas.append((n, {"ref": _corto(l.get("ref") or l.get("codigo"), 60), "desc": _corto(l.get("desc"), 300)}))
+            esp = l.get("especificaciones") if isinstance(l.get("especificaciones"), dict) else {}
+            texto = _corto(l.get("desc"), 300) + ("".join(f" | {_corto(k, 40)}: {_corto(v, 60)}" for k, v in list(esp.items())[:12]) if esp else "")
+            puntuadas.append((n, {"ref": _corto(l.get("ref") or l.get("codigo"), 60), "desc": texto[:800]}))
     puntuadas.sort(key=lambda x: -x[0])
     vistas, salida = set(), []
     for _n, l in puntuadas:

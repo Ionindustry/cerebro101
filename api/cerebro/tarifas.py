@@ -47,6 +47,11 @@ SINONIMOS = {
 }
 # Columnas que son imágenes o enlaces: no son una característica del producto
 IGNORAR_COMO_ESPECIFICACION = ("img", "image", "picture", "pictures", "imagen", "foto", "photo", "link", "url")
+# Columnas cuyo contenido es un enlace útil (ficha técnica, catálogo, página del producto): se GUARDAN aparte, para poder bajar las fichas. Las de imágenes no.
+COLUMNA_DE_ENLACE = ("datasheet", "data sheet", "ficha", "pdf", "catalog", "catalogo", "link", "url", "enlace", "web", "download", "descarga", "manual", "brochure", "folleto")
+COLUMNA_DE_IMAGEN = ("img", "image", "imagen", "picture", "pictures", "foto", "photo", "thumbnail", "icon", "logo")
+MAX_ENLACES = 5
+RE_URL = re.compile(r"^https?://[^\s<>\"']{4,500}$", re.I)
 ESTADOS = (("mp", "disponible"), ("new", "disponible"), ("tbe", "proximamente"), ("eol", "fin_de_vida"), ("sample", "muestra"), ("discontinued", "fin_de_vida"),
            ("descatalogado", "fin_de_vida"), ("proximamente", "proximamente"), ("activo", "disponible"), ("active", "disponible"))
 
@@ -74,6 +79,7 @@ class Producto:
     codigo_proveedor: str = ""                    # el código interno del proveedor (p. ej. «Material Code»), distinto de la referencia del fabricante
     linea: str = ""                               # la hoja (o el fichero) de donde sale: sirve de familia cuando la tarifa no trae una
     especificaciones: dict = field(default_factory=dict)
+    enlaces: dict = field(default_factory=dict)   # {nombre de la columna: URL http/https}: fichas técnicas, páginas de producto… (las imágenes no se guardan)
     moneda: str = ""                              # solo si el propio fichero la dice (€, $, EUR, USD…)
     avisos: list[str] = field(default_factory=list)
 
@@ -190,6 +196,26 @@ def _especificaciones(fila: list[str], cabecera: list[str], mapa: dict[str, int]
     return out
 
 
+def _enlaces(fila: list[str], cabecera: list[str]) -> dict:
+    """Los enlaces http/https que trae la fila en columnas de ficha técnica, catálogo o página del producto. Las columnas de imágenes no cuentan, ni lo que no es una URL. Pura."""
+    out: dict[str, str] = {}
+    for i, c in enumerate(cabecera):
+        if i >= len(fila) or not c.strip():
+            continue
+        nc = norm(c)
+        palabras = nc.split()
+        if any(w in palabras or nc.startswith(w) for w in COLUMNA_DE_IMAGEN):
+            continue
+        if not any(k in nc for k in COLUMNA_DE_ENLACE):
+            continue
+        v = str(fila[i] or "").strip()
+        if RE_URL.match(v):
+            out[_una_linea(c, 40)] = v
+            if len(out) >= MAX_ENLACES:
+                break
+    return out
+
+
 def _json_a_texto(s: str) -> dict:
     """Las características que algunos distribuidores dan como JSON anidado, aplanadas a «Sección · dato: valor»."""
     if not s or len(s) > MAX_JSON:
@@ -245,6 +271,7 @@ def _producto(hoja: str, n: int, fila: list[str], cabecera: list[str], mapa: dic
     esp = _especificaciones(fila, cabecera, mapa)
     esp.update(_json_a_texto(_texto(celda("especificaciones"), MAX_JSON + 1)))
     p.especificaciones = esp
+    p.enlaces = _enlaces(fila, cabecera)
     if p.pvp_recomendado and p.coste > p.pvp_recomendado:
         p.avisos.append("el coste es mayor que el precio recomendado: revisa las columnas")
     return p, ""

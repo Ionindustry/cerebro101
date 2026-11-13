@@ -15,7 +15,7 @@ from fastapi import Depends, FastAPI, HTTPException
 from fastapi.responses import JSONResponse, Response
 from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
 from langgraph.types import Command
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from .. import subidas
 from ..ajustes import ajustes
@@ -34,8 +34,13 @@ from ..licitaciones import ofertas as ofertas_licitaciones
 from ..licitaciones import empresa as empresa_erp
 from ..licitaciones import plantillas as plantillas_ofertas
 from ..licitaciones import redaccion as redaccion_ofertas
+from ..licitaciones import redaccion_externa as redaccion_externa_ofertas
 from ..licitaciones import encargos as encargos_ofertas
 from ..licitaciones import comparativa as comparativa_ofertas
+from ..licitaciones import equivalencia as equivalencia_ofertas
+from ..licitaciones import partidas as partidas_ofertas
+from ..licitaciones import descubrimiento as descubrimiento_ofertas
+from ..licitaciones import fichas as fichas_tecnicas
 from ..licitaciones import reglas as reglas_licitaciones
 from ..licitaciones import simulador as simulador_licitaciones
 from ..licitaciones import embudo as embudo_licitaciones
@@ -880,6 +885,8 @@ class RedactarEntrada(BaseModel):
     rehacer: bool = False             # también rehace los borradores de los agentes (nunca lo que haya escrito o revisado una persona)
     empresa: str | None = None        # la sociedad del ERP con la que se presenta; si el ERP tiene varias y no se ha elegido nunca, hay que indicarla
     modelo: str = "auto"              # con qué modelo externo redactar la memoria técnica: auto (lo que diga la configuración), claude o chatgpt
+    modos: dict[str, str] = {}        # cómo se hace, en este caso, cada paso elegible (administrativo, costes): local, externo (Claude/ChatGPT con datos anonimizados) o manual (lo escribe una persona)
+    confirmados: list[str] = []       # los pasos en «externo» que la persona ha confirmado expresamente (sin esto, «externo» se rechaza)
 
 
 @app.post("/licitaciones/ofertas/{motor_id}/redactar", status_code=202)
@@ -892,7 +899,8 @@ async def redactar_oferta_con_agentes(motor_id: str, entrada: RedactarEntrada | 
         ficha = await motor_lic._get(f"/tenders/{motor_id.strip().lower()}") if motor_lic._UUID.match(motor_id.strip()) else {}
         oferta = await ofertas_licitaciones.plan(motor_id, ficha, usuario.id)
         await _fijar_sociedad(motor_id, oferta, entrada.empresa)
-        ejecucion = await redaccion_ofertas.reservar(motor_id, usuario.id, entrada.rehacer, modelo=entrada.modelo)
+        modos = redaccion_externa_ofertas.validar_modos(entrada.modos, entrada.confirmados, usuario.id)
+        ejecucion = await redaccion_ofertas.reservar(motor_id, usuario.id, entrada.rehacer, modelo=entrada.modelo, modos=modos)
     except redaccion_ofertas.Conflicto as e:
         raise HTTPException(409, str(e)) from None
     except empresa_erp.VariasEmpresas as e:
@@ -912,6 +920,8 @@ async def redactar_oferta_con_agentes(motor_id: str, entrada: RedactarEntrada | 
 class RepetirPaso(BaseModel):
     rehacer: bool = False             # también rehace los borradores que ya escribió este agente (nunca lo que haya escrito o revisado una persona)
     modelo: str = "auto"              # con qué modelo externo, si el paso lo redacta uno: auto, claude o chatgpt
+    modos: dict[str, str] = {}        # cómo se hace este paso si es elegible (administrativo, costes): local, externo o manual
+    confirmados: list[str] = []       # el paso, si se manda a Claude o ChatGPT, confirmado expresamente
 
 
 @app.post("/licitaciones/ofertas/{motor_id}/redactar/{paso}", status_code=202)
@@ -921,7 +931,8 @@ async def repetir_paso_de_la_oferta(motor_id: str, paso: str, entrada: RepetirPa
     _exige_licitaciones(usuario)
     entrada = entrada or RepetirPaso()
     try:
-        ejecucion = await redaccion_ofertas.reservar(motor_id, usuario.id, entrada.rehacer, modelo=entrada.modelo, solo=paso)
+        modos = redaccion_externa_ofertas.validar_modos(entrada.modos, entrada.confirmados, usuario.id)
+        ejecucion = await redaccion_ofertas.reservar(motor_id, usuario.id, entrada.rehacer, modelo=entrada.modelo, solo=paso, modos=modos)
     except redaccion_ofertas.Conflicto as e:
         raise HTTPException(409, str(e)) from None
     except (ofertas_licitaciones.ErrorOferta, MotorNoDisponible, LookupError) as e:
@@ -945,6 +956,199 @@ async def revision_previa_de_la_oferta(motor_id: str, usuario: Usuario = Depends
     except ofertas_licitaciones.ErrorOferta as e:
         raise HTTPException(422, str(e)) from None
     return await revision_previa.revisar(motor_id)
+
+
+@app.post("/licitaciones/ofertas/{motor_id}/cancelar")
+async def cancelar_la_preparacion(motor_id: str, usuario: Usuario = Depends(usuario_actual)):
+    """Cancela la preparación de la oferta en curso. El agente que esté trabajando termina su paso y no empieza ninguno más; lo ya escrito se conserva y se puede volver a lanzar."""
+    _exige_licitaciones(usuario)
+    try:
+        return {"ejecucion": await redaccion_ofertas.cancelar(motor_id, usuario.id)}
+    except (ofertas_licitaciones.ErrorOferta, LookupError) as e:
+        raise _oferta_error(e) from None
+
+
+class SubidaFicha(BaseModel):
+    nombre: str = Field(min_length=1, max_length=200)
+    marca: str = Field(default="", max_length=60)
+    referencia: str = Field(default="", max_length=60)
+    base64: str = Field(min_length=1)
+
+
+class CargaFichas(BaseModel):
+    importacion: int = Field(ge=1)
+
+
+class FichaPorDireccion(BaseModel):
+    url: str = Field(min_length=8, max_length=500)
+    marca: str = Field(default="", max_length=60)
+    referencia: str = Field(default="", max_length=60)
+
+
+@app.get("/licitaciones/fichas")
+async def fichas_cargadas(usuario: Usuario = Depends(usuario_actual)):
+    """Fichas técnicas cargadas, las listas de proveedor de las que se pueden cargar, las últimas cargas y los dominios autorizados."""
+    _exige_licitaciones(usuario)
+    cfg = fichas_tecnicas.configuracion()
+    return {**await fichas_tecnicas.listar(), "listas": await fichas_tecnicas.listas(), "cargas": await fichas_tecnicas.cargas(), "dominios": cfg["hosts"]}
+
+
+@app.get("/licitaciones/fichas/revisar/{importacion}")
+async def revisar_fichas_de_una_lista(importacion: int, usuario: Usuario = Depends(usuario_actual)):
+    """Qué se descargaría de esa lista (sin descargar nada) y qué dominios quedan fuera de la lista autorizada."""
+    _exige_licitaciones(usuario)
+    try:
+        return await fichas_tecnicas.revisar_lista(importacion)
+    except fichas_tecnicas.ErrorFicha as e:
+        raise HTTPException(404, str(e)) from None
+
+
+@app.post("/licitaciones/fichas/cargar")
+async def cargar_fichas_de_una_lista(entrada: CargaFichas, usuario: Usuario = Depends(usuario_actual)):
+    """Lanza en segundo plano la carga de las fichas de los enlaces autorizados de una lista de proveedor."""
+    _exige_licitaciones(usuario)
+    try:
+        carga = await fichas_tecnicas.iniciar_carga(entrada.importacion, usuario.id)
+    except fichas_tecnicas.ErrorFicha as e:
+        raise HTTPException(409 if "en curso" in str(e) else 404, str(e)) from None
+    celery.send_task("cerebro.tareas.celery_app.cargar_fichas", args=[carga], queue="peticiones")
+    log.info("fichas: %s lanza la carga %s (lista %s)", usuario.id, carga, entrada.importacion)
+    return {"carga": carga}
+
+
+@app.post("/licitaciones/fichas/url")
+async def cargar_ficha_por_direccion(entrada: FichaPorDireccion, usuario: Usuario = Depends(usuario_actual)):
+    """Descarga una ficha de una dirección de un dominio autorizado."""
+    _exige_licitaciones(usuario)
+    try:
+        return await fichas_tecnicas.desde_url(entrada.url, entrada.marca, entrada.referencia, "web", usuario.id)
+    except fichas_tecnicas.ErrorFicha as e:
+        raise HTTPException(422, str(e)) from None
+
+
+@app.post("/licitaciones/fichas/subir")
+async def subir_ficha_a_mano(entrada: SubidaFicha, usuario: Usuario = Depends(usuario_actual)):
+    """Una ficha en PDF subida a mano: antivirus, lectura e indexado como las demás."""
+    _exige_licitaciones(usuario)
+    cfg = fichas_tecnicas.configuracion()
+    if len(entrada.base64) > cfg["max_mb"] * 1_400_000:
+        raise HTTPException(413, f"La ficha pesa más de {cfg['max_mb']} MB")
+    try:
+        datos = base64.b64decode(entrada.base64, validate=True)
+    except ValueError:
+        raise HTTPException(422, "La ficha no se ha recibido bien") from None
+    try:
+        return await fichas_tecnicas.subir(datos, entrada.nombre, entrada.marca, entrada.referencia, usuario.id, cfg)
+    except fichas_tecnicas.ErrorFicha as e:
+        raise HTTPException(422, str(e)) from None
+
+
+@app.get("/licitaciones/ofertas/{motor_id}/envios-externos")
+async def envios_externos_de_la_oferta(motor_id: str, usuario: Usuario = Depends(usuario_actual)):
+    """El registro de lo que ha salido a Claude o ChatGPT en los pasos sensibles (quién lo confirmó, qué paso, cuánto texto anonimizado). No contiene el texto enviado."""
+    _exige_licitaciones(usuario)
+    try:
+        return {"envios": await redaccion_externa_ofertas.envios(motor_id), "pasos_elegibles": {p: s for p, s in redaccion_externa_ofertas.PASOS_A_ELEGIR.items()}}
+    except (ofertas_licitaciones.ErrorOferta, LookupError) as e:
+        raise _oferta_error(e) from None
+
+
+class PartidaEntrada(BaseModel):
+    producto: str = Field(min_length=2, max_length=160)
+    cantidad: str | None = Field(default=None, max_length=20)
+
+
+class PartidaCambio(BaseModel):
+    cantidad: str | None = Field(default=None, max_length=20)       # vacío = quitar la cantidad
+    excluida: bool | None = None
+
+
+def _error_partida(e: Exception):
+    if isinstance(e, partidas_ofertas.ErrorPartida):
+        return HTTPException(422, str(e))
+    return _oferta_error(e)
+
+
+@app.get("/licitaciones/ofertas/{motor_id}/partidas")
+async def partidas_de_la_oferta(motor_id: str, usuario: Usuario = Depends(usuario_actual)):
+    """Las partidas de equipos de la oferta con su coste real calculado con las tarifas de proveedor (CONFIDENCIAL: solo Dirección y Licitaciones) y los totales."""
+    _exige_licitaciones(usuario)
+    try:
+        return await partidas_ofertas.listar(motor_id)
+    except (ofertas_licitaciones.ErrorOferta, LookupError) as e:
+        raise _oferta_error(e) from None
+
+
+@app.post("/licitaciones/ofertas/{motor_id}/partidas/proponer")
+async def proponer_partidas_de_la_oferta(motor_id: str, usuario: Usuario = Depends(usuario_actual)):
+    """Rellena las partidas con los productos que recomienda la tabla de equivalencias (lo que una persona ya haya tocado se conserva)."""
+    _exige_licitaciones(usuario)
+    try:
+        return await partidas_ofertas.proponer(motor_id, usuario.id)
+    except (partidas_ofertas.ErrorPartida, ofertas_licitaciones.ErrorOferta, LookupError) as e:
+        raise _error_partida(e) from None
+
+
+@app.post("/licitaciones/ofertas/{motor_id}/partidas")
+async def anadir_partida_a_la_oferta(motor_id: str, entrada: PartidaEntrada, usuario: Usuario = Depends(usuario_actual)):
+    """Añade un producto a mano (marca y referencia, para casarlo con las tarifas) con su cantidad."""
+    _exige_licitaciones(usuario)
+    try:
+        return await partidas_ofertas.anadir(motor_id, entrada.producto, entrada.cantidad, usuario.id)
+    except (partidas_ofertas.ErrorPartida, ofertas_licitaciones.ErrorOferta, LookupError) as e:
+        raise _error_partida(e) from None
+
+
+@app.post("/licitaciones/ofertas/{motor_id}/partidas/{partida}")
+async def cambiar_partida_de_la_oferta(motor_id: str, partida: int, entrada: PartidaCambio, usuario: Usuario = Depends(usuario_actual)):
+    """Pone o quita la cantidad de una partida y/o la excluye o recupera."""
+    _exige_licitaciones(usuario)
+    try:
+        return await partidas_ofertas.ajustar(motor_id, partida, entrada.cantidad if "cantidad" in entrada.model_fields_set else ..., entrada.excluida, usuario.id)
+    except (partidas_ofertas.ErrorPartida, ofertas_licitaciones.ErrorOferta, LookupError) as e:
+        raise _error_partida(e) from None
+
+
+@app.post("/licitaciones/ofertas/{motor_id}/partidas/{partida}/quitar")      # POST: la pasarela del panel solo reenvía GET y POST
+async def quitar_partida_de_la_oferta(motor_id: str, partida: int, usuario: Usuario = Depends(usuario_actual)):
+    _exige_licitaciones(usuario)
+    try:
+        return await partidas_ofertas.quitar(motor_id, partida)
+    except (ofertas_licitaciones.ErrorOferta, LookupError) as e:
+        raise _oferta_error(e) from None
+
+
+@app.get("/licitaciones/ofertas/{motor_id}/equivalencia")
+async def equivalencia_de_la_oferta(motor_id: str, usuario: Usuario = Depends(usuario_actual)):
+    """La tabla de equivalencias «iguala o supera» de la oferta (null si aún no se ha hecho). Solo Dirección y Licitaciones."""
+    _exige_licitaciones(usuario)
+    try:
+        return {"equivalencia": await equivalencia_ofertas.leer(motor_id)}
+    except (ofertas_licitaciones.ErrorOferta, LookupError) as e:
+        raise _oferta_error(e) from None
+
+
+@app.get("/licitaciones/ofertas/{motor_id}/descubrimiento")
+async def descubrimiento_de_la_oferta(motor_id: str, usuario: Usuario = Depends(usuario_actual)):
+    """Las pistas de más opciones encontradas en internet (null si aún no se ha buscado). Solo Dirección y Licitaciones."""
+    _exige_licitaciones(usuario)
+    try:
+        return {"descubrimiento": await descubrimiento_ofertas.leer(motor_id)}
+    except (ofertas_licitaciones.ErrorOferta, LookupError) as e:
+        raise _oferta_error(e) from None
+
+
+@app.post("/licitaciones/ofertas/{motor_id}/descubrimiento")
+async def buscar_mas_opciones_en_internet(motor_id: str, entrada: RedactarEntrada | None = None, usuario: Usuario = Depends(usuario_actual)):
+    """Lanza en segundo plano la búsqueda en internet de más opciones para los parámetros sin cubrir. Las pistas son por verificar: no son evidencia hasta cargar su ficha."""
+    _exige_licitaciones(usuario)
+    try:
+        await descubrimiento_ofertas.iniciar(motor_id, usuario.id)
+    except (ofertas_licitaciones.ErrorOferta, LookupError) as e:
+        raise _oferta_error(e) from None
+    celery.send_task("cerebro.tareas.celery_app.descubrir_opciones", args=[motor_id, (entrada.modelo if entrada and getattr(entrada, "modelo", None) else "auto")], queue="peticiones")
+    log.info("descubrimiento: %s busca más opciones para %s", usuario.id, motor_id)
+    return {"estado": "en_curso"}
 
 
 @app.get("/licitaciones/ofertas/{motor_id}/comparativa")

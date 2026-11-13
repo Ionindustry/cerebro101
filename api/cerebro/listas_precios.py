@@ -378,7 +378,7 @@ def _lineas_de_tarifa(t, prov_nombre: str, canal: str, cfg_precios: dict, max_li
             continue
         linea = {"fila": etiqueta, "ref": ref[:80], "codigo": codigo, "desc": (p.descripcion or ref)[:300], "precio": str(coste), "unidad": "", "marca": marca[:60], "ean": p.ean,
                  "familia": p.familia or p.linea, "stock": None if p.stock is None else str(p.stock), "estado": p.estado, "pvp": None if p.pvp_recomendado is None else str(p.pvp_recomendado),
-                 "especificaciones": dict(list(p.especificaciones.items())[:12]), "avisos_producto": p.avisos[:3]}
+                 "especificaciones": dict(list(p.especificaciones.items())[:12]), "enlaces": dict(p.enlaces), "avisos_producto": p.avisos[:3]}
         try:
             c = precios.calcular(coste, p.moneda, canal, linea["familia"], cfg_precios)
             linea.update({"coste_eur": str(c.coste_eur), "venta": str(c.venta), "margen": str(c.margen_real), "avisos_precio": c.avisos})

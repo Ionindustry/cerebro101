@@ -556,6 +556,7 @@ CREATE TABLE IF NOT EXISTS ofertas_ejecuciones (
   creada    timestamptz NOT NULL DEFAULT now(),
   terminada timestamptz
 );
+ALTER TABLE ofertas_ejecuciones ADD COLUMN IF NOT EXISTS modos jsonb NOT NULL DEFAULT '{}';        -- cómo se hace cada paso elegible: {administrativo: {modo: local|externo|manual, confirmado_por}}
 ALTER TABLE ofertas_ejecuciones ADD COLUMN IF NOT EXISTS modelo text NOT NULL DEFAULT 'auto';     -- con qué modelo externo redactar: auto | claude | chatgpt
 CREATE UNIQUE INDEX IF NOT EXISTS ofertas_ejecuciones_una_en_curso ON ofertas_ejecuciones (motor_id) WHERE estado = 'en_curso';
 CREATE INDEX IF NOT EXISTS ofertas_ejecuciones_motor ON ofertas_ejecuciones (motor_id, id DESC);
@@ -691,4 +692,95 @@ CREATE TABLE IF NOT EXISTS ofertas_comparativa (
   evidencias  jsonb NOT NULL DEFAULT '[]',          -- [{id, origen, titulo, fuente}] (sin el texto): para que una persona vea de dónde sale cada [P1]
   creado      timestamptz NOT NULL DEFAULT now(),
   actualizado timestamptz NOT NULL DEFAULT now()
+);
+
+-- Fichas técnicas de producto (api/cerebro/licitaciones/fichas.py): PDF de fabricante cargados desde los enlaces de las listas CSV, desde webs de dominios autorizados o a mano. Cada uno pasa por el antivirus, se lee
+-- en un proceso aparte y su texto se indexa en la base de conocimiento (departamento «licitaciones»), que es de donde la comparativa saca la evidencia de producto. Sin claves ajenas (el esquema se aplica por trozos en las pruebas).
+CREATE TABLE IF NOT EXISTS fichas_tecnicas (
+  id         bigserial PRIMARY KEY,
+  sha256     text NOT NULL UNIQUE,
+  marca      text NOT NULL DEFAULT '',
+  referencia text NOT NULL DEFAULT '',
+  nombre     text NOT NULL,
+  origen     text NOT NULL CHECK (origen IN ('csv', 'web', 'manual')),
+  url        text NOT NULL DEFAULT '',
+  formato    text NOT NULL,
+  bytes      bigint NOT NULL,
+  estado     text NOT NULL CHECK (estado IN ('indexada', 'sin_texto', 'infectada', 'no_analizable', 'error')),
+  motivo     text NOT NULL DEFAULT '',
+  paginas    integer,
+  trozos     integer NOT NULL DEFAULT 0,
+  por        text NOT NULL DEFAULT '',
+  creado     timestamptz NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS fichas_tecnicas_ref ON fichas_tecnicas (lower(marca), lower(referencia));
+
+-- Cargas de fichas desde una lista de proveedor (tarea en segundo plano de fichas.py): una fila por carga con su informe.
+CREATE TABLE IF NOT EXISTS fichas_cargas (
+  id          bigserial PRIMARY KEY,
+  importacion bigint NOT NULL,
+  estado      text NOT NULL DEFAULT 'en_curso' CHECK (estado IN ('en_curso', 'terminada', 'error')),
+  informe     jsonb NOT NULL DEFAULT '{}',
+  por         text NOT NULL,
+  creado      timestamptz NOT NULL DEFAULT now(),
+  terminada   timestamptz
+);
+
+-- Tabla de equivalencias «iguala o supera» (api/cerebro/licitaciones/equivalencia.py): parámetros medibles del pliego técnico frente a los productos del catálogo, con el veredicto fijado por el código. Una fila por licitación.
+CREATE TABLE IF NOT EXISTS ofertas_equivalencia (
+  motor_id    uuid PRIMARY KEY,                     -- la licitación (sin clave ajena: el esquema se aplica por trozos en las pruebas)
+  proveedor   text NOT NULL,
+  modelo      text,
+  contenido   jsonb NOT NULL,
+  evidencias  jsonb NOT NULL DEFAULT '[]',
+  creado      timestamptz NOT NULL DEFAULT now(),
+  actualizado timestamptz NOT NULL DEFAULT now()
+);
+
+-- Descubrimiento de más opciones en internet (api/cerebro/licitaciones/descubrimiento.py): pistas de productos que podrían cubrir los parámetros sin cubrir de la tabla de equivalencias. Son PISTAS por verificar, no evidencia:
+-- solo cuentan cuando se carga su ficha técnica. Una fila por licitación (repetir la búsqueda la sustituye).
+CREATE TABLE IF NOT EXISTS ofertas_descubrimiento (
+  motor_id    uuid PRIMARY KEY,                     -- la licitación (sin clave ajena: el esquema se aplica por trozos en las pruebas)
+  estado      text NOT NULL DEFAULT 'en_curso' CHECK (estado IN ('en_curso', 'hecha', 'error')),
+  proveedor   text,
+  modelo      text,
+  contenido   jsonb NOT NULL DEFAULT '{}',
+  error       text NOT NULL DEFAULT '',
+  por         text NOT NULL DEFAULT '',
+  creado      timestamptz NOT NULL DEFAULT now(),
+  actualizado timestamptz NOT NULL DEFAULT now()
+);
+
+-- Registro de lo que sale a Claude o ChatGPT en los pasos sensibles de «Preparar la oferta» (Administrativo, Costes): quién lo confirmó, qué paso, qué proveedor y cuánto texto privado (anonimizado) viajó. NO guarda el contenido.
+CREATE TABLE IF NOT EXISTS ofertas_envios_externos (
+  id            bigserial PRIMARY KEY,
+  motor_id      uuid NOT NULL,                      -- sin clave ajena: el esquema se aplica por trozos en las pruebas
+  ejecucion_id  bigint,
+  paso          text NOT NULL,
+  sensibilidad  text NOT NULL,
+  confirmado_por text NOT NULL,
+  proveedor     text,                               -- el que respondió (claude | chatgpt)
+  modelo        text,
+  caracteres_privados integer NOT NULL DEFAULT 0,   -- texto de 101.cat que viajó, ya anonimizado
+  estado        text NOT NULL DEFAULT 'intentado' CHECK (estado IN ('intentado', 'enviado', 'no_enviado')),
+  detalle       text NOT NULL DEFAULT '',
+  creado        timestamptz NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS ofertas_envios_externos_motor ON ofertas_envios_externos (motor_id, id DESC);
+
+-- Partidas de equipos de una oferta (api/cerebro/licitaciones/partidas.py): los productos que la tabla de equivalencias recomienda (o una persona añade), con la cantidad que pone una persona. El COSTE no se guarda aquí:
+-- se calcula al leer, con las tarifas de proveedor cargadas y el cambio del día (son confidenciales y así nunca quedan copias desactualizadas). Una fila por producto y licitación.
+CREATE TABLE IF NOT EXISTS ofertas_partidas (
+  id         bigserial PRIMARY KEY,
+  motor_id   uuid NOT NULL,                         -- sin clave ajena: el esquema se aplica por trozos en las pruebas
+  clave      text NOT NULL,                         -- el producto normalizado (para no duplicar)
+  producto   text NOT NULL,
+  parametros jsonb NOT NULL DEFAULT '[]',           -- qué parámetros del pliego cubre
+  cantidad   numeric,                               -- NULL = sin poner todavía
+  origen     text NOT NULL CHECK (origen IN ('equivalencia', 'manual')),
+  excluida   boolean NOT NULL DEFAULT false,
+  por        text NOT NULL DEFAULT '',
+  creado     timestamptz NOT NULL DEFAULT now(),
+  actualizado timestamptz NOT NULL DEFAULT now(),
+  UNIQUE (motor_id, clave)
 );

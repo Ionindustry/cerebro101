@@ -36,7 +36,7 @@ Lo que Dirección ha pedido y cómo se construye, por pasos (cada uno, su PR). *
    La propuesta de precios de venta lleva por artículo el precio con tu margen, el PVP del fabricante, el mercado (mínimo, mediana, máximo, fecha) y las estrategias; Dirección elige con `elegir_estrategia` (todos, una familia o códigos)
    o ajusta a mano, y aprueba como siempre. Tabla `referencias_mercado`. Pendiente: pantalla propia de revisión en el panel.
 5. Documentación del proveedor y fichas técnicas (descarga de internet y subida a mano).
-6. Que Costes, Precio y Catálogo usen todo esto al preparar ofertas y licitaciones.
+6. Que Costes, Precio y Catálogo usen todo esto al preparar ofertas y licitaciones. **Hecho para Costes y Precio de licitaciones** (`cerebro/licitaciones/partidas.py`, ver `docs/PROYECTO_LICITACIONES.md`): las partidas de equipos salen de la tabla de equivalencias, una persona pone las cantidades y el código calcula el coste real con las tarifas; el modelo local de Costes y de Precio recibe esas cifras. Pendiente: Catálogo.
 7. Actualización periódica de precios por archivo y por webservice.
 
 Las tarifas reales de los proveedores son confidenciales: **no se guardan en el repositorio**; las pruebas usan ficheros sintéticos con la misma estructura.

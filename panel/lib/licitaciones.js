@@ -1226,7 +1226,7 @@ export function botonDePaso(paso, ejec) {
   const escribe = ["solucion", "memoria", "administrativo", "costes"].includes(paso.id);            // los pasos que escriben secciones del sobre
   if (paso.estado === "omitido" && escribe) return { texto: "Rehacer este paso", rehacer: true, confirmar: true };   // «nada que escribir» = ya hay borradores: hay que rehacerlos (con confirmación)
   if (paso.estado === "pendiente" || paso.estado === "omitido") return { texto: "Hacer este paso", rehacer: false, confirmar: false };
-  if (paso.id === "comparativa" || paso.id === "encargos") return { texto: "Repetir este paso", rehacer: false, confirmar: false };   // se vuelven a generar; no hay borradores de la oferta que pisar
+  if (paso.id === "comparativa" || paso.id === "equivalencia" || paso.id === "encargos") return { texto: "Repetir este paso", rehacer: false, confirmar: false };   // se vuelven a generar; no hay borradores de la oferta que pisar
   const informe = paso.id === "precio" || paso.id === "evaluacion";
   return { texto: informe ? "Repetir el informe" : "Rehacer este paso", rehacer: !informe, confirmar: !informe };   // un informe no pisa nada; los borradores sí se rehacen
 }
@@ -1347,4 +1347,92 @@ export function progresoGeneral(ejec, secciones) {
     return a;
   }, 0);
   return { pct: Math.round((100 * suma) / pasos.length), terminados: pasos.filter(hecho).length, total: pasos.length };
+}
+
+export const CONFIRMAR_CANCELAR = "Se cancelará la preparación de la oferta. El agente que esté trabajando terminará su paso actual y no empezará ninguno más; lo ya escrito se conserva y podrás volver a lanzarla. ¿Cancelar?";
+
+/** Fichas técnicas de producto (/licitaciones/fichas): el informe de una carga en una frase para personas. */
+export function informeFichasTexto(inf) {
+  if (!inf) return "";
+  if (inf.error) return inf.error;
+  const partes = [`${inf.cargadas || 0} cargadas`];
+  if (inf.repetidas) partes.push(`${inf.repetidas} ya estaban`);
+  if (inf.sin_texto) partes.push(`${inf.sin_texto} sin texto legible`);
+  if (inf.fallidas?.length) partes.push(`${inf.fallidas.length} con fallo`);
+  if (inf.pendientes) partes.push(`${inf.pendientes} pendientes (repite la carga)`);
+  return partes.join(" · ");
+}
+
+export const ESTADO_FICHA = { indexada: "Lista", sin_texto: "Sin texto legible", infectada: "Rechazada (antivirus)", no_analizable: "No analizable", error: "Con error" };
+export const ORIGEN_FICHA = { csv: "Enlace de la lista", web: "Dirección web", manual: "Subida a mano" };
+
+// ---- Tabla de equivalencias «iguala o supera» (GET licitaciones/ofertas/{id}/equivalencia) ----
+export const VEREDICTO_EQUIVALENCIA = { supera: "Supera", iguala: "Iguala", no_cumple: "No cumple", sin_datos: "Sin datos" };
+export const OPERADOR_EQUIVALENCIA = { ">=": "mínimo", "<=": "máximo", "=": "exacto", texto: "" };
+
+/** «mínimo 4 MP» / «máximo 30 W» / «exacto 24 V»: lo que pide el pliego en un parámetro. Pura. */
+export function exigidoTexto(p) {
+  const op = OPERADOR_EQUIVALENCIA[p?.operador] ?? "";
+  return `${op ? `${op} ` : ""}${p?.valor_exigido || ""}`.trim();
+}
+
+/** Una línea con el recuento de la tabla («7 parámetros · 5 cubiertos · 2 sin cubrir»). Pura. */
+export function resumenEquivalencia(c) {
+  const k = c?.comprobacion;
+  if (!k) return "";
+  return `${k.parametros} parámetros · ${k.cubiertos} con producto que iguala o supera · ${k.sin_cubrir} sin cubrir`;
+}
+
+// ---- Cómo se hace, en cada caso, un paso sensible (Administrativo y Costes) ----
+// Tres opciones: el modelo local de 101.cat (lo de siempre), Claude o ChatGPT con los datos anonimizados (hay que confirmarlo expresamente cada vez y queda registrado) o a mano (no interviene ningún modelo).
+export const PASOS_ELEGIBLES = {
+  administrativo: { nombre: "Administrativo", aviso: "Claude o ChatGPT reciben el pliego y los datos de la sociedad con los nombres, NIF y demás datos de personas y empresas sustituidos por etiquetas. Si no se puede garantizar, no sale nada y lo hace el modelo local." },
+  costes: { nombre: "Costes", aviso: "Claude o ChatGPT NO reciben costes internos, tarifas de proveedor ni datos del ERP: solo redactan la estructura de la justificación con lo que dice el pliego y dejan [PENDIENTE] cada cifra." },
+};
+export const MODOS_PASO = [["local", "Modelo local de 101.cat"], ["externo", "Claude o ChatGPT con datos anonimizados"], ["manual", "Lo escribo yo"]];
+
+/** Lo que se envía a la API: {modos, confirmados} solo con lo elegido distinto de «local». Con `solo` (repetir un paso) únicamente ese paso. Si algo está en «externo» sin confirmar devuelve {error}. Pura. */
+export function cuerpoModos(modos, confirmados, solo = null) {
+  const out = { modos: {}, confirmados: [] };
+  for (const paso of Object.keys(PASOS_ELEGIBLES)) {
+    if (solo && paso !== solo) continue;
+    const m = (modos || {})[paso] || "local";
+    if (m === "local") continue;
+    if (m === "externo" && !(confirmados || {})[paso]) return { error: `Para enviar «${PASOS_ELEGIBLES[paso].nombre}» a Claude o ChatGPT marca la confirmación: el texto saldrá anonimizado y quedará registrado.` };
+    out.modos[paso] = m;
+    if (m === "externo") out.confirmados.push(paso);
+  }
+  return out;
+}
+
+export const MODO_ETIQUETA = { externo: "Claude/ChatGPT (anonimizado)", manual: "A mano" };
+
+/** Una línea del registro de envíos: «Costes → Claude (opus) · lo confirmó albert · 1.240 caracteres anonimizados». Pura. */
+export function envioTexto(x) {
+  const paso = PASOS_ELEGIBLES[x?.paso]?.nombre || x?.paso || "";
+  const quien = x?.proveedor === "claude" ? "Claude" : x?.proveedor === "chatgpt" ? "ChatGPT" : "ningún modelo";
+  const estado = x?.estado === "enviado" ? "" : x?.estado === "no_enviado" ? " · no llegó a enviarse" : " · intentado";
+  return `${paso} → ${quien}${x?.modelo ? ` (${x.modelo})` : ""} · lo confirmó ${x?.confirmado_por || "?"} · ${Number(x?.caracteres_privados || 0).toLocaleString("es-ES")} caracteres privados anonimizados${estado}`;
+}
+
+// ---- Partidas de equipos y coste real (GET licitaciones/ofertas/{id}/partidas) ----
+/** «1.234,56 €» a partir de un importe en texto («1234.56»). Pura. */
+export function eurosTexto(v) {
+  const n = Number(v);
+  return v === null || v === undefined || v === "" || Number.isNaN(n) ? "—" : `${n.toLocaleString("es-ES", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €`;
+}
+
+/** Lo que falta para que el total de las partidas esté completo, en una frase. Pura. */
+export function faltaEnPartidasTexto(t) {
+  if (!t || !t.partidas) return "";
+  const partes = [];
+  if (t.sin_coste?.length) partes.push(`sin coste en las tarifas: ${t.sin_coste.join(", ")}`);
+  if (t.sin_cantidad?.length) partes.push(`sin cantidad: ${t.sin_cantidad.join(", ")}`);
+  return partes.length ? `Total incompleto (${partes.join(" · ")}).` : "";
+}
+
+/** La cantidad escrita en el cuadro a lo que se envía: vacío = null (quitarla). Pura. */
+export function cantidadAEnvio(texto) {
+  const t = String(texto ?? "").trim();
+  return t === "" ? null : t;
 }

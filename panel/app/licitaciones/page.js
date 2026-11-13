@@ -120,6 +120,7 @@ export default function Licitaciones() {
       <p className="lic-fila">
         <Link href="/licitaciones/competencia" className="boton no">Competencia: quién gana en cada mercado</Link>
         <Link href="/licitaciones/vencen" className="boton no">Contratos que vencen: cuándo vuelve a salir</Link>
+        <Link href="/licitaciones/fichas" className="boton no">Fichas técnicas de producto</Link>
       </p>
       <Panel />
       <ResumenDelDia />

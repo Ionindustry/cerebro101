@@ -1,8 +1,10 @@
 "use client";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { CONFIRMAR_REHACER, MODELOS_REDACCION, progresoGeneral, progresoPaso, puedeRelanzar, textoRelanzar, agruparPorAnexo, botonDePaso, clasePaso, clasePlantilla, empresaParaEnviar, mensajeRedaccion, origenTexto, pasoEtiqueta, pendientesQueBloquean, plantillaEtiqueta, redaccionEnCurso, resumenPlantillas, resumenRedaccion } from "../../../../lib/licitaciones";
+import { fechaTexto, MODOS_PASO, MODO_ETIQUETA, PASOS_ELEGIBLES, cuerpoModos, envioTexto, CONFIRMAR_CANCELAR, CONFIRMAR_REHACER, MODELOS_REDACCION, progresoGeneral, progresoPaso, puedeRelanzar, textoRelanzar, agruparPorAnexo, botonDePaso, clasePaso, clasePlantilla, empresaParaEnviar, mensajeRedaccion, origenTexto, pasoEtiqueta, pendientesQueBloquean, plantillaEtiqueta, redaccionEnCurso, resumenPlantillas, resumenRedaccion } from "../../../../lib/licitaciones";
 import { pedirCerebro } from "../../cliente";
 import Comparativa from "./Comparativa";
+import Equivalencia from "./Equivalencia";
+import Partidas from "./Partidas";
 import Encargos from "./Encargos";
 import { MARCA_REVISION, revisionTitular } from "../../../../lib/licitaciones";
 
@@ -17,6 +19,9 @@ export default function Redaccion({ id, o, alCambiar }) {
   const [elegida, setElegida] = useState("");
   const [rehacer, setRehacer] = useState(false);
   const [modelo, setModelo] = useState("auto");          // con qué modelo externo se redacta la memoria técnica
+  const [modos, setModos] = useState({ administrativo: "local", costes: "local" });          // cómo se hace en este caso cada paso sensible
+  const [confirm, setConfirm] = useState({});                                                  // «externo» confirmado expresamente, por paso
+  const [envios, setEnvios] = useState([]);                                                     // lo que ha salido a Claude o ChatGPT (sin el contenido)
   const [ejec, setEjec] = useState(null);
   const [plant, setPlant] = useState(null);
   const [msg, setMsg] = useState(null);
@@ -30,6 +35,10 @@ export default function Redaccion({ id, o, alCambiar }) {
   const cargarEjecucion = useCallback(async () => {
     try { const r = await pedirCerebro(`licitaciones/ofertas/${id}/ejecucion`); if (vivo.current) setEjec(r.ejecucion); return r.ejecucion; } catch { return null; }
   }, [id]);
+
+  useEffect(() => {                                                          // el registro de lo que sale a Claude o ChatGPT se vuelve a leer cuando cambia la ejecución
+    pedirCerebro(`licitaciones/ofertas/${id}/envios-externos`).then((r) => { if (vivo.current) setEnvios(r.envios || []); }).catch(() => {});
+  }, [id, ejec?.id, ejec?.estado]);
 
   useEffect(() => {
     cargarEjecucion(); cargarPlantillas();
@@ -58,9 +67,11 @@ export default function Redaccion({ id, o, alCambiar }) {
   const hayVarias = lista.length > 1;
   const repetirPaso = async (p, b) => {
     if (b.confirmar && !window.confirm(CONFIRMAR_REHACER)) return;
+    const m = cuerpoModos(modos, confirm, p.id);
+    if (m.error) { setMsg(m.error); return; }
     setTrabajando(true); setMsg(null);
     try {
-      const r = await pedirCerebro(`licitaciones/ofertas/${id}/redactar/${encodeURIComponent(p.id)}`, enviar({ rehacer: b.rehacer, modelo }));
+      const r = await pedirCerebro(`licitaciones/ofertas/${id}/redactar/${encodeURIComponent(p.id)}`, enviar({ rehacer: b.rehacer, modelo, ...m }));
       setEjec(r.ejecucion);
       await alCambiar();
     } catch (e) {
@@ -68,10 +79,22 @@ export default function Redaccion({ id, o, alCambiar }) {
       await cargarEjecucion();
     } finally { setTrabajando(false); }
   };
-  const redactar = async () => {
+  const cancelar = async () => {
+    if (!window.confirm(CONFIRMAR_CANCELAR)) return;
     setTrabajando(true); setMsg(null);
     try {
-      const r = await pedirCerebro(`licitaciones/ofertas/${id}/redactar`, enviar({ rehacer, modelo, ...(sociedad ? { empresa: sociedad } : {}) }));
+      const r = await pedirCerebro(`licitaciones/ofertas/${id}/cancelar`, { method: "POST" });
+      setEjec(r.ejecucion);
+      await alCambiar();
+    } catch (e) { setMsg(mensajeRedaccion(e.status, e.detalle)); await cargarEjecucion(); }
+    finally { setTrabajando(false); }
+  };
+  const redactar = async () => {
+    const m = cuerpoModos(modos, confirm);
+    if (m.error) { setMsg(m.error); return; }
+    setTrabajando(true); setMsg(null);
+    try {
+      const r = await pedirCerebro(`licitaciones/ofertas/${id}/redactar`, enviar({ rehacer, modelo, ...m, ...(sociedad ? { empresa: sociedad } : {}) }));
       setEjec(r.ejecucion);
       await alCambiar();
     } catch (e) {
@@ -145,6 +168,31 @@ export default function Redaccion({ id, o, alCambiar }) {
         </label>
         {o?.existe && <label className="ap-check"><input type="checkbox" checked={rehacer} onChange={(e) => setRehacer(e.target.checked)} /> Rehacer también los borradores de los agentes</label>}
       </div>
+      <fieldset className="lic-modos">
+        <legend>Cómo se hacen los pasos sensibles (se elige en cada ocasión)</legend>
+        {Object.entries(PASOS_ELEGIBLES).map(([paso, info]) => (
+          <div key={paso}>
+            <label>{info.nombre}{" "}
+              <select value={modos[paso]} onChange={(e) => { setModos({ ...modos, [paso]: e.target.value }); setConfirm({ ...confirm, [paso]: false }); }} aria-label={`Cómo se hace el paso ${info.nombre}`}>
+                {MODOS_PASO.map(([k, n]) => <option key={k} value={k}>{n}</option>)}
+              </select>
+            </label>
+            {modos[paso] === "externo" && (
+              <label className="ap-check"><input type="checkbox" checked={!!confirm[paso]} onChange={(e) => setConfirm({ ...confirm, [paso]: e.target.checked })} />
+                {" "}Confirmo que el texto, anonimizado, salga a Claude o ChatGPT. <span className="meta">{info.aviso}</span></label>
+            )}
+            {modos[paso] === "manual" && <span className="meta"> Ningún modelo toca este paso: las secciones quedan para que las escribas tú.</span>}
+          </div>
+        ))}
+        <p className="meta">Lo elegido vale para la próxima vez que lances la preparación o repitas el paso con su botón.</p>
+      </fieldset>
+      {envios.length > 0 && (
+        <details>
+          <summary className="meta">Qué ha salido a Claude o ChatGPT en los pasos sensibles ({envios.length})</summary>
+          <ul>{envios.map((x) => <li key={x.id} className="meta">{fechaTexto(x.creado)} · {envioTexto(x)}{x.detalle ? ` — ${x.detalle}` : ""}</li>)}</ul>
+          <p className="meta">El registro no guarda el texto enviado, solo quién lo confirmó, qué paso y cuánto salió.</p>
+        </details>
+      )}
       {errorEmpresas && <p className="meta" role="note">No se han podido leer las sociedades del ERP: {errorEmpresas}</p>}
 
       {ejec && (
@@ -153,6 +201,12 @@ export default function Redaccion({ id, o, alCambiar }) {
           {(() => { const g = progresoGeneral(ejec, o?.secciones); return g.total > 0 && (
             <p className="lic-prog-general"><progress className="lic-prog" max={100} value={g.pct} aria-label="Progreso de la preparación de la oferta" /> <span className="meta">{g.pct} % · {g.terminados} de {g.total} pasos terminados</span></p>
           ); })()}
+          {trabajandoAgentes && (
+            <p className="lic-fila">
+              <button className="boton no" onClick={cancelar} disabled={trabajando} title="El agente que esté trabajando termina su paso y no empieza ninguno más">Cancelar la preparación</button>
+              <span className="meta">Si lleva mucho rato sin avanzar, cancélala y vuelve a lanzarla: lo ya escrito se conserva.</span>
+            </p>
+          )}
           {puedeRelanzar(ejec) && (
             <div className="lic-aviso" role="group" aria-label="Volver a lanzar la preparación">
               <p className="lic-fila">
@@ -166,7 +220,7 @@ export default function Redaccion({ id, o, alCambiar }) {
             {ejec.pasos.map((p) => (
               <li key={p.id}>
                 <span className="lic-fila">
-                  <span className={`lic-etiqueta ${clasePaso(p.estado)}`}>{pasoEtiqueta(p.estado)}</span><strong>{p.titulo}</strong>
+                  <span className={`lic-etiqueta ${clasePaso(p.estado)}`}>{pasoEtiqueta(p.estado)}</span><strong>{p.titulo}</strong>{MODO_ETIQUETA[p.modo] && <span className="lic-etiqueta aviso">{MODO_ETIQUETA[p.modo]}</span>}
                   {(() => { const b = botonDePaso(p, ejec); return b && <button className="boton no" disabled={trabajando || trabajandoAgentes} onClick={() => repetirPaso(p, b)} title="Repite solo esta acción; los demás pasos se quedan como están">{b.texto}</button>; })()}
                 </span>
                 {(() => { const g = progresoPaso(p, o?.secciones); return (
@@ -185,6 +239,8 @@ export default function Redaccion({ id, o, alCambiar }) {
         </div>
       )}
       <Comparativa id={id} version={ejec ? `${ejec.id}:${ejec.estado}:${(ejec.pasos || []).filter((p) => p.estado === "hecho" || p.estado === "parcial").length}` : "sin-ejecucion"} />
+      <Equivalencia id={id} version={ejec ? `${ejec.id}:${ejec.estado}:${(ejec.pasos || []).filter((p) => p.estado === "hecho" || p.estado === "parcial").length}` : "sin-ejecucion"} />
+      <Partidas id={id} version={ejec ? `${ejec.id}:${ejec.estado}:${(ejec.pasos || []).filter((p) => p.estado === "hecho" || p.estado === "parcial").length}` : "sin-ejecucion"} />
       <Encargos id={id} version={ejec ? `${ejec.id}:${ejec.estado}:${(ejec.pasos || []).filter((p) => p.estado === "hecho" || p.estado === "parcial").length}` : "sin-ejecucion"} />
 
       <h3>Documentación administrativa {plant?.documentos?.length > 0 && <span className="meta">· {resumenPlantillas(plant)}</span>}</h3>

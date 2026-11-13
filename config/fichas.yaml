@@ -1,0 +1,7 @@
+# Fichas técnicas de producto (api/cerebro/licitaciones/fichas.py).
+# Solo se descargan fichas de los dominios de esta lista (https; también sus subdominios). Está VACÍA a propósito: añade aquí los dominios OFICIALES de cada fabricante
+# (por ejemplo «milesight.com»). Lo que no esté en la lista no se descarga nunca: el informe de la carga te dice qué dominios han quedado fuera para que decidas.
+hosts: []
+max_mb: 30          # tamaño máximo de una ficha
+max_diarias: 200    # descargas por día (todas las cargas juntas)
+max_por_carga: 100  # fichas por carga desde una lista
