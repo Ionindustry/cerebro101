@@ -1,7 +1,8 @@
 "use client";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { CONFIRMAR_REHACER, MODELOS_REDACCION, agruparPorAnexo, botonDePaso, clasePaso, clasePlantilla, empresaParaEnviar, mensajeRedaccion, origenTexto, pasoEtiqueta, pendientesQueBloquean, plantillaEtiqueta, redaccionEnCurso, resumenPlantillas, resumenRedaccion } from "../../../../lib/licitaciones";
+import { CONFIRMAR_REHACER, MODELOS_REDACCION, progresoGeneral, progresoPaso, puedeRelanzar, textoRelanzar, agruparPorAnexo, botonDePaso, clasePaso, clasePlantilla, empresaParaEnviar, mensajeRedaccion, origenTexto, pasoEtiqueta, pendientesQueBloquean, plantillaEtiqueta, redaccionEnCurso, resumenPlantillas, resumenRedaccion } from "../../../../lib/licitaciones";
 import { pedirCerebro } from "../../cliente";
+import Comparativa from "./Comparativa";
 import Encargos from "./Encargos";
 import { MARCA_REVISION, revisionTitular } from "../../../../lib/licitaciones";
 
@@ -43,9 +44,11 @@ export default function Redaccion({ id, o, alCambiar }) {
   const trabajandoAgentes = redaccionEnCurso(ejec);
   useEffect(() => {
     if (!trabajandoAgentes) return undefined;
+    let vuelta = 0;
     const t = setInterval(async () => {
       const e = await cargarEjecucion();
       if (e && !redaccionEnCurso(e)) { await alCambiar(); await cargarPlantillas(); }
+      else if (++vuelta % 3 === 0) await alCambiar();                       // cada 12 s se relee la oferta: así sube la barra a medida que los agentes guardan secciones
     }, SONDEO_MS);
     return () => clearInterval(t);
   }, [trabajandoAgentes]);                                                   // eslint-disable-line react-hooks/exhaustive-deps
@@ -147,6 +150,18 @@ export default function Redaccion({ id, o, alCambiar }) {
       {ejec && (
         <div aria-live="polite">
           <p><strong>{resumenRedaccion(ejec)}</strong></p>
+          {(() => { const g = progresoGeneral(ejec, o?.secciones); return g.total > 0 && (
+            <p className="lic-prog-general"><progress className="lic-prog" max={100} value={g.pct} aria-label="Progreso de la preparación de la oferta" /> <span className="meta">{g.pct} % · {g.terminados} de {g.total} pasos terminados</span></p>
+          ); })()}
+          {puedeRelanzar(ejec) && (
+            <div className="lic-aviso" role="group" aria-label="Volver a lanzar la preparación">
+              <p className="lic-fila">
+                <button className="boton si" onClick={redactar} disabled={trabajando || trabajandoAgentes || (hayVarias && !sociedad)}>Volver a lanzar la preparación de la oferta</button>
+                {hayVarias && !sociedad && <span className="meta">Elige primero la sociedad con la que se presenta.</span>}
+              </p>
+              <p className="meta">{textoRelanzar(ejec)}</p>
+            </div>
+          )}
           <ol className="lic-pasos">
             {ejec.pasos.map((p) => (
               <li key={p.id}>
@@ -154,6 +169,12 @@ export default function Redaccion({ id, o, alCambiar }) {
                   <span className={`lic-etiqueta ${clasePaso(p.estado)}`}>{pasoEtiqueta(p.estado)}</span><strong>{p.titulo}</strong>
                   {(() => { const b = botonDePaso(p, ejec); return b && <button className="boton no" disabled={trabajando || trabajandoAgentes} onClick={() => repetirPaso(p, b)} title="Repite solo esta acción; los demás pasos se quedan como están">{b.texto}</button>; })()}
                 </span>
+                {(() => { const g = progresoPaso(p, o?.secciones); return (
+                  <span className="lic-fila">
+                    <progress className={`lic-prog ${g.clase}`} max={100} {...(g.indeterminado ? {} : { value: g.pct })} aria-label={`Progreso de ${p.titulo}`} />
+                    <span className="meta">{g.texto}</span>
+                  </span>
+                ); })()}
                 {p.error && <span className="meta lic-aviso">{p.error}</span>}
                 {p.faltan?.length > 0 && <span className="meta">Sin escribir: {p.faltan.join(", ")}</span>}
                 {p.resumen && <details><summary className="meta">Qué ha hecho{p.id === "precio" ? " (precio orientativo: lo fija una persona)" : ""}</summary><p style={{ whiteSpace: "pre-line" }}>{p.resumen}</p></details>}
@@ -163,6 +184,7 @@ export default function Redaccion({ id, o, alCambiar }) {
           {ejec.error && <p role="alert" className="lic-error">{ejec.error}</p>}
         </div>
       )}
+      <Comparativa id={id} version={ejec ? `${ejec.id}:${ejec.estado}:${(ejec.pasos || []).filter((p) => p.estado === "hecho" || p.estado === "parcial").length}` : "sin-ejecucion"} />
       <Encargos id={id} version={ejec ? `${ejec.id}:${ejec.estado}:${(ejec.pasos || []).filter((p) => p.estado === "hecho" || p.estado === "parcial").length}` : "sin-ejecucion"} />
 
       <h3>Documentación administrativa {plant?.documentos?.length > 0 && <span className="meta">· {resumenPlantillas(plant)}</span>}</h3>

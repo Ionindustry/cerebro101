@@ -336,6 +336,75 @@ class TestDesanonimizar(unittest.TestCase):
         self.assertIn("[PERSONA_1]", r.texto)
 
 
+class TestRespuestasRaras(unittest.TestCase):
+    """Lo que pasó de verdad: Claude respondió pero sin el campo esperado, o se quedó sin espacio. Ahora se entiende o se explica."""
+    ESQUEMA_SEC = {"type": "object", "properties": {"secciones": {"type": "array"}}, "required": ["secciones"]}
+
+    def llamar(self, respuesta_json, normalizar=None, max_tokens=None):
+        def manejar(req):
+            return httpx.Response(200, json=respuesta_json)
+        with entorno(ANTHROPIC_API_KEY="k"):
+            return asyncio.run(m._llamar("claude", [{"role": "system", "content": "s"}, {"role": "user", "content": "u"}], self.ESQUEMA_SEC, httpx.MockTransport(manejar),
+                                         max_tokens=max_tokens, normalizar=normalizar))
+
+    def test_una_respuesta_cortada_por_tamano_se_distingue_de_una_mal_formada(self):
+        with self.assertRaises(m.RespuestaCortada) as c:
+            self.llamar({"stop_reason": "max_tokens", "content": [{"type": "tool_use", "name": "responder", "input": {}}]}, max_tokens=4000)
+        self.assertIn("4000 tokens", str(c.exception))
+        with self.assertRaises(m.RespuestaInvalida) as c:
+            self.llamar({"stop_reason": "end_turn", "content": [{"type": "text", "text": "hola"}]})
+        self.assertNotIsInstance(c.exception, m.RespuestaCortada)
+
+    def test_si_faltan_campos_el_mensaje_dice_cuales_llegaron(self):
+        with self.assertRaises(m.RespuestaInvalida) as c:
+            self.llamar({"stop_reason": "tool_use", "content": [{"type": "tool_use", "name": "responder", "input": {"clave": "a", "contenido": "x"}}]})
+        self.assertIn("Faltan campos", str(c.exception))
+        self.assertIn("llegaron: ['clave', 'contenido']", str(c.exception))
+
+    def test_el_llamador_puede_aceptar_otra_forma_de_la_misma_respuesta(self):
+        r = self.llamar({"stop_reason": "tool_use", "content": [{"type": "tool_use", "name": "responder", "input": {"contenido": "x"}}]},
+                        normalizar=lambda d: {"secciones": [{"clave": "a", "contenido": d["contenido"]}]})
+        self.assertEqual(r["secciones"][0]["contenido"], "x")
+
+    def test_chatgpt_cortado_por_tamano_tambien_se_distingue(self):
+        def manejar(req):
+            return httpx.Response(200, json={"choices": [{"finish_reason": "length", "message": {"content": "{\"secciones\": [{\"cla"}}]})
+        with entorno(OPENAI_API_KEY="k"), self.assertRaises(m.RespuestaCortada):
+            asyncio.run(m._llamar("chatgpt", [{"role": "user", "content": "u"}], self.ESQUEMA_SEC, httpx.MockTransport(manejar)))
+
+    def test_consultar_publico_repite_una_vez_con_el_doble_si_se_corta(self):
+        usados = []
+
+        async def llamar(p, mensajes, esquema, transporte=None, max_tokens=None, timeout=None, normalizar=None):
+            usados.append(max_tokens)
+            if max_tokens < 12000:
+                raise m.RespuestaCortada("Claude cortó la respuesta")
+            return {"secciones": []}
+
+        async def activos():
+            return {"claude": True}
+
+        async def cero(p):
+            return 0
+
+        async def nada(*a, **k):
+            return None
+        with entorno(ANTHROPIC_API_KEY="k"), mock.patch.object(m, "_llamar", llamar), mock.patch.object(m, "activos", activos), mock.patch.object(m, "usadas_hoy", cero), \
+                mock.patch.object(m.actividad, "contar", nada):
+            r = asyncio.run(m.consultar_publico("t", [{"role": "user", "content": "x"}], {"type": "object"}, max_tokens=6000))
+        self.assertEqual((r, usados), (({"secciones": []}, "claude"), [6000, 12000]))
+        usados.clear()
+
+        async def siempre_corta(*a, **k):
+            usados.append(k.get("max_tokens"))
+            raise m.RespuestaCortada("Claude cortó la respuesta: el límite se quedó corto")
+        with entorno(ANTHROPIC_API_KEY="k"), mock.patch.object(m, "_llamar", siempre_corta), mock.patch.object(m, "activos", activos), mock.patch.object(m, "usadas_hoy", cero), \
+                mock.patch.object(m.actividad, "contar", nada), self.assertRaises(m.ErrorExterno) as c:
+            asyncio.run(m.consultar_publico("t", [{"role": "user", "content": "x"}], {"type": "object"}, max_tokens=6000))
+        self.assertEqual(usados, [6000, 12000])                                                    # solo UN reintento
+        self.assertIn("cortó la respuesta", str(c.exception))
+
+
 class TestEleccionDelModelo(unittest.TestCase):
     def test_los_modelos_posibles_incluyen_siempre_el_de_por_defecto(self):
         with entorno(CLAUDE_MODELO="", CHATGPT_MODELO=""):

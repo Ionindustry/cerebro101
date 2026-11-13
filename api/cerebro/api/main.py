@@ -35,6 +35,7 @@ from ..licitaciones import empresa as empresa_erp
 from ..licitaciones import plantillas as plantillas_ofertas
 from ..licitaciones import redaccion as redaccion_ofertas
 from ..licitaciones import encargos as encargos_ofertas
+from ..licitaciones import comparativa as comparativa_ofertas
 from ..licitaciones import reglas as reglas_licitaciones
 from ..licitaciones import simulador as simulador_licitaciones
 from ..licitaciones import embudo as embudo_licitaciones
@@ -944,6 +945,16 @@ async def revision_previa_de_la_oferta(motor_id: str, usuario: Usuario = Depends
     except ofertas_licitaciones.ErrorOferta as e:
         raise HTTPException(422, str(e)) from None
     return await revision_previa.revisar(motor_id)
+
+
+@app.get("/licitaciones/ofertas/{motor_id}/comparativa")
+async def comparativa_de_la_oferta(motor_id: str, usuario: Usuario = Depends(usuario_actual)):
+    """La comparativa de productos y ventaja competitiva de la oferta (null si aún no se ha hecho), con la evidencia en que se apoya cada afirmación. Solo Dirección y Licitaciones."""
+    _exige_licitaciones(usuario)
+    try:
+        return {"comparativa": await comparativa_ofertas.leer(motor_id)}
+    except ofertas_licitaciones.ErrorOferta as e:
+        raise _oferta_error(e) from None
 
 
 @app.get("/licitaciones/ofertas/{motor_id}/encargos")

@@ -23,6 +23,33 @@ FICHA_REAL = {"id": "0b1f7a3e-1111-4222-8333-444444444441", "titulo": "Suministr
               "documentos": [{"nombre": "PPT", "tipo": "pliego", "url": "https://contrataciondelestado.es/a"}]}
 
 
+class TestNormalizar(unittest.TestCase):
+    UNA = [{"clave": "descripcion-solucion", "sobre": "tecnico"}]
+    DOS = UNA + [{"clave": "plan-trabajo", "sobre": "tecnico"}]
+
+    def test_la_lista_de_siempre_no_se_toca(self):
+        d = {"secciones": [{"clave": "a", "contenido": "x"}]}
+        self.assertIs(R.normalizar_secciones(d, self.UNA), d)
+
+    def test_una_seccion_plana_se_acepta_si_solo_se_pidio_una(self):
+        r = R.normalizar_secciones({"contenido": "Texto", "citas": [4], "resumen": "ok"}, self.UNA)
+        self.assertEqual(r["secciones"], [{"clave": "descripcion-solucion", "contenido": "Texto", "citas": [4]}])
+        self.assertEqual(r["resumen"], "ok")
+        r = R.normalizar_secciones({"clave": "descripcion-solucion", "contenido": "T"}, self.DOS)         # con varias, vale si dice cuál es
+        self.assertEqual(r["secciones"][0]["clave"], "descripcion-solucion")
+        self.assertNotIn("secciones", R.normalizar_secciones({"contenido": "T"}, self.DOS))               # ambigua: no se adivina
+
+    def test_un_diccionario_por_clave_se_acepta(self):
+        r = R.normalizar_secciones({"descripcion-solucion": "Texto A", "plan-trabajo": {"contenido": "Texto B", "citas": [1]}, "otra": "no pedida"}, self.DOS)
+        self.assertEqual(r["secciones"], [{"clave": "descripcion-solucion", "contenido": "Texto A"}, {"clave": "plan-trabajo", "contenido": "Texto B", "citas": [1]}])
+        r = R.normalizar_secciones({"secciones": {"descripcion-solucion": "Texto A"}}, self.UNA)
+        self.assertEqual(r["secciones"], [{"clave": "descripcion-solucion", "contenido": "Texto A"}])
+
+    def test_lo_que_no_se_entiende_se_deja_como_esta(self):
+        d = {"algo": "raro"}
+        self.assertEqual(R.normalizar_secciones(d, self.UNA), d)
+
+
 class TestOrganismo(unittest.TestCase):
     def test_vale_la_ficha_de_la_herramienta_la_del_motor_y_lo_raro(self):
         self.assertEqual(R.organismo_de(FICHA_REAL), "Ayuntamiento de Girona")                          # texto (el caso real que antes fallaba con AttributeError)
@@ -177,7 +204,7 @@ class TestConsultaConRespaldo(unittest.TestCase):
         from cerebro import modelos_externos as E
         orden = []
 
-        async def llamar(p, mensajes, esquema, transporte=None, max_tokens=None, timeout=None):
+        async def llamar(p, mensajes, esquema, transporte=None, max_tokens=None, timeout=None, normalizar=None):
             orden.append(p)
             if p in fallan:
                 raise E.ErrorExterno(f"{p} no responde")

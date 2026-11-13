@@ -31,6 +31,7 @@ TERMINADOS = (HECHO, PARCIAL, OMITIDO, ERROR)
 # Los pasos, en orden. «sobre» + «claves»/«excepto» dicen qué secciones escribe cada agente; «informe» marca los pasos que no escriben secciones, solo dejan un informe.
 # La proposición económica y «criterios-automaticos» no las escribe ningún agente: la primera sale sola del precio y la segunda son compromisos que decide una persona.
 PASOS = (
+    {"id": "comparativa", "agente": "comparador-productos", "titulo": "Comparativa de productos y ventaja competitiva", "comparativa": True},
     {"id": "encargos", "agente": "director-oferta", "titulo": "Director de la oferta · encargo a cada agente", "encargos": True},
     {"id": "solucion", "agente": "arquitecto-solucion", "titulo": "Arquitecto de Solución · descripción de la solución", "sobre": "tecnico", "claves": ("descripcion-solucion",),
      "contexto": "Diseña la mejor solución, criterio a criterio, dentro del presupuesto: qué se instala o presta, con qué equipos, cómo cubre cada requisito técnico del pliego."},
@@ -72,7 +73,7 @@ def editable_por_agente(s: dict, rehacer: bool) -> bool:
 
 def seleccion(paso: dict, secciones: list[dict], rehacer: bool) -> list[dict]:
     """Las secciones que este paso tiene que escribir. Los pasos de informe no escriben ninguna."""
-    if paso.get("informe") or paso.get("encargos"):
+    if paso.get("informe") or paso.get("encargos") or paso.get("comparativa"):
         return []
     out = []
     for s in secciones:
@@ -91,7 +92,7 @@ def pasos_iniciales(secciones: list[dict], rehacer: bool) -> list[dict]:
     for p in PASOS:
         paso = {"id": p["id"], "agente": p["agente"], "titulo": p["titulo"], "estado": PENDIENTE, "resumen": "", "error": "", "secciones": [], "escritas": 0, "faltan": [],
                 "inicio": None, "fin": None}
-        if not p.get("informe") and not p.get("encargos"):
+        if not p.get("informe") and not p.get("encargos") and not p.get("comparativa"):
             sel = seleccion(p, secciones, rehacer)
             paso["secciones"] = [s["clave"] for s in sel]
             if not sel and not p.get("antes"):
@@ -338,6 +339,13 @@ async def _paso_escritor(ejecucion_id: int, indice: int, e: dict, defin: dict, i
     encargo_local = await encargos_mod.texto_para(motor_id, defin["agente"], encargos_mod.MAX_LOCAL) if encargo else ""
     if encargo_local:                                # el modelo local, más corto: su ventana es pequeña (se suma a las reglas fijas de la petición)
         defin = {**defin, "contexto": f"{defin.get('contexto', '')}\n\n{encargo_local}".strip()}
+    if defin["id"] in ("solucion", "memoria"):         # el Arquitecto y el Redactor reciben también la comparativa de productos (completa para Claude/ChatGPT, corta para el modelo local)
+        from . import comparativa as comparativa_mod
+        completa = await comparativa_mod.texto_para(motor_id)
+        if completa:
+            defin_externo = {**defin_externo, "contexto": f"{defin_externo.get('contexto', '')}\n\n{completa}".strip()}
+            corta = await comparativa_mod.texto_para(motor_id, 1500)
+            defin = {**defin, "contexto": f"{defin.get('contexto', '')}\n\n{corta}".strip()}
     estado, externa = None, ""
     from . import redaccion_externa as externa_mod
     if externa_mod.paso_activo(defin["id"]):
@@ -362,6 +370,13 @@ async def _paso_escritor(ejecucion_id: int, indice: int, e: dict, defin: dict, i
         await _marcar(ejecucion_id, indice, estado=ERROR, error="El agente no ha guardado ninguna sección: se puede volver a intentar.", **campos)
     else:
         await _marcar(ejecucion_id, indice, estado=PARCIAL if faltan else HECHO, error="", **campos)
+
+
+async def _paso_comparativa(ejecucion_id: int, indice: int, e: dict, defin: dict, titulo: str, ficha: dict) -> None:
+    """La comparativa de productos y ventaja competitiva con Claude o ChatGPT. Sin evidencia de producto o sin modelo externo no se hace (no se compara sin datos): el paso queda «omitido» con el motivo."""
+    from . import comparativa
+    res = await comparativa.preparar(e["licitacion"], titulo, ficha or {}, modelo=e.get("modelo") or "auto")
+    await _marcar(ejecucion_id, indice, estado=HECHO if res["estado"] == "hecha" else OMITIDO, error="", resumen=res["resumen"][:MAX_RESUMEN], secciones=[], fin=_iso(_ahora(None)))
 
 
 async def _paso_encargos(ejecucion_id: int, indice: int, e: dict, defin: dict, titulo: str, ficha: dict) -> None:
@@ -407,7 +422,9 @@ async def ejecutar(ejecucion_id: int, invocar) -> dict:
         defin = _PASO[paso["id"]]
         await _marcar(ejecucion_id, i, estado=EN_CURSO, inicio=_iso(_ahora(None)), error="")
         try:
-            if defin.get("encargos"):
+            if defin.get("comparativa"):
+                await _paso_comparativa(ejecucion_id, i, e, defin, titulo, ficha)
+            elif defin.get("encargos"):
                 await _paso_encargos(ejecucion_id, i, e, defin, titulo, ficha)
             elif defin.get("informe"):
                 await _paso_informe(ejecucion_id, i, e, defin, invocar, titulo, ficha)

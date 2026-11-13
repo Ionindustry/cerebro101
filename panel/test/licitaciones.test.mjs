@@ -1135,9 +1135,13 @@ test("repetir un paso: qué botón sale en cada estado y cuándo pide confirmaci
   assert.deepEqual(b("memoria", "error"), { texto: "Reintentar", rehacer: false, confirmar: false });
   assert.deepEqual(b("solucion", "parcial"), { texto: "Completar lo que falta", rehacer: false, confirmar: false });
   assert.equal(b("costes", "pendiente").texto, "Hacer este paso");
-  assert.equal(b("administrativo", "omitido").texto, "Hacer este paso");
+  assert.deepEqual(b("memoria", "omitido"), { texto: "Rehacer este paso", rehacer: true, confirmar: true });       // «Nada que escribir» porque ya hay borradores: rehacerlos, con confirmación
+  assert.equal(b("administrativo", "omitido").texto, "Rehacer este paso");
+  assert.equal(b("precio", "omitido").texto, "Hacer este paso");                                                     // un informe no tiene borradores que rehacer
   assert.deepEqual(b("memoria", "hecho"), { texto: "Rehacer este paso", rehacer: true, confirmar: true });          // rehacer borradores pide confirmación
   assert.deepEqual(b("precio", "hecho"), { texto: "Repetir el informe", rehacer: false, confirmar: false });         // un informe no pisa nada
+  assert.deepEqual(b("comparativa", "hecho"), { texto: "Repetir este paso", rehacer: false, confirmar: false });    // no hay borradores que pisar
+  assert.deepEqual(b("encargos", "omitido"), { texto: "Hacer este paso", rehacer: false, confirmar: false });
   assert.deepEqual(b("evaluacion", "error"), { texto: "Reintentar", rehacer: false, confirmar: false });
   assert.equal(b("memoria", "error", { estado: "en_curso" }), null);                   // mientras trabajan los agentes no se repite nada
   assert.equal(b("memoria", "en_curso"), null);
@@ -1162,4 +1166,63 @@ test("en estudio: solo las de ese estado, las que cierran antes primero y con en
   assert.equal(hrefEnEstudio({ motor_id: "0b1f7a3e-1111-4222-8333-444444444441" }), "/licitaciones/expedientes/0b1f7a3e-1111-4222-8333-444444444441");
   assert.equal(hrefEnEstudio({ motor_id: "../x" }), "/licitaciones/embudo");                  // un identificador raro nunca se convierte en una ruta
   assert.equal(hrefEnEstudio({}), "/licitaciones/embudo");
+});
+
+import { comprobacionTexto, cumpleEtiqueta, evidenciaTexto } from "../lib/licitaciones.js";
+test("comparativa: etiquetas de cumplimiento, de dónde sale cada evidencia y el recuento", () => {
+  assert.deepEqual(cumpleEtiqueta("si"), ["Cumple", "abierta"]);
+  assert.deepEqual(cumpleEtiqueta("no"), ["No cumple", "anulada"]);
+  assert.deepEqual(cumpleEtiqueta("raro"), ["Sin datos", ""]);                                  // lo desconocido es «sin datos»
+  const ev = [{ id: "P1", origen: "ficha", titulo: "Ficha DS-2CD" }, { id: "P2", origen: "lista de proveedor", titulo: "NVR-8" }];
+  assert.equal(evidenciaTexto("P1", ev), "Ficha DS-2CD (ficha)");
+  assert.equal(evidenciaTexto("P9", ev), "P9");
+  assert.equal(evidenciaTexto("P1", null), "P1");
+  assert.equal(comprobacionTexto({ comprobadas: 3, degradadas_a_sin_datos: 2, ventajas_descartadas: 1 }), "3 afirmaciones con evidencia; 2 pasadas a «sin datos» por no citar evidencia válida; 1 ventaja descartada por no tener evidencia");
+  assert.equal(comprobacionTexto({ comprobadas: 1, degradadas_a_sin_datos: 0, ventajas_descartadas: 0 }), "1 afirmación con evidencia");
+  assert.equal(comprobacionTexto(null), "");
+});
+
+import { puedeRelanzar, textoRelanzar } from "../lib/licitaciones.js";
+test("volver a lanzar la preparación: cuándo se ofrece y qué explica", () => {
+  const e = (estado, ...pasos) => ({ estado, pasos: pasos.map((p) => ({ estado: p })) });
+  assert.equal(puedeRelanzar(e("error", "error", "pendiente")), true);
+  assert.equal(puedeRelanzar(e("parcial", "hecho", "parcial")), true);
+  assert.equal(puedeRelanzar(e("completa", "hecho", "omitido")), false);                 // todo bien: no hace falta
+  assert.equal(puedeRelanzar(e("completa", "hecho", "error")), true);                     // aunque la ejecución diga «completa», un paso con error se puede repetir
+  assert.equal(puedeRelanzar(e("en_curso", "error")), false);                             // mientras trabajan los agentes, no
+  assert.equal(puedeRelanzar(null), false);
+  assert.match(textoRelanzar(e("error", "error", "pendiente", "hecho")), /repite 2 pasos/);
+  assert.match(textoRelanzar(e("error", "error")), /repite 1 paso /);
+  assert.match(textoRelanzar(e("parcial", "hecho")), /repite lo que falte/);
+  assert.match(textoRelanzar(e("error", "error")), /persona no se toca/);
+});
+
+import { progresoGeneral, progresoPaso, seccionesEscritas, transcurrido } from "../lib/licitaciones.js";
+test("progreso de la preparación: porcentaje real por secciones y «trabajando» donde no se puede medir", () => {
+  const ahora = Date.parse("2026-11-13T10:30:00Z");
+  const inicio = "2026-11-13T10:20:00Z";
+  const sec = [{ clave: "a", estado: "borrador", actualizado: "2026-11-13T10:25:00Z" }, { clave: "b", estado: "vacia", actualizado: null },
+               { clave: "c", estado: "borrador", actualizado: "2026-11-12T08:00:00Z" }];                    // «c» ya estaba escrita de antes: no cuenta para esta ejecución
+  const paso = { id: "memoria", estado: "en_curso", inicio, secciones: ["a", "b", "c"] };
+  assert.equal(seccionesEscritas(paso, sec), 1);
+  assert.equal(seccionesEscritas({ ...paso, inicio: null }, sec), 0);                                      // sin empezar no cuenta nada
+  const g = progresoPaso(paso, sec, ahora);
+  assert.deepEqual([g.pct, g.indeterminado, g.clase], [33, false, "aviso"]);
+  assert.equal(g.texto, "1 de 3 secciones · 33 % · empezó hace 10 min");
+  const informe = progresoPaso({ id: "precio", estado: "en_curso", inicio, secciones: [] }, sec, ahora);
+  assert.deepEqual([informe.pct, informe.indeterminado], [null, true]);                                    // no se inventa un porcentaje
+  assert.equal(informe.texto, "Trabajando · empezó hace 10 min");
+  assert.deepEqual(progresoPaso({ estado: "hecho" }, sec).pct, 100);
+  assert.deepEqual([progresoPaso({ estado: "pendiente" }, sec).pct, progresoPaso({ estado: "pendiente" }, sec).texto], [0, "En espera"]);
+  assert.equal(progresoPaso({ estado: "omitido" }, sec).texto, "Sin nada que hacer");
+  const err = progresoPaso({ estado: "error", secciones: ["a", "b"], escritas: 1 }, sec);
+  assert.deepEqual([err.pct, err.clase, err.texto], [50, "error", "1 de 2 secciones · 50 %"]);
+  assert.equal(progresoPaso({ estado: "error", secciones: [] }, sec).texto, "No se completó");
+  assert.equal(transcurrido("2026-11-13T10:29:40Z", ahora), "hace menos de 1 min");
+  assert.equal(transcurrido("2026-11-13T09:25:00Z", ahora), "hace 1 h 5 min");
+  assert.equal(transcurrido(null, ahora), "");
+  const ejec = { pasos: [{ estado: "hecho" }, { estado: "omitido" }, paso, { estado: "pendiente" }] };
+  assert.deepEqual(progresoGeneral(ejec, sec), { pct: Math.round((100 * (2 + 1 / 3)) / 4), terminados: 2, total: 4 });   // 2 terminados + 1/3 del que trabaja
+  assert.deepEqual(progresoGeneral({ pasos: [] }, sec), { pct: 0, terminados: 0, total: 0 });
+  assert.equal(progresoGeneral({ pasos: [{ estado: "en_curso", secciones: [] }] }, sec).pct, 0);                           // lo que no se puede medir cuenta 0, no 50
 });

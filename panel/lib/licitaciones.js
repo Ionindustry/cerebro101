@@ -1223,7 +1223,10 @@ export function botonDePaso(paso, ejec) {
   if (paso.estado === "en_curso") return null;
   if (paso.estado === "error") return { texto: "Reintentar", rehacer: false, confirmar: false };
   if (paso.estado === "parcial") return { texto: "Completar lo que falta", rehacer: false, confirmar: false };
+  const escribe = ["solucion", "memoria", "administrativo", "costes"].includes(paso.id);            // los pasos que escriben secciones del sobre
+  if (paso.estado === "omitido" && escribe) return { texto: "Rehacer este paso", rehacer: true, confirmar: true };   // «nada que escribir» = ya hay borradores: hay que rehacerlos (con confirmación)
   if (paso.estado === "pendiente" || paso.estado === "omitido") return { texto: "Hacer este paso", rehacer: false, confirmar: false };
+  if (paso.id === "comparativa" || paso.id === "encargos") return { texto: "Repetir este paso", rehacer: false, confirmar: false };   // se vuelven a generar; no hay borradores de la oferta que pisar
   const informe = paso.id === "precio" || paso.id === "evaluacion";
   return { texto: informe ? "Repetir el informe" : "Rehacer este paso", rehacer: !informe, confirmar: !informe };   // un informe no pisa nada; los borradores sí se rehacen
 }
@@ -1253,3 +1256,95 @@ export function claseDePlazo(dias) {
 
 /** A dónde lleva cada licitación en estudio: su ficha si el motor la conoce y, si no, el embudo. */
 export const hrefEnEstudio = (x) => (x?.motor_id && /^[0-9a-f-]{36}$/i.test(String(x.motor_id)) ? `/licitaciones/expedientes/${x.motor_id}` : "/licitaciones/embudo");
+
+
+// ---- Comparativa de productos y ventaja competitiva (GET licitaciones/ofertas/{id}/comparativa) ----
+
+export const CUMPLE_ETIQUETA = { si: ["Cumple", "abierta"], parcial: ["Cumple en parte", "aviso"], no: ["No cumple", "anulada"], sin_datos: ["Sin datos", ""] };
+export const cumpleEtiqueta = (c) => CUMPLE_ETIQUETA[c] || CUMPLE_ETIQUETA.sin_datos;
+
+/** «P1» → «Ficha DS-2CD (ficha)»: de dónde sale cada evidencia que cita la comparativa, para que una persona la compruebe. Si no la conocemos, el id tal cual. */
+export function evidenciaTexto(id, evidencias) {
+  const e = (Array.isArray(evidencias) ? evidencias : []).find((x) => x.id === id);
+  return e ? `${e.titulo}${e.origen ? ` (${e.origen})` : ""}` : String(id);
+}
+
+/** «12 afirmaciones con evidencia; 2 pasadas a «sin datos»; 1 ventaja descartada». */
+export function comprobacionTexto(c) {
+  if (!c) return "";
+  const p = [`${c.comprobadas ?? 0} ${c.comprobadas === 1 ? "afirmación con evidencia" : "afirmaciones con evidencia"}`];
+  if (c.degradadas_a_sin_datos) p.push(`${c.degradadas_a_sin_datos} pasada${c.degradadas_a_sin_datos === 1 ? "" : "s"} a «sin datos» por no citar evidencia válida`);
+  if (c.ventajas_descartadas) p.push(`${c.ventajas_descartadas} ventaja${c.ventajas_descartadas === 1 ? "" : "s"} descartada${c.ventajas_descartadas === 1 ? "" : "s"} por no tener evidencia`);
+  return p.join("; ");
+}
+
+/** ¿Se ofrece el botón «Volver a lanzar la preparación»? Cuando la última ejecución terminó con un error, a medias o con pasos sin hacer. Mientras trabajan los agentes, no. Pura. */
+export function puedeRelanzar(ejec) {
+  if (!ejec || ejec.estado === "en_curso") return false;
+  const pasos = Array.isArray(ejec.pasos) ? ejec.pasos : [];
+  return ejec.estado === "error" || ejec.estado === "parcial" || pasos.some((p) => ["error", "parcial", "pendiente"].includes(p.estado));
+}
+
+/** Lo que explica el botón: qué va a repetir y qué no. */
+export function textoRelanzar(ejec) {
+  const pasos = Array.isArray(ejec?.pasos) ? ejec.pasos : [];
+  const n = pasos.filter((p) => ["error", "parcial", "pendiente"].includes(p.estado)).length;
+  const cuantos = n > 0 ? `${n} ${n === 1 ? "paso" : "pasos"}` : "lo que falte";
+  return `Vuelve a lanzar la preparación y repite ${cuantos} (lo que falló o quedó a medias). Lo que ya se hizo y lo que haya escrito o revisado una persona no se toca. Si solo quieres repetir un agente, usa el botón de su paso.`;
+}
+
+// ---- Progreso de «Preparar la oferta»: una barra por paso y otra general ----
+// Un paso que escribe secciones tiene un porcentaje REAL: las secciones que ha escrito en esta ejecución entre las que le tocan. Un paso que no escribe secciones (informes, encargos, comparativa) no tiene
+// medida honesta mientras trabaja: se enseña «trabajando» y el tiempo transcurrido, nunca un porcentaje inventado.
+
+const t = (iso) => { const n = iso ? Date.parse(iso) : NaN; return Number.isNaN(n) ? null : n; };
+
+/** Cuántas de las secciones de este paso se han escrito DURANTE esta ejecución (actualizadas desde que empezó el paso). Un paso que aún no ha empezado cuenta 0. Pura. */
+export function seccionesEscritas(paso, secciones) {
+  const inicio = t(paso?.inicio);
+  if (inicio === null) return 0;
+  const por = new Map((Array.isArray(secciones) ? secciones : []).map((s) => [s.clave, s]));
+  return (paso.secciones || []).filter((c) => { const s = por.get(c); return s && s.estado !== "vacia" && (t(s.actualizado) ?? 0) >= inicio - 2000; }).length;
+}
+
+/** «hace 3 min», «hace 1 h 5 min»; vacío si no se sabe cuándo empezó. Pura. */
+export function transcurrido(inicio, ahora = Date.now()) {
+  const i = t(inicio);
+  if (i === null) return "";
+  const s = Math.max(0, Math.round((ahora - i) / 1000));
+  if (s < 60) return "hace menos de 1 min";
+  const m = Math.floor(s / 60);
+  return m < 60 ? `hace ${m} min` : `hace ${Math.floor(m / 60)} h ${m % 60} min`;
+}
+
+/** Lo que enseña la barra de un paso: {pct (0-100 o null si no se puede medir), indeterminado, clase, texto}. Pura. */
+export function progresoPaso(paso, secciones, ahora = Date.now()) {
+  const e = paso?.estado;
+  const claves = paso?.secciones || [];
+  const n = seccionesEscritas(paso, secciones);
+  const medible = claves.length > 0;
+  if (e === "hecho" || e === "omitido") return { pct: 100, indeterminado: false, clase: e === "hecho" ? "ok" : "", texto: e === "hecho" ? "100 %" : "Sin nada que hacer" };
+  if (e === "pendiente" || !e) return { pct: 0, indeterminado: false, clase: "", texto: "En espera" };
+  if (e === "en_curso") {
+    const cuando = transcurrido(paso.inicio, ahora);
+    if (medible) return { pct: Math.round((100 * n) / claves.length), indeterminado: false, clase: "aviso", texto: `${n} de ${claves.length} ${claves.length === 1 ? "sección" : "secciones"} · ${Math.round((100 * n) / claves.length)} %${cuando ? ` · empezó ${cuando}` : ""}` };
+    return { pct: null, indeterminado: true, clase: "aviso", texto: `Trabajando${cuando ? ` · empezó ${cuando}` : ""}` };
+  }
+  // parcial o error: lo que sí se llegó a escribir
+  const hechas = medible ? (paso.escritas ?? n) : 0;
+  const pct = medible ? Math.round((100 * hechas) / claves.length) : 0;
+  return { pct, indeterminado: false, clase: e === "error" ? "error" : "aviso", texto: medible ? `${hechas} de ${claves.length} ${claves.length === 1 ? "sección" : "secciones"} · ${pct} %` : (e === "error" ? "No se completó" : "A medias") };
+}
+
+/** El progreso de toda la preparación: los pasos terminados cuentan enteros y el que trabaja cuenta lo que lleve escrito (si no se puede medir, 0). {pct, terminados, total}. Pura. */
+export function progresoGeneral(ejec, secciones) {
+  const pasos = Array.isArray(ejec?.pasos) ? ejec.pasos : [];
+  if (pasos.length === 0) return { pct: 0, terminados: 0, total: 0 };
+  const hecho = (p) => ["hecho", "omitido", "error", "parcial"].includes(p.estado);
+  const suma = pasos.reduce((a, p) => {
+    if (hecho(p)) return a + 1;
+    if (p.estado === "en_curso" && (p.secciones || []).length > 0) return a + seccionesEscritas(p, secciones) / p.secciones.length;
+    return a;
+  }, 0);
+  return { pct: Math.round((100 * suma) / pasos.length), terminados: pasos.filter(hecho).length, total: pasos.length };
+}
