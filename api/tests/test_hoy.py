@@ -80,9 +80,54 @@ class TestPuros(unittest.TestCase):
         self.assertEqual(H.del_sistema({"estado": "ok"}, {"alerta": False, "ultima": {"ok": True}}, MOTOR_OK), [])
 
 
+class TestPrecios(unittest.TestCase):
+    def fila(self, id_=7, dias=1, estado="propuesta", **r):
+        return {"id": id_, "estado": estado, "creado": AHORA - timedelta(days=dias), "resumen": {"incluidos": 40, "sube": 5, "baja": 2, **r}}
+
+    def test_propuesta_reciente_es_un_aviso_con_enlace_directo(self):
+        [i] = H.de_precios([self.fila()], AHORA)
+        self.assertEqual((i["nivel"], i["categoria"], i["href"]), ("aviso", "precios", "/precios?propuesta=7"))
+        self.assertIn("40 artículos listos", i["detalle"])
+        self.assertIn("5 suben, 2 bajan", i["detalle"])
+
+    def test_bajo_minimo_y_provisional_se_dicen(self):
+        [i] = H.de_precios([self.fila(bajo_minimo=3, provisional=["costes de respaldo"])], AHORA)
+        self.assertIn("3 artículos por debajo del margen mínimo", i["detalle"])
+        self.assertIn("provisionales", i["detalle"])
+        [i] = H.de_precios([self.fila(bajo_minimo=1)], AHORA)
+        self.assertIn("1 artículo por debajo", i["detalle"])
+
+    def test_sin_revisar_hace_dias_avisa_de_desactualizada_y_urgente_a_las_dos_semanas(self):
+        [i] = H.de_precios([self.fila(dias=8)], AHORA)
+        self.assertEqual(i["nivel"], "aviso")
+        self.assertIn("hace 8 días", i["detalle"])
+        self.assertIn("desactualizados", i["detalle"])
+        [i] = H.de_precios([self.fila(dias=15)], AHORA)
+        self.assertEqual(i["nivel"], "urgente")
+
+    def test_con_error_es_urgente(self):
+        [i] = H.de_precios([self.fila(estado="error")], AHORA)
+        self.assertEqual(i["nivel"], "urgente")
+        self.assertIn("se puede repetir", i["detalle"])
+
+    def test_solo_las_tres_mas_nuevas_y_vacio(self):
+        filas = [self.fila(id_=n) for n in (9, 8, 7, 6, 5)]
+        self.assertEqual([i["href"] for i in H.de_precios(filas, AHORA)], ["/precios?propuesta=9", "/precios?propuesta=8", "/precios?propuesta=7"])
+        self.assertEqual(H.de_precios([], AHORA), [])
+        self.assertEqual(H.de_precios(None, AHORA), [])
+
+    def test_solo_direccion_los_ve_en_hoy(self):
+        base = {"aprobaciones": fuente([]), "seguimiento": fuente(SEG), "ultimo_resumen": fuente(None), "antivirus": fuente(AV_MAL), "copias": fuente(COP_MAL), "motor": fuente(MOTOR_OK),
+                "tarifas": fuente([]), "precios_venta": fuente([self.fila()])}
+        d = ejecutar(H.construir(["direccion"], [], AHORA, **base))
+        self.assertTrue(any(i["categoria"] == "precios" for i in d["items"]))
+        d = ejecutar(H.construir([], ["operaciones"], AHORA, **base))
+        self.assertFalse(any(i["categoria"] == "precios" for i in d["items"]))
+
+
 class TestConstruir(unittest.TestCase):
     def lista(self, roles, deps, **kw):
-        base = {"aprobaciones": fuente(APROB), "seguimiento": fuente(SEG), "ultimo_resumen": fuente(None), "antivirus": fuente(AV_MAL), "copias": fuente(COP_MAL), "motor": fuente(MOTOR_OK), "tarifas": fuente([])}
+        base = {"aprobaciones": fuente(APROB), "seguimiento": fuente(SEG), "ultimo_resumen": fuente(None), "antivirus": fuente(AV_MAL), "copias": fuente(COP_MAL), "motor": fuente(MOTOR_OK), "tarifas": fuente([]), "precios_venta": fuente([])}
         return ejecutar(H.construir(roles, deps, AHORA, **{**base, **kw}))
 
     def test_direccion_lo_ve_todo_ordenado_por_urgencia(self):

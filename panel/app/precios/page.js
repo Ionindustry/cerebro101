@@ -28,6 +28,10 @@ export default function Precios() {
     catch (e) { setLista(null); if (e.status !== 403) setError(e); }
   }, []);
   useEffect(() => { cargarLista(); }, [cargarLista]);
+  useEffect(() => {                                 // «Hoy» enlaza a /precios?propuesta=N: se abre esa propuesta
+    const n = Number(new URLSearchParams(window.location.search).get("propuesta"));
+    if (Number.isInteger(n) && n > 0) setSel(n);
+  }, []);
 
   const cargar = useCallback(async () => {
     if (!sel) { setD(null); return; }

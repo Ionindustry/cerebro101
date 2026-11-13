@@ -353,6 +353,13 @@ async def propuestas(limite: int = 20) -> list[dict]:
              "aplicada_en": f["aplicada_en"].isoformat() if f["aplicada_en"] else None} for f in filas]
 
 
+async def pendientes_de_revisar(limite: int = 10) -> list[dict]:
+    """Las propuestas de precios de venta que esperan a Dirección (pendientes o con error al aplicar), de la más nueva a la más vieja, con su resumen. Para «Hoy»."""
+    async with await LP._conectar() as conn:
+        cur = await conn.execute("SELECT id, estado, creado, resumen FROM propuestas_venta WHERE estado IN ('propuesta', 'error') ORDER BY id DESC LIMIT %s", [min(max(int(limite), 1), 50)])
+        return [dict(f) for f in await cur.fetchall()]
+
+
 def filtrar_lineas(lineas: list[dict], familia: str = "", cambio: str = "", texto: str = "", solo_bajo_minimo: bool = False, minimo: Decimal | None = None) -> list[dict]:
     """Las líneas que pasan los filtros de la pantalla (familia, tipo de cambio, texto en código, referencia o descripción, o margen bajo el mínimo). Pura."""
     fam, t = precios.norm(familia), precios.norm(texto)
