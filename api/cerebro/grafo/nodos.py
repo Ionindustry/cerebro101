@@ -1,6 +1,7 @@
 """Nodos del grafo de orquestación."""
 from __future__ import annotations
 
+import dataclasses
 import json
 import logging
 import os
@@ -10,7 +11,7 @@ import time
 from langgraph.types import interrupt
 
 from .. import herramientas as H
-from .. import actividad, modelos_externos
+from .. import actividad, modelos_externos, subidas
 from ..aprobaciones import bandeja, objetivos
 from ..constancia import dejar_constancia
 from ..llm import ContextoLleno, RespuestaInvalida, chat
@@ -156,7 +157,8 @@ async def _paso_del_agente(ficha, estado: dict, mensajes: list[dict]) -> dict:
     origen = estado.get("origen", "peticion")
     entrada = recortar(mensajes, presupuesto)
     # Consulta compleja: si Dirección ha conectado Claude o ChatGPT (y los datos se pueden anonimizar), responde un modelo externo
-    if modelos_externos.es_compleja(estado["peticion"]):
+    # Los documentos que una persona sube al chat se tratan SIEMPRE en local: su texto (contratos, tarifas, nóminas…) no sale de la empresa ni anonimizado
+    if not subidas.hay_adjuntos(estado["peticion"]) and modelos_externos.es_compleja(estado["peticion"]):
         d = await modelos_externos.consultar(ficha, entrada, ESQUEMA_AGENTE, estado.get("sensibilidad"))
         if _paso_valido(d):
             return d
@@ -172,14 +174,22 @@ async def _paso_del_agente(ficha, estado: dict, mensajes: list[dict]) -> dict:
         try:
             return await chat(asignar(ficha, origen, dificil=True), entrada, esquema=ESQUEMA_AGENTE, max_tokens=PASO_MAX_TOKENS)
         except RespuestaInvalida:
-            # Ni el modelo principal local ha dado una respuesta válida: último recurso, un modelo externo (si procede)
-            d = await modelos_externos.consultar(ficha, entrada, ESQUEMA_AGENTE, estado.get("sensibilidad"))
+            # Ni el modelo principal local ha dado una respuesta válida: último recurso, un modelo externo (si procede y si no hay documentos subidos)
+            d = None if subidas.hay_adjuntos(estado["peticion"]) else await modelos_externos.consultar(ficha, entrada, ESQUEMA_AGENTE, estado.get("sensibilidad"))
             if _paso_valido(d):
                 return d
             raise
 
 
+def con_adjuntos(ficha, peticion):
+    """Si el mensaje lleva documentos que la persona ha subido, ese agente puede leerlos aunque su ficha no tenga la herramienta (solo para esta petición; la ficha del registro no cambia). Pura."""
+    if not subidas.hay_adjuntos(peticion) or "documentos_subidos" in ficha.herramientas:
+        return ficha
+    return dataclasses.replace(ficha, herramientas=(*ficha.herramientas, "documentos_subidos"))
+
+
 async def _ejecutar_agente(estado: Estado, ficha) -> Estado:
+    ficha = con_adjuntos(ficha, estado.get("peticion"))
     disponibles = H.disponibles_para(ficha)
     mensajes = [{"role": "system", "content": sistema_agente(ficha, disponibles)},
                 {"role": "user", "content": estado["peticion"]}]

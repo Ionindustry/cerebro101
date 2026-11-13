@@ -17,3 +17,10 @@ Los agentes **Catálogo de Proveedores** y **Compras** (departamento Operaciones
 - Carpeta: `SUBIDAS_DIR` (por defecto `/datos/subidas`, volumen `datos`).
 - Tablas: `documentos_subidos` y `documentos_subidos_paginas` (se crean solas al arrancar).
 - La ruta `/cerebro/documentos/subir` queda fuera del middleware del panel (Next recorta a 10 MB lo que lo atraviesa); la pasarela exige la sesión igualmente.
+
+
+## Qué agente puede leer los documentos adjuntos, y dónde se procesan
+
+- **Cualquier agente.** Si el mensaje lleva documentos adjuntos, el agente que lo atienda puede leerlos con la herramienta `documentos_subidos` (`info`, `leer` y `buscar`) aunque su ficha no la tenga: el sistema se la da **solo para esa petición** (la ficha del registro no cambia). Antes solo la tenían dos agentes de Operaciones, así que un adjunto enrutado a otro departamento no se podía leer.
+- **Siempre en local.** El texto de un documento subido (contratos, tarifas, nóminas…) **no sale de la empresa ni anonimizado**: mientras la petición lleve adjuntos, el agente no consulta a Claude ni a ChatGPT, ni como primera opción ni como último recurso. Si quieres que Claude o ChatGPT trabajen un documento, es una decisión aparte (los pliegos, fichas y pasos de oferta ya tienen su propio circuito con confirmación).
+- **Documentos largos.** El modelo local tiene una ventana pequeña (unas 8.000 unidades de contexto) y cada página son hasta 6.000 caracteres. Por eso la nota que se añade al mensaje, cuando un documento pasa de 4 páginas, le dice al agente que use primero `buscar` con las palabras clave de lo que se le pide y lea solo las páginas que salgan, citando la página de cada dato.
