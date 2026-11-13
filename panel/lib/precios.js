@@ -48,3 +48,31 @@ export function consultaLineas(f, pagina) {
 }
 
 export const MENSAJE_APLICAR = "Vas a escribir estos precios de venta en el ERP. Es una acción que sale de la empresa y queda registrada a tu nombre. ¿Aplicar?";
+
+// ---- Tarifas de proveedores: actualización periódica ----
+export const ESTADO_TARIFA = { pendiente: "Pendiente de revisar", aplicada: "Cargada en el ERP", descartada: "Descartada", rechazada: "Rechazada (seguridad)", error: "No se ha podido leer" };
+
+/** Los cambios de una tarifa nueva en una frase («120 artículos · 5 nuevos · 3 retirados · 40 suben · 12 bajan · variación media 2,3 %»). Pura. */
+export function cambiosTarifaTexto(c) {
+  if (!c || c.articulos === undefined) return "";
+  if (c.primera) return `${c.articulos} artículos (primera tarifa de este proveedor: no hay con qué comparar)`;
+  const p = [`${c.articulos} artículos`];
+  if (c.nuevos) p.push(`${c.nuevos} nuevos`);
+  if (c.retirados) p.push(`${c.retirados} retirados`);
+  if (c.suben) p.push(`${c.suben} suben`);
+  if (c.bajan) p.push(`${c.bajan} bajan`);
+  if (c.iguales) p.push(`${c.iguales} iguales`);
+  p.push(`variación media ${String(c.variacion_media_pct).replace(".", ",")} %`);
+  return p.join(" · ");
+}
+
+/** «hace 3 h» / «hace 2 días» / «nunca». Pura. */
+export function haceTexto(iso, ahora = Date.now()) {
+  const t = iso ? Date.parse(iso) : NaN;
+  if (Number.isNaN(t)) return "nunca";
+  const min = Math.max(Math.round((ahora - t) / 60000), 0);
+  if (min < 2) return "ahora mismo";
+  if (min < 120) return `hace ${min} min`;
+  if (min < 48 * 60) return `hace ${Math.round(min / 60)} h`;
+  return `hace ${Math.round(min / 1440)} días`;
+}

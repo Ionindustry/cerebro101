@@ -37,6 +37,18 @@ Lo que Dirección ha pedido y cómo se construye, por pasos (cada uno, su PR). *
    o ajusta a mano, y aprueba como siempre. Tabla `referencias_mercado`. **Pantalla «Precios» del panel, hecha** (solo Dirección): ver las propuestas con filtros (familia, cambio, texto, bajo el margen mínimo), ajustar un precio a mano, excluir artículos, aplicar una estrategia a todo o a una familia, ver la vista previa y **aplicar en el ERP con confirmación expresa** (firma única de Dirección, como en la bandeja; queda constancia de quién firmó). Ajustes y estrategias también dejan constancia. Nada llega al ERP sin ese paso.
 5. Documentación del proveedor y fichas técnicas (descarga de internet y subida a mano).
 6. Que Costes, Precio y Catálogo usen todo esto al preparar ofertas y licitaciones. **Hecho para Costes y Precio de licitaciones** (`cerebro/licitaciones/partidas.py`, ver `docs/PROYECTO_LICITACIONES.md`): las partidas de equipos salen de la tabla de equivalencias, una persona pone las cantidades y el código calcula el coste real con las tarifas; el modelo local de Costes y de Precio recibe esas cifras. Pendiente: Catálogo.
-7. Actualización periódica de precios por archivo y por webservice.
+7. Actualización periódica de precios por archivo y por webservice. **Hecho** (`cerebro/tarifas_auto.py`, `config/tarifas_auto.yaml`; ver más abajo).
 
 Las tarifas reales de los proveedores son confidenciales: **no se guardan en el repositorio**; las pruebas usan ficheros sintéticos con la misma estructura.
+
+
+## Actualización periódica de tarifas (por carpeta y por servicio web)
+
+Cada día a las 6:40 (y al pulsar «Comprobar ahora» en **Jarvis → Precios → Tarifas de proveedores**) el sistema mira cada proveedor de `config/tarifas_auto.yaml`. La lista viene **vacía**: añade tus proveedores (el fichero trae un ejemplo comentado).
+
+- **Por carpeta:** deja el Excel o CSV en `/datos/tarifas/<id>/` con `./scripts/tarifa_subir.sh <id> /ruta/a/la_tarifa.xlsx` (ventana Ubuntu; en WSL tus ficheros de Windows están en `/mnt/c/Users/TU_USUARIO/Downloads/`). Cualquier fichero con contenido nuevo cuenta; los ya vistos no se repiten.
+- **Por servicio web:** una dirección `https` de un dominio de `hosts` (cada redirección se revalida; anti-SSRF, tamaño máximo). Formatos `csv`, `xlsx` o `json` (la lista y las columnas del JSON se indican en la configuración). Si pide clave, en la configuración solo va el **nombre** (`clave_secreto`); la clave va en `secretos/tarifas.env` (una línea `NOMBRE=valor`, fuera de git; no la pegues en ningún chat) y no sale en ningún registro.
+
+Cada fichero nuevo pasa por la **misma tubería** que una tarifa subida a mano (cuarentena, antivirus, lectura aislada, coste en euros con cambio y logística) y deja **una propuesta de importación** con su resumen frente a la última cargada: artículos nuevos y retirados, cuántos suben y bajan, variación media y los mayores cambios. Si parece **sospechosa** (desaparece más de un tercio de los artículos, o la mayoría cambia más de un 40 %: lo típico de una columna movida o un fichero a medias) se avisa con fuerza, y aparece como urgente en «Hoy».
+
+**Nada se aplica solo.** En la pantalla «Precios» Dirección ve la vista previa, firma (confirmación expresa, queda constancia) y se cargan en el ERP el proveedor, los artículos nuevos y sus costes. **Cargar costes no cambia ningún precio de venta**: después se calcula una propuesta de precios y se aprueba aparte. Un fallo de un proveedor (descarga rota, clave que falta) no frena a los demás y se ve en su línea.

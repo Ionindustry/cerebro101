@@ -39,6 +39,7 @@ from ..licitaciones import encargos as encargos_ofertas
 from ..licitaciones import comparativa as comparativa_ofertas
 from ..licitaciones import equivalencia as equivalencia_ofertas
 from .. import precios_venta as precios_venta_pantalla
+from .. import tarifas_auto as tarifas_automaticas
 from .. import listas_precios as listas_precios_mod
 from ..licitaciones import partidas as partidas_ofertas
 from ..licitaciones import descubrimiento as descubrimiento_ofertas
@@ -1622,3 +1623,67 @@ async def aplicar_propuesta_de_precios(propuesta: int, entrada: PrecioAplicar, u
                                       f"propuesta {propuesta}: {vista['titulo']}; resultado: {str(resultado)[:600]}")
     log.info("precios: %s aplica la propuesta %s en el ERP", usuario.id, propuesta)
     return {"propuesta": propuesta, "resultado": resultado}
+
+
+# ---------------------------------------------------------------- Tarifas de proveedores: actualización periódica (solo Dirección)
+def _error_tarifa(e: Exception):
+    if isinstance(e, listas_precios_mod.NoExiste):
+        return HTTPException(404, str(e))
+    return HTTPException(422, str(e))
+
+
+@app.get("/precios/tarifas")
+async def tarifas_de_proveedores(usuario: Usuario = Depends(usuario_actual)):
+    """Los proveedores vigilados (última comprobación y error), los errores de configuración y las actualizaciones recientes con su resumen de cambios. Solo Dirección."""
+    _exige_direccion(usuario)
+    return await tarifas_automaticas.listar()
+
+
+@app.post("/precios/tarifas/comprobar", status_code=202)
+async def comprobar_tarifas_ahora(usuario: Usuario = Depends(usuario_actual)):
+    """Mira ahora las carpetas y servicios web de tarifas (en segundo plano). Deja propuestas; no aplica nada."""
+    _exige_direccion(usuario)
+    try:
+        from ..tareas.celery_app import app as celery
+        celery.send_task("cerebro.tareas.celery_app.actualizar_tarifas", queue="peticiones")
+    except Exception as e:      # noqa: BLE001
+        log.error("tarifas: no se ha podido encolar la comprobación: %s: %s", type(e).__name__, e)
+        raise HTTPException(503, "No se ha podido encolar el trabajo") from None
+    log.info("tarifas: %s pide comprobar las tarifas de los proveedores", usuario.id)
+    return {"estado": "en_cola"}
+
+
+@app.get("/precios/tarifas/{actualizacion}")
+async def vista_de_una_tarifa(actualizacion: int, usuario: Usuario = Depends(usuario_actual)):
+    """La vista previa de aplicar esa tarifa: proveedor, líneas y rango de costes, y los cambios frente a la última aplicada."""
+    _exige_direccion(usuario)
+    try:
+        return await tarifas_automaticas.vista(actualizacion)
+    except (tarifas_automaticas.ErrorTarifaAuto, listas_precios_mod.ErrorImportacion, listas_precios_mod.NoExiste) as e:
+        raise _error_tarifa(e) from None
+
+
+@app.post("/precios/tarifas/{actualizacion}/aplicar")
+async def aplicar_una_tarifa(actualizacion: int, entrada: PrecioAplicar, usuario: Usuario = Depends(usuario_actual)):
+    """Da de alta en el ERP el proveedor, los artículos nuevos y sus costes (los de la tarifa). Sale de la empresa: firma Dirección con confirmación expresa y queda constancia. No cambia ningún precio de venta."""
+    _exige_direccion(usuario)
+    if not entrada.confirmo:
+        raise HTTPException(422, "Falta la confirmación: revisa la vista previa y confirma que cargas esta tarifa en el ERP")
+    try:
+        v = await tarifas_automaticas.vista(actualizacion)
+        resultado = await tarifas_automaticas.aplicar(actualizacion, usuario.id)
+    except (tarifas_automaticas.ErrorTarifaAuto, listas_precios_mod.ErrorImportacion, listas_precios_mod.NoExiste) as e:
+        raise _error_tarifa(e) from None
+    await constancia.dejar_constancia(None, f"usuario:{usuario.id}", "listas_precios", "aplicar", f"firmado en el panel por {usuario.id}",
+                                      f"tarifa {actualizacion}: {v['vista']['titulo']}; resultado: {str(resultado)[:600]}")
+    log.info("tarifas: %s aplica la tarifa %s en el ERP", usuario.id, actualizacion)
+    return {"actualizacion": actualizacion, "resultado": resultado}
+
+
+@app.post("/precios/tarifas/{actualizacion}/descartar")
+async def descartar_una_tarifa(actualizacion: int, usuario: Usuario = Depends(usuario_actual)):
+    _exige_direccion(usuario)
+    try:
+        return await tarifas_automaticas.descartar(actualizacion, usuario.id)
+    except (tarifas_automaticas.ErrorTarifaAuto, listas_precios_mod.NoExiste) as e:
+        raise _error_tarifa(e) from None

@@ -3,6 +3,7 @@ import { useCallback, useEffect, useState } from "react";
 import { CAMBIO_ETIQUETA, ESTADO_PROPUESTA, MENSAJE_APLICAR, consultaLineas, euros, margenTexto, precioAEnvio, resumenPropuestaTexto } from "../../lib/precios";
 import { fechaTexto } from "../../lib/licitaciones";
 import { pedirCerebro } from "../licitaciones/cliente";
+import Tarifas from "./Tarifas";
 
 const enviar = (cuerpo) => ({ method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(cuerpo) });
 const CLASE_CAMBIO = { nuevo: "ok", sube: "aviso", baja: "aviso", igual: "" };
@@ -63,8 +64,10 @@ export default function Precios() {
       {error && <p className="aviso" role="alert">{error.detalle || "No se ha podido hacer."}</p>}
       {aviso && <p className="aviso" role="status">{aviso}</p>}
 
+      <Tarifas alCargarTarifa={cargarLista} />
+
       <section className="tarjeta">
-        <h2>Propuestas</h2>
+        <h2>Propuestas de precios de venta</h2>
         <p className="lic-fila">
           <input value={marca} onChange={(e) => setMarca(e.target.value)} placeholder="Solo una marca (opcional)" maxLength={60} aria-label="Marca" />
           <button className="boton si" disabled={trabajando} onClick={proponer}>Calcular una propuesta nueva</button>

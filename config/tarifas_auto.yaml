@@ -1,0 +1,31 @@
+# Actualización periódica de tarifas de proveedor (api/cerebro/tarifas_auto.py, docs/PRECIOS_PROVEEDORES.md).
+# Cada día se mira cada proveedor de la lista: si hay un fichero NUEVO (otro contenido) se prepara una propuesta de importación con sus cambios frente a la última aplicada. NADA se aplica solo:
+# Dirección revisa y firma en la pantalla «Precios». La lista está VACÍA a propósito: añade aquí tus proveedores.
+#
+# Dos orígenes:
+#   carpeta → dejas el Excel o CSV en  <carpeta_base>/<id>/  (dentro del volumen de datos de Docker; cualquier fichero nuevo cuenta; los ya vistos no se repiten).
+#   url     → se descarga de una dirección https de un dominio de `hosts` (el servicio web del proveedor). Si pide clave, aquí solo va el NOMBRE de la variable (clave_secreto); la clave
+#             va en secretos/tarifas.env (una línea NOMBRE=valor; esa carpeta no se sube a git). No pegues claves en el chat ni en este fichero.
+carpeta_base: /datos/tarifas
+max_mb: 50
+proveedores: []
+# Ejemplo (quita la almohadilla y adapta):
+# proveedores:
+#   - id: milesight                       # letras minúsculas, números y guiones: es el nombre de la subcarpeta
+#     proveedor: {nombre: "Milesight", nif: "", pais: "China"}
+#     canal: fabricante                   # fabricante | distribuidor (decide moneda, logística y la lista de compra)
+#     moneda: USD                         # opcional: la del proveedor
+#     origen: carpeta
+#   - id: distribuidor-x
+#     proveedor: {nombre: "Distribuidor X S.L.", nif: "B12345678"}
+#     canal: distribuidor
+#     origen: url
+#     url: https://api.distribuidor-x.com/v1/tarifa.csv
+#     hosts: [api.distribuidor-x.com]     # dominios permitidos (https; también redirecciones: cada una se revalida)
+#     formato: csv                        # csv | xlsx | json
+#     cabecera: Authorization             # opcional
+#     cabecera_formato: "Bearer {clave}"  # opcional; {clave} se rellena con el secreto
+#     clave_secreto: DISTRIBUIDOR_X_CLAVE # opcional: nombre en secretos/tarifas.env
+#     json:                               # solo si formato: json
+#       lista: "items"                    # dónde está la lista (ruta con puntos; vacío = el JSON ya es una lista)
+#       columnas: {referencia: "sku", descripcion: "name", coste: "price", marca: "brand", familia: "category", stock: "stock", ean: "ean"}

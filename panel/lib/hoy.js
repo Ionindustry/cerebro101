@@ -4,7 +4,7 @@ export const NIVELES = {
   aviso: { titulo: "Hay que mirarlo", clase: "aviso" },
   info: { titulo: "Para tu información", clase: "abierta" },
 };
-export const CATEGORIAS = { aprobaciones: "Aprobaciones", licitaciones: "Licitaciones", sistema: "Sistema", novedades: "Novedades" };
+export const CATEGORIAS = { aprobaciones: "Aprobaciones", precios: "Precios", licitaciones: "Licitaciones", sistema: "Sistema", novedades: "Novedades" };
 
 /** Agrupa los elementos por nivel (en el orden urgente → aviso → info) y da el titular de la pantalla. */
 export function hoyResumen(d) {

@@ -24,3 +24,15 @@ test("consultaLineas solo lleva lo que tiene valor", () => {
   assert.equal(consultaLineas({}, 1), "");
   assert.equal(consultaLineas({ familia: "Cámaras", texto: "domo", bajoMinimo: true }, 2), "?familia=C%C3%A1maras&q=domo&bajo_minimo=true&pagina=2");
 });
+
+test("cambios de una tarifa y hace cuánto", async () => {
+  const { cambiosTarifaTexto, haceTexto } = await import("../lib/precios.js");
+  assert.equal(cambiosTarifaTexto({ articulos: 10, primera: true }), "10 artículos (primera tarifa de este proveedor: no hay con qué comparar)");
+  assert.equal(cambiosTarifaTexto({ articulos: 120, nuevos: 5, retirados: 0, suben: 40, bajan: 12, iguales: 63, variacion_media_pct: "2.3" }), "120 artículos · 5 nuevos · 40 suben · 12 bajan · 63 iguales · variación media 2,3 %");
+  assert.equal(cambiosTarifaTexto(null), "");
+  const ahora = Date.parse("2026-11-13T12:00:00Z");
+  assert.equal(haceTexto("2026-11-13T11:59:30Z", ahora), "ahora mismo");
+  assert.equal(haceTexto("2026-11-13T09:00:00Z", ahora), "hace 3 h");
+  assert.equal(haceTexto("2026-11-10T12:00:00Z", ahora), "hace 3 días");
+  assert.equal(haceTexto(null, ahora), "nunca");
+});

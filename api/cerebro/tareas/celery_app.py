@@ -77,6 +77,7 @@ app.conf.beat_schedule = {"vigilar-ejecuciones": {"task": "cerebro.tareas.celery
                           "vigilar-copias": {"task": "cerebro.tareas.celery_app.vigilar_copias", "schedule": 21600.0},
                           "plazos-urgentes": {"task": "cerebro.tareas.celery_app.avisar_plazos", "schedule": 3600.0},
                           "vigilante-motor": {"task": "cerebro.tareas.celery_app.vigilar_motor", "schedule": 900.0},
+                          "tarifas-proveedores": {"task": "cerebro.tareas.celery_app.actualizar_tarifas", "schedule": crontab(minute="40", hour="6")},
                           "purgar-subidas": {"task": "cerebro.tareas.celery_app.purgar_subidas", "schedule": crontab(minute="17", hour="3")},
                           "constancia-pendiente": {"task": "cerebro.tareas.celery_app.volcar_constancia", "schedule": 300.0}}
 
@@ -211,6 +212,15 @@ def descubrir_opciones(motor_id: str, modelo: str = "auto") -> dict:
         titulo, _ficha = await redaccion._titulo_y_ficha(motor_id)
         return await descubrimiento.ejecutar(motor_id, titulo, modelo)
     return asyncio.run(_hacer())
+
+
+@app.task(name="cerebro.tareas.celery_app.actualizar_tarifas")
+def actualizar_tarifas() -> dict:
+    """Cada día (y a demanda desde el panel): mira las carpetas y servicios web de tarifas de los proveedores configurados y deja una propuesta de importación por cada fichero nuevo. Nada se aplica
+    solo: Dirección firma en la pantalla «Precios» (cerebro/tarifas_auto.py)."""
+    from .. import tarifas_auto
+    inf = asyncio.run(tarifas_auto.ejecutar())
+    return {"proveedores": inf["proveedores"], "novedades": len(inf["novedades"]), "fallos": len(inf["fallos"])}
 
 
 @app.task(name="cerebro.tareas.celery_app.purgar_subidas")
