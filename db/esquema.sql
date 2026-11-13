@@ -724,3 +724,14 @@ CREATE TABLE IF NOT EXISTS fichas_cargas (
   creado      timestamptz NOT NULL DEFAULT now(),
   terminada   timestamptz
 );
+
+-- Tabla de equivalencias «iguala o supera» (api/cerebro/licitaciones/equivalencia.py): parámetros medibles del pliego técnico frente a los productos del catálogo, con el veredicto fijado por el código. Una fila por licitación.
+CREATE TABLE IF NOT EXISTS ofertas_equivalencia (
+  motor_id    uuid PRIMARY KEY,                     -- la licitación (sin clave ajena: el esquema se aplica por trozos en las pruebas)
+  proveedor   text NOT NULL,
+  modelo      text,
+  contenido   jsonb NOT NULL,
+  evidencias  jsonb NOT NULL DEFAULT '[]',
+  creado      timestamptz NOT NULL DEFAULT now(),
+  actualizado timestamptz NOT NULL DEFAULT now()
+);

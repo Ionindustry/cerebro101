@@ -1239,3 +1239,11 @@ test("informeFichasTexto resume una carga de fichas", async () => {
   assert.equal(informeFichasTexto({ error: "No se ha podido" }), "No se ha podido");
   assert.equal(informeFichasTexto(null), "");
 });
+
+test("la tabla de equivalencias se resume y se escribe el valor exigido", async () => {
+  const { exigidoTexto, resumenEquivalencia } = await import("../lib/licitaciones.js");
+  assert.equal(exigidoTexto({ operador: ">=", valor_exigido: "4 MP" }), "mínimo 4 MP");
+  assert.equal(exigidoTexto({ operador: "texto", valor_exigido: "H.265" }), "H.265");
+  assert.equal(resumenEquivalencia({ comprobacion: { parametros: 7, cubiertos: 5, sin_cubrir: 2 } }), "7 parámetros · 5 con producto que iguala o supera · 2 sin cubrir");
+  assert.equal(resumenEquivalencia(null), "");
+});

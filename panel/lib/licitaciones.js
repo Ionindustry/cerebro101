@@ -1226,7 +1226,7 @@ export function botonDePaso(paso, ejec) {
   const escribe = ["solucion", "memoria", "administrativo", "costes"].includes(paso.id);            // los pasos que escriben secciones del sobre
   if (paso.estado === "omitido" && escribe) return { texto: "Rehacer este paso", rehacer: true, confirmar: true };   // «nada que escribir» = ya hay borradores: hay que rehacerlos (con confirmación)
   if (paso.estado === "pendiente" || paso.estado === "omitido") return { texto: "Hacer este paso", rehacer: false, confirmar: false };
-  if (paso.id === "comparativa" || paso.id === "encargos") return { texto: "Repetir este paso", rehacer: false, confirmar: false };   // se vuelven a generar; no hay borradores de la oferta que pisar
+  if (paso.id === "comparativa" || paso.id === "equivalencia" || paso.id === "encargos") return { texto: "Repetir este paso", rehacer: false, confirmar: false };   // se vuelven a generar; no hay borradores de la oferta que pisar
   const informe = paso.id === "precio" || paso.id === "evaluacion";
   return { texto: informe ? "Repetir el informe" : "Rehacer este paso", rehacer: !informe, confirmar: !informe };   // un informe no pisa nada; los borradores sí se rehacen
 }
@@ -1365,3 +1365,20 @@ export function informeFichasTexto(inf) {
 
 export const ESTADO_FICHA = { indexada: "Lista", sin_texto: "Sin texto legible", infectada: "Rechazada (antivirus)", no_analizable: "No analizable", error: "Con error" };
 export const ORIGEN_FICHA = { csv: "Enlace de la lista", web: "Dirección web", manual: "Subida a mano" };
+
+// ---- Tabla de equivalencias «iguala o supera» (GET licitaciones/ofertas/{id}/equivalencia) ----
+export const VEREDICTO_EQUIVALENCIA = { supera: "Supera", iguala: "Iguala", no_cumple: "No cumple", sin_datos: "Sin datos" };
+export const OPERADOR_EQUIVALENCIA = { ">=": "mínimo", "<=": "máximo", "=": "exacto", texto: "" };
+
+/** «mínimo 4 MP» / «máximo 30 W» / «exacto 24 V»: lo que pide el pliego en un parámetro. Pura. */
+export function exigidoTexto(p) {
+  const op = OPERADOR_EQUIVALENCIA[p?.operador] ?? "";
+  return `${op ? `${op} ` : ""}${p?.valor_exigido || ""}`.trim();
+}
+
+/** Una línea con el recuento de la tabla («7 parámetros · 5 cubiertos · 2 sin cubrir»). Pura. */
+export function resumenEquivalencia(c) {
+  const k = c?.comprobacion;
+  if (!k) return "";
+  return `${k.parametros} parámetros · ${k.cubiertos} con producto que iguala o supera · ${k.sin_cubrir} sin cubrir`;
+}

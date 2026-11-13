@@ -36,6 +36,7 @@ from ..licitaciones import plantillas as plantillas_ofertas
 from ..licitaciones import redaccion as redaccion_ofertas
 from ..licitaciones import encargos as encargos_ofertas
 from ..licitaciones import comparativa as comparativa_ofertas
+from ..licitaciones import equivalencia as equivalencia_ofertas
 from ..licitaciones import fichas as fichas_tecnicas
 from ..licitaciones import reglas as reglas_licitaciones
 from ..licitaciones import simulador as simulador_licitaciones
@@ -1031,6 +1032,16 @@ async def subir_ficha_a_mano(entrada: SubidaFicha, usuario: Usuario = Depends(us
         return await fichas_tecnicas.subir(datos, entrada.nombre, entrada.marca, entrada.referencia, usuario.id, cfg)
     except fichas_tecnicas.ErrorFicha as e:
         raise HTTPException(422, str(e)) from None
+
+
+@app.get("/licitaciones/ofertas/{motor_id}/equivalencia")
+async def equivalencia_de_la_oferta(motor_id: str, usuario: Usuario = Depends(usuario_actual)):
+    """La tabla de equivalencias «iguala o supera» de la oferta (null si aún no se ha hecho). Solo Dirección y Licitaciones."""
+    _exige_licitaciones(usuario)
+    try:
+        return {"equivalencia": await equivalencia_ofertas.leer(motor_id)}
+    except (ofertas_licitaciones.ErrorOferta, LookupError) as e:
+        raise _oferta_error(e) from None
 
 
 @app.get("/licitaciones/ofertas/{motor_id}/comparativa")

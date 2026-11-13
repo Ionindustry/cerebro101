@@ -32,6 +32,7 @@ TERMINADOS = (HECHO, PARCIAL, OMITIDO, ERROR)
 # La proposición económica y «criterios-automaticos» no las escribe ningún agente: la primera sale sola del precio y la segunda son compromisos que decide una persona.
 PASOS = (
     {"id": "comparativa", "agente": "comparador-productos", "titulo": "Comparativa de productos y ventaja competitiva", "comparativa": True},
+    {"id": "equivalencia", "agente": "comparador-productos", "titulo": "Tabla de equivalencias · «iguala o supera» frente al catálogo", "equivalencia": True},
     {"id": "encargos", "agente": "director-oferta", "titulo": "Director de la oferta · encargo a cada agente", "encargos": True},
     {"id": "solucion", "agente": "arquitecto-solucion", "titulo": "Arquitecto de Solución · descripción de la solución", "sobre": "tecnico", "claves": ("descripcion-solucion",),
      "contexto": "Diseña la mejor solución, criterio a criterio, dentro del presupuesto: qué se instala o presta, con qué equipos, cómo cubre cada requisito técnico del pliego."},
@@ -73,7 +74,7 @@ def editable_por_agente(s: dict, rehacer: bool) -> bool:
 
 def seleccion(paso: dict, secciones: list[dict], rehacer: bool) -> list[dict]:
     """Las secciones que este paso tiene que escribir. Los pasos de informe no escriben ninguna."""
-    if paso.get("informe") or paso.get("encargos") or paso.get("comparativa"):
+    if paso.get("informe") or paso.get("encargos") or paso.get("comparativa") or paso.get("equivalencia"):
         return []
     out = []
     for s in secciones:
@@ -92,7 +93,7 @@ def pasos_iniciales(secciones: list[dict], rehacer: bool) -> list[dict]:
     for p in PASOS:
         paso = {"id": p["id"], "agente": p["agente"], "titulo": p["titulo"], "estado": PENDIENTE, "resumen": "", "error": "", "secciones": [], "escritas": 0, "faltan": [],
                 "inicio": None, "fin": None}
-        if not p.get("informe") and not p.get("encargos") and not p.get("comparativa"):
+        if not p.get("informe") and not p.get("encargos") and not p.get("comparativa") and not p.get("equivalencia"):
             sel = seleccion(p, secciones, rehacer)
             paso["secciones"] = [s["clave"] for s in sel]
             if not sel and not p.get("antes"):
@@ -398,6 +399,17 @@ async def _paso_escritor(ejecucion_id: int, indice: int, e: dict, defin: dict, i
             defin_externo = {**defin_externo, "contexto": f"{defin_externo.get('contexto', '')}\n\n{completa}".strip()}
             corta = await comparativa_mod.texto_para(motor_id, 1500)
             defin = {**defin, "contexto": f"{defin.get('contexto', '')}\n\n{corta}".strip()}
+        from . import equivalencia as equivalencia_mod
+        try:
+            eq = await equivalencia_mod.leer(motor_id)
+        except Exception as ex:      # noqa: BLE001 — sin la tabla se sigue igual
+            log.warning("redacción: no se ha podido leer la tabla de equivalencias de %s: %s", motor_id, type(ex).__name__)
+            eq = None
+        tabla = equivalencia_mod.texto_equivalencia((eq or {}).get("contenido") or {}, 1200)
+        if tabla:                                                       # un producto por parámetro medible, ya comprobado por el código: coherencia entre solución y memoria
+            bloque = "Equivalencias comprobadas (parámetro del pliego → producto que lo iguala o supera; no propongas otro sin evidencia):\n" + tabla
+            defin_externo = {**defin_externo, "contexto": f"{defin_externo.get('contexto', '')}\n\n{bloque}".strip()}
+            defin = {**defin, "contexto": f"{defin.get('contexto', '')}\n\n{bloque[:700]}".strip()}
     estado, externa = None, ""
     from . import redaccion_externa as externa_mod
     if externa_mod.paso_activo(defin["id"]):
@@ -428,6 +440,13 @@ async def _paso_comparativa(ejecucion_id: int, indice: int, e: dict, defin: dict
     """La comparativa de productos y ventaja competitiva con Claude o ChatGPT. Sin evidencia de producto o sin modelo externo no se hace (no se compara sin datos): el paso queda «omitido» con el motivo."""
     from . import comparativa
     res = await comparativa.preparar(e["licitacion"], titulo, ficha or {}, modelo=e.get("modelo") or "auto")
+    await _marcar(ejecucion_id, indice, estado=HECHO if res["estado"] == "hecha" else OMITIDO, error="", resumen=res["resumen"][:MAX_RESUMEN], secciones=[], fin=_iso(_ahora(None)))
+
+
+async def _paso_equivalencia(ejecucion_id: int, indice: int, e: dict, defin: dict, titulo: str, ficha: dict) -> None:
+    """La tabla de equivalencias «iguala o supera» (parámetros medibles del pliego frente al catálogo). Sin evidencia o sin modelo externo no se hace: el paso queda «omitido» con el motivo."""
+    from . import equivalencia
+    res = await equivalencia.preparar(e["licitacion"], titulo, ficha or {}, modelo=e.get("modelo") or "auto")
     await _marcar(ejecucion_id, indice, estado=HECHO if res["estado"] == "hecha" else OMITIDO, error="", resumen=res["resumen"][:MAX_RESUMEN], secciones=[], fin=_iso(_ahora(None)))
 
 
@@ -480,6 +499,8 @@ async def ejecutar(ejecucion_id: int, invocar) -> dict:
         try:
             if defin.get("comparativa"):
                 await _paso_comparativa(ejecucion_id, i, e, defin, titulo, ficha)
+            elif defin.get("equivalencia"):
+                await _paso_equivalencia(ejecucion_id, i, e, defin, titulo, ficha)
             elif defin.get("encargos"):
                 await _paso_encargos(ejecucion_id, i, e, defin, titulo, ficha)
             elif defin.get("informe"):
