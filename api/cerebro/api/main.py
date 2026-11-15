@@ -31,6 +31,7 @@ from ..licitaciones import frescura as frescura_licitaciones
 from ..licitaciones import analisis_pliego, aptitud, revision_previa
 from ..licitaciones import pliegos as pliegos_licitaciones
 from ..licitaciones import fabricantes as fabricantes_dir
+from ..licitaciones import documentos_agentes
 from ..licitaciones import ofertas as ofertas_licitaciones
 from ..licitaciones import empresa as empresa_erp
 from ..licitaciones import plantillas as plantillas_ofertas
@@ -1278,6 +1279,47 @@ async def _refrescar_plantillas(motor_id: str, usuario: str) -> int | None:
     except Exception as e:      # noqa: BLE001 — el precio ya está guardado; esto es solo comodidad
         log.warning("ofertas: no se han podido actualizar las plantillas de %s al fijar el precio: %s: %s", motor_id, type(e).__name__, e)
         return None
+
+
+@app.get("/licitaciones/ofertas/{motor_id}/documentos-agentes")
+async def documentos_de_los_agentes(motor_id: str, usuario: Usuario = Depends(usuario_actual)):
+    """Todo lo que han redactado los agentes de esta licitación (solución, memoria técnica, administrativo, justificación e informe de precio, informe del evaluador, comparativa, equivalencias, encargos)
+    y las plantillas administrativas rellenadas. Solo lee. Solo Dirección y Licitaciones."""
+    _exige_licitaciones(usuario)
+    try:
+        return await documentos_agentes.listar(motor_id)
+    except (ofertas_licitaciones.ErrorOferta, LookupError) as e:
+        raise _oferta_error(e) from None
+
+
+@app.get("/licitaciones/ofertas/{motor_id}/documentos-agentes/{doc_id}")
+async def documento_de_un_agente(motor_id: str, doc_id: str, usuario: Usuario = Depends(usuario_actual)):
+    """Un documento de los agentes, entero y como texto, para leerlo en el panel."""
+    _exige_licitaciones(usuario)
+    try:
+        doc = await documentos_agentes.obtener(motor_id, doc_id)
+    except documentos_agentes.NoExisteDocumento as e:
+        raise HTTPException(404, str(e)) from None
+    except (ofertas_licitaciones.ErrorOferta, LookupError) as e:
+        raise _oferta_error(e) from None
+    return {**documentos_agentes.publico(doc), "texto": documentos_agentes.a_texto(doc)}
+
+
+@app.get("/licitaciones/ofertas/{motor_id}/documentos-agentes/{doc_id}/word")
+async def documento_de_un_agente_en_word(motor_id: str, doc_id: str, usuario: Usuario = Depends(usuario_actual)):
+    """Un documento de los agentes en Word (base64 en el JSON: la pasarela del panel solo lleva JSON). Lleva marcado que es un borrador de agentes."""
+    _exige_licitaciones(usuario)
+    try:
+        doc = await documentos_agentes.obtener(motor_id, doc_id)
+        ficha = await motor_lic._get(f"/tenders/{motor_id.strip().lower()}") if motor_lic._UUID.match(motor_id.strip()) else {}
+    except documentos_agentes.NoExisteDocumento as e:
+        raise HTTPException(404, str(e)) from None
+    except (ofertas_licitaciones.ErrorOferta, MotorNoDisponible, LookupError) as e:
+        raise _oferta_error(e) from None
+    datos = documentos_agentes.a_docx(doc, str(ficha.get("titulo") or ""))
+    exp = re.sub(r"[^A-Za-z0-9._-]+", "-", str(ficha.get("expediente") or ""))[:40].strip("-")
+    log.info("ofertas: %s descarga el documento «%s» de los agentes de %s (%d bytes)", usuario.id, doc_id, motor_id, len(datos))
+    return {"nombre": documentos_agentes.nombre_fichero(doc, exp), "tipo": "application/vnd.openxmlformats-officedocument.wordprocessingml.document", "base64": base64.b64encode(datos).decode("ascii")}
 
 
 @app.get("/licitaciones/ofertas/{motor_id}/documento")

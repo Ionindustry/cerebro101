@@ -1449,3 +1449,19 @@ export function comandoAutorizar(sugerencias) {
   const ok = (sugerencias || []).filter((x) => x.comprobado && /^[a-z0-9.-]+$/.test(x.dominio)).map((x) => x.dominio);
   return ok.length ? `python3 scripts/fichas_autorizar.py ${ok.join(" ")}` : "(ninguno de estos dominios está comprobado en el directorio: ábrelos y confirma cuáles son los oficiales antes de autorizarlos)";
 }
+
+// ---- Documentos que redactan los agentes (GET licitaciones/ofertas/{id}/documentos-agentes) ----
+/** Tamaño de un documento: «850 caracteres» o «2,4 mil caracteres». */
+export const tamanoDocumentoTexto = (n) => (Number(n) >= 1000 ? `${(Number(n) / 1000).toLocaleString("es-ES", { maximumFractionDigits: 1 })} mil caracteres` : `${Number(n) || 0} caracteres`);
+
+/** Quién lo escribió, sin el prefijo «agente:». */
+export const autorDocumentoTexto = (por) => String(por || "").split(",").map((p) => p.trim().replace(/^agente:/, "agente ")).filter(Boolean).join(", ") || "—";
+
+/** Clase visual del estado de un documento de los agentes. */
+export const claseDocumento = (estado) => (estado === "aprobada" ? "abierta" : estado === "vacia" ? "anulada" : estado === "borrador" ? "aviso" : "");
+
+export function mensajeDocumentos(status, detalle = "") {
+  if (status === 403) return "Solo Dirección y el departamento de Licitaciones ven los documentos de los agentes.";
+  if (status === 404 && detalle) return detalle;
+  return "No se han podido leer los documentos de los agentes. Inténtalo de nuevo más tarde.";
+}
