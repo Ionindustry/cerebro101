@@ -35,6 +35,8 @@ TIPOS_REQUISITO = ("tecnico", "criterio_juicio_valor", "criterio_automatico", "g
 MAX_REQUISITOS = 12
 MAX_EVIDENCIAS = 30
 MAX_CARACTERES_EVIDENCIA = 14_000
+MAX_ESPECIFICACIONES_EVIDENCIA = 24
+MAX_TEXTO_LINEA = 1300
 CUMPLE = ("si", "parcial", "no", "sin_datos")
 
 ESQUEMA = {
@@ -70,8 +72,25 @@ def _norm(t: str) -> str:
     return "".join(c for c in unicodedata.normalize("NFD", str(t or "").lower()) if unicodedata.category(c) != "Mn")
 
 
+# Las tarifas de fabricantes chinos o europeos vienen en inglés y los pliegos en castellano: sin esto, «cámara» no encuentra «Camera». Equivalencias de uso común (sin tildes).
+EQUIVALENTES = {"camara": "camera", "domo": "dome", "grabador": "recorder", "exterior": "outdoor", "interior": "indoor", "antivandalico": "vandal", "infrarrojos": "infrared",
+                "lector": "reader", "cerradura": "lock", "tarjeta": "card", "alimentacion": "power", "conmutador": "switch", "deteccion": "detection", "matricula": "plate",
+                "humo": "smoke", "incendio": "fire", "sirena": "siren", "teclado": "keyboard", "altavoz": "speaker", "termica": "thermal", "videoportero": "intercom",
+                "tarjetas": "cards", "camaras": "cameras", "grabadores": "recorders", "lectores": "readers", "detectores": "detectors", "detector": "detector", "resolucion": "resolution",
+                "proteccion": "protection", "objetivo": "lens", "vision": "vision", "nocturna": "night", "canales": "channels"}
+_INVERSO = {v: k for k, v in EQUIVALENTES.items() if v != k}
+
+
 def _palabras(t: str) -> set[str]:
-    return {w for w in re.findall(r"[a-z0-9]{4,}", _norm(t))}
+    w = {x for x in re.findall(r"[a-z0-9]{4,}", _norm(t))}
+    return w | {EQUIVALENTES[x] for x in w if x in EQUIVALENTES} | {_INVERSO[x] for x in w if x in _INVERSO}
+
+
+def _especificaciones_utiles(esp: dict, pedidas: set[str], maximo: int = MAX_ESPECIFICACIONES_EVIDENCIA) -> list[tuple]:
+    """Las características de un producto que se enseñan al modelo: primero las que tienen que ver con lo que pide el pliego (por su nombre o su valor: «IP67», «Protection level»…) y después el resto, en su orden. Pura."""
+    pares = [(str(k), v) for k, v in esp.items()]
+    pri = [(k, v) for k, v in pares if pedidas & _palabras(f"{k} {v}")]
+    return (pri + [kv for kv in pares if kv not in pri])[:maximo]
 
 
 # ---- La evidencia ----
@@ -86,8 +105,8 @@ def lineas_relevantes(lineas: list[dict], consultas: list[str], maximo: int = 15
         n = len(pedidas & _palabras(f"{l.get('desc')} {l.get('ref') or ''} {l.get('codigo') or ''}"))
         if n > 0:
             esp = l.get("especificaciones") if isinstance(l.get("especificaciones"), dict) else {}
-            texto = _corto(l.get("desc"), 300) + ("".join(f" | {_corto(k, 40)}: {_corto(v, 60)}" for k, v in list(esp.items())[:12]) if esp else "")
-            puntuadas.append((n, {"ref": _corto(l.get("ref") or l.get("codigo"), 60), "desc": texto[:800]}))
+            texto = _corto(l.get("desc"), 300) + ("".join(f" | {_corto(k, 40)}: {_corto(v, 60)}" for k, v in _especificaciones_utiles(esp, pedidas)) if esp else "")
+            puntuadas.append((n, {"ref": _corto(l.get("ref") or l.get("codigo"), 60), "desc": texto[:MAX_TEXTO_LINEA]}))
     puntuadas.sort(key=lambda x: -x[0])
     vistas, salida = set(), []
     for _n, l in puntuadas:
