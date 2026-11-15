@@ -1,6 +1,6 @@
 import unittest
 
-from cerebro.aprobaciones.logica import DecisionNoValida, Solicitud, decidir
+from cerebro.aprobaciones.logica import DecisionNoValida, Solicitud, anular, decidir
 
 
 def solicitud(nivel="doble"):
@@ -74,3 +74,34 @@ class TestAprobaciones(unittest.TestCase):
         s = solicitud()
         decidir(s, "ana", {"responsable"}, {"licitaciones"}, False, "panel", "Precio demasiado bajo")
         self.assertEqual(s.estado, "rechazada")
+
+
+class TestAnular(unittest.TestCase):
+    """Los tickets antiguos que pedían dos firmas: quien ya firmó una no puede rechazar (la segunda la hace otra persona), así que Dirección puede anularlos con motivo."""
+
+    def test_anular_un_ticket_en_el_que_ya_firme_una_vez(self):
+        s = solicitud()
+        decidir(s, "albert", {"direccion", "responsable"}, {"licitaciones"}, True, "panel")
+        self.assertEqual(s.estado, "pendiente")
+        with self.assertRaises(DecisionNoValida):                       # rechazar ya no se puede
+            decidir(s, "albert", {"direccion"}, set(), False, "panel")
+        anular(s, "albert", {"direccion"}, "  Antigua,   pedía 2 firmas ")
+        self.assertEqual(s.estado, "rechazada")
+        ultima = s.decisiones[-1]
+        self.assertEqual((ultima["usuario"], ultima["aprobado"], ultima["anulada"]), ("albert", False, True))
+        self.assertEqual(ultima["comentario"], "Anulada: Antigua, pedía 2 firmas")
+        self.assertEqual(len(s.decisiones), 2)                          # la firma anterior sigue en el historial
+
+    def test_solo_direccion_y_siempre_con_motivo(self):
+        with self.assertRaisesRegex(DecisionNoValida, "Solo Dirección"):
+            anular(solicitud(), "ana", {"responsable"}, "motivo largo")
+        for motivo in ("", "  ", "ok", None):
+            with self.assertRaisesRegex(DecisionNoValida, "motivo"):
+                anular(solicitud(), "albert", {"direccion"}, motivo)
+
+    def test_una_solicitud_ya_resuelta_no_se_anula(self):
+        s = solicitud("simple")
+        s.aprobadores = ("direccion",)
+        decidir(s, "albert", {"direccion"}, set(), True, "panel")
+        with self.assertRaisesRegex(DecisionNoValida, "ya está aprobada"):
+            anular(s, "albert", {"direccion"}, "motivo largo")

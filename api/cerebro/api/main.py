@@ -1526,6 +1526,30 @@ async def decidir(sid: str, d: Decision, usuario: Usuario = Depends(usuario_actu
     return {"estado": s.estado, **_salida(estado, hilo)}
 
 
+class AnulacionEntrada(BaseModel):
+    motivo: str = Field(default="", max_length=400)
+
+
+@app.post("/aprobaciones/{sid}/anular")
+async def anular_aprobacion(sid: str, entrada: AnulacionEntrada, usuario: Usuario = Depends(usuario_actual)):
+    """Dirección cierra una solicitud pendiente sin ejecutarla (p. ej. tickets antiguos que pedían dos firmas y quien firmó una ya no puede rechazar). Queda como rechazada, con el motivo y su nombre en el historial."""
+    try:
+        s, hilo = await bandeja.anular_solicitud(sid, usuario.id, usuario.roles, entrada.motivo)
+    except DecisionNoValida as e:
+        raise HTTPException(403, str(e)) from e
+    except LookupError as e:
+        raise HTTPException(404, str(e)) from e
+    log.info("aprobaciones: %s anula la solicitud %s (%s)", usuario.id, sid, s.accion)
+    try:
+        estados = await bandeja.estados_del_hilo(hilo)
+        if not any(e == "pendiente" for e in estados.values()):
+            config = {"configurable": {"thread_id": hilo}, "callbacks": callbacks(), "metadata": metadatos(hilo, usuario.id)}
+            await GRAFO["g"].ainvoke(Command(resume=estados), config)
+    except Exception as e:  # noqa: BLE001 — un ticket antiguo puede haber perdido su hilo: la anulación ya está guardada y es lo que importa
+        log.warning("aprobaciones: anulada %s, pero no se ha podido avisar al agente: %s", sid, type(e).__name__)
+    return {"estado": s.estado, "mensaje": "Anulada: queda en el historial como rechazada, con tu motivo."}
+
+
 @app.get("/oficina")
 async def ver_oficina(usuario: Usuario = Depends(usuario_actual)):
     """La oficina del panel: departamentos, agentes y qué hace cada uno ahora. Sin base de datos se muestra todo en reposo."""
