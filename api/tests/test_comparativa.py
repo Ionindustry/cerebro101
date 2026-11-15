@@ -38,6 +38,27 @@ class TestEvidencia(unittest.TestCase):
         self.assertTrue(all("precio" not in x for x in r))
         self.assertEqual(C.lineas_relevantes(lineas, []), [])
 
+    def test_una_tarifa_en_ingles_se_encuentra_con_un_pliego_en_castellano(self):
+        lineas = [{"ref": "MS-C8", "desc": "4MP Outdoor Dome Network Camera", "precio": 1}, {"ref": "MS-N8", "desc": "8 channels Network Video Recorder", "precio": 2}, {"ref": "CAB", "desc": "Cat6 patch cable", "precio": 3}]
+        r = C.lineas_relevantes(lineas, ["Cámara domo de exterior", "Grabador de 8 canales"])
+        self.assertEqual({x["ref"] for x in r}, {"MS-C8", "MS-N8"})
+        self.assertEqual(C.lineas_relevantes([{"ref": "A", "desc": "Cámara domo exterior"}], ["Outdoor dome camera"])[0]["ref"], "A")   # y al revés
+
+    def test_las_caracteristicas_pedidas_van_primero_y_caben_las_de_una_tarifa_larga(self):
+        esp = {f"Dato{i}": f"valor{i}" for i in range(1, 20)}
+        esp["Protection level"] = "IP67 IK10"
+        esp["NDAA"] = "Yes"
+        r = C.lineas_relevantes([{"ref": "MS", "desc": "Outdoor Dome Camera", "especificaciones": esp}], ["Cámara domo de exterior con protección IP67"])
+        d = r[0]["desc"]
+        self.assertIn("Protection level: IP67 IK10", d)
+        self.assertLess(d.index("Protection level"), d.index("Dato1:"))                  # lo pedido, antes que el resto
+        self.assertIn("NDAA: Yes", d)                                                        # ya no se pierde el final de la lista
+        self.assertLessEqual(len(d), C.MAX_TEXTO_LINEA)
+
+    def test_especificaciones_utiles_respeta_el_tope(self):
+        esp = {f"K{i}": "v" for i in range(60)}
+        self.assertEqual(len(C._especificaciones_utiles(esp, set())), C.MAX_ESPECIFICACIONES_EVIDENCIA)
+
     def test_la_evidencia_se_numera_y_se_toma_de_las_dos_fuentes(self):
         async def buscar(q, dep, sens, k):
             self.assertEqual((dep, sens), ("licitaciones", "media"))
