@@ -1283,3 +1283,17 @@ test("comandoAutorizar solo ofrece los comprobados", async () => {
   assert.match(comandoAutorizar([{ dominio: "milesight.com", comprobado: false }]), /ninguno/);
   assert.match(comandoAutorizar(null), /ninguno/);
 });
+
+test("documentos de los agentes: textos de tamaño, autor, clase y errores", async () => {
+  const L = await import("../lib/licitaciones.js");
+  assert.equal(L.tamanoDocumentoTexto(850), "850 caracteres");
+  assert.match(L.tamanoDocumentoTexto(2400), /^2,4 mil caracteres$/);
+  assert.equal(L.autorDocumentoTexto("agente:redactor-memoria, agente:arquitecto-solucion"), "agente redactor-memoria, agente arquitecto-solucion");
+  assert.equal(L.autorDocumentoTexto(""), "—");
+  assert.equal(L.claseDocumento("aprobada"), "abierta");
+  assert.equal(L.claseDocumento("borrador"), "aviso");
+  assert.equal(L.claseDocumento("informe"), "");
+  assert.match(L.mensajeDocumentos(403), /Dirección y el departamento de Licitaciones/);
+  assert.equal(L.mensajeDocumentos(404, "Los agentes aún no han redactado este documento"), "Los agentes aún no han redactado este documento");
+  assert.match(L.mensajeDocumentos(500), /No se han podido leer/);
+});

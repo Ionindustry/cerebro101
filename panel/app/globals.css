@@ -20,7 +20,8 @@ button { font: inherit; cursor: pointer; }
 @media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; } }
 
 .marco { display: grid; grid-template-columns: 220px 1fr; min-height: 100dvh; }
-.rail { padding: 28px 16px; display: flex; flex-direction: column; gap: 4px; }
+/* La barra lateral se queda a la vista al bajar por la pantalla: ocupa el alto de la ventana y, si no cabe todo, se desplaza ella sola. */
+.rail { padding: 28px 16px; display: flex; flex-direction: column; gap: 4px; position: sticky; top: 0; align-self: start; height: 100dvh; overflow-y: auto; }
 .marca { font-size: 22px; font-weight: 700; letter-spacing: -0.4px; padding: 0 12px 24px; }
 .marca span { font-weight: 300; }
 .rail a { display: flex; justify-content: space-between; align-items: center; padding: 10px 12px;
@@ -80,7 +81,7 @@ h1 { font-size: 30px; font-weight: 300; letter-spacing: -0.6px; margin: 0 0 20px
 
 @media (max-width: 760px) {
   .marco { grid-template-columns: 1fr; }
-  .rail { flex-direction: row; padding: 12px; overflow-x: auto; }
+  .rail { flex-direction: row; padding: 12px; overflow-x: auto; overflow-y: hidden; height: auto; z-index: 20; background: var(--fondo); }          /* en el móvil es una barra arriba que también se queda */
   .marca { display: none; }
   .principal { padding: 8px 12px 0; }
 }

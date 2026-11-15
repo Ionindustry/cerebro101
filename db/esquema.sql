@@ -811,3 +811,12 @@ CREATE TABLE IF NOT EXISTS tarifas_vigilancia (
   error         text NOT NULL DEFAULT '',
   novedades     integer NOT NULL DEFAULT 0
 );
+
+-- Ajustes de las copias de seguridad que se cambian desde Jarvis (api/cerebro/copias.py): cuántas se conservan, segunda ubicación, cuántas allí y a los cuántos días sin copia se avisa. Solo lo fijado aquí;
+-- lo no fijado sigue como siempre (.env y valores por defecto). Los lee scripts/copia_automatica.sh en cada copia.
+CREATE TABLE IF NOT EXISTS copias_ajustes (
+  clave       text PRIMARY KEY,
+  valor       text NOT NULL,
+  por         text NOT NULL,
+  actualizado timestamptz NOT NULL DEFAULT now()
+);

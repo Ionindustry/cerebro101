@@ -11,7 +11,7 @@ import psycopg
 from psycopg.rows import dict_row
 
 from ..ajustes import ajustes
-from .logica import Solicitud, decidir
+from .logica import Solicitud, anular, decidir
 
 
 def _a_solicitud(fila: dict) -> Solicitud:
@@ -152,6 +152,20 @@ async def registrar_decision(sid: str, usuario: str, roles: set[str], departamen
             if fila is None:
                 raise LookupError("Solicitud no encontrada")
             s = decidir(_a_solicitud(fila), usuario, roles, departamentos, aprobado, canal, comentario)
+            await conn.execute("UPDATE aprobaciones SET decisiones=%s, estado=%s, actualizado=now() WHERE id=%s",
+                               (json.dumps(s.decisiones), s.estado, sid))
+    return s, fila["hilo"]
+
+
+async def anular_solicitud(sid: str, usuario: str, roles: set[str], motivo: str) -> tuple[Solicitud, str]:
+    """Dirección anula una solicitud pendiente (queda como rechazada con el motivo). Devuelve la solicitud y su hilo."""
+    async with await psycopg.AsyncConnection.connect(ajustes.database_url, row_factory=dict_row) as conn:
+        async with conn.transaction():
+            cur = await conn.execute("SELECT * FROM aprobaciones WHERE id=%s FOR UPDATE", (sid,))
+            fila = await cur.fetchone()
+            if fila is None:
+                raise LookupError("Solicitud no encontrada")
+            s = anular(_a_solicitud(fila), usuario, roles, motivo)
             await conn.execute("UPDATE aprobaciones SET decisiones=%s, estado=%s, actualizado=now() WHERE id=%s",
                                (json.dumps(s.decisiones), s.estado, sid))
     return s, fila["hilo"]

@@ -62,3 +62,22 @@ def decidir(s: Solicitud, usuario: str, roles_usuario: set[str], departamentos_u
     elif set(s.aprobadores) <= roles_cubiertos(s):
         s.estado = "aprobada"
     return s
+
+
+MIN_MOTIVO_ANULACION = 5
+
+
+def anular(s: Solicitud, usuario: str, roles_usuario: set[str], motivo: str) -> Solicitud:
+    """Dirección cierra una solicitud pendiente SIN ejecutarla, aunque ya hubiera firmado una de las firmas que pedía (tickets antiguos de cuando hacían falta dos). Cuenta como rechazada, con una decisión
+    marcada «anulada» y el motivo, y queda en el historial (las aprobaciones no se borran). Solo Dirección y siempre con motivo. Pura."""
+    if s.estado != "pendiente":
+        raise DecisionNoValida(f"La solicitud ya está {s.estado}")
+    if "direccion" not in roles_usuario:
+        raise DecisionNoValida("Solo Dirección puede anular una solicitud")
+    motivo = " ".join(str(motivo or "").split())
+    if len(motivo) < MIN_MOTIVO_ANULACION:
+        raise DecisionNoValida("Escribe el motivo de la anulación (unas palabras bastan)")
+    s.decisiones.append({"usuario": usuario, "rol": "direccion", "aprobado": False, "canal": "panel", "comentario": f"Anulada: {motivo[:400]}", "anulada": True,
+                         "fecha": datetime.now(timezone.utc).isoformat()})
+    s.estado = "rechazada"
+    return s

@@ -227,9 +227,24 @@ export default function Aprobaciones() {
     try {
       const r = await fetch(`/cerebro/aprobaciones/${s.id}`, { method: "POST", body: JSON.stringify({ aprobado, canal: "panel", comentario: comentario[s.id] || "" }) });
       const d = await r.json();
-      if (!r.ok) return setAvisos((a) => ({ ...a, [s.id]: d.detail || "No se ha podido guardar la decisión" }));
+      if (!r.ok) return setAvisos((a) => ({ ...a, [s.id]: (d.detail || "No se ha podido guardar la decisión") + (/Ya has decidido/.test(d.detail || "") ? " Si ya no hace falta, usa «Anular»." : "") }));
       setAbierta(null);
       setAvisos((a) => ({ ...a, _ultimo: `${aprobado ? "Aprobada" : "Rechazada"}: ${s.datos?.resumen || s.accion}. Queda guardada en el historial.` }));
+      await cargar();
+    } finally { setOcupada(null); }
+  }
+
+  async function anular(s) {
+    const motivo = (comentario[s.id] || "").trim();
+    if (motivo.length < 5) return setAvisos((a) => ({ ...a, [s.id]: "Para anular, escribe el motivo en el comentario (unas palabras bastan)." }));
+    if (!window.confirm(`¿Anular «${s.datos?.resumen || s.accion}»? No se ejecutará nada y quedará en el historial como rechazada.`)) return;
+    setOcupada(s.id);
+    try {
+      const r = await fetch(`/cerebro/aprobaciones/${s.id}/anular`, { method: "POST", body: JSON.stringify({ motivo }) });
+      const d = await r.json().catch(() => ({}));
+      if (!r.ok) return setAvisos((a) => ({ ...a, [s.id]: d.detail || "No se ha podido anular" }));
+      setAbierta(null);
+      setAvisos((a) => ({ ...a, _ultimo: `Anulada: ${s.datos?.resumen || s.accion}. Queda en el historial como rechazada, con tu motivo.` }));
       await cargar();
     } finally { setOcupada(null); }
   }
@@ -271,6 +286,7 @@ export default function Aprobaciones() {
                     <div className="botones">
                       <button className="boton si" disabled={ocupada === s.id} onClick={() => decidir(s, true)}>Aprobar</button>
                       <button className="boton no" disabled={ocupada === s.id} onClick={() => decidir(s, false)}>Rechazar</button>
+                      <button className="boton no" disabled={ocupada === s.id} onClick={() => anular(s)} title="Cierra la solicitud sin ejecutarla, aunque ya hubieras firmado una vez. Pide el motivo en el comentario.">Anular</button>
                     </div>
                     {avisos[s.id] && <div className="aviso" role="alert">{avisos[s.id]}</div>}
                   </div>

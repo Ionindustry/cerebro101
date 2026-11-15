@@ -34,7 +34,7 @@ class TestCopiaAutomatica(unittest.TestCase):
     def tearDown(self):
         self.tmp.cleanup()
 
-    def ejecutar(self, copia: str, conservar: int = 7, extra: str = "", previas: int = 0):
+    def ejecutar(self, copia: str, conservar: int = 7, extra: str = "", previas: int = 0, config: str = "", conservar_extra: int = 0, previas_extra: int = 0):
         cmd = self.dir / "copia.sh"
         cmd.write_text(copia)
         cmd.chmod(0o755)
@@ -46,7 +46,13 @@ class TestCopiaAutomatica(unittest.TestCase):
         reg = self.dir / "registrar.sh"
         reg.write_text(f'#!/usr/bin/env bash\necho "$@" >> "{self.dir / "registro.txt"}"\n')
         reg.chmod(0o755)
-        env = {**os.environ, "COPIA_REGISTRAR": str(reg), "COPIA_BASE": str(base), "COPIA_COMANDO": str(cmd), "COPIA_AVISAR": str(self.aviso_cmd), "COPIA_CONSERVAR": str(conservar), "COPIA_EXTRA": extra}
+        cfg = self.dir / "config.sh"
+        cfg.write_text(f"#!/usr/bin/env bash\ncat <<'FIN'\n{config}FIN\n")                # lo que diría «python -m cerebro.copias config»: lo fijado en Jarvis
+        cfg.chmod(0o755)
+        for i in range(previas_extra):
+            (Path(extra) / f"2026-09-{10 + i:02d}_0300").mkdir(parents=True, exist_ok=True)
+            (Path(extra) / f"2026-09-{10 + i:02d}_0300" / "x").write_text("x")
+        env = {**os.environ, "COPIA_CONFIG": str(cfg), "COPIA_CONSERVAR_EXTRA": str(conservar_extra), "COPIA_REGISTRAR": str(reg), "COPIA_BASE": str(base), "COPIA_COMANDO": str(cmd), "COPIA_AVISAR": str(self.aviso_cmd), "COPIA_CONSERVAR": str(conservar), "COPIA_EXTRA": extra}
         r = subprocess.run(["bash", str(SCRIPT)], env=env, capture_output=True, text=True, timeout=60)
         estado = json.loads((self.dir / "estado.json").read_text())
         return r, estado, base
@@ -70,6 +76,38 @@ class TestCopiaAutomatica(unittest.TestCase):
         self.assertEqual(len(copias), 3)
         self.assertEqual(copias[:2], ["2026-10-13_0300", "2026-10-14_0300"])          # se quedan las más nuevas
         self.assertNotIn("2026-10-10_0300", copias)
+
+    def test_lo_fijado_en_jarvis_manda_sobre_el_entorno(self):
+        r, estado, base = self.ejecutar(COPIA_BUENA, conservar=7, previas=5, config="conservar=2\n")
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertEqual(len([c for c in base.iterdir() if c.name != "otra-cosa"]), 2)
+
+    def test_un_ajuste_con_mala_forma_se_ignora(self):
+        r, _estado, base = self.ejecutar(COPIA_BUENA, conservar=4, previas=5, config="conservar=0\nconservar=abc\n")
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertEqual(len([c for c in base.iterdir() if c.name != "otra-cosa"]), 4)         # se queda el del entorno
+
+    def test_una_ruta_extra_rara_de_jarvis_no_se_usa(self):
+        extra = self.dir / "otro-disco"
+        r, _e, _b = self.ejecutar(COPIA_BUENA, extra=str(extra), config="extra=/etc/cron.d\n")
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertTrue(any(extra.iterdir()))                                                  # sigue copiando donde decía el entorno, no en /etc
+
+    def test_extra_vacio_en_jarvis_desactiva_la_segunda_copia(self):
+        extra = self.dir / "otro-disco"
+        r, _e, _b = self.ejecutar(COPIA_BUENA, extra=str(extra), config="extra=\n")
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertFalse(extra.exists())
+
+    def test_la_segunda_ubicacion_conserva_solo_las_ultimas_si_se_pide(self):
+        extra = self.dir / "otro-disco"
+        r, _e, _b = self.ejecutar(COPIA_BUENA, extra=str(extra), previas_extra=4, conservar_extra=2)
+        self.assertEqual(r.returncode, 0, r.stderr)
+        nombres = sorted(p.name for p in extra.iterdir())
+        self.assertEqual(len(nombres), 2)
+        self.assertNotIn("2026-09-10_0300", nombres)
+        r, _e, _b = self.ejecutar(COPIA_BUENA, extra=str(extra), previas_extra=0, conservar_extra=0)       # 0 = no se borra nada
+        self.assertGreaterEqual(len(list(extra.iterdir())), 2)
 
     def test_si_el_script_de_copia_falla_avisa_y_sale_con_error(self):
         r, estado, _ = self.ejecutar(COPIA_QUE_FALLA)
