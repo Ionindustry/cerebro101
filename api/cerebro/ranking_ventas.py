@@ -110,7 +110,32 @@ def periodo(dias: int, hoy: date | None = None) -> tuple[str, str]:
     return (hasta - timedelta(days=dias)).isoformat(), hasta.isoformat()
 
 
-async def obtener(dias: int = 365, top: int = 10, leer=None, catalogo: tuple[dict, ...] | None = None, hoy: date | None = None) -> dict:
+def texto_diagnostico(total: int, confirmados: int, borradores: int) -> str:
+    """Por qué no sale nada, dicho con los números de pedidos que hay en el ERP en el periodo. Pura."""
+    if total == 0:
+        return "En el ERP no hay ningún pedido de venta con fecha en este periodo. Si facturas sin crear antes el pedido, estas ventas no se cuentan: habría que leer las facturas de venta."
+    if confirmados == 0:
+        return f"Hay {total} pedidos de venta en el periodo pero ninguno confirmado ({borradores} en borrador): solo se cuentan los confirmados (Submitted)."
+    return (f"Hay {confirmados} pedidos confirmados en el periodo, pero la consulta no ha devuelto sus líneas (artículos). Puede ser un permiso de ERPNext sobre las líneas del pedido; "
+            "avísanos con este mensaje.")
+
+
+async def diagnostico(desde: str, hasta: str, contar=None) -> str | None:
+    """Cuenta los pedidos de venta del periodo (todos, confirmados y en borrador) para explicar un resultado vacío. None si ni eso se puede leer."""
+    if contar is None:
+        from .herramientas import erpnext
+
+        async def contar(filtros):
+            return int(await erpnext.metrica(DEPARTAMENTO, "Sales Order", filtros, "contar", campo_fecha="transaction_date", desde=desde, hasta=hasta, ttl=0))
+    try:
+        total, confirmados, borradores = await contar([]), await contar([["docstatus", "=", 1]]), await contar([["docstatus", "=", 0]])
+    except Exception as e:  # noqa: BLE001 — es solo una ayuda: si falla, el resultado vacío se enseña igual
+        log.info("ventas: no se ha podido diagnosticar el resultado vacío: %s", type(e).__name__)
+        return None
+    return texto_diagnostico(int(total), int(confirmados), int(borradores))
+
+
+async def obtener(dias: int = 365, top: int = 10, leer=None, catalogo: tuple[dict, ...] | None = None, hoy: date | None = None, contar=None) -> dict:
     """El ranking de ventas de los últimos `dias` días. `leer` es la lectura del ERP (por defecto la real; inyectable para probar)."""
     desde, hasta = periodo(dias, hoy)
     if leer is None:
@@ -123,4 +148,6 @@ async def obtener(dias: int = 365, top: int = 10, leer=None, catalogo: tuple[dic
     aviso = None
     if sin_tipo and r["tipos"] and float(sin_tipo["cuota_pct"]) > 25:
         aviso = f"El {sin_tipo['cuota_pct']} % de lo vendido no encaja en ningún tipo: ajusta config/tipos_producto.yaml (grupos y palabras)"
+    if not lineas:
+        aviso = await diagnostico(desde, hasta, contar) or aviso
     return {**r, "dias": dias, "desde": desde, "hasta": hasta, "aviso": aviso, "moneda": "moneda de la empresa (importe neto de pedidos confirmados)"}

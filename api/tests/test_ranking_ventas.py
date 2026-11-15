@@ -89,5 +89,43 @@ class TestObtener(unittest.TestCase):
         self.assertEqual(R.clasificar(l("Z", "Central de alarma", 1), R.tipos()), "intrusion")
 
 
+class TestDiagnostico(unittest.TestCase):
+    def test_textos(self):
+        self.assertIn("ningún pedido de venta", R.texto_diagnostico(0, 0, 0))
+        self.assertIn("facturas de venta", R.texto_diagnostico(0, 0, 0))
+        t = R.texto_diagnostico(5, 0, 5)
+        self.assertIn("ninguno confirmado (5 en borrador)", t)
+        self.assertIn("no ha devuelto sus líneas", R.texto_diagnostico(5, 3, 2))
+
+    def test_un_resultado_vacio_trae_el_diagnostico_como_aviso(self):
+        async def leer(dep, desde, hasta):
+            return []
+
+        async def contar(filtros):
+            return {0: 4, 1: 0}.get(filtros[0][2] if filtros else None, 4) if filtros else 4
+        r = asyncio.run(R.obtener(30, 5, leer, CAT, date(2026, 11, 13), contar))
+        self.assertEqual(r["tipos"], [])
+        self.assertIn("Hay 4 pedidos de venta en el periodo pero ninguno confirmado", r["aviso"])
+
+    def test_si_el_diagnostico_falla_no_rompe(self):
+        async def leer(dep, desde, hasta):
+            return []
+
+        async def contar(filtros):
+            raise RuntimeError("erp caído")
+        r = asyncio.run(R.obtener(30, 5, leer, CAT, date(2026, 11, 13), contar))
+        self.assertEqual(r["total"], "0.00")
+        self.assertIsNone(r["aviso"])
+
+    def test_con_datos_no_se_diagnostica(self):
+        async def leer(dep, desde, hasta):
+            return [l("C", "Cámara", "10")]
+
+        async def contar(filtros):
+            raise AssertionError("no debía llamarse")
+        r = asyncio.run(R.obtener(30, 5, leer, CAT, date(2026, 11, 13), contar))
+        self.assertEqual(r["total"], "10.00")
+
+
 if __name__ == "__main__":
     unittest.main()
