@@ -19,6 +19,18 @@ CONSERVAR="${COPIA_CONSERVAR:-7}"
 BASE="${COPIA_BASE:-copias/auto}"
 EXTRA="${COPIA_EXTRA:-}"
 [ -z "$EXTRA" ] && [ -f .env ] && EXTRA="$({ grep -E '^COPIA_EXTRA=' .env || true; } | head -1 | cut -d= -f2- | sed 's/[[:space:]]#.*$//')"      # también se puede fijar en el .env
+CONSERVAR_EXTRA="${COPIA_CONSERVAR_EXTRA:-0}"        # 0 = en la segunda ubicación no se borra nunca (como siempre)
+# Lo que se haya fijado en Jarvis (botón «Configurar» de Copias de seguridad) manda sobre el .env; sin nada fijado (o con la API parada) se queda como arriba. Solo se aceptan valores con la forma esperada.
+CONFIG="$(${COPIA_CONFIG:-docker compose exec -T api python -m cerebro.copias config} 2>/dev/null || true)"
+ajuste() { printf '%s\n' "$CONFIG" | sed -n "s/^$1=//p" | head -1 | tr -d '\r'; }
+v="$(ajuste conservar)"; [[ "$v" =~ ^[0-9]{1,2}$ ]] && [ "$v" -ge 1 ] && CONSERVAR="$v"
+v="$(ajuste conservar_extra)"; [[ "$v" =~ ^[0-9]{1,3}$ ]] && CONSERVAR_EXTRA="$v"
+if printf '%s\n' "$CONFIG" | grep -q '^extra='; then
+  v="$(ajuste extra)"
+  if [ -z "$v" ]; then EXTRA=""
+  elif [[ "$v" =~ ^/(mnt/[a-z]|media/[A-Za-z0-9._-]+|srv|home/[A-Za-z0-9._-]+)/[A-Za-z0-9._/-]+$ ]] && [[ "$v" != *..* ]]; then EXTRA="$v"
+  fi
+fi
 COMANDO="${COPIA_COMANDO:-./scripts/copia_seguridad.sh}"
 AVISAR="${COPIA_AVISAR:-docker compose exec -T api python -m cerebro.avisar_soporte}"
 REGISTRAR="${COPIA_REGISTRAR:-docker compose exec -T api python -m cerebro.copias registrar copia}"      # anota el resultado para la tarjeta de Jarvis y el vigilante de copias
@@ -61,6 +73,12 @@ if [ -n "$EXTRA" ]; then
   echo "→ Segunda copia en $EXTRA"
   mkdir -p "$EXTRA" 2>/dev/null && cp -r "$CARPETA" "$EXTRA/" 2>/dev/null && ( cd "$EXTRA/$(basename "$CARPETA")" && sha256sum -c SHA256SUMS >/dev/null 2>&1 ) \
     || fallar "no se ha podido dejar la segunda copia en $EXTRA (¿está conectada la unidad?)"
+fi
+
+if [ -n "$EXTRA" ] && [ "$CONSERVAR_EXTRA" -gt 0 ]; then
+  echo "→ Conservando las últimas $CONSERVAR_EXTRA copias en $EXTRA"
+  mapfile -t viejas_extra < <(ls -1d "$EXTRA"/[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]_[0-9][0-9][0-9][0-9] 2>/dev/null | sort | head -n "-$CONSERVAR_EXTRA")
+  for d in "${viejas_extra[@]}"; do [ -n "$d" ] && rm -rf -- "$d" && echo "   borrada $d"; done
 fi
 
 echo "→ Conservando las últimas $CONSERVAR copias"

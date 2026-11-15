@@ -238,6 +238,30 @@ async def salud_copias(usuario: Usuario = Depends(usuario_actual)):
     return await copias.estado()
 
 
+class AjustesCopias(BaseModel):
+    conservar: int | str | None = None
+    extra: str | None = None
+    conservar_extra: int | str | None = None
+    dias_aviso: int | str | None = None
+
+
+@app.get("/salud/copias/ajustes")
+async def ajustes_de_las_copias(usuario: Usuario = Depends(usuario_actual)):
+    """Los ajustes de las copias de seguridad en vigor (cuántas se conservan, segunda ubicación, días para avisar) y quién los fijó. Solo Dirección: incluyen la ruta del disco extra."""
+    _exigir_direccion(usuario)
+    return {**await copias.en_vigor(), "defectos": copias.DEFECTOS}
+
+
+@app.post("/salud/copias/ajustes")
+async def cambiar_ajustes_de_las_copias(entrada: AjustesCopias, usuario: Usuario = Depends(usuario_actual)):
+    """Cambia los ajustes de las copias de seguridad. Solo Dirección; queda anotado quién. Se aplican en la próxima copia (la de las 14:00) y el aviso de días, en la próxima vigilancia."""
+    _exigir_direccion(usuario)
+    try:
+        return {**await copias.guardar(entrada.model_dump(exclude_none=True), usuario.id), "defectos": copias.DEFECTOS}
+    except ValueError as e:
+        raise HTTPException(422, str(e)) from None
+
+
 @app.post("/modelos-externos/{proveedor}")
 async def cambiar_modelo_externo(proveedor: str, i: Interruptor, usuario: Usuario = Depends(usuario_actual)):
     """Conecta o desconecta un modelo externo. Solo Dirección, y solo si tiene clave; queda constancia de quién y cuándo."""
