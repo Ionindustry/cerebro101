@@ -10,7 +10,7 @@ carpeta_base: /datos/tarifas
 max_mb: 150
 proveedores:
   - id: asecur                          # ./scripts/tarifa_subir.sh asecur /ruta/a/products_2.csv
-    proveedor: {nombre: "A-Secur", nif: "", pais: "España"}
+    proveedor: {nombre: "A-Secur", nif: "", pais: "Spain"}
     canal: distribuidor
     moneda: EUR
     origen: carpeta

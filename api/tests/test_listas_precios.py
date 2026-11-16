@@ -133,6 +133,7 @@ class ErpFalso:
     """Un ERP en memoria con lo justo: proveedores, listas, artículos y precios."""
     def __init__(self):
         self.suppliers, self.listas, self.items, self.precios, self.llamadas, self.falla_items = {}, set(), {}, {}, [], False
+        self.marcas, self.rechaza_barras = set(), False
 
     async def listar(self, doctype, departamento, filtros=None, campos=None, limite=50):
         self.llamadas.append(("listar", doctype))
@@ -147,6 +148,8 @@ class ErpFalso:
         if doctype == "Item Price":
             lista, codigos = f[0][2], f[1][2]
             return [{"name": k, "item_code": v["item_code"], "price_list_rate": v["price_list_rate"]} for k, v in self.precios.items() if v["price_list"] == lista and v["item_code"] in codigos]
+        if doctype == "Brand":
+            return [{"name": m} for m in self.marcas]
         raise AssertionError(doctype)
 
     async def crear_maestro(self, doctype, datos, departamento):
@@ -157,12 +160,22 @@ class ErpFalso:
         if doctype == "Price List":
             self.listas.add(datos["price_list_name"])
             return {"name": datos["price_list_name"]}
+        if doctype == "Brand":
+            self.marcas.add(datos["brand"])
+            return {"name": datos["brand"]}
+        if doctype == "Item":
+            if self.falla_items:
+                raise RuntimeError("ERPNext: Item Group Products no existe")
+            if self.rechaza_barras and datos.get("barcodes"):
+                raise RuntimeError("ERPNext: código de barras no válido")
+            self.items[datos["item_code"]] = datos
+            return {"name": datos["item_code"]}
         raise AssertionError(doctype)
 
     async def insertar_varios(self, doctype, docs, departamento, tamano=100):
         self.llamadas.append(("insertar", doctype, len(docs)))
         if doctype == "Item":
-            if self.falla_items:
+            if self.falla_items or (self.rechaza_barras and any(d.get("barcodes") for d in docs)):
                 raise RuntimeError("ERPNext: Item Group Products no existe")
             for d in docs:
                 self.items[d["item_code"]] = d
@@ -268,6 +281,23 @@ class TestFlujo(unittest.TestCase):
         self.assertEqual((a["estado"], a["proveedor_creado"], a["lista_creada"], a["articulos_creados"], a["precios_nuevos"]), ("aplicada", False, False, 3, 3))
         self.assertEqual(len(self.erp.suppliers), 1)
         self.assertEqual(len(self.erp.precios), 3)
+
+    def test_el_limite_de_lineas_admite_las_tarifas_reales(self):
+        self.assertGreaterEqual(L.configuracion()["max_lineas"], 5000)             # la de A-Secur trae 3265 productos
+
+    def test_el_articulo_lleva_marca_descripcion_y_referencia_del_proveedor(self):
+        r = self.proponer()
+        ejecutar(L.aplicar(r["importacion"], "operaciones"))
+        d = self.erp.items["VISIOT-A-2"]
+        self.assertIn("Grabador 16 canales", d["description"])
+        self.assertTrue(d["description"].startswith("<p><b>"))
+
+    def test_si_el_erp_rechaza_un_extra_el_articulo_se_carga_sin_el(self):
+        r = self.proponer()
+        self.erp.rechaza_barras = True
+        a = ejecutar(L.aplicar(r["importacion"], "operaciones"))
+        self.assertEqual((a["estado"], a["articulos_creados"]), ("aplicada", 3))
+        self.assertEqual(len(self.erp.items), 3)
 
     def test_sin_erp_se_propone_igual_y_avisa(self):
         async def roto(*a, **k):

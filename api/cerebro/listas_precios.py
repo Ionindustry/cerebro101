@@ -27,14 +27,14 @@ import yaml
 from psycopg.rows import dict_row
 from psycopg.types.json import Jsonb
 
-from . import cambio, precios, subidas, tarifas
+from . import articulos_erp, cambio, precios, subidas, tarifas
 from .ajustes import ajustes
 from .herramientas import erpnext
 from .herramientas.facturas import DatosFactura, a_decimal
 
 log = logging.getLogger("cerebro.listas_precios")
 DEFECTO = {"item_group": "Products", "stock_uom": "Nos", "supplier_group": "All Supplier Groups", "supplier_type": "Company", "moneda": "EUR", "monedas": ["EUR", "USD", "GBP"],
-           "max_lineas": 3000, "lote": 100, "prefijo_lista": "Compra", "lista_venta": "Venta"}
+           "max_lineas": 10000, "lote": 100, "prefijo_lista": "Compra", "lista_venta": "Venta"}
 CAMPOS = ("referencia", "descripcion", "precio", "unidad", "descuento")
 PRECIO_MAX = Decimal("10000000")
 RE_NIF = re.compile(r"^[A-Z0-9]{8,14}$")
@@ -167,7 +167,7 @@ def codigo_articulo(prefijo: str, ref: str) -> str:
 
 
 def construir_lineas(paginas: list[tuple[int, str]], formato: str, columnas: dict, fila_cabecera: int = 1, prefijo: str = "PROV", iva_incluido_pct: float | None = None,
-                     max_lineas: int = 3000) -> dict:
+                     max_lineas: int = 10000) -> dict:
     """Lee TODAS las filas de las páginas indicadas y devuelve {lineas, rechazadas, omitidas, avisos, columnas}. `fila_cabecera` es la fila (desde 1, de cada página u hoja) que lleva los títulos: se salta
     esa y las anteriores. Una fila sin referencia ni precio (un título de sección, una nota) se omite; con referencia pero sin precio válido, se rechaza con el motivo."""
     if isinstance(fila_cabecera, bool) or not isinstance(fila_cabecera, int) or not 0 <= fila_cabecera <= 50:
@@ -378,7 +378,8 @@ def _lineas_de_tarifa(t, prov_nombre: str, canal: str, cfg_precios: dict, max_li
             continue
         linea = {"fila": etiqueta, "ref": ref[:80], "codigo": codigo, "desc": (p.descripcion or ref)[:300], "precio": str(coste), "unidad": "", "marca": marca[:60], "ean": p.ean,
                  "familia": p.familia or p.linea, "stock": None if p.stock is None else str(p.stock), "estado": p.estado, "pvp": None if p.pvp_recomendado is None else str(p.pvp_recomendado),
-                 "especificaciones": dict(list(p.especificaciones.items())[:30]), "enlaces": dict(p.enlaces), "avisos_producto": p.avisos[:3]}
+                 "especificaciones": dict(list(p.especificaciones.items())[:30]), "enlaces": dict(p.enlaces), "avisos_producto": p.avisos[:3],
+                 "imagen": p.imagen, "categorias": list(p.categorias)[:6]}
         try:
             c = precios.calcular(coste, p.moneda, canal, linea["familia"], cfg_precios)
             linea.update({"coste_eur": str(c.coste_eur), "venta": str(c.venta), "margen": str(c.margen_real), "avisos_precio": c.avisos})
@@ -545,10 +546,42 @@ async def aplicar(importacion: int, departamento: str, ahora: date | None = None
         codigos = [l["codigo"] for l in lineas]
         ya = await _existentes(departamento, "Item", "item_code", codigos, cfg["lote"])
         nuevos = [l for l in lineas if l["codigo"] not in ya]
-        docs = [{"item_code": l["codigo"], "item_name": l["desc"][:140], "description": l["desc"], "item_group": cfg["item_group"], "stock_uom": l["unidad"] or cfg["stock_uom"],
-                 "is_stock_item": 1, "is_purchase_item": 1, "supplier_items": [{"supplier": res["proveedor"], "supplier_part_no": l["ref"]}]} for l in nuevos]
+        docs, res["codigos_quitados"] = articulos_erp.sin_codigos_repetidos([articulos_erp.documento_articulo(l, res["proveedor"], cfg) for l in nuevos])
+        marcas = sorted({d["brand"] for d in docs if d.get("brand")})
+        if marcas:
+            try:
+                tenia = {str(r["name"]) for r in await erpnext.listar("Brand", departamento, campos=["name"], limite=5000)}
+                for m in marcas:
+                    if m not in tenia:
+                        await erpnext.crear_maestro("Brand", {"brand": m}, departamento)
+                        res["marcas_creadas"] = res.get("marcas_creadas", 0) + 1
+            except Exception as e:  # noqa: BLE001 — sin marcas se cargan igual, sin el campo
+                res["errores_menores"] = res.get("errores_menores", []) + [f"Marcas: {type(e).__name__}: {str(e)[:150]}"]
+                docs = [{k: v for k, v in d.items() if k != "brand"} for d in docs]
         if docs:
-            res["articulos_creados"] = len(await erpnext.insertar_varios("Item", docs, departamento, cfg["lote"]))
+            try:
+                res["articulos_creados"] = len(await erpnext.insertar_varios("Item", docs, departamento, cfg["lote"]))
+            except Exception as e:  # noqa: BLE001 — un artículo malo tumba su tanda: se reintenta uno a uno, y sin extras si hace falta
+                log.warning("listas de precios: la carga por tandas falló (%s); se carga artículo a artículo", type(e).__name__)
+                ya = await _existentes(departamento, "Item", "item_code", codigos, cfg["lote"])
+                por_codigo = {l["codigo"]: l for l in nuevos}
+                for d in docs:
+                    if d["item_code"] in ya:
+                        res["articulos_creados"] += 1
+                        continue
+                    for doc in (d, articulos_erp.documento_articulo(por_codigo[d["item_code"]], res["proveedor"], cfg, con_extras=False)):
+                        try:
+                            await erpnext.crear_maestro("Item", doc, departamento)
+                            res["articulos_creados"] += 1
+                            if doc is not d:
+                                res["articulos_basicos"] = res.get("articulos_basicos", 0) + 1
+                            break
+                        except Exception as e2:  # noqa: BLE001
+                            ultimo = f"{d['item_code'][:30]}: {type(e2).__name__}: {str(e2)[:120]}"
+                    else:
+                        res["errores"].append(ultimo)
+                if res["errores"]:
+                    raise ErrorImportacion(f"No se han podido crear {len(res['errores'])} artículos (p. ej. {res['errores'][0]}): no se cargan precios hasta resolverlo")
         existentes: dict[str, tuple[str, str]] = {}
         for i in range(0, len(codigos), 80):
             trozo = codigos[i:i + 80]
