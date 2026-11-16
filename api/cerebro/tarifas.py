@@ -79,7 +79,8 @@ class Producto:
     codigo_proveedor: str = ""                    # el código interno del proveedor (p. ej. «Material Code»), distinto de la referencia del fabricante
     linea: str = ""                               # la hoja (o el fichero) de donde sale: sirve de familia cuando la tarifa no trae una
     especificaciones: dict = field(default_factory=dict)
-    enlaces: dict = field(default_factory=dict)   # {nombre de la columna: URL http/https}: fichas técnicas, páginas de producto… (las imágenes no se guardan)
+    enlaces: dict = field(default_factory=dict)   # {nombre de la columna: URL http/https}: fichas técnicas, páginas de producto… (las imágenes no van aquí)
+    imagen: str = ""                              # la URL https de la primera imagen del producto (solo la dirección: no se descarga nada)
     moneda: str = ""                              # solo si el propio fichero la dice (€, $, EUR, USD…)
     avisos: list[str] = field(default_factory=list)
 
@@ -216,6 +217,21 @@ def _enlaces(fila: list[str], cabecera: list[str]) -> dict:
     return out
 
 
+def _imagen(fila: list[str], cabecera: list[str]) -> str:
+    """La URL https de la primera imagen del producto (la primera columna de imagen con una dirección válida; http se descarta). Solo la dirección: no se baja nada. Pura."""
+    for i, c in enumerate(cabecera):
+        if i >= len(fila) or not c.strip():
+            continue
+        nc = norm(c)
+        palabras = nc.split()
+        if not any(w in palabras or nc.startswith(w) for w in ("img", "image", "imagen", "picture", "foto", "photo")):
+            continue
+        v = str(fila[i] or "").strip()
+        if v.lower().startswith("https://") and RE_URL.match(v):
+            return v[:500]
+    return ""
+
+
 def _json_a_texto(s: str) -> dict:
     """Las características que algunos distribuidores dan como JSON anidado, aplanadas a «Sección · dato: valor»."""
     if not s or len(s) > MAX_JSON:
@@ -272,6 +288,7 @@ def _producto(hoja: str, n: int, fila: list[str], cabecera: list[str], mapa: dic
     esp.update(_json_a_texto(_texto(celda("especificaciones"), MAX_JSON + 1)))
     p.especificaciones = esp
     p.enlaces = _enlaces(fila, cabecera)
+    p.imagen = _imagen(fila, cabecera)
     if p.pvp_recomendado and p.coste > p.pvp_recomendado:
         p.avisos.append("el coste es mayor que el precio recomendado: revisa las columnas")
     return p, ""

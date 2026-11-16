@@ -43,10 +43,10 @@ departamentos:
            Lead, Project, Task, Campaign, Territory, Customer Group, Bin, CRM Lead, CRM Deal, CRM Organization]
     borrador: []
   operaciones:
-    leer: [Item, Item Price, Price List, Bin, Warehouse, Stock Entry, Material Request, Purchase Order, Purchase Receipt, Delivery Note, Supplier,
+    leer: [Item, Item Price, Price List, Brand, Bin, Warehouse, Stock Entry, Material Request, Purchase Order, Purchase Receipt, Delivery Note, Supplier,
            Project, Task, Timesheet, Work Order, BOM, Sales Order, Customer, Contact, Address, Request for Quotation, Supplier Quotation]
     borrador: [Material Request, Purchase Order, Stock Entry, Delivery Note, Work Order, Task, Timesheet, Project, Request for Quotation]     # «Request for Quotation»: las peticiones de cotización a proveedores (cerebro/cotizaciones.py)
-    maestros: [Supplier, Item, Item Price, Price List]       # listas de precios de proveedores: las aplica el proceso aprobado (cerebro/listas_precios.py)
+    maestros: [Supplier, Item, Item Price, Price List, Brand]       # listas de precios de proveedores: las aplica el proceso aprobado (cerebro/listas_precios.py)
   telecom:
     leer: [Customer, Contact, Address, Item, Item Price, Sales Order, Quotation, Project, Task, Supplier, Purchase Order,
            Subscription, Subscription Plan]
