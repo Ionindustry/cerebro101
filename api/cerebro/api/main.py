@@ -125,7 +125,7 @@ async def salud():
     r = registro()
     return {"estado": "ok", "agentes": len(r.fichas), "departamentos": len(r.departamentos),
             "perfil_hardware": ajustes.perfil_hardware, "modo": os.environ.get("CEREBRO_MODO", "produccion"),
-            "version": (os.environ.get("CODIGO_VERSION") or "desconocida")[:7]}
+            "version": (os.environ.get("CODIGO_VERSION") or "")[:7] or "desconocida"}
 
 
 @app.get("/salud/constancia")
