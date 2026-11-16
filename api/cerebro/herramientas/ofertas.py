@@ -47,9 +47,8 @@ async def _tal_cual(coro) -> dict:
 registrar(Herramienta(
     nombre="ofertas",
     descripcion="La oferta de una licitación, por secciones (sobre administrativo, técnico y económico). Prepara las secciones a partir del pliego, lee las que hay y guarda el borrador de una sección. "
-                "SOLO escribes borradores: una persona los revisa, aprueba y presenta, y el precio de la oferta lo fija una persona (no escribas la proposición económica ni inventes el precio). "
-                "Cita siempre los requisitos del pliego en los que te apoyas (sus ids, que salen de la herramienta «pliegos», operación «requisitos»). "
-                "La licitación se indica por su identificador (UUID), que NO hay que pedirle a la persona: se obtiene con la herramienta «licitaciones».",
+                "SOLO escribes borradores: una persona los revisa, aprueba y presenta y fija el precio (no escribas la proposición económica ni inventes el precio). "
+                "Cita los requisitos del pliego en que te apoyas (ids de «pliegos», operación «requisitos»). La licitación se indica por su UUID, que NO hay que pedirle a la persona: sale de «licitaciones».",
     operaciones={"plan": plan, "leer": leer, "seccion": seccion, "guardar_seccion": guardar_seccion},
     ayuda={"plan": "prepara la oferta (si no estaba) y devuelve sus secciones, cada una con su «guia» (lo que pide el pliego), su estado y los requisitos técnicos aún sin cubrir",
            "leer": "las secciones de la oferta con su estado y el principio de su contenido, y los requisitos técnicos del pliego que ninguna sección cita todavía",
