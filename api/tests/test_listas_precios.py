@@ -513,11 +513,13 @@ class TestTarifasEnLaImportacion(unittest.TestCase):
 
     def test_fabricante_calcula_coste_en_euros_y_venta_y_no_carga_lo_que_no_esta_disponible(self):
         r = self.lineas(TARIFA_FABRICANTE, "fabricante", "USD", "Milesight")
-        self.assertEqual([l["codigo"] for l in r["lineas"]], ["MILESI-MS-C1", "MILESI-MS-C2"])
+        self.assertEqual([l["codigo"] for l in r["lineas"]], ["MILESI-MS-C1", "MILESI-MS-C2", "MILESI-MS-X9"])      # el «próximamente» SÍ se carga (licitaciones)
+        self.assertEqual([l["estado"] for l in r["lineas"]][2], "proximamente")
         l = r["lineas"][0]
         self.assertEqual((l["precio"], l["coste_eur"], l["venta"]), ("100.0000", "103.50", "207.00"))        # 100 USD × 0,9 × 1,15 = 103,50 € ; venta = coste ÷ (1 − 0,5)
-        self.assertEqual(r["no_cargadas"], 2)
-        self.assertTrue(any("próximamente" in a and "fin de vida" in a for a in r["avisos"]))
+        self.assertEqual(r["no_cargadas"], 1)
+        self.assertTrue(any("«próximamente»" in a and "MARCADOS" in a for a in r["avisos"]))
+        self.assertTrue(any("No se cargan" in a and "fin de vida" in a for a in r["avisos"]))
 
     def test_el_mismo_producto_del_distribuidor_llega_al_mismo_articulo(self):
         f = self.lineas(TARIFA_FABRICANTE, "fabricante", "USD", "Milesight")["lineas"][0]
@@ -588,19 +590,21 @@ class TestProponerTarifa(unittest.TestCase):
 
     def test_propone_guarda_y_la_vista_previa_resume_la_tarifa(self):
         r = ejecutar(L.proponer_tarifa(DOC, {"nombre": "Milesight"}, "fabricante", "catalogo-proveedores", "operaciones", moneda="USD"))
-        self.assertEqual((r["lineas"], r["canal"], r["moneda"], r["lista"], r["articulos_nuevos"]), (2, "fabricante", "USD", "Compra Milesight", 2))
-        self.assertEqual((r["venta_min"], r["venta_max"], r["con_venta"]), ("207.00", "517.50", 2))
+        self.assertEqual((r["lineas"], r["canal"], r["moneda"], r["lista"], r["articulos_nuevos"]), (3, "fabricante", "USD", "Compra Milesight", 3))
+        self.assertEqual((r["venta_min"], r["venta_max"], r["con_venta"]), ("207.00", "621.00", 3))
         self.assertEqual({c[0] for c in self.erp.llamadas}, {"listar"})                                    # solo lecturas
         v = ejecutar(L.vista_aplicar(r["importacion"], "operaciones"))
         texto = "\n".join(f"{k}: {x}" for k, x in v["campos"])
         self.assertIn("canal «fabricante»", texto)
-        self.assertIn("2 no se cargan", texto)
+        self.assertIn("1 no se cargan", texto)
 
     def test_aplicar_crea_un_articulo_por_marca_y_referencia_con_su_coste_en_la_lista_del_proveedor(self):
         r = ejecutar(L.proponer_tarifa(DOC, {"nombre": "Milesight"}, "fabricante", "a", "operaciones", moneda="USD"))
         a = ejecutar(L.aplicar(r["importacion"], "operaciones"))
-        self.assertEqual((a["estado"], a["articulos_creados"], a["precios_nuevos"]), ("aplicada", 2, 2))
-        self.assertEqual(set(self.erp.items), {"MILESI-MS-C1", "MILESI-MS-C2"})
+        self.assertEqual((a["estado"], a["articulos_creados"], a["precios_nuevos"]), ("aplicada", 3, 3))
+        self.assertEqual(set(self.erp.items), {"MILESI-MS-C1", "MILESI-MS-C2", "MILESI-MS-X9"})
+        self.assertIn("PRÓXIMAMENTE", self.erp.items["MILESI-MS-X9"]["description"])
+        self.assertNotIn("PRÓXIMAMENTE", self.erp.items["MILESI-MS-C1"]["description"])
         p = next(v for v in self.erp.precios.values() if v["item_code"] == "MILESI-MS-C1")
         self.assertEqual((p["price_list_rate"], p["currency"], p["price_list"]), (100.0, "USD", "Compra Milesight"))
 
