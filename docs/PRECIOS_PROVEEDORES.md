@@ -82,3 +82,14 @@ En **Precios → «Proveedores y marcas»** (solo Dirección) se ve qué marcas 
 
 ## Cotizaciones cuando no hay precio
 Lo que no está en ninguna tarifa sale «sin coste». Para esas referencias, ver [docs/COTIZACIONES.md](COTIZACIONES.md): el sistema redacta el correo (solo referencia, cantidad y plazo), se envía por el sistema con tu confirmación o lo mandas tú, y la respuesta del proveedor pasa a ser el coste de la partida.
+
+## Búsqueda por significado de los productos de las tarifas
+
+Para la tabla de equivalencias «iguala o supera», las líneas de las tarifas de proveedores se vectorizan con BGE-M3 (el mismo modelo local de la base de conocimiento; nada sale de la máquina) y se guardan en la tabla `lineas_vectores`.
+
+- **Quién lo hace:** la tarea `vectorizar_tarifas` (cada 10 minutos, hasta 2.000 líneas por pasada; una tarifa grande tarda varias pasadas). Solo calcula lo nuevo o lo que ha cambiado y borra lo que ya no está en la tarifa. Si Ollama no responde, lo deja para la pasada siguiente.
+- **Qué se vectoriza:** marca, referencia, descripción y las primeras características. **Nunca el precio.**
+- **Para qué sirve:** proponer candidatos aunque no compartan palabras con el pliego («cámara bullet» ↔ «bullet camera»). Se une a la búsqueda por palabras de siempre sin repetir líneas.
+- **Lo que no hace:** decidir si un producto iguala o supera un requisito. Eso lo comprueba el código con los valores de la ficha, no el parecido.
+- **Es un índice:** `TRUNCATE lineas_vectores` y se recalcula sola. Hasta que se complete la primera pasada, la búsqueda sigue funcionando por palabras.
+- **Ajuste pendiente:** el umbral de parecido (`SIMILITUD_MINIMA = 0.45` en `api/cerebro/lineas_vectores.py`) hay que calibrarlo con tarifas reales.

@@ -18,6 +18,21 @@ CREATE TABLE IF NOT EXISTS documentos (
 CREATE INDEX IF NOT EXISTS documentos_embedding_idx ON documentos USING hnsw (embedding vector_cosine_ops);
 CREATE INDEX IF NOT EXISTS documentos_dep_idx ON documentos (departamento, sensibilidad);
 
+-- Líneas de las tarifas de proveedores vectorizadas (api/cerebro/lineas_vectores.py): el embedding (BGE-M3, local) del texto de cada línea (referencia, marca, descripción y características, SIN precio)
+-- permite encontrar productos por significado aunque no compartan palabras con el pliego. Se rellena en segundo plano y se puede borrar entera: se vuelve a calcular sola.
+CREATE TABLE IF NOT EXISTS lineas_vectores (
+  lista      text NOT NULL,                       -- lista de precios del proveedor (importaciones_precios.lista)
+  ref        text NOT NULL,                       -- referencia de la línea
+  proveedor  text NOT NULL DEFAULT '',
+  marca      text NOT NULL DEFAULT '',
+  texto      text NOT NULL,                       -- lo que se vectoriza y se enseña como evidencia (sin precio)
+  huella     text NOT NULL,                       -- hash del texto: si no cambia, no se recalcula
+  embedding  vector(1024) NOT NULL,
+  creado     timestamptz NOT NULL DEFAULT now(),
+  PRIMARY KEY (lista, ref)
+);
+CREATE INDEX IF NOT EXISTS lineas_vectores_embedding_idx ON lineas_vectores USING hnsw (embedding vector_cosine_ops);
+
 -- Cuadernos de investigación (como NotebookLM, en local): fuentes que reúne un agente y sobre las que se pregunta con citas
 CREATE TABLE IF NOT EXISTS cuadernos (
   id            uuid PRIMARY KEY DEFAULT gen_random_uuid(),
