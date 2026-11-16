@@ -50,8 +50,17 @@ class TestConfig(unittest.TestCase):
         self.assertEqual([p["id"] for p in ok], ["milesight", "otro"])
         self.assertEqual(len(errores), 2)
 
-    def test_por_defecto_no_hay_proveedores(self):
-        self.assertEqual(T.configuracion()["proveedores"], [])
+    def test_sin_fichero_de_configuracion_no_hay_proveedores(self):
+        with tempfile.TemporaryDirectory() as d:
+            self.assertEqual(T._configuracion(d)["proveedores"], [])
+
+    def test_los_proveedores_de_la_configuracion_del_repositorio_son_validos(self):
+        ok, errores = T.proveedores_validos()
+        self.assertEqual(errores, [])
+        ids = [p["id"] for p in ok]
+        self.assertEqual(len(ids), len(set(ids)))
+        for p in ok:
+            self.assertIn(p["canal"], ("fabricante", "distribuidor"))
 
     def test_la_clave_sale_del_fichero_de_secretos_no_de_la_configuracion(self):
         with tempfile.TemporaryDirectory() as d:
