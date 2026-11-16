@@ -76,3 +76,6 @@ En **Precios → «Proveedores y marcas»** (solo Dirección) se ve qué marcas 
 - **Variantes bajo el fabricante.** Las tarifas traen etiquetas como «HIKVISION PRO», «HIKVISION PRO NO CCTV» o «MOVOK ACCESSORIES», y líneas propias del proveedor («A-CCTV», «A-FIRE»…). `config/marcas_alias.yaml` las junta bajo la marca de verdad (o «A-Secur (líneas propias)») y las variantes originales se ven al desplegar. Con la tarifa de A-Secur, 40 etiquetas quedan en 29 marcas (Hikvision 1.112 artículos, Ajax 524, Dahua 325, Movok 264, Detnov 158…).
 - **«¿Quién distribuye…?»**: buscar una marca enseña solo los proveedores que la distribuyen (a quién pedirle precio o cotización).
 - **A mano.** Se pueden añadir marcas que un proveedor distribuye aunque no vengan en su tarifa (p. ej. un distribuidor autorizado); una recarga de tarifas nunca las pisa y solo se quitan las puestas a mano.
+
+## Cotizaciones cuando no hay precio
+Lo que no está en ninguna tarifa sale «sin coste». Para esas referencias, ver [docs/COTIZACIONES.md](COTIZACIONES.md): el sistema redacta el correo (solo referencia, cantidad y plazo), se envía por el sistema con tu confirmación o lo mandas tú, y la respuesta del proveedor pasa a ser el coste de la partida.

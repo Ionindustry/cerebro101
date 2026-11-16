@@ -1,6 +1,7 @@
 "use client";
 import { useCallback, useEffect, useState } from "react";
 import { cantidadAEnvio, eurosTexto, faltaEnPartidasTexto } from "../../../../lib/licitaciones";
+import { referenciaDeProducto } from "../../../../lib/cotizaciones";
 import { pedirCerebro } from "../../cliente";
 
 const enviar = (cuerpo) => ({ method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(cuerpo) });
@@ -48,7 +49,9 @@ export default function Partidas({ id, version }) {
             <tbody>
               {d.partidas.map((p) => (
                 <tr key={p.id} style={p.excluida ? { opacity: 0.5 } : undefined}>
-                  <td>{p.producto}{p.parametros?.length > 0 && <span className="meta"> · cubre: {p.parametros.join("; ")}</span>}{p.coste_unit_eur === null && <span className="lic-etiqueta aviso">{p.motivo}</span>}</td>
+                  <td>{p.producto}{p.parametros?.length > 0 && <span className="meta"> · cubre: {p.parametros.join("; ")}</span>}{p.coste_unit_eur === null && (
+                    <><span className="lic-etiqueta aviso">{p.motivo}</span> <a href={`/cotizaciones?${new URLSearchParams({ ref: referenciaDeProducto(p.producto), cantidad: p.cantidad ? String(Math.round(Number(p.cantidad)) || 1) : "1", licitacion: String(id), partida: String(p.id) })}`}>Pedir cotización</a></>)}
+                    {p.origen_coste === "cotizacion" && <span className="lic-etiqueta abierta" title={`Cotización de proveedor ${p.cotizacion}${p.plazo_dias != null ? ` · entrega en ${p.plazo_dias} días` : ""}${p.validez_hasta ? ` · válida hasta ${p.validez_hasta}` : ""}`}>cotización de proveedor</span>}</td>
                   <td><input defaultValue={p.cantidad ?? ""} inputMode="decimal" size={6} aria-label={`Cantidad de ${p.producto}`} disabled={trabajando}
                     onBlur={(e) => { const v = cantidadAEnvio(e.target.value); if (v !== (p.cantidad ?? null)) hacer(() => pedirCerebro(`${ruta}/${p.id}`, enviar({ cantidad: v }))); }} /></td>
                   <td>{eurosTexto(p.coste_unit_eur)}{p.avisos?.length > 0 && <span className="meta" title={p.avisos.join(" · ")}> ⚠</span>}</td>

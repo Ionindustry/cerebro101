@@ -85,12 +85,32 @@ def _dec(v) -> Decimal | None:
     return d
 
 
-def calcular_filas(partidas: list[dict], ofertas: dict, cfg: dict) -> list[dict]:
-    """Cada partida con su coste. Pura."""
+def _coste_de_cotizacion(p: dict, cotizaciones: list[dict] | None, cfg: dict) -> dict | None:
+    """Si una partida no tiene coste en las tarifas, el de la cotización de proveedor respondida (y vigente) que le corresponde, con el mismo cálculo en euros. Pura."""
+    if not cotizaciones:
+        return None
+    from .. import cotizaciones as COT
+    cot = COT.emparejar(p["producto"], p["id"], cotizaciones)
+    q = COT.coste_de_cotizacion(cot, cfg) if cot else None
+    if not q:
+        return None
+    try:
+        venta = precios.calcular(q["coste_origen"], q["moneda"], "distribuidor", "", cfg).venta
+    except precios.ErrorPrecios:
+        venta = None
+    return {**q, "venta_unit_eur": venta, "motivo": "", "ofertas": 1, "stock": None, "origen_coste": "cotizacion"}
+
+
+def calcular_filas(partidas: list[dict], ofertas: dict, cfg: dict, cotizaciones: list[dict] | None = None) -> list[dict]:
+    """Cada partida con su coste: el de las tarifas y, si no hay, el de una cotización de proveedor respondida. Pura."""
     out = []
     for p in partidas:
         codigo = emparejar(p["producto"], ofertas)
         c = costear(codigo, ofertas, cfg)
+        if c["coste_unit_eur"] is None:
+            c = _coste_de_cotizacion(p, cotizaciones, cfg) or c
+        else:
+            c = {**c, "origen_coste": "tarifa"}
         cant = None if p.get("cantidad") is None else Decimal(str(p["cantidad"]))
         unit = c["coste_unit_eur"]
         out.append({**{k: p[k] for k in ("id", "producto", "parametros", "origen", "excluida")}, "cantidad": None if cant is None else str(cant), "codigo": codigo, **{k: (str(v) if isinstance(v, Decimal) else v) for k, v in c.items()},
@@ -150,12 +170,22 @@ async def _material():
     return ofertas, await cambio.configuracion_de_precios()
 
 
+async def _cotizaciones() -> list[dict]:
+    """Las cotizaciones de proveedor respondidas (para costear lo que no está en las tarifas); sin ellas, [] (nunca rompe el cálculo)."""
+    try:
+        from .. import cotizaciones as COT
+        return await COT.respondidas()
+    except Exception as e:      # noqa: BLE001
+        log.warning("partidas: no se han podido leer las cotizaciones: %s", type(e).__name__)
+        return []
+
+
 async def listar(motor_id: str) -> dict:
     motor_id = O._id(motor_id)
     partidas = await _partidas(motor_id)
     try:
         ofertas, cfg = await _material()
-        filas = calcular_filas(partidas, ofertas, cfg)
+        filas = calcular_filas(partidas, ofertas, cfg, await _cotizaciones())
         aviso = "" if ofertas else "No hay tarifas de proveedor cargadas: no se puede calcular ningún coste."
     except Exception as e:      # noqa: BLE001 — sin tarifas se enseñan las partidas sin coste
         log.warning("partidas de %s: no se han podido leer las tarifas: %s: %s", motor_id, type(e).__name__, e)

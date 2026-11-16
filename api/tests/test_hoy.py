@@ -80,6 +80,27 @@ class TestPuros(unittest.TestCase):
         self.assertEqual(H.del_sistema({"estado": "ok"}, {"alerta": False, "ultima": {"ok": True}}, MOTOR_OK), [])
 
 
+class TestCotizacionesHoy(unittest.TestCase):
+    def c(self, **kw):
+        return {"id": 1, "referencia": "REF-1", "proveedor": "A-Secur", "estado": "enviada", "modo": "manual", "sin_respuesta": False, **kw}
+
+    def test_sin_respuesta_avisa_a_licitaciones_y_a_direccion(self):
+        for d in (True, False):
+            [i] = H.de_cotizaciones([self.c(sin_respuesta=True), self.c(id=2, sin_respuesta=True, referencia="REF-2")], d)
+            self.assertEqual((i["nivel"], i["categoria"], i["href"]), ("aviso", "precios", "/cotizaciones"))
+            self.assertIn("2 cotizaciones sin respuesta", i["titulo"])
+            self.assertIn("REF-1 (A-Secur)", i["detalle"])
+
+    def test_las_que_esperan_confirmacion_solo_las_ve_direccion(self):
+        borrador = self.c(estado="borrador", modo="enviar")
+        self.assertEqual(len(H.de_cotizaciones([borrador], True)), 1)
+        self.assertIn("espera tu confirmación", H.de_cotizaciones([borrador], True)[0]["titulo"])
+        self.assertEqual(H.de_cotizaciones([borrador], False), [])
+        self.assertEqual(H.de_cotizaciones([self.c(estado="borrador", modo="manual")], True), [])           # las manuales las manda una persona
+        self.assertEqual(H.de_cotizaciones([], True), [])
+        self.assertEqual(H.de_cotizaciones(None, True), [])
+
+
 class TestPrecios(unittest.TestCase):
     def fila(self, id_=7, dias=1, estado="propuesta", **r):
         return {"id": id_, "estado": estado, "creado": AHORA - timedelta(days=dias), "resumen": {"incluidos": 40, "sube": 5, "baja": 2, **r}}
@@ -127,7 +148,7 @@ class TestPrecios(unittest.TestCase):
 
 class TestConstruir(unittest.TestCase):
     def lista(self, roles, deps, **kw):
-        base = {"aprobaciones": fuente(APROB), "seguimiento": fuente(SEG), "ultimo_resumen": fuente(None), "antivirus": fuente(AV_MAL), "copias": fuente(COP_MAL), "motor": fuente(MOTOR_OK), "tarifas": fuente([]), "precios_venta": fuente([])}
+        base = {"aprobaciones": fuente(APROB), "seguimiento": fuente(SEG), "ultimo_resumen": fuente(None), "antivirus": fuente(AV_MAL), "copias": fuente(COP_MAL), "motor": fuente(MOTOR_OK), "tarifas": fuente([]), "precios_venta": fuente([]), "cotizaciones": fuente([])}
         return ejecutar(H.construir(roles, deps, AHORA, **{**base, **kw}))
 
     def test_direccion_lo_ve_todo_ordenado_por_urgencia(self):
