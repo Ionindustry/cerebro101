@@ -1518,3 +1518,10 @@ export function totalIngestaTexto(r) {
   const n = new Intl.NumberFormat("es-ES").format(v);
   return r.total.relacion === "gte" ? `al menos ${n}` : n;
 }
+
+/** Una línea por producto que nombra el pliego: «Hikvision DS-2CD2143G2-I · admite «o equivalente» · documento 2, página 7». Sin modelo: solo la marca. Pura. */
+export function referenciaPliegoTexto(r) {
+  const nombre = [r?.marca, r?.modelo].filter(Boolean).join(" ") || "(sin nombre)";
+  const eq = r?.modelo ? (r.equivalente ? "admite «o equivalente»" : "sin «o equivalente» en la frase") : "solo nombra la marca";
+  return `${nombre} · ${eq} · documento ${r?.documento ?? "?"}, página ${r?.pagina ?? "?"}`;
+}
