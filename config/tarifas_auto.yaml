@@ -24,6 +24,11 @@ proveedores:
     canal: distribuidor
     moneda: EUR
     origen: carpeta
+  - id: eet                             # su tarifa, si te la dan en fichero: ./scripts/tarifa_subir.sh eet /ruta/al/fichero. El precio y stock en vivo van por la herramienta «eet» (config/eet.yaml)
+    proveedor: {nombre: "EET Europarts", nif: "", pais: ""}
+    canal: distribuidor
+    moneda: EUR
+    origen: carpeta
 # Ejemplo (quita la almohadilla y adapta):
 # proveedores:
 #   - id: milesight                       # letras minúsculas, números y guiones: es el nombre de la subcarpeta
