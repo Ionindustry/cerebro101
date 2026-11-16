@@ -12,6 +12,7 @@ Lo que NO hace (a propósito): no decide el coste con el que se calcula un preci
 from __future__ import annotations
 
 import csv
+import html
 import io
 import json
 import re
@@ -36,16 +37,18 @@ SINONIMOS = {
     "codigo_proveedor": ["material code", "codigo proveedor", "supplier code", "codigo interno"],
     "referencia_fabricante": ["main model name", "reference", "referencia fabricante", "model", "modelo"],
     "descripcion": ["product name", "nombre", "name", "descripcion", "description", "producto", "denominacion", "articulo", "item"],
-    "coste": ["exw china", "exw price", "exw", "standard price", "precio coste", "coste", "cost", "dealer price", "net price", "precio neto", "precio distribuidor", "price", "precio", "tarifa"],
-    "pvp_recomendado": ["msrp price", "msrp", "rrp", "pvp", "pvpr", "precio recomendado", "precio publico", "retail price"],
+    "coste": ["exw china", "exw price", "exw", "standard price", "precio coste", "coste", "cost", "dealer price", "net price", "precio neto compra", "precio neto", "precio distribuidor", "price", "precio", "tarifa"],
+    "pvp_recomendado": ["msrp price", "pvp", "pvpr", "msrp", "rrp", "precio recomendado", "precio publico", "retail price"],
     "stock": ["stock", "existencias", "disponible", "disponibilidad", "inventory", "qty", "cantidad disponible"],
-    "familia": ["categories", "categorias", "categoria", "familia", "family", "series", "serie", "gama", "grupo"],
+    "familia": ["categories", "categorias", "categoria", "category", "familia", "family", "series", "serie", "gama", "grupo"],
     "estado": ["production status", "estado", "status", "situacion"],
     "ean": ["ean", "ean13", "gtin", "upc", "codigo de barras"],
     "marca": ["brand", "marca", "fabricante", "manufacturer"],
-    "especificaciones": ["specs", "especificaciones", "caracteristicas", "características tecnicas", "caracteristicas tecnicas"],
+    "especificaciones": ["specs", "specifications", "especificaciones", "caracteristicas", "características tecnicas", "caracteristicas tecnicas"],
 }
 # Columnas que son imágenes o enlaces: no son una característica del producto
+# Columnas administrativas de algunas tarifas (fechas, banderas, enlaces entre productos): tampoco son una característica
+NO_ES_CARACTERISTICA = {"msrp", "created", "modified", "published", "params", "related products", "extra images paths", "category id", "on request", "envio especial", "order quantity block", "precio venta cliente final"}
 IGNORAR_COMO_ESPECIFICACION = ("img", "image", "picture", "pictures", "imagen", "foto", "photo", "link", "url")
 # Columnas cuyo contenido es un enlace útil (ficha técnica, catálogo, página del producto): se GUARDAN aparte, para poder bajar las fichas. Las de imágenes no.
 COLUMNA_DE_ENLACE = ("datasheet", "data sheet", "ficha", "pdf", "catalog", "catalogo", "link", "url", "enlace", "web", "download", "descarga", "manual", "brochure", "folleto")
@@ -166,6 +169,10 @@ def _columnas(cabecera: list[str]) -> dict[str, int]:
                 if campo != "referencia_fabricante":
                     usadas.add(i)
                 break
+    # Formato «name = referencia» (Visiotech): si no hay columna de referencia y «name» es lo único que hace de descripción, «name» es la referencia y la descripción es «short description».
+    if "referencia" not in mapa and "name" in ncab and "short description" in ncab and mapa.get("descripcion") == ncab.index("name"):
+        mapa["referencia"] = ncab.index("name")
+        mapa["descripcion"] = ncab.index("short description")
     return mapa
 
 
@@ -186,10 +193,10 @@ def _especificaciones(fila: list[str], cabecera: list[str], mapa: dict[str, int]
         if i in centrales or i >= len(fila) or not c.strip():
             continue
         nc = norm(c)
-        if any(nc == k or nc.startswith(k) for k in IGNORAR_COMO_ESPECIFICACION):
+        if nc in NO_ES_CARACTERISTICA or any(nc == k or nc.startswith(k) for k in IGNORAR_COMO_ESPECIFICACION):
             continue
         v = _una_linea(fila[i], 200)
-        if not v or v.lower() in ("n/a", "na", "-", "—", "none") or v.startswith("=DISPIMG"):
+        if not v or v.lower() in ("n/a", "na", "-", "—", "none") or v.startswith("=DISPIMG") or "<" in v and ">" in v:        # el HTML (descripciones, tablas) no es una característica: ya se lee aparte
             continue
         out[_una_linea(c, 60)] = v
         if len(out) >= MAX_ESPECIFICACIONES:
@@ -257,6 +264,28 @@ def _json_a_texto(s: str) -> dict:
     return out
 
 
+RE_FILA_HTML = re.compile(r"<tr[^>]*>\s*<td[^>]*>(.*?)</td>\s*<td[^>]*>(.*?)</td>\s*</tr>", re.I | re.S)
+RE_ETIQUETA = re.compile(r"<[^>]+>")
+
+
+def _html_a_texto(t: str) -> str:
+    return " ".join(html.unescape(RE_ETIQUETA.sub(" ", t)).split())
+
+
+def _tabla_html_a_texto(s: str) -> dict:
+    """Las características que Visiotech da como tabla HTML (<tr><td><strong>Material</strong></td><td>Poliamida</td></tr>), a «Material: Poliamida». Sin ejecutar nada: solo se leen las filas y se quitan las etiquetas. Pura."""
+    if not s or "<tr" not in s.lower() or len(s) > 200_000:
+        return {}
+    out: dict[str, str] = {}
+    for k, v in RE_FILA_HTML.findall(s):
+        k, v = _html_a_texto(k)[:100], _html_a_texto(v)[:200]
+        if k and v:
+            out[k] = v
+            if len(out) >= MAX_ESPECIFICACIONES:
+                break
+    return out
+
+
 def _producto(hoja: str, n: int, fila: list[str], cabecera: list[str], mapa: dict[str, int]) -> tuple[Producto | None, str]:
     def celda(campo):
         i = mapa.get(campo)
@@ -285,7 +314,9 @@ def _producto(hoja: str, n: int, fila: list[str], cabecera: list[str], mapa: dic
     p.categorias = cats[:10]
     p.familia = (cats[0].split(" / ")[0].strip() if cats else "")
     esp = _especificaciones(fila, cabecera, mapa)
-    esp.update(_json_a_texto(_texto(celda("especificaciones"), MAX_JSON + 1)))
+    texto_esp = _texto(celda("especificaciones"), 200_000)
+    esp.update(_json_a_texto(texto_esp[:MAX_JSON + 1]))
+    esp.update(_tabla_html_a_texto(texto_esp))
     p.especificaciones = esp
     p.enlaces = _enlaces(fila, cabecera)
     p.imagen = _imagen(fila, cabecera)

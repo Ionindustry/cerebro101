@@ -228,5 +228,28 @@ class TestEnlaces(unittest.TestCase):
         self.assertNotIn("Image", por_ref["DS-2CD"].especificaciones)                               # y la imagen tampoco es una característica
 
 
+CAB_VISIOTECH = ("name;image_path;stock;msrp;brand;description;specifications;content;short_description;short_description_html;category;category_parent;precio_neto_compra;"
+                 "precio_venta_cliente_final;PVP;ean;published;created;modified;params;related_products;extra_images_paths;category_id;on_request;envio_especial;order_quantity_block")
+TABLA_VISIOTECH = '<table class=""specs""><tbody><tr class=""table-data""><td><strong>Material</strong></td><td>Poliamida &amp; vidrio</td></tr><tr><td><strong>Color</strong></td><td>Negro</td></tr></tbody></table>'
+FILA_VISIOTECH = ('100XPC5/6-PA;https://cdn.example.com/a.png;high;0.00;SECURITON;"<p>Abrazadera dise\xf1ada</p>";"' + TABLA_VISIOTECH + '";"<ul><li>x</li></ul>";"Abrazadera de poliamida 5 mm";'
+                  '"<ul><li>x</li></ul>";Accesorios;Detecci\xf3n;1,25;;4,10;5706998010049;1;2024-01-01;2025-01-01;{};;;12;0;0;1')
+
+
+class TestFormatoVisiotech(unittest.TestCase):
+    def leer(self):
+        return T.leer((CAB_VISIOTECH + "\r\n" + FILA_VISIOTECH + "\r\n").encode("latin-1"), "visiotech_connect.csv", "EUR")
+
+    def test_name_es_la_referencia_y_el_coste_es_el_precio_neto_de_compra(self):
+        p = self.leer().productos[0]
+        self.assertEqual((p.referencia, p.descripcion, str(p.coste), str(p.pvp_recomendado), p.marca, p.ean), ("100XPC5/6-PA", "Abrazadera de poliamida 5 mm", "1.25", "4.10", "SECURITON", "5706998010049"))
+        self.assertEqual((p.familia, p.imagen), ("Accesorios", "https://cdn.example.com/a.png"))
+
+    def test_la_tabla_html_de_caracteristicas_se_lee_sin_etiquetas_y_lo_administrativo_no_cuenta(self):
+        e = self.leer().productos[0].especificaciones
+        self.assertEqual((e["Material"], e["Color"]), ("Poliamida & vidrio", "Negro"))
+        self.assertFalse({"created", "modified", "published", "params", "msrp"} & set(e))
+        self.assertFalse(any("<" in v for v in e.values()))
+
+
 if __name__ == "__main__":
     unittest.main()
