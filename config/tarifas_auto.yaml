@@ -24,6 +24,8 @@ proveedores:
     canal: distribuidor
     moneda: EUR
     origen: carpeta
+    # Visiotech tiene decenas de miles de productos: solo se cargan las marcas de esta lista (una variante como «HIKVISION PRO» cuenta como su marca). Añade o quita las que quieras.
+    marcas: [Hikvision, Dahua, Ajax, Milesight, Movok, Paradox, Optex, Davantis, Detnov, Aritech, Vanderbilt, EZVIZ, ZKTeco, Risco, Notifier, Xtralis, Securiton, Western Digital, Network Optix, Anviz, X-Sense, Kingston]
   - id: eet                             # su tarifa, si te la dan en fichero: ./scripts/tarifa_subir.sh eet /ruta/al/fichero. El precio y stock en vivo van por la herramienta «eet» (config/eet.yaml)
     proveedor: {nombre: "EET Europarts", nif: "", pais: ""}
     canal: distribuidor
@@ -37,6 +39,7 @@ proveedores:
 #     moneda: USD                         # opcional: la del proveedor
 #     origen: carpeta
 #   - id: distribuidor-x
+#     marcas: [Hikvision, Dahua]         # opcional: solo se cargan estas marcas (para tarifas enormes)
 #     proveedor: {nombre: "Distribuidor X S.L.", nif: "B12345678"}
 #     canal: distribuidor
 #     origen: url
