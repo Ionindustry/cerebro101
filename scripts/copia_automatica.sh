@@ -12,7 +12,7 @@
 #   · COPIA INCREMENTAL (opcional): con COPIA_RESTIC_REPO (una carpeta) y COPIA_RESTIC_CLAVE (el fichero con la contraseña del repositorio) deja además la copia en un repositorio de restic, que guarda
 #     cada día SOLO lo que ha cambiado (deduplicado y cifrado) y conserva 7 diarias, 8 semanales y 12 mensuales. Las copias completas de arriba siguen haciéndose igual. Ver docs/SEGURIDAD.md.
 #
-# Variables (o en el .env): COPIA_CONSERVAR=7  COPIA_EXTRA=  COPIA_BASE=copias/auto  COPIA_RESTIC_REPO=  COPIA_RESTIC_CLAVE=   (para pruebas: COPIA_COMANDO, COPIA_AVISAR, COPIA_RESTIC)
+# Variables (o en el .env): COPIA_CONSERVAR=7  COPIA_EXTRA=  COPIA_BASE=copias/auto  COPIA_RESTIC_REPO=  COPIA_RESTIC_CLAVE=   (para pruebas: COPIA_COMANDO, COPIA_AVISAR, COPIA_RESTIC, COPIA_RESTIC_SIN_VALIDAR)
 set -uo pipefail
 umask 077          # las copias llevan datos sensibles: solo las lee quien las hace
 cd "$(dirname "$0")/.."
@@ -85,7 +85,7 @@ fi
 if [ -n "$RESTIC_REPO" ]; then
   echo "→ Copia incremental (restic) en $RESTIC_REPO"
   RUTA_OK='^/(mnt/[a-z]|media/[A-Za-z0-9._-]+|srv|home/[A-Za-z0-9._-]+)/[A-Za-z0-9._/-]+$'
-  [[ "$RESTIC_REPO" =~ $RUTA_OK ]] && [[ "$RESTIC_REPO" != *..* ]] || fallar "COPIA_RESTIC_REPO tiene que ser una carpeta local (/mnt/d/..., /home/...): $RESTIC_REPO"
+  [ "${COPIA_RESTIC_SIN_VALIDAR:-0}" = 1 ] || { [[ "$RESTIC_REPO" =~ $RUTA_OK ]] && [[ "$RESTIC_REPO" != *..* ]]; } || fallar "COPIA_RESTIC_REPO tiene que ser una carpeta local (/mnt/d/..., /home/...): $RESTIC_REPO"
   [ -n "$RESTIC_CLAVE" ] && [ -s "$RESTIC_CLAVE" ] || fallar "falta el fichero con la contraseña del repositorio restic (COPIA_RESTIC_CLAVE): sin ella no se puede cifrar ni recuperar la copia"
   command -v "$RESTIC" >/dev/null 2>&1 || fallar "restic no está instalado (sudo apt install restic)"
   export RESTIC_REPOSITORY="$RESTIC_REPO" RESTIC_PASSWORD_FILE="$RESTIC_CLAVE"

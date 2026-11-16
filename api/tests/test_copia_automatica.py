@@ -170,7 +170,7 @@ exit 0
 
 @unittest.skipUnless(os.name == "posix", "script de bash")
 class TestCopiaIncremental(TestCopiaAutomatica):
-    def restic(self, backup: str = "true", clave: bool = True, repo: str | None = None):
+    def restic(self, backup: str = "true", clave: bool = True, repo: str | None = None, sin_validar: bool = True):
         reg = self.dir / "restic.txt"
         falso = self.dir / "restic.sh"
         falso.write_text(RESTIC_FALSO.format(registro=reg, marca=self.dir / "repo_creado", backup=backup))
@@ -178,7 +178,11 @@ class TestCopiaIncremental(TestCopiaAutomatica):
         k = self.dir / "clave.txt"
         if clave:
             k.write_text("contrasena-de-prueba\n")
-        return {"COPIA_RESTIC": str(falso), "COPIA_RESTIC_REPO": repo or str(self.dir / "home" / "x" / "restic"), "COPIA_RESTIC_CLAVE": str(k)}
+        # la ruta del repositorio de verdad solo admite /mnt/x, /media, /srv y /home/usuario: en las pruebas se salta esa comprobación (COPIA_RESTIC_SIN_VALIDAR) y se usa una carpeta temporal
+        env = {"COPIA_RESTIC": str(falso), "COPIA_RESTIC_REPO": repo or str(self.dir / "restic"), "COPIA_RESTIC_CLAVE": str(k)}
+        if sin_validar:
+            env["COPIA_RESTIC_SIN_VALIDAR"] = "1"
+        return env
 
     def test_sin_configurar_no_se_llama_a_restic(self):
         r, estado, _ = self.ejecutar(COPIA_BUENA)
@@ -186,7 +190,7 @@ class TestCopiaIncremental(TestCopiaAutomatica):
         self.assertFalse((self.dir / "restic.txt").exists())
 
     def test_incremental_crea_el_repositorio_copia_y_limpia(self):
-        env = self.restic(repo="/mnt/d/Copias101/restic")
+        env = self.restic()
         r, estado, _ = self.ejecutar(COPIA_BUENA, entorno=env)
         self.assertEqual(r.returncode, 0, r.stderr + r.stdout)
         self.assertTrue(estado["ok"])
@@ -196,14 +200,14 @@ class TestCopiaIncremental(TestCopiaAutomatica):
         self.assertIn("--tag cerebro", ordenes[2])
 
     def test_si_el_repositorio_ya_existe_no_lo_vuelve_a_crear(self):
-        env = self.restic(repo="/mnt/d/Copias101/restic")
+        env = self.restic()
         (self.dir / "repo_creado").write_text("")
         r, _, _ = self.ejecutar(COPIA_BUENA, entorno=env)
         self.assertEqual(r.returncode, 0, r.stderr)
         self.assertEqual([o.split()[0] for o in (self.dir / "restic.txt").read_text().splitlines()], ["cat", "backup", "forget"])
 
     def test_si_restic_falla_la_copia_falla_y_avisa(self):
-        env = self.restic(backup="echo disco lleno >&2; exit 1", repo="/mnt/d/Copias101/restic")
+        env = self.restic(backup="echo disco lleno >&2; exit 1")
         r, estado, _ = self.ejecutar(COPIA_BUENA, entorno=env)
         self.assertEqual(r.returncode, 1)
         self.assertFalse(estado["ok"])
@@ -211,14 +215,14 @@ class TestCopiaIncremental(TestCopiaAutomatica):
         self.assertTrue(self.avisos.exists())
 
     def test_sin_fichero_de_contrasena_no_se_hace_y_se_dice(self):
-        env = self.restic(clave=False, repo="/mnt/d/Copias101/restic")
+        env = self.restic(clave=False)
         r, estado, _ = self.ejecutar(COPIA_BUENA, entorno=env)
         self.assertEqual(r.returncode, 1)
         self.assertIn("contraseña del repositorio", estado["mensaje"])
 
     def test_el_repositorio_tiene_que_ser_una_carpeta_local_razonable(self):
         for malo in ("sftp:usuario@host:/copias", "/etc/restic", "/mnt/d/../etc"):
-            env = self.restic(repo=malo)
+            env = self.restic(repo=malo, sin_validar=False)
             r, estado, _ = self.ejecutar(COPIA_BUENA, entorno=env)
             self.assertEqual(r.returncode, 1, malo)
             self.assertIn("carpeta local", estado["mensaje"], malo)
