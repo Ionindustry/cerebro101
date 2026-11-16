@@ -34,7 +34,7 @@ class TestCopiaAutomatica(unittest.TestCase):
     def tearDown(self):
         self.tmp.cleanup()
 
-    def ejecutar(self, copia: str, conservar: int = 7, extra: str = "", previas: int = 0, config: str = "", conservar_extra: int = 0, previas_extra: int = 0):
+    def ejecutar(self, copia: str, conservar: int = 7, extra: str = "", previas: int = 0, config: str = "", conservar_extra: int = 0, previas_extra: int = 0, entorno: dict | None = None):
         cmd = self.dir / "copia.sh"
         cmd.write_text(copia)
         cmd.chmod(0o755)
@@ -52,7 +52,7 @@ class TestCopiaAutomatica(unittest.TestCase):
         for i in range(previas_extra):
             (Path(extra) / f"2026-09-{10 + i:02d}_0300").mkdir(parents=True, exist_ok=True)
             (Path(extra) / f"2026-09-{10 + i:02d}_0300" / "x").write_text("x")
-        env = {**os.environ, "COPIA_CONFIG": str(cfg), "COPIA_CONSERVAR_EXTRA": str(conservar_extra), "COPIA_REGISTRAR": str(reg), "COPIA_BASE": str(base), "COPIA_COMANDO": str(cmd), "COPIA_AVISAR": str(self.aviso_cmd), "COPIA_CONSERVAR": str(conservar), "COPIA_EXTRA": extra}
+        env = {**os.environ, "COPIA_CONFIG": str(cfg), "COPIA_CONSERVAR_EXTRA": str(conservar_extra), "COPIA_REGISTRAR": str(reg), "COPIA_BASE": str(base), "COPIA_COMANDO": str(cmd), "COPIA_AVISAR": str(self.aviso_cmd), "COPIA_CONSERVAR": str(conservar), "COPIA_EXTRA": extra, **(entorno or {})}
         r = subprocess.run(["bash", str(SCRIPT)], env=env, capture_output=True, text=True, timeout=60)
         estado = json.loads((self.dir / "estado.json").read_text())
         return r, estado, base
@@ -156,3 +156,75 @@ class TestAvisarSoporte(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+RESTIC_FALSO = """#!/usr/bin/env bash
+echo "$@" >> "{registro}"
+case "$1" in
+  cat) [ -f "{marca}" ] || exit 1 ;;
+  init) touch "{marca}" ;;
+  backup) {backup} ;;
+esac
+exit 0
+"""
+
+
+@unittest.skipUnless(os.name == "posix", "script de bash")
+class TestCopiaIncremental(TestCopiaAutomatica):
+    def restic(self, backup: str = "true", clave: bool = True, repo: str | None = None):
+        reg = self.dir / "restic.txt"
+        falso = self.dir / "restic.sh"
+        falso.write_text(RESTIC_FALSO.format(registro=reg, marca=self.dir / "repo_creado", backup=backup))
+        falso.chmod(0o755)
+        k = self.dir / "clave.txt"
+        if clave:
+            k.write_text("contrasena-de-prueba\n")
+        return {"COPIA_RESTIC": str(falso), "COPIA_RESTIC_REPO": repo or str(self.dir / "home" / "x" / "restic"), "COPIA_RESTIC_CLAVE": str(k)}
+
+    def test_sin_configurar_no_se_llama_a_restic(self):
+        r, estado, _ = self.ejecutar(COPIA_BUENA)
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertFalse((self.dir / "restic.txt").exists())
+
+    def test_incremental_crea_el_repositorio_copia_y_limpia(self):
+        env = self.restic(repo="/mnt/d/Copias101/restic")
+        r, estado, _ = self.ejecutar(COPIA_BUENA, entorno=env)
+        self.assertEqual(r.returncode, 0, r.stderr + r.stdout)
+        self.assertTrue(estado["ok"])
+        ordenes = (self.dir / "restic.txt").read_text().splitlines()
+        self.assertEqual([o.split()[0] for o in ordenes], ["cat", "init", "backup", "forget"])
+        self.assertIn("--keep-daily 7 --keep-weekly 8 --keep-monthly 12 --prune", ordenes[-1])
+        self.assertIn("--tag cerebro", ordenes[2])
+
+    def test_si_el_repositorio_ya_existe_no_lo_vuelve_a_crear(self):
+        env = self.restic(repo="/mnt/d/Copias101/restic")
+        (self.dir / "repo_creado").write_text("")
+        r, _, _ = self.ejecutar(COPIA_BUENA, entorno=env)
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertEqual([o.split()[0] for o in (self.dir / "restic.txt").read_text().splitlines()], ["cat", "backup", "forget"])
+
+    def test_si_restic_falla_la_copia_falla_y_avisa(self):
+        env = self.restic(backup="echo disco lleno >&2; exit 1", repo="/mnt/d/Copias101/restic")
+        r, estado, _ = self.ejecutar(COPIA_BUENA, entorno=env)
+        self.assertEqual(r.returncode, 1)
+        self.assertFalse(estado["ok"])
+        self.assertIn("restic no ha podido", estado["mensaje"])
+        self.assertTrue(self.avisos.exists())
+
+    def test_sin_fichero_de_contrasena_no_se_hace_y_se_dice(self):
+        env = self.restic(clave=False, repo="/mnt/d/Copias101/restic")
+        r, estado, _ = self.ejecutar(COPIA_BUENA, entorno=env)
+        self.assertEqual(r.returncode, 1)
+        self.assertIn("contraseña del repositorio", estado["mensaje"])
+
+    def test_el_repositorio_tiene_que_ser_una_carpeta_local_razonable(self):
+        for malo in ("sftp:usuario@host:/copias", "/etc/restic", "/mnt/d/../etc"):
+            env = self.restic(repo=malo)
+            r, estado, _ = self.ejecutar(COPIA_BUENA, entorno=env)
+            self.assertEqual(r.returncode, 1, malo)
+            self.assertIn("carpeta local", estado["mensaje"], malo)
+
+
+# la clase hija repite los tests de la madre; se quitan para no ejecutarlos dos veces
+for _n in [n for n in dir(TestCopiaIncremental) if n.startswith("test_") and n not in TestCopiaIncremental.__dict__]:
+    setattr(TestCopiaIncremental, _n, None)
+
