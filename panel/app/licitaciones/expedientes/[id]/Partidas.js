@@ -1,7 +1,7 @@
 "use client";
 import { useCallback, useEffect, useState } from "react";
 import { cantidadAEnvio, eurosTexto, faltaEnPartidasTexto } from "../../../../lib/licitaciones";
-import { referenciaDeProducto } from "../../../../lib/cotizaciones";
+import { preparadasTexto, referenciaDeProducto } from "../../../../lib/cotizaciones";
 import { pedirCerebro } from "../../cliente";
 
 const enviar = (cuerpo) => ({ method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(cuerpo) });
@@ -15,6 +15,9 @@ export default function Partidas({ id, version }) {
   const [trabajando, setTrabajando] = useState(false);
   const [nuevo, setNuevo] = useState("");
   const [cantNueva, setCantNueva] = useState("");
+  const [modoCot, setModoCot] = useState("manual");
+  const [plazoCot, setPlazoCot] = useState("15");
+  const [prep, setPrep] = useState(null);
   const cargar = useCallback(async () => {
     try { setD(await pedirCerebro(`licitaciones/ofertas/${encodeURIComponent(id)}/partidas`)); }
     catch { setD((x) => (x === undefined ? null : x)); }
@@ -39,6 +42,29 @@ export default function Partidas({ id, version }) {
       {faltaEnPartidasTexto(t) && <p className="aviso" role="note">{faltaEnPartidasTexto(t)}</p>}
       {d.aviso && <p className="aviso" role="alert">{d.aviso}</p>}
       {error && <p className="aviso" role="alert">{error.detalle || "No se ha podido hacer."}</p>}
+      {d.partidas.some((p) => !p.excluida && p.coste_unit_eur === null) && (
+        <div className="lic-aviso" role="group" aria-label="Pedir cotización de lo que no tiene precio">
+          <p><strong>{d.partidas.filter((p) => !p.excluida && p.coste_unit_eur === null).length} partida(s) sin coste en las tarifas.</strong> Prepara de una vez la cotización a los proveedores que distribuyen cada marca: el correo lo redacta el sistema (solo referencia, cantidad y plazo de entrega) y queda en borrador para que lo revises.</p>
+          <p className="lic-fila">
+            <label>Plazo de entrega (días) <input value={plazoCot} onChange={(e) => setPlazoCot(e.target.value)} inputMode="numeric" size={4} aria-label="Plazo de entrega en días" /></label>
+            <label>Modo <select value={modoCot} onChange={(e) => setModoCot(e.target.value)} aria-label="Modo de las cotizaciones">
+              <option value="manual">La mando yo</option>
+              <option value="enviar">La envía el sistema cuando Dirección confirma</option>
+            </select></label>
+            <button className="boton si" disabled={trabajando || !(Number(plazoCot) >= 1)} onClick={async () => {
+              setTrabajando(true); setError(null); setPrep(null);
+              try { setPrep(await pedirCerebro(`licitaciones/ofertas/${encodeURIComponent(id)}/cotizaciones/preparar`, enviar({ modo: modoCot, plazo_tipo: "dias", plazo_valor: Number(plazoCot) }))); await cargar(); }
+              catch (e) { setError(e); } finally { setTrabajando(false); }
+            }}>Preparar las cotizaciones</button>
+          </p>
+          {prep && (
+            <div role="status">
+              <p>{preparadasTexto(prep)} {prep.creadas.length > 0 && <a href="/cotizaciones">Ir a Cotizaciones</a>}</p>
+              {prep.omitidas.length > 0 && <ul>{prep.omitidas.map((o, i) => <li key={i}><strong>{o.producto}</strong>: {o.motivo}</li>)}</ul>}
+            </div>
+          )}
+        </div>
+      )}
       <p className="lic-fila">
         <button className="boton si" disabled={trabajando} onClick={() => hacer(() => pedirCerebro(`${ruta}/proponer`, enviar({})))}>{d.partidas.length ? "Actualizar desde la tabla de equivalencias" : "Calcular desde la tabla de equivalencias"}</button>
       </p>

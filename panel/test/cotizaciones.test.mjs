@@ -34,3 +34,11 @@ test("la referencia que se pide sale del texto del producto", () => {
   assert.equal(referenciaDeProducto(""), "");
   assert.ok(referenciaDeProducto("x".repeat(200)).length <= 80);
 });
+
+test("texto tras preparar las cotizaciones de una oferta", async () => {
+  const { preparadasTexto } = await import("../lib/cotizaciones.js");
+  assert.equal(preparadasTexto({ creadas: [], omitidas: [] }), "No hay partidas sin coste que cotizar.");
+  assert.match(preparadasTexto({ creadas: [{}, {}], omitidas: [] }), /^2 cotización\(es\) preparada\(s\) en borrador/);
+  assert.match(preparadasTexto({ creadas: [{}], omitidas: [{}] }), /1 no se ha\(n\) podido preparar/);
+  assert.match(preparadasTexto({ creadas: [], omitidas: [{}] }), /^1 no se ha/);
+});

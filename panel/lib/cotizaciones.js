@@ -61,3 +61,13 @@ export function referenciaDeProducto(texto) {
   if (palabras.length) return palabras.sort((a, b) => b.length - a.length)[0].slice(0, 80);
   return String(texto || "").trim().replace(/\s+/g, " ").slice(0, 80);
 }
+
+/** Lo que dice el panel tras «Preparar cotizaciones» de una oferta: cuántos borradores se han creado y cuáles no se han podido preparar (con el motivo). */
+export function preparadasTexto(r) {
+  const c = r?.creadas?.length || 0, o = r?.omitidas?.length || 0;
+  if (!c && !o) return "No hay partidas sin coste que cotizar.";
+  const partes = [];
+  if (c) partes.push(`${c} cotización(es) preparada(s) en borrador: revisa el correo y envíalo desde Cotizaciones.`);
+  if (o) partes.push(`${o} no se ha(n) podido preparar (mira el motivo de cada una).`);
+  return partes.join(" ");
+}
