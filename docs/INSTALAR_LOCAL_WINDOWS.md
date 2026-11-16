@@ -83,7 +83,7 @@ Ollama y Langfuse deja la máquina sin memoria y los modelos empiezan a dar time
 Dos piezas, ya incluidas en el proyecto:
 - `scripts/arrancar.sh` (dentro de WSL): levanta el Cerebro y el ERP ya instalados, sin reconstruir nada, y espera a que respondan. Se puede lanzar a mano
   (`./scripts/arrancar.sh`) o solo para comprobar (`./scripts/arrancar.sh estado`). Si Docker se ha caído y has vuelto a abrirlo, es lo único que necesitas.
-- `scripts/windows/autoarranque.ps1` (en Windows): registra dos tareas programadas. **Arranque**: al iniciar sesión abre Docker Desktop y lanza `arrancar.sh`.
+- `scripts/windows/autoarranque.ps1` (en Windows): registra cuatro tareas programadas. **Arranque**: al iniciar sesión abre Docker Desktop y lanza `arrancar.sh`.
   **Vigilante**: cada 5 minutos comprueba Docker y la API; si Docker no responde dos veces seguidas (10 minutos) lo cierra, reinicia WSL y lo vuelve a abrir
   (máximo 3 veces por hora, para no entrar en bucle); si Docker responde pero la API o el panel no (`localhost:8000` o `:3000`), vuelve a levantar los servicios y, si los contenedores están en marcha pero sin puertos (pasa al reiniciar Docker), recrea `api` y `panel` solo. `arrancar.sh` levanta también el motor de licitaciones y repara el ERP.
 
@@ -96,8 +96,18 @@ y en **PowerShell como administrador** (cambia la ruta si tu usuario no es `PC`)
 powershell -ExecutionPolicy Bypass -File C:\Users\PC\autoarranque.ps1 -Instalar
 powershell -ExecutionPolicy Bypass -File C:\Users\PC\autoarranque.ps1 -Estado
 ```
-`-Estado` muestra si las dos tareas existen, si Docker y la API responden y las últimas líneas del registro (`%USERPROFILE%\cerebro-autoarranque\autoarranque.log`).
+`-Estado` muestra si las tareas existen, el espacio libre de las unidades vigiladas, si Docker y la API responden y las últimas líneas del registro (`%USERPROFILE%\cerebro-autoarranque\autoarranque.log`).
 Para quitarlo: `-Quitar`. Para probarlo sin reiniciar: `Start-ScheduledTask -TaskName "Cerebro - arranque"`.
+
+**Espacio en disco (tarea «Cerebro - disco»).** Los discos de Docker Desktop y de WSL son ficheros `.vhdx` que **crecen y no se encogen solos**: si la unidad donde viven se llena (a 0 GB libres),
+Docker no arranca (`device or resource busy` al montar el disco de datos) y el Cerebro y el ERP se paran. La tarea mira cada 30 minutos las unidades donde viven esos discos (las lee del registro de Windows,
+aunque las hayas movido a otra unidad como `D:`) y avisa por debajo de **50 GB** libres (aviso) y de **20 GB** (crítico): notificación de Windows y línea en el registro, y además un correo a soporte@ si Docker
+responde. No depende de Docker. Los avisos no se repiten sin parar: crítico cada 3 horas, aviso cada 24. Para ver ahora el espacio sin esperar: `autoarranque.ps1 -Disco` (o `-Estado`). Otros umbrales:
+`-Instalar -AvisoGB 80 -CriticoGB 30`; otras unidades además de esas: `-Unidades D,F`. **Ojo:** `-Instalar` vuelve a registrar las cuatro tareas y deja activadas las que tuvieras desactivadas.
+
+Si el disco ya se llenó y Docker no arranca: no uses «Reset to factory defaults» ni «Clean / Purge data» (borran las bases de datos). Libera espacio **fuera** de la carpeta de Docker, aunque sean unos cientos de MB
+(mover una copia vieja a otra unidad, por ejemplo), cierra Docker Desktop, `wsl --shutdown` y ábrelo otra vez antes de abrir cualquier Ubuntu. Una máquina virtual de Hyper-V con checkpoints antiguos
+(`.avhdx`) en la misma unidad es una causa típica de que se llene: se puede mover con `Move-VMStorage` a otra unidad (con la máquina apagada).
 
 Límites que conviene conocer: Docker Desktop necesita una sesión de usuario abierta (tras reiniciar el PC hay que iniciar sesión, o activar el inicio de
 sesión automático); si el PC se suspende, todo se para (`powercfg /change standby-timeout-ac 0`); y el script de Windows **no se ha podido probar en un
