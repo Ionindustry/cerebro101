@@ -820,3 +820,17 @@ CREATE TABLE IF NOT EXISTS copias_ajustes (
   por         text NOT NULL,
   actualizado timestamptz NOT NULL DEFAULT now()
 );
+
+-- Qué marcas distribuye cada proveedor (api/cerebro/proveedores_marcas.py): se deduce de la última tarifa cargada de cada proveedor (fuente «tarifa») y se pueden añadir a mano las que no vienen en ella
+-- (fuente «manual»). Sin precios. Sirve para saber a quién pedir precio o cotización de una marca.
+CREATE TABLE IF NOT EXISTS proveedores_marcas (
+  proveedor   text NOT NULL,
+  clave       text NOT NULL,                       -- la marca normalizada (sin mayúsculas ni tildes) con la que se compara
+  marca       text NOT NULL,                       -- cómo se enseña (ya agrupada bajo el fabricante)
+  articulos   integer NOT NULL DEFAULT 0,          -- cuántos artículos de esa marca trae su tarifa (0 en las manuales)
+  variantes   jsonb NOT NULL DEFAULT '{}',         -- cómo la escribe la tarifa: {texto original: artículos}
+  fuente      text NOT NULL CHECK (fuente IN ('tarifa', 'manual')),
+  por         text NOT NULL DEFAULT 'sistema',
+  actualizado timestamptz NOT NULL DEFAULT now(),
+  PRIMARY KEY (proveedor, clave, fuente)
+);

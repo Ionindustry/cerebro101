@@ -4,6 +4,7 @@ import { CAMBIO_ETIQUETA, ESTADO_PROPUESTA, MENSAJE_APLICAR, consultaLineas, eur
 import { fechaTexto } from "../../lib/licitaciones";
 import { pedirCerebro } from "../licitaciones/cliente";
 import Tarifas from "./Tarifas";
+import ProveedoresMarcas from "./ProveedoresMarcas";
 
 const enviar = (cuerpo) => ({ method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(cuerpo) });
 const CLASE_CAMBIO = { nuevo: "ok", sube: "aviso", baja: "aviso", igual: "" };
@@ -69,6 +70,7 @@ export default function Precios() {
       {aviso && <p className="aviso" role="status">{aviso}</p>}
 
       <Tarifas alCargarTarifa={cargarLista} />
+      <ProveedoresMarcas />
 
       <section className="tarjeta">
         <h2>Propuestas de precios de venta</h2>

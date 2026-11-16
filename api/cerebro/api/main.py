@@ -41,6 +41,7 @@ from ..licitaciones import encargos as encargos_ofertas
 from ..licitaciones import comparativa as comparativa_ofertas
 from ..licitaciones import equivalencia as equivalencia_ofertas
 from .. import precios_venta as precios_venta_pantalla
+from .. import proveedores_marcas
 from .. import ranking_ventas
 from .. import tarifas_auto as tarifas_automaticas
 from .. import listas_precios as listas_precios_mod
@@ -1692,6 +1693,45 @@ async def ranking_de_ventas(dias: int = 365, top: int = 10, usuario: Usuario = D
     except Exception as e:  # noqa: BLE001 — el ERP puede fallar de muchas formas; se dice sin enseñar detalles internos
         log.warning("ventas: no se ha podido leer el ERP: %s", type(e).__name__)
         raise HTTPException(502, "No se han podido leer los pedidos de venta del ERP (¿está en marcha y con permiso de lectura para Dirección?)") from None
+
+
+class MarcaProveedorEntrada(BaseModel):
+    proveedor: str = Field(min_length=2, max_length=80)
+    marca: str = Field(min_length=1, max_length=60)
+    accion: str = "anadir"
+
+
+@app.get("/precios/proveedores-marcas")
+async def marcas_de_los_proveedores(marca: str = "", usuario: Usuario = Depends(usuario_actual)):
+    """Qué marcas distribuye cada proveedor (de sus tarifas cargadas y de lo añadido a mano). Con `marca`, solo los proveedores que la distribuyen. Solo Dirección: quién nos vende qué es confidencial."""
+    _exige_direccion(usuario)
+    try:
+        return await proveedores_marcas.listar(marca[:60])
+    except ValueError as e:
+        raise HTTPException(422, str(e)) from None
+
+
+@app.post("/precios/proveedores-marcas/reconstruir")
+async def reconstruir_marcas_de_los_proveedores(usuario: Usuario = Depends(usuario_actual)):
+    """Vuelve a deducir las marcas de todos los proveedores desde sus tarifas ya cargadas (lo manual no se toca). Para llenar lo que había antes de existir esta pantalla."""
+    _exige_direccion(usuario)
+    r = await proveedores_marcas.reconstruir()
+    log.info("precios: %s reconstruye las marcas de los proveedores (%d proveedores)", usuario.id, r["proveedores"])
+    return r
+
+
+@app.post("/precios/proveedores-marcas/manual")
+async def marca_manual_de_un_proveedor(entrada: MarcaProveedorEntrada, usuario: Usuario = Depends(usuario_actual)):
+    """Añade o quita a mano una marca que un proveedor distribuye aunque no venga en su tarifa. Solo quita lo puesto a mano."""
+    _exige_direccion(usuario)
+    if entrada.accion not in ("anadir", "quitar"):
+        raise HTTPException(422, "La acción es «anadir» o «quitar»")
+    try:
+        if entrada.accion == "anadir":
+            return {"estado": "anadida", **await proveedores_marcas.anadir_manual(entrada.proveedor, entrada.marca, usuario.id)}
+        return {"estado": "quitada" if await proveedores_marcas.quitar_manual(entrada.proveedor, entrada.marca) else "no_estaba"}
+    except ValueError as e:
+        raise HTTPException(422, str(e)) from None
 
 
 @app.get("/precios/propuestas")

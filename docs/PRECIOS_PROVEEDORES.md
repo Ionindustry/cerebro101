@@ -70,3 +70,9 @@ Dirección necesita permiso de lectura de «Sales Order» (ya lo tiene en `confi
 
 ## Descarga de tarifas por servicio web: qué se rechaza
 Respuestas cortadas a medias, tiempos de espera, conexión rechazada, fichero vacío, una página web en lugar de la tarifa (sesión caducada o clave rechazada), un «Excel» que no es un .xlsx, `Content-Length` por encima del máximo, redirecciones a http o a otro dominio, JSON sin productos o demasiado anidado. En todos los casos el proveedor queda como «con fallo» con un mensaje claro y no se carga nada.
+
+## Proveedores y marcas
+En **Precios → «Proveedores y marcas»** (solo Dirección) se ve qué marcas distribuye cada proveedor, y queda **guardado** (tabla `proveedores_marcas`, sin precios). Se deduce de la columna «marca» de la última tarifa cargada de cada proveedor; cada vez que se carga una tarifa nueva se actualiza solo, y el botón **«Recalcular desde las tarifas»** llena lo que ya estaba cargado.
+- **Variantes bajo el fabricante.** Las tarifas traen etiquetas como «HIKVISION PRO», «HIKVISION PRO NO CCTV» o «MOVOK ACCESSORIES», y líneas propias del proveedor («A-CCTV», «A-FIRE»…). `config/marcas_alias.yaml` las junta bajo la marca de verdad (o «A-Secur (líneas propias)») y las variantes originales se ven al desplegar. Con la tarifa de A-Secur, 40 etiquetas quedan en 29 marcas (Hikvision 1.112 artículos, Ajax 524, Dahua 325, Movok 264, Detnov 158…).
+- **«¿Quién distribuye…?»**: buscar una marca enseña solo los proveedores que la distribuyen (a quién pedirle precio o cotización).
+- **A mano.** Se pueden añadir marcas que un proveedor distribuye aunque no vengan en su tarifa (p. ej. un distribuidor autorizado); una recarga de tarifas nunca las pisa y solo se quitan las puestas a mano.

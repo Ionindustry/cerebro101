@@ -1,0 +1,33 @@
+# Marcas de los proveedores: cómo se juntan las variantes que traen sus tarifas bajo el fabricante de verdad.
+# Una tarifa puede llamar «HIKVISION PRO», «HIKVISION PRO NO CCTV» o «HIKVISION PRO INTRUSION» a líneas de Hikvision, o «MOVOK ACCESSORIES» a accesorios de Movok: en «Proveedores y marcas» todas
+# salen como la marca de verdad, y las variantes originales se ven al desplegarla. Se compara sin mayúsculas, tildes ni signos. Se edita aquí y vale al reiniciar la API.
+# Si una marca no encaja en ninguna regla, sale tal como la trae la tarifa.
+prefijos:                       # una marca que EMPIEZA por esto (palabras enteras) es de ese fabricante
+  hikvision: Hikvision
+  movok: Movok
+  dahua: Dahua
+  ajax: Ajax
+  paradox: Paradox
+  optex: Optex
+  milesight: Milesight
+  davantis: Davantis
+  detnov: Detnov
+  aritech: Aritech
+  vanderbilt: Vanderbilt
+  ezviz: EZVIZ
+  zkteco: ZKTeco
+  risco: Risco
+  notifier: Notifier
+  xtralis: Xtralis
+  western digital: Western Digital
+  network optix: Network Optix
+exactas:                        # marcas con este nombre exacto → fabricante (o línea propia del proveedor)
+  openers closers: Openers Closers
+propias:                        # etiquetas que son LÍNEAS o categorías del propio proveedor, no un fabricante: se juntan en una sola «marca propia»
+  - patron: "^a ?-?(cctv|smarthome|fire|electricity|larm|ccess|time)$"
+    marca: "A-Secur (líneas propias)"
+sin_marca:                      # lo que significa «no consta fabricante»
+  - sin fabricante asignado
+  - sin marca
+  - n/a
+  - varios
