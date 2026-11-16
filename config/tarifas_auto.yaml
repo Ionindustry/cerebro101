@@ -7,7 +7,7 @@
 #   url     → se descarga de una dirección https de un dominio de `hosts` (el servicio web del proveedor). Si pide clave, aquí solo va el NOMBRE de la variable (clave_secreto); la clave
 #             va en secretos/tarifas.env (una línea NOMBRE=valor; esa carpeta no se sube a git). No pegues claves en el chat ni en este fichero.
 carpeta_base: /datos/tarifas
-max_mb: 50
+max_mb: 150
 proveedores: []
 # Ejemplo (quita la almohadilla y adapta):
 # proveedores:

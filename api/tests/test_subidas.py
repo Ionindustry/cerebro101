@@ -318,7 +318,7 @@ class TestRutaYHerramienta(unittest.TestCase):
             self.assertEqual((r.status_code, r.json()), (200, ok))
             self.assertEqual(sub.await_args.args[:3], ("marta", "t.csv", CSV))
             self.assertEqual(self.c.post("/documentos/subir", json={"nombre": "t.csv", "base64": "no es base64!!"}).status_code, 422)
-            self.assertEqual(self.c.post("/documentos/subir", json={"nombre": "t.csv", "base64": "A" * (26 * 1_400_000)}).status_code, 413)
+            self.assertEqual(self.c.post("/documentos/subir", json={"nombre": "t.csv", "base64": "A" * ((S.configuracion()["max_mb"] + 1) * 1_400_000)}).status_code, 413)
             self.assertEqual(self.c.post("/documentos/subir", json={"nombre": "t.csv"}).status_code, 422)
         with mock.patch.object(self.main.subidas, "subir", mock.AsyncMock(side_effect=S.ErrorSubida("Formato no admitido"))):
             r = self.c.post("/documentos/subir", json={"nombre": "x.exe", "base64": base64.b64encode(b"MZ").decode()})

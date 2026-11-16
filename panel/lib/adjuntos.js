@@ -1,7 +1,7 @@
 // Documentos que se adjuntan al chat de Jarvis (POST /cerebro/documentos/subir, api/cerebro/subidas.py): comprobaciones previas en el navegador y textos para la persona.
 // La comprobación de verdad (por el contenido, antivirus, tamaño) la hace siempre la API; esto solo evita subir lo que se va a rechazar.
 
-export const MAX_MB = 25;
+export const MAX_MB = 100;
 export const EXTENSIONES = [".pdf", ".docx", ".xlsx", ".odt", ".ods", ".csv", ".tsv", ".txt"];
 export const ACCEPT = EXTENSIONES.join(",");
 
