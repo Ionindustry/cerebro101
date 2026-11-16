@@ -19,7 +19,11 @@ proveedores:
     canal: fabricante
     moneda: USD                         # LA TARIFA NO DICE LA MONEDA (precios MSRP y EXW China): se ha puesto USD, que es lo habitual en Milesight. COMPRUÉBALO en la vista previa de Precios antes de firmar
     origen: carpeta
-# Visiotech: pendiente de recibir su tarifa; se añade aquí igual que A-Secur (canal: distribuidor, moneda: EUR).
+  - id: visiotech                       # ./scripts/tarifa_subir.sh visiotech /ruta/a/la_tarifa_de_Visiotech.csv
+    proveedor: {nombre: "Visiotech", nif: "", pais: "Spain"}
+    canal: distribuidor
+    moneda: EUR
+    origen: carpeta
 # Ejemplo (quita la almohadilla y adapta):
 # proveedores:
 #   - id: milesight                       # letras minúsculas, números y guiones: es el nombre de la subcarpeta
