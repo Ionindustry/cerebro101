@@ -38,6 +38,6 @@ listas_precios:
   supplier_type: Company
   moneda: EUR
   monedas: [EUR, USD, GBP]
-  max_lineas: 40000                  # líneas máximas por importación
+  max_lineas: 100000                 # líneas máximas por importación
   lote: 100                          # documentos por llamada al ERP
   prefijo_lista: Compra              # la lista de precios se llama «Compra <proveedor>»
