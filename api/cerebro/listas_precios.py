@@ -34,7 +34,7 @@ from .herramientas.facturas import DatosFactura, a_decimal
 
 log = logging.getLogger("cerebro.listas_precios")
 DEFECTO = {"item_group": "Products", "stock_uom": "Nos", "supplier_group": "All Supplier Groups", "supplier_type": "Company", "moneda": "EUR", "monedas": ["EUR", "USD", "GBP"],
-           "max_lineas": 10000, "lote": 100, "prefijo_lista": "Compra", "lista_venta": "Venta"}
+           "max_lineas": 40000, "lote": 100, "prefijo_lista": "Compra", "lista_venta": "Venta"}
 CAMPOS = ("referencia", "descripcion", "precio", "unidad", "descuento")
 PRECIO_MAX = Decimal("10000000")
 RE_NIF = re.compile(r"^[A-Z0-9]{8,14}$")
@@ -56,7 +56,7 @@ def configuracion() -> dict:
     except OSError:
         c = {}
     cfg = {**DEFECTO, **c}
-    cfg["max_lineas"] = min(max(int(cfg["max_lineas"]), 10), 20000)
+    cfg["max_lineas"] = min(max(int(cfg["max_lineas"]), 10), 50000)
     cfg["lote"] = min(max(int(cfg["lote"]), 10), 500)
     cfg["lista_venta"] = str(cfg["lista_venta"]).strip()[:140] or "Venta"
     return cfg
@@ -167,7 +167,7 @@ def codigo_articulo(prefijo: str, ref: str) -> str:
 
 
 def construir_lineas(paginas: list[tuple[int, str]], formato: str, columnas: dict, fila_cabecera: int = 1, prefijo: str = "PROV", iva_incluido_pct: float | None = None,
-                     max_lineas: int = 10000) -> dict:
+                     max_lineas: int = 40000) -> dict:
     """Lee TODAS las filas de las páginas indicadas y devuelve {lineas, rechazadas, omitidas, avisos, columnas}. `fila_cabecera` es la fila (desde 1, de cada página u hoja) que lleva los títulos: se salta
     esa y las anteriores. Una fila sin referencia ni precio (un título de sección, una nota) se omite; con referencia pero sin precio válido, se rechaza con el motivo."""
     if isinstance(fila_cabecera, bool) or not isinstance(fila_cabecera, int) or not 0 <= fila_cabecera <= 50:
