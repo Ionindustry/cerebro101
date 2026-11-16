@@ -93,3 +93,11 @@ Para la tabla de equivalencias «iguala o supera», las líneas de las tarifas d
 - **Lo que no hace:** decidir si un producto iguala o supera un requisito. Eso lo comprueba el código con los valores de la ficha, no el parecido.
 - **Es un índice:** `TRUNCATE lineas_vectores` y se recalcula sola. Hasta que se complete la primera pasada, la búsqueda sigue funcionando por palabras.
 - **Ajuste pendiente:** el umbral de parecido (`SIMILITUD_MINIMA = 0.45` en `api/cerebro/lineas_vectores.py`) hay que calibrarlo con tarifas reales.
+
+### Atributos normalizados y comprobación por el código
+
+Cada línea vectorizada guarda también sus **atributos leídos del texto** (resolución en MP, focal mín./máx., IP, IK, sensibilidad en lux, alcance IR, canales, almacenamiento, batería, PoE) en `lineas_vectores.atributos`. Los saca `api/cerebro/atributos_producto.py` **con reglas (sin modelo)**: es determinista, gratis y se recalcula en cada pasada sin tocar los vectores.
+
+Al buscar, el código lee lo que pide la consulta («4 MP», «IP66», «8-32 mm»…) y lo compara con «iguala o supera». Quien incumple un dato leído pasa al final; quien no tiene el dato **no** se penaliza (sin dato ≠ incumple). Nunca se descarta a nadie, y cada línea lleva la nota «[Comprobado por el código frente al requisito: …]» para que el modelo externo no tenga que adivinar.
+
+Limitación conocida: en el texto del requisito, la focal solo se lee si aparece una palabra de lente (lente, focal, varifocal…) y el alcance IR si aparece «IR»/«infrarrojos»/«alcance». Sin esas palabras no se exige ese atributo.

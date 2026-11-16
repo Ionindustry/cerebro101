@@ -143,6 +143,19 @@ class TestBase(unittest.TestCase):
         self.assertEqual(res[0]["ref"], "LPR-1")
         self.assertNotIn("100", res[0]["desc"])                          # sin precio
 
+    def test_el_codigo_baja_al_que_incumple_el_requisito_y_lo_anota(self):
+        self.tarifa([{"ref": "DOS", "desc": "Cámara bullet exterior 2 MP lente 4 mm IP67"},
+                     {"ref": "CUATRO", "desc": "Cámara bullet exterior 4 MP lente 4 mm IP67"}])
+        asyncio.run(LV.indexar_pendientes(embed=embed_falso))
+        res = asyncio.run(LV.buscar(["Cámara bullet exterior de 4 MP lente 4 mm IP67"], por_consulta=1, embed=embed_falso))
+        self.assertEqual([r["ref"] for r in res], ["CUATRO"])
+        self.assertIn("Comprobado por el código", res[0]["desc"])
+        res = asyncio.run(LV.buscar(["Cámara bullet exterior de 4 MP lente 4 mm IP67"], por_consulta=2, embed=embed_falso))
+        dos = next(r for r in res if r["ref"] == "DOS")
+        self.assertIn("NO cumple resolución", dos["desc"])
+        with psycopg.connect(self.url) as c:
+            self.assertEqual(c.execute("SELECT atributos->>'resolucion_mp' FROM lineas_vectores WHERE ref='CUATRO'").fetchone()[0], "4.0")
+
     def test_respeta_el_maximo_por_pasada_y_continua_en_la_siguiente(self):
         self.tarifa([{"ref": f"R{i}", "desc": f"Producto numero{i}"} for i in range(70)])
         r = asyncio.run(LV.indexar_pendientes(maximo=32, embed=embed_falso))

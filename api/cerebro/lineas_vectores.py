@@ -13,6 +13,9 @@ import logging
 
 import psycopg
 
+from psycopg.types.json import Jsonb
+
+from . import atributos_producto as AP
 from .ajustes import ajustes
 from .llm import embeddings
 
@@ -56,8 +59,19 @@ def pendientes(lineas: list[dict], existentes: dict[str, str]) -> list[dict]:
         vistos.add(ref)
         h = huella(texto)
         if existentes.get(ref) != h:
-            salida.append({"ref": ref, "texto": texto, "huella": h, "marca": _corto(l.get("marca"), 60)})
+            salida.append({"ref": ref, "texto": texto, "huella": h, "marca": _corto(l.get("marca"), 60), "atributos": AP.atributos_de_linea(l)})
     return salida
+
+
+def atributos_por_ref(lineas: list[dict]) -> dict[str, dict]:
+    """{ref: atributos normalizados} de las líneas de una lista (la primera de cada referencia). Pura."""
+    r: dict[str, dict] = {}
+    for l in lineas:
+        if isinstance(l, dict):
+            ref = _corto(l.get("ref") or l.get("codigo"), 80)
+            if ref and ref not in r:
+                r[ref] = AP.atributos_de_linea(l)
+    return r
 
 
 def _conectar():
@@ -80,8 +94,16 @@ async def indexar_pendientes(maximo: int = 2000, embed=embeddings) -> dict:
             return {"indexadas": 0, "pendientes": 0, "listas": 0, "omitida": "ya hay otra pasada en marcha"}
         for proveedor, lista, lineas in await _ultimas_listas(conn):
             listas += 1
-            cur = await conn.execute("SELECT ref, huella FROM lineas_vectores WHERE lista = %s", [lista])
-            existentes = {r: h for r, h in await cur.fetchall()}
+            cur = await conn.execute("SELECT ref, huella, atributos FROM lineas_vectores WHERE lista = %s", [lista])
+            filas = await cur.fetchall()
+            existentes = {r: h for r, h, _a in filas}
+            guardados = {r: a for r, _h, a in filas}
+            # los atributos se recalculan siempre (es barato y no lleva modelo): si las reglas mejoran o la tarifa cambia, se actualizan sin recalcular el vector
+            por_ref = atributos_por_ref(lineas)
+            cambian = [(Jsonb(por_ref[r]), lista, r) for r in guardados if r in por_ref and guardados[r] != por_ref[r]]
+            if cambian:
+                await conn.cursor().executemany("UPDATE lineas_vectores SET atributos = %s WHERE lista = %s AND ref = %s", cambian)
+                await conn.commit()
             falta = pendientes(lineas, existentes)
             vigentes = {_corto(l.get("ref") or l.get("codigo"), 80) for l in lineas if isinstance(l, dict)}
             sobran = [r for r in existentes if r not in vigentes]
@@ -100,10 +122,10 @@ async def indexar_pendientes(maximo: int = 2000, embed=embeddings) -> dict:
                     return {"indexadas": hechas, "pendientes": quedan + len(falta) - i, "listas": listas, "error": type(e).__name__}
                 for x, v in zip(lote, vectores):
                     await conn.execute(
-                        "INSERT INTO lineas_vectores (lista, ref, proveedor, marca, texto, huella, embedding) VALUES (%s,%s,%s,%s,%s,%s,%s::vector) "
+                        "INSERT INTO lineas_vectores (lista, ref, proveedor, marca, texto, huella, embedding, atributos) VALUES (%s,%s,%s,%s,%s,%s,%s::vector,%s) "
                         "ON CONFLICT (lista, ref) DO UPDATE SET proveedor = EXCLUDED.proveedor, marca = EXCLUDED.marca, texto = EXCLUDED.texto, huella = EXCLUDED.huella, "
-                        "embedding = EXCLUDED.embedding, creado = now()",
-                        [lista, x["ref"], proveedor, x["marca"], x["texto"], x["huella"], str(v)])
+                        "embedding = EXCLUDED.embedding, atributos = EXCLUDED.atributos, creado = now()",
+                        [lista, x["ref"], proveedor, x["marca"], x["texto"], x["huella"], str(v), Jsonb(x["atributos"])])
                 await conn.commit()
                 hechas += len(lote)
     log.info("lineas_vectores: %d líneas vectorizadas, %d pendientes", hechas, quedan)
@@ -111,20 +133,27 @@ async def indexar_pendientes(maximo: int = 2000, embed=embeddings) -> dict:
 
 
 async def buscar(consultas: list[str], por_consulta: int = 4, embed=embeddings) -> list[dict]:
-    """Las líneas más parecidas por significado a cada consulta: [{ref, desc, similitud}]. Una por referencia, la mejor puntuación; sin precio. Vacío si la tabla no tiene nada."""
+    """Las líneas más parecidas por significado a cada consulta: [{ref, desc, similitud}]. Una por referencia, la mejor puntuación; sin precio. Vacío si la tabla no tiene nada.
+    Se piden el triple de candidatos y se ordenan comprobando con el código los atributos que pide la consulta (resolución, focal, IP…): los que incumplen un dato leído pasan al final y todos llevan una nota
+    «comprobado por el código». Nunca se descarta a nadie por un atributo: sin dato no es un incumplimiento."""
     consultas = [_corto(q, 300) for q in consultas if _corto(q, 300)]
     if not consultas:
         return []
     vectores = await embed(consultas)
     mejores: dict[tuple[str, str], dict] = {}
     async with await _conectar() as conn:
-        for v in vectores:
-            cur = await conn.execute("SELECT lista, ref, texto, 1 - (embedding <=> %s::vector) AS similitud FROM lineas_vectores ORDER BY embedding <=> %s::vector LIMIT %s",
-                                     [str(v), str(v), por_consulta])
-            for lista, ref, texto, sim in await cur.fetchall():
+        for q, v in zip(consultas, vectores):
+            rest = AP.restricciones(q)
+            cur = await conn.execute("SELECT lista, ref, texto, 1 - (embedding <=> %s::vector) AS similitud, atributos FROM lineas_vectores ORDER BY embedding <=> %s::vector LIMIT %s",
+                                     [str(v), str(v), por_consulta * 3])
+            candidatos = []
+            for lista, ref, texto, sim, attrs in await cur.fetchall():
                 if sim < SIMILITUD_MINIMA:
                     continue
+                res = AP.evaluar(rest, attrs or AP.extraer(texto))
+                candidatos.append((AP.orden(res), -float(sim), lista, ref, texto, float(sim), AP.texto_de_comprobacion(res)))
+            for _o, _s, lista, ref, texto, sim, nota in sorted(candidatos)[:por_consulta]:
                 k = (lista, ref)
                 if k not in mejores or sim > mejores[k]["similitud"]:
-                    mejores[k] = {"ref": ref, "desc": texto, "similitud": round(float(sim), 3)}
+                    mejores[k] = {"ref": ref, "desc": (texto + " " + nota).strip(), "similitud": round(sim, 3)}
     return sorted(mejores.values(), key=lambda x: -x["similitud"])
