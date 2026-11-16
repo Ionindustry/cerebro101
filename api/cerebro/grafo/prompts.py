@@ -1,8 +1,12 @@
 """Instrucciones de sistema. Se construyen a partir de la ficha del agente."""
 from __future__ import annotations
 
+import logging
 from datetime import datetime, timezone
+from functools import lru_cache
 from zoneinfo import ZoneInfo
+
+import yaml
 
 from ..ajustes import ajustes
 from ..registro import Ficha
@@ -35,6 +39,23 @@ NORMAS = (
 )
 
 
+log = logging.getLogger(__name__)
+
+
+@lru_cache(maxsize=1)
+def _metodos() -> dict[str, str]:
+    """Método de trabajo por agente (config/prompts/metodo_agentes.yaml). Si el fichero falta o está mal, los agentes siguen con su ficha de siempre."""
+    try:
+        with open(ajustes.dir_config / "prompts" / "metodo_agentes.yaml", encoding="utf-8") as fh:
+            datos = (yaml.safe_load(fh) or {}).get("agentes") or {}
+        return {str(k): str(v).strip() for k, v in datos.items() if isinstance(v, str) and v.strip()}
+    except FileNotFoundError:
+        return {}
+    except Exception as e:      # noqa: BLE001 - un YAML roto no puede dejar a todos los agentes sin prompt
+        log.warning("prompts: no se ha podido leer metodo_agentes.yaml: %s: %s", type(e).__name__, e)
+        return {}
+
+
 def sistema_agente(ficha: Ficha, herramientas: dict, con_esquema: bool = True) -> str:
     """Prompt del agente. Con `con_esquema` (por defecto) cada herramienta lleva sus operaciones y argumentos exactos."""
     if con_esquema:
@@ -48,7 +69,8 @@ def sistema_agente(ficha: Ficha, herramientas: dict, con_esquema: bool = True) -
         reglas = ""
     return (f"{CONTEXTO_EMPRESA}\n\nFecha y hora actuales: {ahora_texto()}. Úsalas para «hoy», «mañana», plazos y días de la semana; "
             f"no las supongas.\n\nEres el agente «{ficha.nombre}» del departamento {ficha.departamento}, "
-            f"subárea {ficha.subarea}. Tus tareas: {ficha.tareas}.\n\n{NORMAS}\n\n"
+            f"subárea {ficha.subarea}. Tus tareas: {ficha.tareas}.\n\n"
+            + (f"Método de trabajo:\n{_metodos()[ficha.id]}\n\n" if ficha.id in _metodos() else "") + f"{NORMAS}\n\n"
             f"Herramientas disponibles:\n{lista}\n{reglas}\n"
             "En cada turno responde con JSON: o bien {\"tipo\":\"herramienta\",\"herramienta\":…,\"operacion\":…,"
             "\"argumentos\":{…}} para usar una herramienta, o bien {\"tipo\":\"respuesta\",\"respuesta\":…,"

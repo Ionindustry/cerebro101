@@ -349,12 +349,12 @@ async def crear_factura_compra(departamento: str, message_id: str, adjunto: int 
 AYUDA_DOCUMENTOS = (
     "Documentos habituales (doctype: campos; los campos pueden variar con la versión): "
     "Customer(customer_name, customer_type, customer_group, territory, email_id); Supplier(supplier_name, supplier_group); "
-    "Item(item_code, item_name, item_group, stock_uom, standard_rate); Bin = existencias(item_code, warehouse, actual_qty); "
+    "Item(item_code, item_name, item_group, stock_uom, standard_rate); Bin(item_code, warehouse, actual_qty); "
     "Quotation(party_name, transaction_date, items); Sales Order(customer, transaction_date, delivery_date, items); "
     "Sales Invoice(customer, posting_date, due_date, items); Purchase Order(supplier, transaction_date, schedule_date, items); "
     "Purchase Invoice(supplier, bill_date, items); Project(project_name, status, expected_start_date, expected_end_date); "
-    "Task(subject, status, project); Lead(lead_name, company_name, email_id, status); Employee(employee_name, department, status). "
-    "CRM: CRM Lead(first_name, email, status); CRM Deal(organization, status, lead); FCRM Note(title, content) y CRM Task(title, due_date, status) llevan reference_doctype y reference_docname del lead o trato. "
+    "Task(subject, status, project); Lead(lead_name, company_name, email_id, status); Employee(employee_name, department). "
+    "CRM: CRM Lead(first_name, email, status); CRM Deal(organization, status, lead); FCRM Note(title, content) y CRM Task(title, due_date, status) con reference_doctype y reference_docname del lead o trato. "
     "En «items» va una lista de {item_code, qty, rate}.")
 
 registrar(Herramienta(
@@ -368,11 +368,9 @@ registrar(Herramienta(
            "crear_borrador": "crea un documento en BORRADOR; «datos» lleva los campos del documento",
            "adjuntar_desde_correo": "guarda un adjunto de un correo (message_id y adjunto, de correo.leer_bandeja) como fichero privado de un documento "
                                     "que ya existe (doctype y nombre exactos); úsalo después de crear_borrador, con el nombre que este devuelve",
-           "crear_factura_compra": "pasa a BORRADOR una factura de proveedor que llegó adjunta a un correo (PDF, escaneo o foto; se lee con OCR si hace falta). "
-                                   "Primero lee el documento con correo.leer_adjunto y rellena: proveedor, nif, numero (de factura), fecha (dd/mm/aaaa), "
-                                   "lineas = [{descripcion, cantidad, precio (unitario sin IVA)}], total (con IVA, tal como sale en el documento), "
-                                   "iva_porcentaje y vencimiento si constan. Se comprueba que cuadra y que número y total están en el documento; "
-                                   "si falla, explica el motivo a la persona y no insistas"},
+           "crear_factura_compra": "pasa a BORRADOR una factura de proveedor adjunta a un correo (con OCR si hace falta). Lee antes el documento con correo.leer_adjunto: "
+                                   "proveedor, nif, numero, fecha (dd/mm/aaaa), lineas = [{descripcion, cantidad, precio unitario sin IVA}], total con IVA, iva_porcentaje y vencimiento si constan. "
+                                   "Se comprueba que cuadra; si falla, explica el motivo y no insistas"},
     ejemplos={"listar": {"doctype": "Customer", "campos": ["customer_name"], "limite": 10},
               "crear_borrador": {"doctype": "Sales Invoice", "datos": {"customer": "Comunitat Vilanova SL", "items": [{"item_code": "ART-001", "qty": 2, "rate": 150}]}}},
 ))
