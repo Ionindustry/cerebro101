@@ -320,7 +320,7 @@ def _conectar():
 
 async def _vista(sha: str, pid: str) -> bool:
     async with await _conectar() as conn:
-        cur = await conn.execute("SELECT 1 FROM tarifas_actualizaciones WHERE proveedor_id = %s AND sha256 = %s", [pid, sha])
+        cur = await conn.execute("SELECT 1 FROM tarifas_actualizaciones WHERE proveedor_id = %s AND sha256 = %s AND estado <> 'error'", [pid, sha])
         return bool(await cur.fetchone())
 
 
@@ -334,7 +334,8 @@ async def _ultima_aplicada(nombre_proveedor: str, canal: str) -> list[dict] | No
 async def _guardar(p: dict, nombre: str, sha: str, importacion: int | None, estado: str, motivo: str, cambios: dict) -> int:
     async with await _conectar() as conn:
         cur = await conn.execute("INSERT INTO tarifas_actualizaciones (proveedor_id, origen, nombre, sha256, importacion, estado, motivo, cambios) VALUES (%s,%s,%s,%s,%s,%s,%s,%s) "
-                                 "ON CONFLICT (proveedor_id, sha256) DO NOTHING RETURNING id", [p["id"], p["origen"], nombre[:200], sha, importacion, estado, motivo[:300], Jsonb(cambios)])
+                                 "ON CONFLICT (proveedor_id, sha256) DO UPDATE SET nombre = EXCLUDED.nombre, importacion = EXCLUDED.importacion, estado = EXCLUDED.estado, motivo = EXCLUDED.motivo, cambios = EXCLUDED.cambios, creado = now() "
+                                 "WHERE tarifas_actualizaciones.estado = 'error' RETURNING id", [p["id"], p["origen"], nombre[:200], sha, importacion, estado, motivo[:300], Jsonb(cambios)])
         f = await cur.fetchone()
     return f["id"] if f else 0
 
@@ -349,7 +350,7 @@ async def _vigilancia(pid: str, ok: bool, error: str = "", novedades: int = 0) -
 
 # ---------------------------------------------------------------- la tarea
 async def procesar_fichero(p: dict, nombre: str, datos: bytes, subir=None, proponer=None) -> dict | None:
-    """Un fichero de un proveedor: si es nuevo, lo prepara como propuesta de importación (cuarentena, antivirus, lectura) y anota los cambios. None si ya se había visto."""
+    """Un fichero de un proveedor: si es nuevo, lo prepara como propuesta de importación (cuarentena, antivirus, lectura) y anota los cambios. None si ya se había visto (un fichero que falló al leerse SE REINTENTA en la siguiente comprobación: el fallo suele ser de la aplicación y ya está arreglado, no del fichero)."""
     sha = hashlib.sha256(datos).hexdigest()
     if await _vista(sha, p["id"]):
         return None
