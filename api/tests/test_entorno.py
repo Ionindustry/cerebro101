@@ -17,7 +17,8 @@ PROHIBIDAS = ("POSTGRES_PASSWORD", "DATABASE_URL_ADMIN", "KEYCLOAK_ADMIN_PASSWOR
               "LANGFUSE_NEXTAUTH_SECRET", "LANGFUSE_DB_PASSWORD", "LANGFUSE_CLICKHOUSE_PASSWORD", "LANGFUSE_MINIO_PASSWORD",
               "LANGFUSE_REDIS_PASSWORD", "LANGFUSE_INIT_USER_PASSWORD", "TLS_MODO")
 # Las lee el código pero no son del entorno de la API (migraciones, rutas, pruebas)
-AJENAS = {"DATABASE_URL_ADMIN", "CEREBRO_APP_PASSWORD", "CEREBRO_DB_DIR", "CEREBRO_CONFIG", "CEREBRO_DATOS",
+AJENAS = {"CODIGO_VERSION",       # la lleva la propia imagen (ENV de su Dockerfile, puesta por la integración continua), no el .env ni el compose
+          "DATABASE_URL_ADMIN", "CEREBRO_APP_PASSWORD", "CEREBRO_DB_DIR", "CEREBRO_CONFIG", "CEREBRO_DATOS",
           # del consumidor de eventos (servicio licitaciones-eventos): la API no ve ni la conexión ni las credenciales del bus
           "LICITACIONES_NATS_URL", "LICITACIONES_NATS_USUARIO", "LICITACIONES_NATS_CLAVE", "LICITACIONES_ENCAJE_MIN"}
 # Variables que se crean con f-string: prefijo -> se exige al menos una en la lista
