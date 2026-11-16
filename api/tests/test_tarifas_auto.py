@@ -334,6 +334,18 @@ class TestFlujo(unittest.TestCase):
             r = ejecutar(T.ejecutar(self.cfg(d), subir=self.subir, proponer=mal))
         self.assertEqual((r["novedades"][0]["estado"], "producto cargable" in r["novedades"][0]["motivo"]), ("error", True))
 
+    def test_un_fichero_que_dio_error_se_reintenta_y_uno_ya_leido_no(self):
+        async def mal(*a, **k):
+            raise LP.ErrorImportacion("La tarifa tiene más de 3000 productos")
+        with tempfile.TemporaryDirectory() as d:
+            self.poner(d, "t.csv", b"x")
+            self.assertEqual(ejecutar(T.ejecutar(self.cfg(d), subir=self.subir, proponer=mal))["novedades"][0]["estado"], "error")
+            r = ejecutar(T.ejecutar(self.cfg(d), subir=self.subir, proponer=self.proponer))          # ya arreglado: se vuelve a leer
+            self.assertEqual(r["novedades"][0]["estado"], "pendiente")
+            r2 = ejecutar(T.ejecutar(self.cfg(d), subir=self.subir, proponer=self.proponer))         # leído: no se repite
+            self.assertEqual(r2["novedades"], [])
+        self.assertEqual(len(ejecutar(T.pendientes())), 1)
+
     def test_un_proveedor_que_falla_no_frena_a_los_demas_y_queda_su_error(self):
         async def descarga(p, tope):
             raise T.ErrorTarifaAuto("El servicio responde con error 500")
