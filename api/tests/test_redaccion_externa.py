@@ -136,6 +136,22 @@ class TestMaterial(unittest.TestCase):
         self.assertLessEqual(len(t), 6000)
         self.assertEqual(len(avisos), 1)
 
+    def test_los_documentos_cortos_entran_enteros_y_el_cupo_que_sobra_va_al_largo(self):
+        corto = {"n": 1, "nombre": "Anexo", "paginas": [(1, "a" * 500)]}
+        largo = {"n": 2, "nombre": "PCAP", "paginas": [(i, "b" * 900) for i in range(1, 60)]}
+        t, avisos = R.texto_de_pliegos([largo, corto], 20000)
+        self.assertIn("a" * 500, t)                                     # el corto, entero
+        self.assertLessEqual(len(t), 20000)
+        self.assertGreater(t.count("b" * 900), 15)                      # antes el largo se quedaba en la mitad del cupo (≈10 páginas)
+        self.assertEqual(len(avisos), 1)
+        self.assertIn("faltan desde la página", avisos[0])
+
+    def test_si_todo_cabe_no_se_corta_nada(self):
+        docs = [{"n": 1, "nombre": "A", "paginas": [(1, "x" * 100), (2, "y" * 100)]}, {"n": 2, "nombre": "B", "paginas": [(1, "z" * 100)]}]
+        t, avisos = R.texto_de_pliegos(docs, 10000)
+        self.assertEqual(avisos, [])
+        self.assertEqual(t.count("[Documento"), 3)
+
     def test_lo_ya_escrito_no_incluye_las_secciones_que_se_van_a_escribir(self):
         sec = [{"sobre": "tecnico", "clave": "a", "titulo": "A", "estado": "borrador", "contenido": "texto a"}, {"sobre": "tecnico", "clave": "b", "titulo": "B", "estado": "borrador", "contenido": "texto b"},
                {"sobre": "economico", "clave": "c", "titulo": "C", "estado": "borrador", "contenido": "precio"}]
