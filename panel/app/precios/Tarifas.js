@@ -57,7 +57,7 @@ export default function Tarifas({ alCargarTarifa }) {
           </span>
           {vista?.actualizacion === a.id && (
             <div className="lic-aviso" role="group" aria-label="Vista previa de la tarifa">
-              <dl className="lic-ficha">{vista.vista.vista.campos.map(([k, v]) => <div key={k}><dt>{k}</dt><dd style={{ whiteSpace: "pre-line" }}>{v}</dd></div>)}</dl>
+              <dl className="lic-ficha">{(vista.vista?.campos || []).map(([k, v]) => <div key={k}><dt>{k}</dt><dd style={{ whiteSpace: "pre-line" }}>{v}</dd></div>)}</dl>
               <label className="ap-check"><input type="checkbox" checked={confirmo} onChange={(e) => setConfirmo(e.target.checked)} /> He revisado la vista previa y firmo que se cargue esta tarifa en el ERP (proveedor, artículos y costes).</label>
               <button className="boton si" disabled={trabajando || !confirmo} onClick={() => window.confirm("Vas a cargar esta tarifa en el ERP. Queda registrado a tu nombre. ¿Seguir?") && hacer(async () => { const r = await pedirCerebro(`precios/tarifas/${a.id}/aplicar`, enviar({ confirmo: true })); setVista(null); setConfirmo(false); if (alCargarTarifa) alCargarTarifa(); return r; }, () => "Tarifa cargada. Ahora puedes calcular una propuesta de precios de venta con los costes nuevos.")}>Cargar la tarifa en el ERP</button>
             </div>

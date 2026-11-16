@@ -36,7 +36,10 @@ def _e(t) -> str:
 
 def descripcion_html(l: dict) -> str:
     """Descripción del artículo: el nombre, la marca y la referencia, las categorías, la tabla de características y los enlaces a la ficha. Todo escapado. Pura."""
-    partes = [f"<p><b>{_e(l.get('desc') or l.get('ref'))}</b></p>"]
+    partes = []
+    if l.get("estado") == "proximamente":
+        partes.append("<p><b>PRÓXIMAMENTE: producto aún no disponible. No ofrecer como disponible ni con plazo de entrega.</b></p>")
+    partes.append(f"<p><b>{_e(l.get('desc') or l.get('ref'))}</b></p>")
     datos = [f"{etq}: {_e(v)}" for etq, v in (("Marca", l.get("marca")), ("Referencia", l.get("ref")), ("Familia", l.get("familia"))) if v]
     if datos:
         partes.append("<p>" + " · ".join(datos) + "</p>")
@@ -54,7 +57,7 @@ def descripcion_html(l: dict) -> str:
 
 def documento_articulo(l: dict, proveedor: str, cfg: dict, con_extras: bool = True) -> dict:
     """El documento `Item` de una línea de la tarifa. `con_extras=False` deja solo lo básico (sin marca, código de barras ni imagen): es el que se reintenta si el ERP rechaza el completo. Pura."""
-    doc = {"item_code": l["codigo"], "item_name": (l.get("desc") or l["ref"])[:140], "description": descripcion_html(l) if con_extras else (l.get("desc") or l["ref"]),
+    doc = {"item_code": l["codigo"], "item_name": (l.get("desc") or l["ref"])[:140], "description": descripcion_html(l) if con_extras else ("PRÓXIMAMENTE (no disponible aún): " if l.get("estado") == "proximamente" else "") + (l.get("desc") or l["ref"]),
            "item_group": cfg["item_group"], "stock_uom": l.get("unidad") or cfg["stock_uom"], "is_stock_item": 1, "is_purchase_item": 1,
            "supplier_items": [{"supplier": proveedor, "supplier_part_no": l["ref"]}]}
     if con_extras:

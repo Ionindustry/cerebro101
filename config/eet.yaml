@@ -1,0 +1,10 @@
+# Consulta de precio y stock a EET Europarts (api/cerebro/eet.py, herramienta «eet», docs/EET.md). SOLO LECTURA: no hace pedidos.
+# Mientras `url` esté vacía la integración está apagada y la herramienta lo dice. Los datos de acceso los da EET (su comercial) y NO van aquí:
+# van en secretos/eet.env (una línea NOMBRE=valor por dato; esa carpeta no se sube a git). No los pegues en el chat.
+url: ""                       # la dirección https que te dé EET para enviar el PA Request
+hosts: []                     # el dominio de esa dirección, p. ej. [gateway.eetgroup.com]
+cid: ""                       # identificador de empresa EET (2 letras: DK, ES…), te lo da EET
+secretos: {cliente: EET_CLIENTE, clave: EET_CLAVE}    # NOMBRES de las líneas de secretos/eet.env: EET_CLIENTE=<tu número de cliente>, EET_CLAVE=<tu AuthCode>
+moneda: EUR                   # el documento de EET no dice la moneda de los precios: la de tu cuenta (compruébalo con EET)
+ampliada: true                # pide también stock por tipo (local/entrante/remoto), plazo, EAN y descripción
+max_referencias: 50           # por consulta

@@ -346,7 +346,7 @@ async def proponer(documento: str, proveedor: dict, columnas: dict, agente: str,
 
 # ---- Proponer desde una tarifa (Excel o CSV del fabricante o del distribuidor) ----
 
-NO_CARGAR = {"proximamente": "próximamente", "fin_de_vida": "fin de vida", "muestra": "muestra"}
+NO_CARGAR = {"fin_de_vida": "fin de vida", "muestra": "muestra"}        # «próximamente» SÍ se carga (marcado): puede dar ventaja competitiva en una licitación
 CANALES = ("fabricante", "distribuidor")
 
 
@@ -391,7 +391,10 @@ def _lineas_de_tarifa(t, prov_nombre: str, canal: str, cfg_precios: dict, max_li
         if len(lineas) > max_lineas:
             raise ErrorImportacion(f"La tarifa tiene más de {max_lineas} productos: divídela en varias")
     if not lineas:
-        raise ErrorImportacion("La tarifa no tiene ningún producto cargable (todos son próximos, de fin de vida o muestras, o no tienen precio)")
+        raise ErrorImportacion("La tarifa no tiene ningún producto cargable (todos son de fin de vida o muestras, o no tienen precio)")
+    proximos = sum(1 for l in lineas if l["estado"] == "proximamente")
+    if proximos:
+        avisos.append(f"{proximos} productos son «próximamente»: se cargan MARCADOS («PRÓXIMAMENTE» al principio de su descripción) para poder usarlos en licitaciones, pero no se deben ofrecer como disponibles ni con plazo de entrega")
     if no_cargadas:
         avisos.append("No se cargan: " + ", ".join(f"{n} {NO_CARGAR[k]}" for k, n in no_cargadas.items()) + " (no se deben ofrecer como disponibles)")
     if sin_marca:
@@ -502,7 +505,7 @@ async def vista_aplicar(importacion: int, departamento: str) -> dict:
               ["Artículos", "no se ha podido comprobar" if r.get("articulos_nuevos") is None else f"{r['articulos_nuevos']} nuevos (se crean) · {r['articulos_existentes']} que ya existen (solo precio)"]]
     if r.get("tarifa"):
         campos.append(["Tarifa", f"canal «{r['canal']}» · costes {r['precio_min']} – {r['precio_max']} {f['moneda']} · precio de venta calculado en {r['con_venta']} de {r['lineas']} productos"
-                       + (f" ({r['venta_min']} – {r['venta_max']} € sin IVA)" if r.get("venta_min") else "") + (f" · {r['omitidas']} no se cargan (próximos, fin de vida o muestras)" if r.get("omitidas") else "")])
+                       + (f" ({r['venta_min']} – {r['venta_max']} € sin IVA)" if r.get("venta_min") else "") + (f" · {r['omitidas']} no se cargan (fin de vida o muestras)" if r.get("omitidas") else "")])
         if r.get("provisional"):
             campos.append(["Valores provisionales", "\n".join(f"- {a}" for a in r["provisional"][:5])])
     if f["avisos"]:
