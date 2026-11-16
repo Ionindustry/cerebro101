@@ -1486,3 +1486,35 @@ export function textoActualizacionManual({ esperando, terminado, error, p }) {
 
 export const INTERVALO_ACTUALIZACION_MS = 10000;
 export const MAX_ESPERA_ACTUALIZACION_MS = 6 * 60 * 1000;
+
+/** Ventanas del indicador de ingesta: desde cuándo se cuenta «hoy» (00:00 de Madrid), «24 h» y «7 días». `ahora` se puede fijar (pruebas). */
+export function ventanasIngesta(ahora = new Date()) {
+  const dia = hoyMadrid(ahora);
+  const partes = new Intl.DateTimeFormat("en-GB", { timeZone: "Europe/Madrid", timeZoneName: "longOffset" }).formatToParts(ahora);
+  const m = (partes.find((p) => p.type === "timeZoneName")?.value || "GMT").match(/GMT([+-]\d{2}):?(\d{2})?/);
+  const desfase = m ? `${m[1]}:${m[2] || "00"}` : "+00:00";                 // el desfase de Madrid ese día (+01:00 invierno, +02:00 verano)
+  const inicioHoy = new Date(`${dia}T00:00:00${desfase}`);
+  return [
+    { clave: "hoy", etiqueta: "Hoy", desde: inicioHoy.toISOString() },
+    { clave: "24h", etiqueta: "Últimas 24 h", desde: new Date(ahora.getTime() - 24 * 3600e3).toISOString() },
+    { clave: "7d", etiqueta: "Últimos 7 días", desde: new Date(ahora.getTime() - 7 * 24 * 3600e3).toISOString() },
+  ];
+}
+
+/** Las consultas (al motor, solo lectura) de una ventana: nuevas publicadas, nuevas aún abiertas y con novedad (nuevas o cambiadas). Solo piden el total. */
+export function consultasIngesta(desde) {
+  const d = encodeURIComponent(desde);
+  return {
+    nuevas: `tenders?publicada_desde=${d}&limit=1`,
+    abiertas: `tenders?publicada_desde=${d}&estado=abierta&estado=anuncio_previo&limit=1`,
+    novedades: `tenders?actualizada_desde=${d}&limit=1`,
+  };
+}
+
+/** El número de una respuesta `{total:{valor, relacion}}`: «123» o «al menos 10 000»; «—» si no se pudo leer. */
+export function totalIngestaTexto(r) {
+  const v = r?.total?.valor;
+  if (!Number.isFinite(v)) return "—";
+  const n = new Intl.NumberFormat("es-ES").format(v);
+  return r.total.relacion === "gte" ? `al menos ${n}` : n;
+}
