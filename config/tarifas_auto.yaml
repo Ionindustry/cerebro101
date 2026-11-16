@@ -8,7 +8,18 @@
 #             va en secretos/tarifas.env (una línea NOMBRE=valor; esa carpeta no se sube a git). No pegues claves en el chat ni en este fichero.
 carpeta_base: /datos/tarifas
 max_mb: 150
-proveedores: []
+proveedores:
+  - id: asecur                          # ./scripts/tarifa_subir.sh asecur /ruta/a/products_2.csv
+    proveedor: {nombre: "A-Secur", nif: "", pais: "España"}
+    canal: distribuidor
+    moneda: EUR
+    origen: carpeta
+  - id: milesight                       # ./scripts/tarifa_subir.sh milesight /ruta/a/la_tarifa_de_Milesight.xlsx
+    proveedor: {nombre: "Milesight", nif: "", pais: "China"}
+    canal: fabricante
+    moneda: USD                         # LA TARIFA NO DICE LA MONEDA (precios MSRP y EXW China): se ha puesto USD, que es lo habitual en Milesight. COMPRUÉBALO en la vista previa de Precios antes de firmar
+    origen: carpeta
+# Visiotech: pendiente de recibir su tarifa; se añade aquí igual que A-Secur (canal: distribuidor, moneda: EUR).
 # Ejemplo (quita la almohadilla y adapta):
 # proveedores:
 #   - id: milesight                       # letras minúsculas, números y guiones: es el nombre de la subcarpeta
