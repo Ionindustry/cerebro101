@@ -9,7 +9,7 @@ test("validarAdjunto: formatos, vacío y tamaño", () => {
   assert.match(validarAdjunto({ name: "a.zip", size: 10 }), /no admitido/);
   assert.match(validarAdjunto({ name: "a.exe", size: 10 }), /no admitido/);
   assert.match(validarAdjunto({ name: "a.pdf", size: 0 }), /vacío/);
-  assert.match(validarAdjunto({ name: "a.pdf", size: 26_000_000 }), /25 MB/);
+  assert.match(validarAdjunto({ name: "a.pdf", size: 101_000_000 }), /100 MB/);
   assert.ok(validarAdjunto(null));
 });
 
@@ -22,7 +22,7 @@ test("aBase64 coincide con Buffer y aguanta ficheros grandes", () => {
 
 test("mensajes y estado del adjunto", () => {
   assert.equal(mensajeSubida(422, "Formato no admitido"), "Formato no admitido");
-  assert.match(mensajeSubida(413), /25 MB/);
+  assert.match(mensajeSubida(413), /100 MB/);
   assert.match(mensajeSubida(401), /sesión/);
   assert.match(mensajeSubida(500), /Inténtalo/);
   assert.equal(estadoAdjuntoTexto({ disponible: true, paginas: 3, unidad: "página" }), "3 páginas");

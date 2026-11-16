@@ -431,7 +431,7 @@ export const puedeBajarOriginal = (d) => Boolean(d && d.estado === "limpio");
 
 export const puedeDescargarPliego = (d) => !d || ["cuarentena", "no_analizable", "error"].includes(d.estado) || (d.disponible && d.paginas == null);
 /** Subir a mano un documento del pliego (POST /licitaciones/pliegos/{id}/subir): comprobaciones previas en el navegador; la de verdad (por el contenido, antivirus) la hace la API. */
-export const MAX_MB_PLIEGO = 50;
+export const MAX_MB_PLIEGO = 100;
 export const EXTENSIONES_PLIEGO = [".pdf", ".docx", ".xlsx", ".odt", ".ods"];
 export const ACCEPT_PLIEGO = EXTENSIONES_PLIEGO.join(",");
 /** null si el fichero puede subirse; si no, el motivo en una frase. */
