@@ -38,6 +38,14 @@ class TestEvidencia(unittest.TestCase):
         self.assertTrue(all("precio" not in x for x in r))
         self.assertEqual(C.lineas_relevantes(lineas, []), [])
 
+    def test_una_familia_con_muchas_coincidencias_no_tapa_a_las_demas(self):
+        teclados = [{"ref": f"KB-{i}", "desc": f"Teclado de control para grabador NVR de 8 canales modelo {i}"} for i in range(40)]
+        camaras = [{"ref": "CAM-LPR", "desc": "Cámara bullet LPR matrícula 4MP"}, {"ref": "ROUT", "desc": "Router 4G industrial carril DIN"}]
+        r = C.lineas_relevantes(teclados + camaras, ["Grabador NVR de 8 canales teclado de control", "Cámara bullet LPR de matrícula", "Router 4G industrial"], maximo=8)
+        refs = {x["ref"] for x in r}
+        self.assertIn("CAM-LPR", refs)
+        self.assertIn("ROUT", refs)
+
     def test_una_tarifa_en_ingles_se_encuentra_con_un_pliego_en_castellano(self):
         lineas = [{"ref": "MS-C8", "desc": "4MP Outdoor Dome Network Camera", "precio": 1}, {"ref": "MS-N8", "desc": "8 channels Network Video Recorder", "precio": 2}, {"ref": "CAB", "desc": "Cat6 patch cable", "precio": 3}]
         r = C.lineas_relevantes(lineas, ["Cámara domo de exterior", "Grabador de 8 canales"])
