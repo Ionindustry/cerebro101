@@ -725,3 +725,6 @@ En la ficha de cada licitación, la tarjeta **«Documentos de los agentes»** re
 - Los informes de Precio y del Evaluador antes solo existían como el resumen de un paso; ahora son documentos descargables (se actualizan con la última ejecución).
 - La proposición económica nunca sale aquí: la fija una persona y sigue en «Oferta».
 - Si un documento no aparece, es que el agente aún no lo ha redactado (o su paso falló).
+
+## Actualizar los concursos a mano
+En **Licitaciones**, el botón **«Actualizar concursos ahora»** (Dirección y Licitaciones) pide al motor que el ingestor empiece una vuelta **ya**, aunque lo último sea reciente (el ingestor mira las fuentes cada 15 minutos por su cuenta y el panel solo lo pide al abrirse si lo último tiene más de 20 minutos). Muestra cuánto hace de la última ingesta, sigue el progreso cada 10 segundos (hasta 6 minutos) y, cuando termina una ingesta nueva, vuelve a leer las «Últimas novedades». El motor no repite una petición de hace menos de un minuto (el botón lo dice). Si el motor no responde, o no acepta la petición (credencial `LICITACIONES_API_TOKEN` o motor desactualizado), lo dice con un mensaje claro. No ingiere nada por sí mismo: solo pide la vuelta al ingestor.

@@ -13,7 +13,7 @@ from datetime import datetime, timezone
 import psycopg
 from psycopg.rows import dict_row
 
-from . import antivirus, copias, precios_venta, tarifas_auto
+from . import antivirus, copias, cotizaciones, precios_venta, tarifas_auto
 from .ajustes import ajustes
 from .aprobaciones import bandeja
 from .licitaciones import frescura, resumen as resumen_lic
@@ -78,6 +78,22 @@ def de_precios(filas: list[dict] | None, ahora: datetime) -> list[dict]:
         if not partes:
             partes.append(f"{r.get('incluidos', 0)} artículos listos para revisar" + (f" ({r.get('sube', 0)} suben, {r.get('baja', 0)} bajan)" if r.get("sube") or r.get("baja") else ""))
         out.append(_it("urgente" if urgente else "aviso", "precios", f"Propuesta de precios #{f['id']} pendiente de revisar", ". ".join(partes) + ".", f"/precios?propuesta={f['id']}"))
+    return out
+
+
+def de_cotizaciones(filas: list[dict] | None, es_direccion: bool) -> list[dict]:
+    """Avisos de las cotizaciones a proveedores: las enviadas que llevan días sin respuesta y, para Dirección, las de modo «enviar» que esperan su confirmación. Pura."""
+    out = []
+    sin = [c for c in (filas or []) if c.get("sin_respuesta")]
+    if sin:
+        n = len(sin)
+        out.append(_it("aviso", "precios", f"{n} {'cotización sin respuesta' if n == 1 else 'cotizaciones sin respuesta'} de proveedores",
+                       "; ".join(f"{c['referencia']} ({c['proveedor']})" for c in sin[:3]) + ". Reclámala o regístrala si ya contestaron.", "/cotizaciones"))
+    por_enviar = [c for c in (filas or []) if es_direccion and c["estado"] == "borrador" and c["modo"] == "enviar"]
+    if por_enviar:
+        n = len(por_enviar)
+        out.append(_it("aviso", "precios", f"{n} {'cotización espera' if n == 1 else 'cotizaciones esperan'} tu confirmación para enviarse",
+                       "; ".join(f"{c['referencia']} → {c['proveedor']}" for c in por_enviar[:3]) + ". El correo ya está redactado.", "/cotizaciones"))
     return out
 
 
@@ -173,6 +189,7 @@ async def construir(roles: set[str], departamentos: set[str], ahora: datetime | 
         items += de_tarifas(await leer("tarifas", tarifas_auto.pendientes))
         items += de_precios(await leer("precios_venta", precios_venta.pendientes_de_revisar), ahora)
     if ve_lic:
+        items += de_cotizaciones(await leer("cotizaciones", cotizaciones.abiertas), es_direccion)
         items += de_licitaciones(await leer("seguimiento", _seguimiento, ahora))
         items += de_novedades(await leer("ultimo_resumen", resumen_lic.leer))
     if ve_sistema:

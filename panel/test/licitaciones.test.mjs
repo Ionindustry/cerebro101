@@ -1297,3 +1297,20 @@ test("documentos de los agentes: textos de tamaño, autor, clase y errores", asy
   assert.equal(L.mensajeDocumentos(404, "Los agentes aún no han redactado este documento"), "Los agentes aún no han redactado este documento");
   assert.match(L.mensajeDocumentos(500), /No se han podido leer/);
 });
+
+test("actualizar concursos a mano: cuándo hay una ingesta nueva y qué se le dice a la persona", async () => {
+  const L = await import("../lib/licitaciones.js");
+  assert.equal(L.huboIngestaNueva(300, 5), true);            // la edad baja: ha terminado una
+  assert.equal(L.huboIngestaNueva(30, 40), false);           // va subiendo: todavía no
+  assert.equal(L.huboIngestaNueva(30, 30), false);
+  assert.equal(L.huboIngestaNueva(null, 20), true);          // antes no había ninguna
+  assert.equal(L.huboIngestaNueva(30, null), false);
+  assert.equal(L.huboIngestaNueva(undefined, undefined), false);
+  assert.match(L.textoActualizacionManual({ esperando: true }).texto, /Actualizando/);
+  assert.equal(L.textoActualizacionManual({ terminado: true, p: { mas_reciente_s: 20 } }).clase, "ok");
+  assert.match(L.textoActualizacionManual({ terminado: true, p: { mas_reciente_s: 20 } }).texto, /hace un momento/);
+  assert.equal(L.textoActualizacionManual({ error: "Algo falló" }).clase, "error");
+  assert.equal(L.textoActualizacionManual({ p: { estado: "motor_no_responde" } }).clase, "error");
+  assert.match(L.textoActualizacionManual({ p: { estado: "ok", mas_reciente_s: 1200 } }).texto, /Última ingesta del motor: hace 20 min/);
+  assert.equal(L.textoActualizacionManual({ p: null }).texto, "");
+});

@@ -1,0 +1,24 @@
+# Cotizaciones a proveedores (Jarvis → Cotizaciones; api/cerebro/cotizaciones.py).
+# El correo lo REDACTA SIEMPRE el sistema con esta plantilla y lleva SOLO tres datos: referencia, cantidad y plazo de entrega. Nunca el cliente, la licitación, precios nuestros ni nada más.
+# Dos modos, a elegir en cada caso:
+#   enviar  → el sistema lo envía desde el buzón del departamento, cuando Dirección pulsa «Enviar» y confirma en el panel (queda constancia a su nombre).
+#   manual  → el sistema deja el correo redactado para copiarlo y mandarlo tú; después se marca como enviado.
+buzon_departamento: operaciones          # el buzón desde el que sale (config/buzones.yaml: «administracion» sirve a operaciones)
+dias_sin_respuesta: 3                    # a los cuántos días de enviada sin respuesta se avisa en «Hoy»
+plazo_max_dias: 365
+asunto: "Solicitud de cotización · {referencia}"
+saludo: "Buenos días:"
+cuerpo: |
+  {saludo}
+
+  Les solicitamos cotización y disponibilidad del siguiente artículo:
+
+  · Referencia: {referencia}
+  · Cantidad: {cantidad} uds.
+  · Plazo de entrega requerido: {plazo}
+
+  Les agradeceríamos que nos indicaran el precio unitario y el plazo de entrega.
+
+  Gracias de antemano.
+erp:                                     # también se crea la «Petición de cotización» (Request for Quotation) en ERPNext, como borrador, cuando el artículo existe en el ERP
+  activo: true

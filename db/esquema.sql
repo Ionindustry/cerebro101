@@ -820,3 +820,52 @@ CREATE TABLE IF NOT EXISTS copias_ajustes (
   por         text NOT NULL,
   actualizado timestamptz NOT NULL DEFAULT now()
 );
+
+-- Qué marcas distribuye cada proveedor (api/cerebro/proveedores_marcas.py): se deduce de la última tarifa cargada de cada proveedor (fuente «tarifa») y se pueden añadir a mano las que no vienen en ella
+-- (fuente «manual»). Sin precios. Sirve para saber a quién pedir precio o cotización de una marca.
+CREATE TABLE IF NOT EXISTS proveedores_marcas (
+  proveedor   text NOT NULL,
+  clave       text NOT NULL,                       -- la marca normalizada (sin mayúsculas ni tildes) con la que se compara
+  marca       text NOT NULL,                       -- cómo se enseña (ya agrupada bajo el fabricante)
+  articulos   integer NOT NULL DEFAULT 0,          -- cuántos artículos de esa marca trae su tarifa (0 en las manuales)
+  variantes   jsonb NOT NULL DEFAULT '{}',         -- cómo la escribe la tarifa: {texto original: artículos}
+  fuente      text NOT NULL CHECK (fuente IN ('tarifa', 'manual')),
+  por         text NOT NULL DEFAULT 'sistema',
+  actualizado timestamptz NOT NULL DEFAULT now(),
+  PRIMARY KEY (proveedor, clave, fuente)
+);
+
+-- Cotizaciones a proveedores (api/cerebro/cotizaciones.py): cuando una referencia no tiene precio en las tarifas se le pide cotización a un proveedor. El correo lo redacta siempre el sistema y lleva SOLO
+-- referencia, cantidad y plazo de entrega. Dos modos: «enviar» (lo envía el sistema cuando Dirección confirma) y «manual» (lo manda una persona). Sin claves ajenas: el esquema se aplica por trozos en las pruebas.
+CREATE TABLE IF NOT EXISTS proveedores_contactos (
+  proveedor   text PRIMARY KEY,
+  email       text NOT NULL,                       -- a dónde se piden las cotizaciones
+  nombre      text NOT NULL DEFAULT '',
+  notas       text NOT NULL DEFAULT '',
+  por         text NOT NULL DEFAULT '',
+  actualizado timestamptz NOT NULL DEFAULT now()
+);
+CREATE TABLE IF NOT EXISTS cotizaciones (
+  id           bigserial PRIMARY KEY,
+  motor_id     uuid,                                -- la licitación de la que viene (opcional; NUNCA sale en el correo)
+  partida_id   bigint,                              -- la partida de la oferta (opcional)
+  referencia   text NOT NULL,
+  marca        text NOT NULL DEFAULT '',            -- solo para elegir proveedor; no sale en el correo
+  cantidad     integer NOT NULL CHECK (cantidad > 0),
+  plazo_tipo   text NOT NULL CHECK (plazo_tipo IN ('dias', 'fecha')),
+  plazo_valor  text NOT NULL,                       -- «15» (días) o «2026-12-10» (fecha límite de entrega)
+  proveedor    text NOT NULL,
+  email        text NOT NULL,
+  modo         text NOT NULL CHECK (modo IN ('enviar', 'manual')),
+  estado       text NOT NULL DEFAULT 'borrador' CHECK (estado IN ('borrador', 'enviada', 'respondida', 'cancelada')),
+  asunto       text NOT NULL,
+  cuerpo       text NOT NULL,
+  creado_por   text NOT NULL,
+  creado       timestamptz NOT NULL DEFAULT now(),
+  enviado_por  text,
+  enviado_en   timestamptz,
+  respuesta    jsonb NOT NULL DEFAULT '{}',         -- {precio, moneda, plazo_dias, validez_hasta, nota, por, fecha}
+  erp          jsonb NOT NULL DEFAULT '{}',         -- {estado: creada | sin_articulo | error | desactivada, nombre, motivo}
+  actualizado  timestamptz NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS cotizaciones_estado_idx ON cotizaciones (estado, creado);

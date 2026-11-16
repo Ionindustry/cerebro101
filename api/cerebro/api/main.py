@@ -41,6 +41,8 @@ from ..licitaciones import encargos as encargos_ofertas
 from ..licitaciones import comparativa as comparativa_ofertas
 from ..licitaciones import equivalencia as equivalencia_ofertas
 from .. import precios_venta as precios_venta_pantalla
+from .. import cotizaciones as cotizaciones_proveedores
+from .. import proveedores_marcas
 from .. import ranking_ventas
 from .. import tarifas_auto as tarifas_automaticas
 from .. import listas_precios as listas_precios_mod
@@ -434,6 +436,20 @@ async def comprobar_actualizacion_de_licitaciones(usuario: Usuario = Depends(usu
     """Lo lanza el panel cada vez que se abre la aplicación: si lo último ingerido es viejo, pide al motor que actualice YA (el ingestor empieza en segundos, no espera a su intervalo).
     Para cualquier persona con sesión (es lo mismo que mirar el estado del motor): solo pide una vuelta, nunca ingiere nada ni cambia datos. Devuelve {estado, antiguedad_s, solicitada}."""
     return await frescura_licitaciones.comprobar(usuario.id)
+
+
+@app.post("/licitaciones/motor/actualizar")
+async def actualizar_licitaciones_ahora(usuario: Usuario = Depends(usuario_actual)):
+    """Botón «Actualizar concursos ahora»: pide al motor que el ingestor empiece una vuelta YA, aunque lo último sea reciente. Solo Dirección y Licitaciones. El motor no repite una petición de hace menos de un minuto."""
+    _exige_licitaciones(usuario)
+    return await frescura_licitaciones.actualizar_ahora(usuario.id)
+
+
+@app.get("/licitaciones/motor/actualizacion")
+async def progreso_de_la_actualizacion(usuario: Usuario = Depends(usuario_actual)):
+    """Cuánto hace de la última ingesta (la más reciente y la más atrasada), para seguir el progreso tras pulsar «Actualizar concursos ahora». Solo lee."""
+    _exige_licitaciones(usuario)
+    return await frescura_licitaciones.progreso()
 
 
 @app.get("/licitaciones/embudo/resumen")
@@ -1678,6 +1694,195 @@ async def ranking_de_ventas(dias: int = 365, top: int = 10, usuario: Usuario = D
     except Exception as e:  # noqa: BLE001 — el ERP puede fallar de muchas formas; se dice sin enseñar detalles internos
         log.warning("ventas: no se ha podido leer el ERP: %s", type(e).__name__)
         raise HTTPException(502, "No se han podido leer los pedidos de venta del ERP (¿está en marcha y con permiso de lectura para Dirección?)") from None
+
+
+class MarcaProveedorEntrada(BaseModel):
+    proveedor: str = Field(min_length=2, max_length=80)
+    marca: str = Field(min_length=1, max_length=60)
+    accion: str = "anadir"
+
+
+@app.get("/precios/proveedores-marcas")
+async def marcas_de_los_proveedores(marca: str = "", usuario: Usuario = Depends(usuario_actual)):
+    """Qué marcas distribuye cada proveedor (de sus tarifas cargadas y de lo añadido a mano). Con `marca`, solo los proveedores que la distribuyen. Solo Dirección: quién nos vende qué es confidencial."""
+    _exige_direccion(usuario)
+    try:
+        return await proveedores_marcas.listar(marca[:60])
+    except ValueError as e:
+        raise HTTPException(422, str(e)) from None
+
+
+@app.post("/precios/proveedores-marcas/reconstruir")
+async def reconstruir_marcas_de_los_proveedores(usuario: Usuario = Depends(usuario_actual)):
+    """Vuelve a deducir las marcas de todos los proveedores desde sus tarifas ya cargadas (lo manual no se toca). Para llenar lo que había antes de existir esta pantalla."""
+    _exige_direccion(usuario)
+    r = await proveedores_marcas.reconstruir()
+    log.info("precios: %s reconstruye las marcas de los proveedores (%d proveedores)", usuario.id, r["proveedores"])
+    return r
+
+
+@app.post("/precios/proveedores-marcas/manual")
+async def marca_manual_de_un_proveedor(entrada: MarcaProveedorEntrada, usuario: Usuario = Depends(usuario_actual)):
+    """Añade o quita a mano una marca que un proveedor distribuye aunque no venga en su tarifa. Solo quita lo puesto a mano."""
+    _exige_direccion(usuario)
+    if entrada.accion not in ("anadir", "quitar"):
+        raise HTTPException(422, "La acción es «anadir» o «quitar»")
+    try:
+        if entrada.accion == "anadir":
+            return {"estado": "anadida", **await proveedores_marcas.anadir_manual(entrada.proveedor, entrada.marca, usuario.id)}
+        return {"estado": "quitada" if await proveedores_marcas.quitar_manual(entrada.proveedor, entrada.marca) else "no_estaba"}
+    except ValueError as e:
+        raise HTTPException(422, str(e)) from None
+
+
+def _error_cotizacion(e: Exception) -> HTTPException:
+    return HTTPException(404 if isinstance(e, cotizaciones_proveedores.NoExiste) else 422, str(e))
+
+
+class CotizacionNueva(BaseModel):
+    referencia: str = Field(min_length=2, max_length=80)
+    cantidad: int | str
+    plazo_tipo: str = "dias"
+    plazo_valor: int | str
+    proveedor: str = Field(min_length=2, max_length=80)
+    modo: str
+    marca: str = Field(default="", max_length=60)
+    email: str | None = Field(default=None, max_length=200)
+    licitacion: str | None = Field(default=None, max_length=36)
+    partida: int | None = None
+
+
+class ConfirmarEnvio(BaseModel):
+    confirmo: bool = False
+
+
+class RespuestaCotizacion(BaseModel):
+    precio: str | int | float
+    moneda: str = "EUR"
+    plazo_dias: int | str | None = None
+    validez_hasta: str | None = None
+    nota: str = Field(default="", max_length=500)
+
+
+class ContactoProveedor(BaseModel):
+    proveedor: str = Field(min_length=2, max_length=80)
+    email: str = Field(min_length=3, max_length=200)
+    nombre: str = Field(default="", max_length=80)
+    notas: str = Field(default="", max_length=300)
+
+
+class ArticuloErp(BaseModel):
+    item_code: str = Field(default="", max_length=140)
+
+
+@app.get("/cotizaciones")
+async def cotizaciones_de_proveedores(estado: str = "", licitacion: str = "", usuario: Usuario = Depends(usuario_actual)):
+    """Las cotizaciones a proveedores (las últimas 100). Solo Dirección y Licitaciones."""
+    _exige_licitaciones(usuario)
+    try:
+        return {"cotizaciones": await cotizaciones_proveedores.listar(estado, licitacion), "dias_sin_respuesta": cotizaciones_proveedores.configuracion()["dias_sin_respuesta"]}
+    except cotizaciones_proveedores.ErrorCotizacion as e:
+        raise _error_cotizacion(e) from None
+
+
+@app.get("/cotizaciones/contactos")
+async def contactos_de_proveedores(usuario: Usuario = Depends(usuario_actual)):
+    _exige_licitaciones(usuario)
+    return {"contactos": await cotizaciones_proveedores.contactos()}
+
+
+@app.post("/cotizaciones/contactos")
+async def guardar_contacto_de_proveedor(entrada: ContactoProveedor, usuario: Usuario = Depends(usuario_actual)):
+    """A qué correo se le piden las cotizaciones a un proveedor. Solo Dirección."""
+    _exige_direccion(usuario)
+    try:
+        return await cotizaciones_proveedores.guardar_contacto(entrada.proveedor, entrada.email, entrada.nombre, entrada.notas, usuario.id)
+    except cotizaciones_proveedores.ErrorCotizacion as e:
+        raise _error_cotizacion(e) from None
+
+
+@app.get("/cotizaciones/sugerencias")
+async def proveedores_para_cotizar(marca: str = "", usuario: Usuario = Depends(usuario_actual)):
+    """Los proveedores que distribuyen una marca (de sus tarifas y de lo añadido a mano) con su correo de contacto, si lo hay: a quién pedirle la cotización."""
+    _exige_licitaciones(usuario)
+    try:
+        r = await proveedores_marcas.listar(marca[:60])
+    except ValueError as e:
+        raise HTTPException(422, str(e)) from None
+    mails = {c["proveedor"]: c["email"] for c in await cotizaciones_proveedores.contactos()}
+    return {"proveedores": [{"proveedor": p["proveedor"], "articulos": p["articulos"], "email": mails.get(p["proveedor"])} for p in r["proveedores"]]}
+
+
+@app.post("/cotizaciones")
+async def crear_cotizacion(entrada: CotizacionNueva, usuario: Usuario = Depends(usuario_actual)):
+    """Crea una cotización en borrador con el correo ya redactado (solo referencia, cantidad y plazo de entrega). Modo «enviar» (lo envía el sistema cuando Dirección confirma) o «manual» (lo manda una persona)."""
+    _exige_licitaciones(usuario)
+    try:
+        return await cotizaciones_proveedores.crear(entrada.model_dump(), usuario.id)
+    except cotizaciones_proveedores.ErrorCotizacion as e:
+        raise _error_cotizacion(e) from None
+
+
+@app.get("/cotizaciones/{cid}")
+async def una_cotizacion(cid: int, usuario: Usuario = Depends(usuario_actual)):
+    _exige_licitaciones(usuario)
+    try:
+        return await cotizaciones_proveedores.leer(cid)
+    except (cotizaciones_proveedores.NoExiste, cotizaciones_proveedores.ErrorCotizacion) as e:
+        raise _error_cotizacion(e) from None
+
+
+@app.post("/cotizaciones/{cid}/enviar")
+async def enviar_cotizacion(cid: int, entrada: ConfirmarEnvio, usuario: Usuario = Depends(usuario_actual)):
+    """Modo «enviar»: el sistema envía el correo ya redactado al proveedor. Solo Dirección y con confirmación expresa (queda constancia a su nombre): es un correo que sale de la empresa."""
+    _exige_direccion(usuario)
+    if not entrada.confirmo:
+        raise HTTPException(422, "Falta la confirmación expresa: confirma que quieres enviar este correo al proveedor")
+    try:
+        r = await cotizaciones_proveedores.enviar(cid, usuario.id)
+    except (cotizaciones_proveedores.NoExiste, cotizaciones_proveedores.ErrorCotizacion) as e:
+        raise _error_cotizacion(e) from None
+    await constancia.dejar_constancia(None, f"usuario:{usuario.id}", "cotizaciones", "enviar", None, f"cotización {cid} ({r['referencia']} × {r['cantidad']}) enviada a {r['proveedor']}: firmado en el panel por {usuario.id}")
+    return r
+
+
+@app.post("/cotizaciones/{cid}/marcar-enviada")
+async def marcar_cotizacion_enviada(cid: int, usuario: Usuario = Depends(usuario_actual)):
+    """Modo «manual»: la persona ya ha mandado el correo."""
+    _exige_licitaciones(usuario)
+    try:
+        return await cotizaciones_proveedores.marcar_enviada(cid, usuario.id)
+    except (cotizaciones_proveedores.NoExiste, cotizaciones_proveedores.ErrorCotizacion) as e:
+        raise _error_cotizacion(e) from None
+
+
+@app.post("/cotizaciones/{cid}/respuesta")
+async def respuesta_de_cotizacion(cid: int, entrada: RespuestaCotizacion, usuario: Usuario = Depends(usuario_actual)):
+    """Registra la respuesta del proveedor (precio unitario, moneda, plazo, validez): pasa a costear la partida de la oferta como «cotización de proveedor»."""
+    _exige_licitaciones(usuario)
+    try:
+        return await cotizaciones_proveedores.registrar_respuesta(cid, entrada.model_dump(), usuario.id)
+    except (cotizaciones_proveedores.NoExiste, cotizaciones_proveedores.ErrorCotizacion) as e:
+        raise _error_cotizacion(e) from None
+
+
+@app.post("/cotizaciones/{cid}/cancelar")
+async def cancelar_cotizacion(cid: int, usuario: Usuario = Depends(usuario_actual)):
+    _exige_licitaciones(usuario)
+    try:
+        return await cotizaciones_proveedores.cancelar(cid, usuario.id)
+    except (cotizaciones_proveedores.NoExiste, cotizaciones_proveedores.ErrorCotizacion) as e:
+        raise _error_cotizacion(e) from None
+
+
+@app.post("/cotizaciones/{cid}/erp")
+async def cotizacion_al_erp(cid: int, entrada: ArticuloErp, usuario: Usuario = Depends(usuario_actual)):
+    """Crea la «Petición de cotización» en ERPNext (borrador) si el artículo y el proveedor existen allí; si no, dice por qué. No bloquea la cotización."""
+    _exige_licitaciones(usuario)
+    try:
+        return await cotizaciones_proveedores.enviar_al_erp(cid, entrada.item_code, usuario.id)
+    except (cotizaciones_proveedores.NoExiste, cotizaciones_proveedores.ErrorCotizacion) as e:
+        raise _error_cotizacion(e) from None
 
 
 @app.get("/precios/propuestas")

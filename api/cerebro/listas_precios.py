@@ -451,6 +451,11 @@ async def proponer_tarifa(documento: str, proveedor: dict, canal: str, agente: s
             [ficha["id"], agente, departamento, Jsonb(prov), moneda, lista, Jsonb(lineas), Jsonb([]), Jsonb(avisos), Jsonb(resumen)])
         iid = (await cur.fetchone())["id"]
     log.info("listas de precios: %s propone la tarifa %s (%s, canal %s, %d productos)", agente, iid, prov["nombre"], canal, len(lineas))
+    try:                                      # qué marcas distribuye ese proveedor (api/cerebro/proveedores_marcas.py): una ayuda, nunca debe romper la carga
+        from . import proveedores_marcas
+        await proveedores_marcas.registrar(prov["nombre"], lineas)
+    except Exception as e:  # noqa: BLE001
+        log.warning("listas de precios: no se han podido anotar las marcas de %s: %s", prov["nombre"], type(e).__name__)
     return {"importacion": iid, "proveedor": {**prov, "existe_en_el_erp": existe_prov}, "lista": lista, "moneda": moneda, "canal": canal,
             **{k: v for k, v in resumen.items() if k not in ("documento", "tarifa", "columnas", "hojas")}, "avisos": avisos,
             "muestra": [{k: l[k] for k in ("ref", "desc", "precio", "venta")} for l in lineas[:5]],
