@@ -63,6 +63,21 @@ class TestRedaccion(unittest.TestCase):
             with self.assertRaises(C.ErrorCotizacion, msg=malo):
                 C.validar_email(malo)
 
+    def test_direcciones_de_prueba_solo_las_listadas_y_exactas(self):
+        cfg = {**C.configuracion(), "direcciones_de_prueba": ["soporte@101.cat"]}
+        self.assertEqual(C.validar_email("Soporte@101.cat", cfg), "Soporte@101.cat")
+        for malo in ("concursos@101.cat", "albert@101.cat", "soporte@101.cat.otro.com"):
+            if malo.endswith(".com"):
+                self.assertEqual(C.validar_email(malo, cfg), malo)               # un dominio ajeno que se parece no es de la empresa ni de la lista: es un proveedor cualquiera
+                continue
+            with self.assertRaises(C.ErrorCotizacion, msg=malo):
+                C.validar_email(malo, cfg)
+        with self.assertRaises(C.ErrorCotizacion):
+            C.validar_email("soporte@101.cat", {**cfg, "direcciones_de_prueba": []})        # sin lista, nunca
+        self.assertTrue(C.es_de_prueba(" SOPORTE@101.cat ", cfg))
+        self.assertFalse(C.es_de_prueba("ventas@a-secur.com", cfg))
+        self.assertEqual(C._config("/no/existe.yaml")["direcciones_de_prueba"], [])
+
     def test_respuesta_validada(self):
         r = C.validar_respuesta({"precio": "1234.5", "moneda": "usd", "plazo_dias": "10", "validez_hasta": "2026-12-31", "nota": " hola   mundo "}, HOY)
         self.assertEqual(r, {"precio": "1234.5", "moneda": "USD", "plazo_dias": 10, "validez_hasta": "2026-12-31", "nota": "hola mundo"})
@@ -185,6 +200,22 @@ class TestEnBase(unittest.TestCase):
         with self.assertRaisesRegex(C.ErrorCotizacion, "ya no se puede enviar"):
             ejecutar(C.enviar(c["id"], "albert", envio))
         self.assertEqual(len(enviados), 1)
+
+    def test_envio_de_prueba_a_soporte_lleva_prueba_en_el_asunto_y_la_permite(self):
+        ejecutar(C.guardar_contacto("A-Secur", "soporte@101.cat", "prueba", "", "albert"))      # la ficha de A-Secur apunta a soporte@ solo para probar
+        c = self.nueva(modo="enviar")
+        self.assertEqual(c["email"], "soporte@101.cat")
+        enviados = []
+
+        async def envio(buzon, para, asunto, cuerpo, *a, **kw):
+            enviados.append((buzon, para, asunto, cuerpo, kw))
+        ejecutar(C.enviar(c["id"], "albert", envio))
+        self.assertEqual(len(enviados), 1)
+        buzon, para, asunto, cuerpo, kw = enviados[0]
+        self.assertEqual((buzon, para), ("operaciones", ["soporte@101.cat"]))
+        self.assertEqual(asunto, "[PRUEBA] " + c["asunto"])
+        self.assertEqual(cuerpo, c["cuerpo"])                                        # el cuerpo es exactamente el redactado
+        self.assertEqual(kw, {"permitidas": ["soporte@101.cat"]})
 
     def test_si_el_envio_falla_sigue_en_borrador_y_se_puede_reintentar(self):
         c = self.nueva(modo="enviar")

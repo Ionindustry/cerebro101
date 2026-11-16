@@ -30,7 +30,7 @@ DEFECTO = {"buzon_departamento": "operaciones", "dias_sin_respuesta": 3, "plazo_
            "asunto": "Solicitud de cotización · {referencia}", "saludo": "Buenos días:",
            "cuerpo": "{saludo}\n\nLes solicitamos cotización y disponibilidad del siguiente artículo:\n\n· Referencia: {referencia}\n· Cantidad: {cantidad} uds.\n· Plazo de entrega requerido: {plazo}\n\n"
                      "Les agradeceríamos que nos indicaran el precio unitario y el plazo de entrega.\n\nGracias de antemano.\n",
-           "erp": {"activo": True}}
+           "erp": {"activo": True}, "direcciones_de_prueba": []}
 ESTADOS = ("borrador", "enviada", "respondida", "cancelada")
 MODOS = ("enviar", "manual")
 MAX_CANTIDAD = 100_000
@@ -59,6 +59,7 @@ def _config(ruta: str) -> dict:
     cfg = {**DEFECTO, **{k: v for k, v in c.items() if k in DEFECTO}}
     cfg["dias_sin_respuesta"] = min(max(int(cfg["dias_sin_respuesta"]), 1), 60)
     cfg["plazo_max_dias"] = min(max(int(cfg["plazo_max_dias"]), 1), 730)
+    cfg["direcciones_de_prueba"] = [str(d).strip().lower() for d in cfg["direcciones_de_prueba"]] if isinstance(cfg["direcciones_de_prueba"], list) else []
     cfg["erp"] = {**DEFECTO["erp"], **(cfg.get("erp") if isinstance(cfg.get("erp"), dict) else {})}
     return cfg
 
@@ -124,13 +125,26 @@ def redactar(referencia: str, cantidad: int, plazo_tipo: str, plazo_valor: str, 
     return str(cfg["asunto"]).format(**datos)[:200], str(cfg["cuerpo"]).format(**datos)
 
 
-def validar_email(email: str) -> str:
-    """La dirección del proveedor: válida y no de la propia empresa (las reglas del correo de la empresa). Pura sobre la configuración de buzones."""
+def direcciones_de_prueba(cfg: dict | None = None) -> list[str]:
+    """Las direcciones de la propia empresa a las que se puede mandar una cotización DE PRUEBA (config/cotizaciones.yaml → direcciones_de_prueba): para ver el correo real sin molestar a un proveedor. Pura."""
+    cfg = cfg or configuracion()
+    return [str(d).strip().lower() for d in (cfg.get("direcciones_de_prueba") or []) if str(d).strip()]
+
+
+def es_de_prueba(email, cfg: dict | None = None) -> bool:
+    return str(email or "").strip().lower() in direcciones_de_prueba(cfg)
+
+
+def validar_email(email: str, cfg: dict | None = None) -> str:
+    """La dirección del proveedor: válida y no de la propia empresa (las reglas del correo de la empresa), salvo las direcciones de prueba que se listan expresamente en la configuración. Pura sobre la configuración de buzones."""
     from .herramientas import buzones, correo
+    libres = direcciones_de_prueba(cfg)
     try:
-        direccion = correo._destinatarios(str(email or "").strip())[0]
+        direccion = correo._destinatarios(str(email or "").strip(), libres)[0]
     except ValueError as e:
         raise ErrorCotizacion(str(e)) from None
+    if direccion.lower() in libres:
+        return direccion
     propios = [str(d).lower() for d in ((buzones.cargar().get("avisos") or {}).get("dominios") or [])]
     if direccion.rsplit("@", 1)[-1].lower() in propios:
         raise ErrorCotizacion("Una cotización se pide a un proveedor, no a una dirección de la propia empresa")
@@ -229,7 +243,7 @@ async def crear(datos: dict, por: str, cfg: dict | None = None, hoy: date | None
     email = datos.get("email") or await _email_de(proveedor)
     if not email:
         raise ErrorCotizacion(f"No hay correo de {proveedor}: añádelo en «Contactos de proveedores»")
-    email = validar_email(email)
+    email = validar_email(email, cfg)
     asunto, cuerpo = redactar(referencia, cantidad, tipo, valor, cfg)
     motor = str(datos.get("licitacion") or "").strip().lower() or None
     if motor and not re.match(r"^[0-9a-f-]{36}$", motor):
@@ -312,8 +326,12 @@ async def enviar(cid: int, por: str, enviar_correo=None) -> dict:
     if enviar_correo is None:
         from .herramientas import correo
         enviar_correo = correo.enviar
+    cfg = configuracion()
     try:
-        await enviar_correo(configuracion()["buzon_departamento"], [f["email"]], f["asunto"], f["cuerpo"], None, False)
+        if es_de_prueba(f["email"], cfg):          # a una dirección de prueba (soporte@): el asunto lo dice, para que nadie lo tome por una petición real
+            await enviar_correo(cfg["buzon_departamento"], [f["email"]], "[PRUEBA] " + f["asunto"], f["cuerpo"], None, False, permitidas=[f["email"]])
+        else:
+            await enviar_correo(cfg["buzon_departamento"], [f["email"]], f["asunto"], f["cuerpo"], None, False)
     except Exception as e:  # noqa: BLE001 — el correo puede fallar de muchas formas (servidor, buzón, dirección): se dice y se puede reintentar
         log.warning("cotizaciones: no se ha podido enviar la %s: %s: %s", cid, type(e).__name__, e)
         raise ErrorCotizacion(f"No se ha podido enviar el correo ({str(e)[:160] or type(e).__name__}). Sigue en borrador: puedes reintentarlo o pasarla a modo manual.") from None

@@ -97,8 +97,9 @@ def es_automatico(m) -> bool:
 
 
 
-def _destinatarios(para: list[str] | str) -> list[str]:
-    """Direcciones limpias y válidas; rechaza lo que no sea una dirección, demasiados destinatarios y las direcciones de la propia empresa."""
+def _destinatarios(para: list[str] | str, permitidas: list[str] | tuple = ()) -> list[str]:
+    """Direcciones limpias y válidas; rechaza lo que no sea una dirección, demasiados destinatarios y las direcciones de la propia empresa.
+    `permitidas`: direcciones EXACTAS de la propia empresa que quien llama admite expresamente (las pruebas de cotizaciones a soporte@); por defecto ninguna."""
     lista = para if isinstance(para, list) else [para]
     direcciones = [a.strip() for _, a in getaddresses([str(x) for x in lista]) if a.strip()]
     if not direcciones:
@@ -110,7 +111,8 @@ def _destinatarios(para: list[str] | str) -> list[str]:
         if not DIRECCION.match(d):
             raise ValueError(f"«{d}» no es una dirección de correo válida")
     propias = B.direcciones_propias()
-    internos = [d for d in direcciones if d.lower() in propias]
+    libres = {str(a).strip().lower() for a in permitidas}
+    internos = [d for d in direcciones if d.lower() in propias and d.lower() not in libres]
     if internos:
         raise ValueError(f"No se envía correo a los buzones de la propia empresa ({', '.join(internos)}): usa la coordinación entre agentes")
     return direcciones
@@ -327,7 +329,7 @@ async def preparar_borrador(departamento: str, para: list[str] | str, asunto: st
                             comercial: bool = False, responder_a: str | None = None) -> dict:
     ident, datos = B.resolver(departamento, buzon)
     _texto_valido(cuerpo, asunto)
-    m = construir_mensaje(datos["direccion"], _destinatarios(para), _limpiar_asunto(asunto), _con_firma(cuerpo, datos), comercial,
+    m = construir_mensaje(datos["direccion"], _destinatarios(para, permitidas), _limpiar_asunto(asunto), _con_firma(cuerpo, datos), comercial,
                           B.cargar().get("pie_comercial", ""), responder_a)
 
     def guardar():
@@ -341,7 +343,7 @@ async def preparar_borrador(departamento: str, para: list[str] | str, asunto: st
 
 
 async def enviar(departamento: str, para: list[str] | str, asunto: str, cuerpo: str, buzon: str | None = None,
-                 comercial: bool = False) -> dict:
+                 comercial: bool = False, permitidas: list[str] | tuple = ()) -> dict:
     ident, datos = B.resolver(departamento, buzon)
     _texto_valido(cuerpo, asunto)
     m = construir_mensaje(datos["direccion"], _destinatarios(para), _limpiar_asunto(asunto), _con_firma(cuerpo, datos), comercial,

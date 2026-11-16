@@ -20,5 +20,7 @@ cuerpo: |
   Les agradeceríamos que nos indicaran el precio unitario y el plazo de entrega.
 
   Gracias de antemano.
+direcciones_de_prueba:                   # direcciones de la propia empresa a las que SÍ se puede mandar una cotización, para probar el correo real como si fuera a un proveedor (el asunto lleva «[PRUEBA]»).
+  - soporte@101.cat                      # A cualquier otra dirección de la empresa no se envía nunca. Vacía la lista cuando acabes de probar.
 erp:                                     # también se crea la «Petición de cotización» (Request for Quotation) en ERPNext, como borrador, cuando el artículo existe en el ERP
   activo: true
