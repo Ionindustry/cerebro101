@@ -71,6 +71,22 @@ def _cabeceras(departamento: str) -> dict:
     return {"Authorization": f"token {token}", "Accept": "application/json"}
 
 
+def _comprobar_respuesta(r: "httpx.Response") -> None:
+    """Como `raise_for_status`, pero el mensaje lleva el motivo que da el ERP (p. ej. «Duplicate entry … for key …»), que sin él un 409 no dice con qué choca."""
+    try:
+        r.raise_for_status()
+    except httpx.HTTPStatusError as e:
+        motivo = ""
+        try:
+            j = r.json()
+            motivo = str(j.get("exception") or j.get("_server_messages") or j.get("message") or "")
+        except Exception:      # noqa: BLE001
+            motivo = (r.text or "")[:200]
+        if motivo:
+            raise httpx.HTTPStatusError(f"{e} — ERP: {motivo[:200]}", request=e.request, response=e.response) from None
+        raise
+
+
 async def crear_maestro(doctype: str, datos: dict[str, Any], departamento: str) -> dict:
     """Da de alta UN dato maestro (p. ej. un proveedor). Como `insertar_varios`, no es una operación de los agentes: solo la usan procesos ya aprobados."""
     comprobar_acceso(departamento, doctype, "maestros")
@@ -172,7 +188,7 @@ async def crear_borrador(doctype: str, datos: dict[str, Any], departamento: str)
         datos[campo] = await _usuario_tecnico(departamento)
     async with httpx.AsyncClient(base_url=ajustes.erpnext_url, timeout=30) as c:
         r = await c.post(f"/api/resource/{quote(doctype, safe='')}", json=datos, headers=_cabeceras(departamento))
-    r.raise_for_status()
+    _comprobar_respuesta(r)
     return r.json()["data"]
 
 
@@ -185,7 +201,7 @@ async def insertar_varios(doctype: str, docs: list[dict], departamento: str, tam
         lote = [{**d, "doctype": doctype, "docstatus": 0} for d in docs[i:i + tamano]]
         async with httpx.AsyncClient(base_url=ajustes.erpnext_url, timeout=120) as c:
             r = await c.post("/api/method/frappe.client.insert_many", json={"docs": lote}, headers=_cabeceras(departamento))
-        r.raise_for_status()
+        _comprobar_respuesta(r)
         nombres += [str(n) for n in (r.json().get("message") or [])]
     return nombres
 

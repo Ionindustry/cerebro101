@@ -144,10 +144,11 @@ class ErpFalso:
         if doctype == "Price List":
             return [{"name": f[0][2]}] if f[0][2] in self.listas else []
         if doctype == "Item":
-            return [{"item_code": c} for c in f[0][2] if c in self.items]
+            pedidos = {c.casefold() for c in f[0][2]}                      # como el ERP real: no distingue mayúsculas y devuelve el nombre con que se creó
+            return [{"item_code": k} for k in self.items if k.casefold() in pedidos]
         if doctype == "Item Price":
-            lista, codigos = f[0][2], f[1][2]
-            return [{"name": k, "item_code": v["item_code"], "price_list_rate": v["price_list_rate"]} for k, v in self.precios.items() if v["price_list"] == lista and v["item_code"] in codigos]
+            lista, codigos = f[0][2], {c.casefold() for c in f[1][2]}
+            return [{"name": k, "item_code": v["item_code"], "price_list_rate": v["price_list_rate"]} for k, v in self.precios.items() if v["price_list"] == lista and v["item_code"].casefold() in codigos]
         if doctype == "Brand":
             return [{"name": m} for m in self.marcas]
         raise AssertionError(doctype)
@@ -256,6 +257,14 @@ class TestFlujo(unittest.TestCase):
             ejecutar(L.aplicar(r["importacion"], "operaciones"))
         with self.assertRaisesRegex(L.ErrorImportacion, "«aplicada»"):
             ejecutar(L.vista_aplicar(r["importacion"], "operaciones"))
+
+    def test_un_articulo_que_solo_difiere_en_mayusculas_ya_existe_y_no_se_vuelve_a_crear(self):
+        self.erp.items["Visiot-a-2"] = {"item_code": "Visiot-a-2"}          # en el ERP se creó con otras mayúsculas (el 409 real de HIKVIS-…-BLACK / -Black)
+        r = self.proponer()
+        self.assertEqual((r["articulos_nuevos"], r["articulos_existentes"]), (2, 1))
+        a = ejecutar(L.aplicar(r["importacion"], "operaciones"))
+        self.assertEqual((a["estado"], a["articulos_creados"]), ("aplicada", 2))
+        self.assertNotIn("VISIOT-A-2", self.erp.items)
 
     def test_una_lista_nueva_del_mismo_proveedor_actualiza_precios_y_no_duplica(self):
         ejecutar(L.aplicar(self.proponer()["importacion"], "operaciones"))
