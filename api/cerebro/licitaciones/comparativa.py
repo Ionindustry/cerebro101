@@ -19,6 +19,7 @@ Los datos de producto pasan por la anonimización local antes de salir; si no se
 from __future__ import annotations
 
 import logging
+import math
 import re
 import unicodedata
 
@@ -95,38 +96,60 @@ def _especificaciones_utiles(esp: dict, pedidas: set[str], maximo: int = MAX_ESP
 
 # ---- La evidencia ----
 
-def lineas_relevantes(lineas: list[dict], consultas: list[str], maximo: int = 15) -> list[dict]:
-    """De las líneas de las listas de proveedores (ref, codigo, desc), las que comparten palabras con lo que pide el pliego, las más parecidas primero. SIN precio: el precio no se copia. Pura."""
-    pedidas = set().union(*[_palabras(q) for q in consultas]) if consultas else set()
-    puntuadas = []
-    for l in lineas:
-        if not isinstance(l, dict) or not (l.get("desc") or "").strip():
-            continue
-        n = len(pedidas & _palabras(f"{l.get('desc')} {l.get('ref') or ''} {l.get('codigo') or ''}"))
-        if n > 0:
-            esp = l.get("especificaciones") if isinstance(l.get("especificaciones"), dict) else {}
-            texto = _corto(l.get("desc"), 300) + ("".join(f" | {_corto(k, 40)}: {_corto(v, 60)}" for k, v in _especificaciones_utiles(esp, pedidas)) if esp else "")
-            puntuadas.append((n, {"ref": _corto(l.get("ref") or l.get("codigo"), 60), "desc": texto[:MAX_TEXTO_LINEA]}))
-    puntuadas.sort(key=lambda x: -x[0])
-    vistas, salida = set(), []
-    for _n, l in puntuadas:
-        k = (l["ref"], l["desc"][:60])
-        if k not in vistas:
-            vistas.add(k)
-            salida.append(l)
-        if len(salida) >= maximo:
-            break
+def lineas_relevantes(lineas: list[dict], consultas: list[str], maximo: int = 15, por_consulta: int = 4) -> list[dict]:
+    """De las líneas de las listas de proveedores (ref, codigo, desc), las que comparten palabras con lo que pide el pliego, las más parecidas primero. SIN precio: el precio no se copia.
+    Cada consulta (cada requisito o producto del pliego) aporta sus mejores `por_consulta` líneas, para que una familia con muchas coincidencias (p. ej. teclados) no tape a las demás (cámaras, routers, baterías…).
+    Las palabras que aparecen en pocas líneas pesan más que las comunes («camera» en miles de líneas). Pura."""
+    if not consultas:
+        return []
+    utiles = [l for l in lineas if isinstance(l, dict) and (l.get("desc") or "").strip()]
+    palabras_l = [_palabras(f"{l.get('desc')} {l.get('ref') or ''} {l.get('codigo') or ''}") for l in utiles]
+    por_q = [_palabras(q) for q in consultas]
+    pedidas = set().union(*por_q)
+    frecuencia: dict[str, int] = {}
+    for w in palabras_l:
+        for x in w & pedidas:
+            frecuencia[x] = frecuencia.get(x, 0) + 1
+    peso = {x: 1.0 / math.log(2 + n) for x, n in frecuencia.items()}
+
+    def texto(l: dict) -> dict:
+        esp = l.get("especificaciones") if isinstance(l.get("especificaciones"), dict) else {}
+        t = _corto(l.get("desc"), 300) + ("".join(f" | {_corto(k, 40)}: {_corto(v, 60)}" for k, v in _especificaciones_utiles(esp, pedidas)) if esp else "")
+        return {"ref": _corto(l.get("ref") or l.get("codigo"), 60), "desc": t[:MAX_TEXTO_LINEA]}
+
+    elegidas: list[list[dict]] = []
+    for qw in por_q:
+        punt = []
+        for i, w in enumerate(palabras_l):
+            comunes = qw & w
+            if comunes:
+                punt.append((sum(peso[x] for x in comunes), i))
+        punt.sort(key=lambda x: -x[0])
+        elegidas.append([utiles[i] for _p, i in punt[:por_consulta * 3]])
+    vistas: set = set()
+    salida: list[dict] = []
+    # reparto por turnos: la mejor de cada consulta, luego la segunda de cada una…
+    for ronda in range(por_consulta * 3):
+        for lista in elegidas:
+            if ronda < len(lista) and len(salida) < maximo:
+                l = texto(lista[ronda])
+                k = (l["ref"], l["desc"][:60])
+                if k not in vistas:
+                    vistas.add(k)
+                    salida.append(l)
     return salida
 
 
 async def _lineas_de_proveedores() -> list[dict]:
+    """Las líneas de la tarifa más reciente de cada proveedor y lista (aplicada o propuesta). Antes se cortaba en 6.000 líneas de las 30 últimas importaciones, y una tarifa grande tapaba a las demás."""
     import psycopg
     from psycopg.rows import dict_row
     from ..ajustes import ajustes
     async with await psycopg.AsyncConnection.connect(ajustes.database_url, row_factory=dict_row) as conn:
-        cur = await conn.execute("SELECT lineas FROM importaciones_precios WHERE estado IN ('propuesta', 'aplicada') ORDER BY id DESC LIMIT 30")
+        cur = await conn.execute("SELECT DISTINCT ON (proveedor->>'nombre', lista) lineas FROM importaciones_precios "
+                                 "WHERE estado IN ('propuesta', 'aplicada') ORDER BY proveedor->>'nombre', lista, id DESC")
         filas = await cur.fetchall()
-    return [l for f in filas for l in (f["lineas"] or [])][:6000]
+    return [l for f in filas for l in (f["lineas"] or [])]
 
 
 async def reunir_evidencias(consultas: list[str], k: int = 3, buscar=None, lineas=None) -> list[dict]:
@@ -148,7 +171,7 @@ async def reunir_evidencias(consultas: list[str], k: int = 3, buscar=None, linea
             usados += len(texto)
             evid.append({"origen": "ficha", "titulo": _corto(f["titulo"], 120), "fuente": _corto(f.get("fuente"), 120), "texto": texto})
     try:
-        for l in lineas_relevantes(await (lineas or _lineas_de_proveedores)(), consultas, 15):
+        for l in lineas_relevantes(await (lineas or _lineas_de_proveedores)(), consultas, 24):
             if len(evid) >= MAX_EVIDENCIAS or usados > MAX_CARACTERES_EVIDENCIA:
                 break
             evid.append({"origen": "lista de proveedor", "titulo": l["ref"] or "(sin referencia)", "fuente": "", "texto": l["desc"]})
