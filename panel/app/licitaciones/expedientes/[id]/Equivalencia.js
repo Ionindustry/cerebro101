@@ -1,6 +1,6 @@
 "use client";
 import { useCallback, useEffect, useState } from "react";
-import { VEREDICTO_EQUIVALENCIA, evidenciaTexto, exigidoTexto, fechaTexto, resumenEquivalencia, solucionTitulo } from "../../../../lib/licitaciones";
+import { VEREDICTO_EQUIVALENCIA, evidenciaTexto, exigidoTexto, fechaTexto, referenciaPliegoTexto, resumenEquivalencia, solucionTitulo } from "../../../../lib/licitaciones";
 import { pedirCerebro } from "../../cliente";
 import Descubrimiento from "./Descubrimiento";
 
@@ -25,6 +25,13 @@ export default function Equivalencia({ id, version }) {
         <button className="boton no" aria-expanded={abierto} onClick={() => setAbierto((v) => !v)}>{abierto ? "Ocultar" : "Ver"}</button>
       </header>
       <p className="meta">Hecha con {d.proveedor === "claude" ? "Claude" : "ChatGPT"}{d.modelo ? ` (${d.modelo})` : ""} el {fechaTexto(d.actualizado)}. {resumenEquivalencia(c)}. Los números los compara el código con el valor que figura en la ficha; «sin verificar» pide que una persona lo mire.</p>
+      {c.referencias_pliego?.length > 0 && (
+        <div role="group" aria-label="Productos que nombra el pliego">
+          <p><strong>Productos que nombra el pliego</strong></p>
+          <ul>{c.referencias_pliego.map((r, i) => <li key={i} title={r.cita}>{referenciaPliegoTexto(r)}</li>)}</ul>
+          <p className="meta">Sacados del texto del pliego (pasa el ratón por encima para ver la frase). Se han buscado sus fichas para fijar el mínimo que deben igualar o superar los equivalentes.</p>
+        </div>
+      )}
       {c.solucion && (
         <div role="group" aria-label="Solución propuesta">
           <p><strong>{solucionTitulo(c.solucion)}</strong></p>

@@ -9,7 +9,10 @@
 #   · si algo falla, AVISA por correo a soporte@ (los mismos destinatarios que los fallos del motor) y sale con código 1.
 # Una copia no sirve de nada sin probar la restauración: ver docs/SEGURIDAD.md. Y guarda una copia del .env en un gestor de contraseñas (no está en git).
 #
-# Variables (o en el .env): COPIA_CONSERVAR=7  COPIA_EXTRA=  COPIA_BASE=copias/auto   (para pruebas: COPIA_COMANDO, COPIA_AVISAR)
+#   · COPIA INCREMENTAL (opcional): con COPIA_RESTIC_REPO (una carpeta) y COPIA_RESTIC_CLAVE (el fichero con la contraseña del repositorio) deja además la copia en un repositorio de restic, que guarda
+#     cada día SOLO lo que ha cambiado (deduplicado y cifrado) y conserva 7 diarias, 8 semanales y 12 mensuales. Las copias completas de arriba siguen haciéndose igual. Ver docs/SEGURIDAD.md.
+#
+# Variables (o en el .env): COPIA_CONSERVAR=7  COPIA_EXTRA=  COPIA_BASE=copias/auto  COPIA_RESTIC_REPO=  COPIA_RESTIC_CLAVE=   (para pruebas: COPIA_COMANDO, COPIA_AVISAR, COPIA_RESTIC, COPIA_RESTIC_SIN_VALIDAR)
 set -uo pipefail
 umask 077          # las copias llevan datos sensibles: solo las lee quien las hace
 cd "$(dirname "$0")/.."
@@ -31,6 +34,10 @@ if printf '%s\n' "$CONFIG" | grep -q '^extra='; then
   elif [[ "$v" =~ ^/(mnt/[a-z]|media/[A-Za-z0-9._-]+|srv|home/[A-Za-z0-9._-]+)/[A-Za-z0-9._/-]+$ ]] && [[ "$v" != *..* ]]; then EXTRA="$v"
   fi
 fi
+leer_env() { [ -f .env ] && { grep -E "^$1=" .env || true; } | head -1 | cut -d= -f2- | sed 's/[[:space:]]#.*$//' | tr -d '\r"'"'"; }
+RESTIC_REPO="${COPIA_RESTIC_REPO:-$(leer_env COPIA_RESTIC_REPO)}"
+RESTIC_CLAVE="${COPIA_RESTIC_CLAVE:-$(leer_env COPIA_RESTIC_CLAVE)}"
+RESTIC="${COPIA_RESTIC:-restic}"
 COMANDO="${COPIA_COMANDO:-./scripts/copia_seguridad.sh}"
 AVISAR="${COPIA_AVISAR:-docker compose exec -T api python -m cerebro.avisar_soporte}"
 REGISTRAR="${COPIA_REGISTRAR:-docker compose exec -T api python -m cerebro.copias registrar copia}"      # anota el resultado para la tarjeta de Jarvis y el vigilante de copias
@@ -73,6 +80,21 @@ if [ -n "$EXTRA" ]; then
   echo "→ Segunda copia en $EXTRA"
   mkdir -p "$EXTRA" 2>/dev/null && cp -r "$CARPETA" "$EXTRA/" 2>/dev/null && ( cd "$EXTRA/$(basename "$CARPETA")" && sha256sum -c SHA256SUMS >/dev/null 2>&1 ) \
     || fallar "no se ha podido dejar la segunda copia en $EXTRA (¿está conectada la unidad?)"
+fi
+
+if [ -n "$RESTIC_REPO" ]; then
+  echo "→ Copia incremental (restic) en $RESTIC_REPO"
+  RUTA_OK='^/(mnt/[a-z]|media/[A-Za-z0-9._-]+|srv|home/[A-Za-z0-9._-]+)/[A-Za-z0-9._/-]+$'
+  [ "${COPIA_RESTIC_SIN_VALIDAR:-0}" = 1 ] || { [[ "$RESTIC_REPO" =~ $RUTA_OK ]] && [[ "$RESTIC_REPO" != *..* ]]; } || fallar "COPIA_RESTIC_REPO tiene que ser una carpeta local (/mnt/d/..., /home/...): $RESTIC_REPO"
+  [ -n "$RESTIC_CLAVE" ] && [ -s "$RESTIC_CLAVE" ] || fallar "falta el fichero con la contraseña del repositorio restic (COPIA_RESTIC_CLAVE): sin ella no se puede cifrar ni recuperar la copia"
+  command -v "$RESTIC" >/dev/null 2>&1 || fallar "restic no está instalado (sudo apt install restic)"
+  export RESTIC_REPOSITORY="$RESTIC_REPO" RESTIC_PASSWORD_FILE="$RESTIC_CLAVE"
+  mkdir -p "$RESTIC_REPO" 2>/dev/null || fallar "no se puede crear $RESTIC_REPO (¿está conectada la unidad?)"
+  if ! "$RESTIC" cat config >/dev/null 2>&1; then
+    "$RESTIC" init >"$REGISTRO" 2>&1 || fallar "no se ha podido crear el repositorio restic en $RESTIC_REPO ($(tail -1 "$REGISTRO"))"
+  fi
+  "$RESTIC" backup "$CARPETA" --tag cerebro --host cerebro --quiet >"$REGISTRO" 2>&1 || fallar "restic no ha podido hacer la copia incremental ($(tail -1 "$REGISTRO"))"
+  "$RESTIC" forget --tag cerebro --keep-daily 7 --keep-weekly 8 --keep-monthly 12 --prune --quiet >"$REGISTRO" 2>&1 || fallar "restic no ha podido limpiar las copias antiguas ($(tail -1 "$REGISTRO"))"
 fi
 
 if [ -n "$EXTRA" ] && [ "$CONSERVAR_EXTRA" -gt 0 ]; then

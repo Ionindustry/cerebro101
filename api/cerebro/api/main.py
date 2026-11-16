@@ -47,6 +47,7 @@ from .. import ranking_ventas
 from .. import tarifas_auto as tarifas_automaticas
 from .. import listas_precios as listas_precios_mod
 from ..licitaciones import partidas as partidas_ofertas
+from ..licitaciones import cotizar_partidas
 from ..licitaciones import descubrimiento as descubrimiento_ofertas
 from ..licitaciones import fichas as fichas_tecnicas
 from ..licitaciones import reglas as reglas_licitaciones
@@ -124,7 +125,8 @@ def _salida(estado: dict, hilo: str) -> dict:
 async def salud():
     r = registro()
     return {"estado": "ok", "agentes": len(r.fichas), "departamentos": len(r.departamentos),
-            "perfil_hardware": ajustes.perfil_hardware, "modo": os.environ.get("CEREBRO_MODO", "produccion")}
+            "perfil_hardware": ajustes.perfil_hardware, "modo": os.environ.get("CEREBRO_MODO", "produccion"),
+            "version": (os.environ.get("CODIGO_VERSION") or "")[:7] or "desconocida"}
 
 
 @app.get("/salud/constancia")
@@ -1192,6 +1194,25 @@ async def quitar_partida_de_la_oferta(motor_id: str, partida: int, usuario: Usua
         return await partidas_ofertas.quitar(motor_id, partida)
     except (ofertas_licitaciones.ErrorOferta, LookupError) as e:
         raise _oferta_error(e) from None
+
+class PrepararCotizaciones(BaseModel):
+    modo: str
+    plazo_tipo: str = "dias"
+    plazo_valor: int | str
+
+
+@app.post("/licitaciones/ofertas/{motor_id}/cotizaciones/preparar")
+async def preparar_cotizaciones_de_la_oferta(motor_id: str, entrada: PrepararCotizaciones, usuario: Usuario = Depends(usuario_actual)):
+    """Prepara, en BORRADOR, la cotización de cada partida sin coste de la oferta (proveedor elegido por la marca; correo redactado por el sistema). No envía nada: lo revisa y lo envía una persona en Cotizaciones."""
+    _exige_licitaciones(usuario)
+    if entrada.modo not in cotizaciones_proveedores.MODOS:
+        raise HTTPException(422, "Elige el modo: «enviar» (lo envía el sistema cuando lo confirmes) o «manual» (lo mandas tú)")
+    try:
+        cotizaciones_proveedores.validar_plazo(entrada.plazo_tipo, entrada.plazo_valor)
+        return await cotizar_partidas.preparar(ofertas_licitaciones._id(motor_id), usuario.id, entrada.modo, entrada.plazo_tipo, entrada.plazo_valor)
+    except (cotizaciones_proveedores.ErrorCotizacion, partidas_ofertas.ErrorPartida, ofertas_licitaciones.ErrorOferta, LookupError) as e:
+        raise HTTPException(422, str(e)) from None
+
 
 
 @app.get("/licitaciones/ofertas/{motor_id}/equivalencia")

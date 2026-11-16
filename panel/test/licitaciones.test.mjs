@@ -1332,3 +1332,10 @@ test("indicador de ingesta: ventanas, consultas y texto", async () => {
   assert.match(L.totalIngestaTexto({ total: { valor: 10000, relacion: "gte" } }), /^al menos 10\.?000$/);
   assert.equal(L.totalIngestaTexto(null), "—");
 });
+
+test("referencia que nombra el pliego, en una línea", async () => {
+  const { referenciaPliegoTexto } = await import("../lib/licitaciones.js");
+  assert.equal(referenciaPliegoTexto({ marca: "Hikvision", modelo: "DS-2CD2143G2-I", equivalente: true, documento: 2, pagina: 7 }), "Hikvision DS-2CD2143G2-I · admite «o equivalente» · documento 2, página 7");
+  assert.match(referenciaPliegoTexto({ marca: "Axis", modelo: "", equivalente: true, documento: 1, pagina: 3 }), /Axis · solo nombra la marca/);
+  assert.match(referenciaPliegoTexto({ marca: "Milesight", modelo: "MS-N5016", equivalente: false, documento: 1, pagina: 1 }), /sin «o equivalente»/);
+});

@@ -20,23 +20,26 @@ DESTINO="${DESTINO:-copias/$(date +%Y-%m-%d_%H%M)}"
 PROYECTO="$(docker compose config --format json | python3 -c 'import sys,json;print(json.load(sys.stdin)["name"])')"
 mkdir -p "$DESTINO"; DESTINO="$(cd "$DESTINO" && pwd)"
 
+# gzip --rsyncable (si esta versión lo tiene) deja los volcados comprimidos de forma que un cambio pequeño en la base cambia solo un trozo del fichero: así la copia incremental
+# (scripts/copia_automatica.sh con COPIA_RESTIC_REPO) guarda cada día solo lo nuevo y no el volcado entero. Sin esa opción funciona igual, solo que ocupa más.
+GZ="gzip"; gzip --help 2>&1 | grep -q rsyncable && GZ="gzip --rsyncable"
 echo "→ PostgreSQL del Cerebro (aprobaciones, registro de acciones, conocimiento)"
-docker compose exec -T postgres pg_dump -U cerebro --no-owner cerebro | gzip > "$DESTINO/cerebro.sql.gz"
+docker compose exec -T postgres pg_dump -U cerebro --no-owner cerebro | $GZ > "$DESTINO/cerebro.sql.gz"
 echo "→ PostgreSQL de Langfuse"
-docker compose exec -T langfuse-db pg_dump -U langfuse --no-owner langfuse | gzip > "$DESTINO/langfuse.sql.gz"
+docker compose exec -T langfuse-db pg_dump -U langfuse --no-owner langfuse | $GZ > "$DESTINO/langfuse.sql.gz"
 
 # Keycloak (el inicio de sesión: usuarios, roles, clientes), si funciona con su base PostgreSQL (scripts/keycloak_a_postgres.sh, docs/KEYCLOAK_POSTGRES.md). En el modo antiguo (base H2 en un
 # volumen) no hay volcado: se copia con keycloak_conservar.sh / keycloak_a_postgres.sh.
 if docker compose ps --status running --services 2>/dev/null | grep -qx 'keycloak-db'; then
   echo "→ PostgreSQL de Keycloak (usuarios del inicio de sesión)"
-  docker compose exec -T keycloak-db pg_dump -U keycloak --no-owner keycloak | gzip > "$DESTINO/keycloak.sql.gz"
+  docker compose exec -T keycloak-db pg_dump -U keycloak --no-owner keycloak | $GZ > "$DESTINO/keycloak.sql.gz"
 fi
 
 # Motor de licitaciones (si está en marcha): su base de datos (estado de la ingesta y modelo de lectura). Los originales de las licitaciones están en el
 # almacén S3 del motor (RustFS), que no se copia aquí por su tamaño: con los originales el modelo de lectura se puede regenerar (ADR 0003).
 if docker ps --format '{{.Names}}' | grep -qx 'licitaciones-lic-db-1'; then
   echo "→ PostgreSQL del motor de licitaciones"
-  docker exec licitaciones-lic-db-1 pg_dump -U lic --no-owner licitaciones | gzip > "$DESTINO/licitaciones.sql.gz"
+  docker exec licitaciones-lic-db-1 pg_dump -U lic --no-owner licitaciones | $GZ > "$DESTINO/licitaciones.sql.gz"
 fi
 
 if [ "$PARAR" = 1 ]; then
@@ -59,7 +62,7 @@ if docker ps --format '{{.Names}}' | grep -qx 'erpnext-db-1'; then
   echo "→ ERPNext (base de datos y ficheros)"
   CLAVE_ERP="$(grep -E '^ERPNEXT_DB_ROOT_PASSWORD=' .env | cut -d= -f2-)"
   docker exec -e MYSQL_PWD="$CLAVE_ERP" erpnext-db-1 mariadb-dump -uroot --all-databases --single-transaction --routines \
-    | gzip > "$DESTINO/erpnext.sql.gz"
+    | $GZ > "$DESTINO/erpnext.sql.gz"
   docker run --rm -v "erpnext_sites:/datos:ro" -v "$DESTINO:/copia" alpine tar czf /copia/erpnext_sitios.tar.gz -C /datos .
 fi
 

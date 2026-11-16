@@ -21,6 +21,7 @@ from . import comparativa as C
 from . import familias as F
 from . import ofertas as O
 from . import pliegos
+from . import referencias as REF
 from . import redaccion_externa as X
 
 log = logging.getLogger("cerebro.equivalencia")
@@ -126,7 +127,7 @@ ESQUEMA = {
 }
 
 
-def construir_mensajes(titulo: str, organismo: str, pliego: str, requisitos: str, evidencias: str, guia: str = "") -> list[dict]:
+def construir_mensajes(titulo: str, organismo: str, pliego: str, requisitos: str, evidencias: str, guia: str = "", nombrados: str = "") -> list[dict]:
     sistema = (
         "Eres un ingeniero de preventa de 101.cat que prepara una licitación pública. Tu tarea: de los requisitos técnicos del pliego, sacar los parámetros MEDIBLES y, para cada uno, decir qué productos de 101.cat "
         "lo IGUALAN o SUPERAN, según la EVIDENCIA que se te da. Respondes en español.\n"
@@ -145,6 +146,7 @@ def construir_mensajes(titulo: str, organismo: str, pliego: str, requisitos: str
         f"Requisitos técnicos confirmados del pliego:\n{requisitos}\n\n"
         f"EVIDENCIA de producto de 101.cat (lo único en que puedes apoyarte):\n{evidencias}\n\n"
         + (f"{guia}\n\n" if guia else "")
+        + (f"{nombrados}\n\n" if nombrados else "")
         + f"Texto de los pliegos (cada página lleva su marca [Documento N · página P]):\n««««\n{pliego}\n»»»»\n"
     )
     return [{"role": "system", "content": sistema}, {"role": "user", "content": usuario}]
@@ -299,6 +301,22 @@ async def _guardar(motor_id: str, proveedor: str, modelo: str | None, contenido:
             [motor_id, proveedor, modelo, Jsonb(contenido), Jsonb([{k: e[k] for k in ("id", "origen", "titulo", "fuente")} for e in evid])])
 
 
+async def _referencias_del_pliego(docs: list[dict]) -> list[dict]:
+    """Marca y modelo que nombra el pliego (referencias.py). Las marcas buscadas incluyen las de tus tarifas; si no se pueden leer, valen las de la configuración. Nunca rompe la tabla."""
+    try:
+        extra: list[str] = []
+        try:
+            from .. import proveedores_marcas as PM
+            extra = [m["marca"] for p in (await PM.listar())["proveedores"] for m in p["marcas"]]
+        except Exception as e:      # noqa: BLE001
+            log.warning("equivalencia: no se han podido leer las marcas de las tarifas: %s", type(e).__name__)
+        paginas = [(d["n"], pag, txt) for d in docs for pag, txt in d["paginas"]]
+        return REF.extraer(paginas, REF.marcas_conocidas(extra))
+    except Exception as e:      # noqa: BLE001
+        log.warning("equivalencia: no se han podido sacar las referencias del pliego: %s: %s", type(e).__name__, e)
+        return []
+
+
 async def preparar(motor_id: str, titulo: str, ficha: dict, modelo: str = "auto", consulta=None, buscar=None, lineas=None) -> dict:
     """Hace la tabla y la guarda: {estado: «hecha»|«omitida», resumen}. Misma política que la comparativa: sin pliegos, sin evidencia o sin modelo externo no se hace."""
     motor_id = O._id(motor_id)
@@ -309,7 +327,8 @@ async def preparar(motor_id: str, titulo: str, ficha: dict, modelo: str = "auto"
         reqs = (await pliegos.requisitos(motor_id))["requisitos"]
         tecnicos = [r for r in reqs if r.get("estado") == "confirmado" and r.get("tipo") == "tecnico"][:MAX_REQUISITOS]
         texto_reqs, _ids = X.texto_de_requisitos(tecnicos)
-        consultas = [C._corto(r.get("resumen"), 300) for r in tecnicos if C._corto(r.get("resumen"), 300)] or [C._corto(titulo, 200)]
+        referencias = await _referencias_del_pliego(docs)             # los productos que el pliego NOMBRA (marca y modelo): se buscan sus fichas y fijan el mínimo
+        consultas = REF.consultas(referencias) + ([C._corto(r.get("resumen"), 300) for r in tecnicos if C._corto(r.get("resumen"), 300)] or [C._corto(titulo, 200)])
         evid = await C.reunir_evidencias(consultas, buscar=buscar, lineas=lineas)
         if not evid:
             return {"estado": "omitida", "resumen": "Sin tabla de equivalencias: no hay evidencia de producto (fichas técnicas ni listas de proveedores relacionadas). Carga las fichas técnicas."}
@@ -317,11 +336,12 @@ async def preparar(motor_id: str, titulo: str, ficha: dict, modelo: str = "auto"
         if motivos:
             return {"estado": "omitida", "resumen": "Sin tabla de equivalencias: los datos de producto no se pueden anonimizar con garantías, así que no salen a la nube (" + "; ".join(motivos)[:150] + ")."}
         pliego, avisos = X.texto_de_pliegos(docs, int(X.configuracion()["max_caracteres_pliego"]))
-        mensajes = construir_mensajes(titulo, X.organismo_de(ficha), pliego, texto_reqs, limpios[0]["content"], F.guia(texto_reqs + "\n" + pliego))
+        mensajes = construir_mensajes(titulo, X.organismo_de(ficha), pliego, texto_reqs, limpios[0]["content"], F.guia(texto_reqs + "\n" + pliego), REF.texto_para_modelo(referencias))
         preferido = X.proveedor_preferido("equivalencia", modelo)
         datos, proveedor = await (consulta or externos.consultar_publico)(AGENTE, mensajes, ESQUEMA, max_tokens=int(X.configuracion()["max_tokens"]), timeout=300, preferido=preferido)
         datos = anon.desanonimizar(datos, sesion) if sesion else datos
         contenido = verificar(datos, {e["id"]: e["texto"] for e in evid}, "\n".join(t for d in docs for _n, t in d["paginas"]))
+        contenido["referencias_pliego"] = referencias
         nombre_modelo = await externos.modelo_elegido(proveedor)
         await _guardar(motor_id, proveedor, nombre_modelo, contenido, evid)
         c = contenido["comprobacion"]

@@ -111,6 +111,24 @@ ninguno vacío, `SHA256SUMS` coincide), conserva las **7 últimas** en `copias/a
 Para tener además una copia **fuera de este disco** (una copia en el mismo disco no te salva de que falle): `COPIA_EXTRA=/mnt/d/Copias101 ./scripts/copia_automatica.sh` (otro disco, USB o unidad de red); para que
 la tarea la haga siempre, añade la línea `COPIA_EXTRA=/mnt/d/Copias101` al `.env`. Prueba la restauración de vez en cuando (docs/SEGURIDAD.md) y guarda una copia del `.env` en un gestor de contraseñas.
 
+**Copia incremental (opcional, con restic).** Las copias de arriba son completas cada día. Con restic, además, se guarda cada día solo lo que ha cambiado (cifrado y deduplicado), y se conservan 7 diarias, 8 semanales y 12 mensuales en poco espacio. Se activa una vez, en la ventana Ubuntu:
+
+```
+sudo apt install restic
+mkdir -p /mnt/d/Copias101/restic
+nano ~/.restic-clave
+chmod 600 ~/.restic-clave
+```
+
+En `nano` escribe **tú** una contraseña larga (una sola línea), guarda con Ctrl+O, Enter y sal con Ctrl+X. **Guarda esa contraseña en tu gestor de contraseñas: sin ella las copias incrementales no se pueden recuperar.** Luego añade al `.env` estas dos líneas (rutas de ejemplo):
+
+```
+COPIA_RESTIC_REPO=/mnt/d/Copias101/restic
+COPIA_RESTIC_CLAVE=/home/pc/.restic-clave
+```
+
+La próxima copia crea el repositorio y deja ahí la copia incremental; si restic falla, la copia se marca como fallida y avisa a soporte@. Para recuperar la última: `RESTIC_REPOSITORY=/mnt/d/Copias101/restic RESTIC_PASSWORD_FILE=/home/pc/.restic-clave restic restore latest --tag cerebro --target /tmp/restaurar`.
+
 **Configurarla desde Jarvis (Dirección):** en la tarjeta «Copias de seguridad» (barra superior) el botón **Configurar** cambia cuántas copias se conservan en el servidor (1–60, por defecto 7), la **segunda ubicación** (una carpeta como `/mnt/d/Copias101`; vacía = sin segunda copia), cuántas se conservan allí (0 = no se borra nunca) y a los cuántos días sin copia correcta se avisa a soporte@ (1–14, por defecto 3). Lo fijado en Jarvis manda sobre el `.env`; sin nada fijado todo sigue como antes. Se aplica en la próxima copia (la de las 14:00). La hora no se cambia desde Jarvis: es la tarea de Windows «Cerebro - copia». Las rutas se comprueban (solo carpetas dentro de `/mnt/<unidad>/`, `/media/…`, `/srv/…` o `/home/…`) y el script de copias no acepta ninguna otra.
 
 **Comprobar que la copia se puede restaurar:** `./scripts/probar_restauracion.sh` (en Ubuntu, desde la raíz) restaura la última copia en una base de datos **temporal** (que se borra al terminar; tus datos no se tocan),
