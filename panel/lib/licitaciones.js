@@ -1465,3 +1465,24 @@ export function mensajeDocumentos(status, detalle = "") {
   if (status === 404 && detalle) return detalle;
   return "No se han podido leer los documentos de los agentes. Inténtalo de nuevo más tarde.";
 }
+
+// ---- Botón «Actualizar concursos ahora» (POST licitaciones/motor/actualizar y GET licitaciones/motor/actualizacion) ----
+/** ¿Ha terminado una ingesta nueva entre dos lecturas? La edad de la ingesta más reciente solo baja cuando termina una (si no, va subiendo). `anterior` null = aún no había ninguna. Pura. */
+export function huboIngestaNueva(anterior, actual) {
+  if (actual === null || actual === undefined) return false;
+  if (anterior === null || anterior === undefined) return true;
+  return actual < anterior - 1;
+}
+
+/** Lo que se le dice a la persona según el estado del botón. `p` = última lectura del progreso (o null). */
+export function textoActualizacionManual({ esperando, terminado, error, p }) {
+  if (error) return { clase: "error", texto: error };
+  if (terminado) return { clase: "ok", texto: `Actualizado: lo más reciente del motor es de ${antiguedadTexto(p?.mas_reciente_s)}.` };
+  if (esperando) return { clase: "aviso", texto: "Actualizando… el ingestor está trayendo lo nuevo (puede tardar unos minutos). Esta pantalla se refresca sola cuando termine." };
+  if (p?.estado === "motor_no_responde") return { clase: "error", texto: "El motor de licitaciones no responde ahora. Si sigue así, avisa a Tecnología." };
+  if (p?.mas_reciente_s !== undefined && p?.mas_reciente_s !== null) return { clase: "", texto: `Última ingesta del motor: ${antiguedadTexto(p.mas_reciente_s)}.` };
+  return { clase: "", texto: "" };
+}
+
+export const INTERVALO_ACTUALIZACION_MS = 10000;
+export const MAX_ESPERA_ACTUALIZACION_MS = 6 * 60 * 1000;

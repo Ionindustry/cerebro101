@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { antiguedadTexto, estadoMotor, ESTADOS_EMBUDO, fechaCivilTexto, nombreFuente, sinLeerTexto, tasaExitoTexto, totalesTexto } from "../../lib/licitaciones";
 import { Fallo, Item, Oportunidad, pedir, pedirCerebro } from "./cliente";
+import ActualizarConcursos from "./ActualizarConcursos";
 import Panel from "./Panel";
 
 function EstadoDelMotor() {
@@ -88,10 +89,10 @@ function AvisosDeAlertas() {
   );
 }
 
-function Novedades() {
+function Novedades({ version }) {
   const [d, setD] = useState(null);
   const [error, setError] = useState(null);
-  useEffect(() => { pedir("tenders?orden=actualizacion&limit=8").then(setD).catch(setError); }, []);
+  useEffect(() => { pedir("tenders?orden=actualizacion&limit=8").then(setD).catch(setError); }, [version]);
   return (
     <section aria-labelledby="lic-nov-t" className="lic">
       <div className="lic-fila"><h2 id="lic-nov-t">Últimas novedades</h2><Link href="/licitaciones/buscar" className="lic-vuelve">Ver todas</Link></div>
@@ -106,6 +107,7 @@ function Novedades() {
 export default function Licitaciones() {
   const router = useRouter();
   const [q, setQ] = useState("");
+  const [version, setVersion] = useState(0);              // sube cuando una actualización manual termina: la lista de novedades se vuelve a leer
   const buscar = (ev) => {
     ev.preventDefault();
     router.push(q.trim().length >= 2 ? `/licitaciones/buscar?q=${encodeURIComponent(q.trim())}` : "/licitaciones/buscar");
@@ -117,6 +119,7 @@ export default function Licitaciones() {
         <input type="text" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Buscar por texto: videovigilancia, software, mantenimiento…" aria-label="Buscar licitaciones" maxLength={200} />
         <button className="boton si" type="submit">Buscar</button>
       </form>
+      <ActualizarConcursos alTerminar={() => setVersion((v) => v + 1)} />
       <p className="lic-fila">
         <Link href="/licitaciones/competencia" className="boton no">Competencia: quién gana en cada mercado</Link>
         <Link href="/licitaciones/vencen" className="boton no">Contratos que vencen: cuándo vuelve a salir</Link>
@@ -127,7 +130,7 @@ export default function Licitaciones() {
       <AvisosDeAlertas />
       <EmbudoPropio />
       <EstadoDelMotor />
-      <Novedades />
+      <Novedades version={version} />
     </div>
   );
 }

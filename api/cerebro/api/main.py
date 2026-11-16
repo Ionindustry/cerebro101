@@ -436,6 +436,20 @@ async def comprobar_actualizacion_de_licitaciones(usuario: Usuario = Depends(usu
     return await frescura_licitaciones.comprobar(usuario.id)
 
 
+@app.post("/licitaciones/motor/actualizar")
+async def actualizar_licitaciones_ahora(usuario: Usuario = Depends(usuario_actual)):
+    """Botón «Actualizar concursos ahora»: pide al motor que el ingestor empiece una vuelta YA, aunque lo último sea reciente. Solo Dirección y Licitaciones. El motor no repite una petición de hace menos de un minuto."""
+    _exige_licitaciones(usuario)
+    return await frescura_licitaciones.actualizar_ahora(usuario.id)
+
+
+@app.get("/licitaciones/motor/actualizacion")
+async def progreso_de_la_actualizacion(usuario: Usuario = Depends(usuario_actual)):
+    """Cuánto hace de la última ingesta (la más reciente y la más atrasada), para seguir el progreso tras pulsar «Actualizar concursos ahora». Solo lee."""
+    _exige_licitaciones(usuario)
+    return await frescura_licitaciones.progreso()
+
+
 @app.get("/licitaciones/embudo/resumen")
 async def resumen_embudo_licitaciones(dias: int = 30, usuario: Usuario = Depends(usuario_actual)):
     """Dashboard de Licitaciones, bloque «Embudo propio»: foto por estado, lo ocurrido en el periodo, tasa de éxito y motivos de pérdida."""

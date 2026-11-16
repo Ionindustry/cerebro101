@@ -105,5 +105,58 @@ class TestPedirAlMotor(unittest.TestCase):
             ejecutar(motor.pedir_actualizacion("albert"))
 
 
+class TestManual(unittest.TestCase):
+    def test_progreso_de_lo_que_dice_el_motor(self):
+        self.assertEqual(F.progreso_de(estado(60, 300)), {"mas_reciente_s": 60, "mas_atrasada_s": 300, "fuentes": 2, "sin_ingesta": 0})
+        p = F.progreso_de(estado(60, None))
+        self.assertEqual((p["mas_reciente_s"], p["mas_atrasada_s"], p["sin_ingesta"]), (60, None, 1))        # una fuente sin ingesta: no hay «más atrasada» que valga
+        self.assertEqual(F.progreso_de({}), {"mas_reciente_s": None, "mas_atrasada_s": None, "fuentes": 0, "sin_ingesta": 0})
+
+    def test_progreso_con_el_motor_caido(self):
+        m = Motor(cae=True)
+        self.assertEqual(ejecutar(F.progreso(m.consulta))["estado"], "motor_no_responde")
+
+    def test_pide_actualizar_aunque_lo_ultimo_sea_reciente(self):
+        m = Motor(estado(30))                                        # hace 30 s: la comprobación automática NO pediría nada
+        r = ejecutar(F.actualizar_ahora("albert", m.consulta, m.pedir))
+        self.assertEqual((r["estado"], r["solicitada"], r["mas_reciente_s"]), ("actualizando", True, 30))
+        self.assertEqual(m.pedidos, ["albert"])
+
+    def test_si_ya_se_pidio_hace_menos_de_un_minuto_lo_dice(self):
+        m = Motor(estado(30), nueva=False)
+        r = ejecutar(F.actualizar_ahora("albert", m.consulta, m.pedir))
+        self.assertEqual((r["estado"], r["solicitada"]), ("actualizando", False))
+        self.assertIn("hace menos de un minuto", r["mensaje"])
+
+    def test_motor_caido_o_que_no_acepta_no_lanza_error(self):
+        r = ejecutar(F.actualizar_ahora("albert", Motor(cae=True).consulta, Motor(cae=True).pedir))
+        self.assertEqual((r["estado"], r["solicitada"]), ("motor_no_responde", False))
+        m = Motor(estado(30), falla_pedir=True)
+        r = ejecutar(F.actualizar_ahora("albert", m.consulta, m.pedir))
+        self.assertEqual(r["estado"], "motor_no_responde")
+        self.assertIn("no acepta", r["mensaje"])
+
+    def test_endpoints_solo_dirección_y_licitaciones(self):
+        from cerebro.api import main
+        from cerebro.api.main import Usuario, usuario_actual
+        from fastapi.testclient import TestClient
+        m = Motor(estado(30))
+        cl = TestClient(main.app)
+        try:
+            with mock.patch.object(F.motor, "_get", m.consulta), mock.patch.object(F.motor, "pedir_actualizacion", m.pedir):
+                main.app.dependency_overrides[usuario_actual] = lambda: Usuario("pepe", {"usuario"}, {"finanzas"})
+                self.assertEqual(cl.post("/licitaciones/motor/actualizar").status_code, 403)
+                self.assertEqual(cl.get("/licitaciones/motor/actualizacion").status_code, 403)
+                self.assertEqual(m.pedidos, [])
+                main.app.dependency_overrides[usuario_actual] = lambda: Usuario("ana", {"usuario"}, {"licitaciones"})
+                r = cl.post("/licitaciones/motor/actualizar")
+                self.assertEqual((r.status_code, r.json()["estado"]), (200, "actualizando"))
+                self.assertEqual(m.pedidos, ["ana"])
+                g = cl.get("/licitaciones/motor/actualizacion").json()
+                self.assertEqual((g["estado"], g["mas_reciente_s"]), ("ok", 30))
+        finally:
+            main.app.dependency_overrides.clear()
+
+
 if __name__ == "__main__":
     unittest.main()

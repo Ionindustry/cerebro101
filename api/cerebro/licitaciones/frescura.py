@@ -58,3 +58,39 @@ async def comprobar(usuario: str, consulta=None, pedir=None, cfg: dict | None = 
         return {"estado": "motor_no_responde", "antiguedad_s": edad, "solicitada": False}
     log.info("frescura: %s abre la aplicación con lo último ingerido de hace %s s: se pide actualizar (nueva=%s)", usuario, edad, solicitada)
     return {"estado": "actualizando", "antiguedad_s": edad, "solicitada": solicitada, "poniendose_al_dia": atrasada}
+
+
+# ---- Actualización MANUAL (botón «Actualizar concursos ahora» de Licitaciones) ----
+def progreso_de(estado: dict) -> dict:
+    """De lo que dice el motor: la edad de la ingesta más reciente y de la más atrasada (segundos) y cuántas fuentes hay. None = ninguna ingesta completa todavía. Pura."""
+    fuentes = estado.get("fuentes") or []
+    edades = [f.get("antiguedad_s") for f in fuentes if f.get("antiguedad_s") is not None]
+    return {"mas_reciente_s": int(min(edades)) if edades else None, "mas_atrasada_s": int(max(edades)) if edades and len(edades) == len(fuentes) else None, "fuentes": len(fuentes),
+            "sin_ingesta": sum(1 for f in fuentes if f.get("antiguedad_s") is None)}
+
+
+async def progreso(consulta=None) -> dict:
+    """{estado: ok | motor_no_responde, mas_reciente_s, mas_atrasada_s, fuentes, sin_ingesta}. El panel lo mira cada pocos segundos tras pedir la actualización: cuando «mas_reciente_s» baja, hay una ingesta nueva."""
+    consulta = consulta or motor._get
+    try:
+        estado = await consulta("/ops/status", None)
+    except (motor.MotorNoDisponible, ValueError):
+        return {"estado": "motor_no_responde", "mas_reciente_s": None, "mas_atrasada_s": None, "fuentes": 0, "sin_ingesta": 0}
+    return {"estado": "ok", **progreso_de(estado)}
+
+
+async def actualizar_ahora(usuario: str, consulta=None, pedir=None) -> dict:
+    """Pide al motor que el ingestor empiece una vuelta YA, sin mirar lo viejo que esté lo último. {estado: actualizando | motor_no_responde, solicitada, mas_reciente_s, mensaje}.
+    `solicitada` False = ya había una petición de hace menos de un minuto (el motor no las repite). Nunca ingiere nada por sí mismo ni cambia datos."""
+    pedir = pedir or motor.pedir_actualizacion
+    antes = await progreso(consulta)
+    if antes["estado"] == "motor_no_responde":
+        return {"estado": "motor_no_responde", "solicitada": False, "mas_reciente_s": None, "mensaje": "El motor de licitaciones no responde: no se puede pedir la actualización. Si sigue así, avisa a Tecnología."}
+    try:
+        solicitada = await pedir(usuario)
+    except motor.MotorNoDisponible as e:
+        log.warning("frescura: no se ha podido pedir la actualización manual: %s", e)
+        return {"estado": "motor_no_responde", "solicitada": False, "mas_reciente_s": antes["mas_reciente_s"], "mensaje": str(e)[:300]}
+    log.info("frescura: %s pide actualizar los concursos a mano (nueva=%s, lo más reciente de hace %s s)", usuario, solicitada, antes["mas_reciente_s"])
+    return {"estado": "actualizando", "solicitada": solicitada, "mas_reciente_s": antes["mas_reciente_s"],
+            "mensaje": "Pedido. El ingestor empieza en unos segundos y tarda unos minutos en traer lo nuevo." if solicitada else "Ya se había pedido hace menos de un minuto: el ingestor está en ello."}
