@@ -17,9 +17,8 @@ async def consultar(referencias: list | str) -> dict:
 
 registrar(Herramienta(
     nombre="eet",
-    descripcion="EET Europarts (proveedor): consulta en tiempo real el precio de compra y el stock de referencias. Solo lectura: no hace pedidos. Los precios los da EET: no los recalcules ni inventes. Confidencial.",
+    descripcion="EET (proveedor): precio de compra y stock en vivo. Solo lectura. Confidencial.",
     operaciones={"consultar": consultar},
-    ayuda={"consultar": "precio, stock (y plazo, EAN y descripción) de una o varias «referencias» de EET, hasta 50 por consulta"},
-    ejemplos={"consultar": {"referencias": ["LSU-15", "LS-150"]}},
+    ayuda={"consultar": "precio y stock de «referencias» de EET (hasta 50)"},
     confidencial=True,
 ))
