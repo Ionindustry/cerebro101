@@ -27,7 +27,7 @@ class TestMetodoAgentes(unittest.TestCase):
         for i in SEIS:
             p = self.prompt(i)
             self.assertIn("Método de trabajo:", p, i)
-            self.assertIn("TERMINA CUANDO.", p, i)
+            self.assertIn(P._metodos()[i][:60], p, i)
             self.assertLess(p.index("Método de trabajo:"), p.index("Normas:"), i)      # después de las tareas y antes de las normas
 
     def test_un_agente_sin_metodo_queda_como_antes(self):
@@ -45,6 +45,10 @@ class TestMetodoAgentes(unittest.TestCase):
         P._metodos.cache_clear()
         with mock.patch("builtins.open", mock.mock_open(read_data="agentes: [esto, no, es, un, mapa")):
             self.assertEqual(P._metodos(), {})
+
+    def test_con_el_metodo_cada_prompt_cabe_con_margen(self):
+        for i in SEIS:
+            self.assertLess(len(self.prompt(i)), 13500, i)       # margen para catálogo y encargos más largos
 
     def test_el_metodo_no_contiene_reglas_de_seguridad_que_contradigan_las_fijas(self):
         for i, texto in P._metodos().items():

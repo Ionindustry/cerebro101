@@ -143,24 +143,34 @@ def _corto(t, n: int) -> str:
 
 # ---- El material ----
 
+def _cupos(tamanos: list[int], maximo: int) -> list[int]:
+    """Reparte `maximo` caracteres entre documentos: los cortos entran enteros y lo que les sobra pasa a los largos (antes todos tenían el mismo cupo, y un pliego largo se cortaba aunque los demás documentos fueran cortos). Pura."""
+    cupos = [0] * len(tamanos)
+    resto = max(maximo, 0)
+    for restantes, i in zip(range(len(tamanos), 0, -1), sorted(range(len(tamanos)), key=lambda k: tamanos[k])):
+        cupos[i] = min(tamanos[i], max(resto // restantes, 2000))
+        resto = max(resto - cupos[i], 0)
+    return cupos
+
+
 def texto_de_pliegos(documentos: list[dict], maximo: int) -> tuple[str, list[str]]:
-    """El texto de los pliegos con una marca por página ([Documento N «nombre» · página P]). Si no cabe, el cupo se reparte a partes iguales entre los documentos y se avisa. `documentos`: [{n, nombre, paginas: [(pagina, texto)]}]. Pura."""
+    """El texto de los pliegos con una marca por página ([Documento N «nombre» · página P]). Si no cabe, los documentos cortos entran enteros y el resto del cupo se reparte entre los largos, y se avisa de qué páginas no se han leído. `documentos`: [{n, nombre, paginas: [(pagina, texto)]}]. Pura."""
     avisos: list[str] = []
     if not documentos:
         return "", avisos
-    cupo = max(maximo // len(documentos), 2000)
+    bloques = [[f"[Documento {d['n']} «{_corto(d['nombre'], 80)}» · página {pagina}]\n{(texto or '').strip()}\n" for pagina, texto in d["paginas"]] for d in documentos]
+    cupos = _cupos([sum(len(b) for b in bl) for bl in bloques], maximo)
     trozos = []
-    for d in documentos:
-        usado, hechas = 0, 0
-        partes = []
-        for pagina, texto in d["paginas"]:
-            bloque = f"[Documento {d['n']} «{_corto(d['nombre'], 80)}» · página {pagina}]\n{(texto or '').strip()}\n"
-            if usado + len(bloque) > cupo:
-                avisos.append(f"El documento {d['n']} es largo: el modelo ha leído {hechas} de {len(d['paginas'])} páginas")
+    for d, bl, cupo in zip(documentos, bloques, cupos):
+        usado, partes = 0, []
+        for b in bl:
+            if usado + len(b) > cupo:
                 break
-            partes.append(bloque)
-            usado += len(bloque)
-            hechas += 1
+            partes.append(b)
+            usado += len(b)
+        if len(partes) < len(bl):
+            avisos.append(f"El documento {d['n']} es largo: el modelo ha leído {len(partes)} de {len(bl)} páginas (faltan desde la página {d['paginas'][len(partes)][0]}); "
+                          "lo que dependa de esas páginas queda sin comprobar")
         trozos.append("".join(partes))
     return "\n".join(trozos), avisos
 
