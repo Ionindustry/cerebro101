@@ -90,6 +90,11 @@ def validar_proveedor(p) -> dict:
     if origen not in ORIGENES:
         raise ErrorTarifaAuto(f"«{pid}»: origen debe ser carpeta o url")
     out = {"id": pid, "proveedor": prov, "canal": p["canal"], "moneda": (str(p["moneda"]).upper() if p.get("moneda") else None), "origen": origen}
+    marcas = p.get("marcas")
+    if marcas is not None:
+        if not isinstance(marcas, list) or not all(isinstance(m, str) and m.strip() for m in marcas) or len(marcas) > 500:
+            raise ErrorTarifaAuto(f"«{pid}»: marcas debe ser una lista de nombres de marca (hasta 500)")
+        out["marcas"] = [m.strip()[:60] for m in marcas]
     if origen == "url":
         url = str(p.get("url") or "")
         hosts = [str(h).lower().strip(".") for h in (p.get("hosts") or []) if h]
@@ -359,7 +364,7 @@ async def procesar_fichero(p: dict, nombre: str, datos: bytes, subir=None, propo
         await _guardar(p, nombre, sha, None, "rechazada", ficha.get("motivo") or f"El fichero no es seguro ({ficha['estado']})", {})
         return {"proveedor": p["id"], "fichero": nombre, "estado": "rechazada", "motivo": ficha.get("motivo") or ficha["estado"]}
     try:
-        r = await (proponer or LP.proponer_tarifa)(ficha["id"], p["proveedor"], p["canal"], USUARIO, DEPARTAMENTO, p.get("moneda"))
+        r = await (proponer or LP.proponer_tarifa)(ficha["id"], p["proveedor"], p["canal"], USUARIO, DEPARTAMENTO, p.get("moneda"), **({"marcas": p["marcas"]} if p.get("marcas") else {}))
     except (LP.ErrorImportacion, LP.NoExiste) as e:
         await _guardar(p, nombre, sha, None, "error", str(e), {})
         return {"proveedor": p["id"], "fichero": nombre, "estado": "error", "motivo": str(e)[:200]}

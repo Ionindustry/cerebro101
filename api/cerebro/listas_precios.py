@@ -34,7 +34,7 @@ from .herramientas.facturas import DatosFactura, a_decimal
 
 log = logging.getLogger("cerebro.listas_precios")
 DEFECTO = {"item_group": "Products", "stock_uom": "Nos", "supplier_group": "All Supplier Groups", "supplier_type": "Company", "moneda": "EUR", "monedas": ["EUR", "USD", "GBP"],
-           "max_lineas": 10000, "lote": 100, "prefijo_lista": "Compra", "lista_venta": "Venta"}
+           "max_lineas": 100000, "lote": 100, "prefijo_lista": "Compra", "lista_venta": "Venta"}
 CAMPOS = ("referencia", "descripcion", "precio", "unidad", "descuento")
 PRECIO_MAX = Decimal("10000000")
 RE_NIF = re.compile(r"^[A-Z0-9]{8,14}$")
@@ -56,7 +56,7 @@ def configuracion() -> dict:
     except OSError:
         c = {}
     cfg = {**DEFECTO, **c}
-    cfg["max_lineas"] = min(max(int(cfg["max_lineas"]), 10), 20000)
+    cfg["max_lineas"] = min(max(int(cfg["max_lineas"]), 10), 100000)
     cfg["lote"] = min(max(int(cfg["lote"]), 10), 500)
     cfg["lista_venta"] = str(cfg["lista_venta"]).strip()[:140] or "Venta"
     return cfg
@@ -167,7 +167,7 @@ def codigo_articulo(prefijo: str, ref: str) -> str:
 
 
 def construir_lineas(paginas: list[tuple[int, str]], formato: str, columnas: dict, fila_cabecera: int = 1, prefijo: str = "PROV", iva_incluido_pct: float | None = None,
-                     max_lineas: int = 10000) -> dict:
+                     max_lineas: int = 100000) -> dict:
     """Lee TODAS las filas de las páginas indicadas y devuelve {lineas, rechazadas, omitidas, avisos, columnas}. `fila_cabecera` es la fila (desde 1, de cada página u hoja) que lleva los títulos: se salta
     esa y las anteriores. Una fila sin referencia ni precio (un título de sección, una nota) se omite; con referencia pero sin precio válido, se rechaza con el motivo."""
     if isinstance(fila_cabecera, bool) or not isinstance(fila_cabecera, int) or not 0 <= fila_cabecera <= 50:
@@ -350,13 +350,24 @@ NO_CARGAR = {"fin_de_vida": "fin de vida", "muestra": "muestra"}        # «pró
 CANALES = ("fabricante", "distribuidor")
 
 
-def _lineas_de_tarifa(t, prov_nombre: str, canal: str, cfg_precios: dict, max_lineas: int) -> dict:
+def marca_permitida(marca: str, permitidas) -> bool:
+    """¿La marca del producto está entre las elegidas? Sin tildes ni mayúsculas, y una variante («HIKVISION PRO», «MOVOK ACCESSORIES») cuenta como su marca. Sin lista, todas valen. Pura."""
+    if not permitidas:
+        return True
+    n = precios.norm(marca)
+    return any(n == m or n.startswith(m + " ") for m in (precios.norm(x) for x in permitidas) if m)
+
+
+def _lineas_de_tarifa(t, prov_nombre: str, canal: str, cfg_precios: dict, max_lineas: int, marcas=None) -> dict:
     """De los productos de una tarifa a las líneas de la importación. UN producto por fabricante y referencia: el código del artículo es la marca (o el fabricante, en su propia tarifa) + la referencia, de modo
     que la tarifa del fabricante y la del distribuidor llegan al MISMO artículo y cada una pone su coste en su lista de precios. Todo el cálculo (cambio, logística, margen, redondeo) lo hace `precios`."""
     lineas, vistos, avisos = [], {}, []
     no_cargadas: dict[str, int] = {}
-    sin_marca = repetidas = sin_calculo = 0
+    sin_marca = repetidas = sin_calculo = fuera_de_marcas = 0
     for p in t.productos:
+        if marcas and not marca_permitida(p.marca or (prov_nombre if canal == "fabricante" else ""), marcas):
+            fuera_de_marcas += 1
+            continue
         if p.estado in NO_CARGAR:
             no_cargadas[p.estado] = no_cargadas.get(p.estado, 0) + 1
             continue
@@ -391,10 +402,12 @@ def _lineas_de_tarifa(t, prov_nombre: str, canal: str, cfg_precios: dict, max_li
         if len(lineas) > max_lineas:
             raise ErrorImportacion(f"La tarifa tiene más de {max_lineas} productos: divídela en varias")
     if not lineas:
-        raise ErrorImportacion("La tarifa no tiene ningún producto cargable (todos son de fin de vida o muestras, o no tienen precio)")
+        raise ErrorImportacion("La tarifa no tiene ningún producto cargable (todos son de fin de vida o muestras, de marcas fuera de la lista o no tienen precio)")
     proximos = sum(1 for l in lineas if l["estado"] == "proximamente")
     if proximos:
         avisos.append(f"{proximos} productos son «próximamente»: se cargan MARCADOS («PRÓXIMAMENTE» al principio de su descripción) para poder usarlos en licitaciones, pero no se deben ofrecer como disponibles ni con plazo de entrega")
+    if fuera_de_marcas:
+        avisos.append(f"{fuera_de_marcas} productos son de marcas que no están en la lista de este proveedor (`marcas` en config/tarifas_auto.yaml): no se cargan")
     if no_cargadas:
         avisos.append("No se cargan: " + ", ".join(f"{n} {NO_CARGAR[k]}" for k, n in no_cargadas.items()) + " (no se deben ofrecer como disponibles)")
     if sin_marca:
@@ -406,7 +419,7 @@ def _lineas_de_tarifa(t, prov_nombre: str, canal: str, cfg_precios: dict, max_li
     return {"lineas": lineas, "avisos": avisos, "no_cargadas": sum(no_cargadas.values())}
 
 
-async def proponer_tarifa(documento: str, proveedor: dict, canal: str, agente: str, departamento: str, moneda: str | None = None, vigente_desde: str | None = None, lector=None) -> dict:
+async def proponer_tarifa(documento: str, proveedor: dict, canal: str, agente: str, departamento: str, moneda: str | None = None, vigente_desde: str | None = None, lector=None, marcas: list[str] | None = None) -> dict:
     """Lee una tarifa (Excel o CSV) subida al chat SIN que el agente diga las columnas (el lector de `tarifas` las reconoce), calcula el coste en euros y el precio de venta de cada producto con `precios` y GUARDA la
     propuesta. No escribe nada en el ERP: una persona la aprueba antes (`aplicar`). `canal` es de dónde se compra: «fabricante» o «distribuidor» (decide la moneda, la logística y el nombre de la lista)."""
     cfg = configuracion()
@@ -433,7 +446,7 @@ async def proponer_tarifa(documento: str, proveedor: dict, canal: str, agente: s
     except Exception:  # noqa: BLE001 — si el texto no está, solo se pierde el aviso de «el nombre no sale en el documento»
         texto = ""
     prov, avisos_prov = validar_proveedor(proveedor, texto)
-    r = _lineas_de_tarifa(tarifa, prov["nombre"], canal, cfg_precios, cfg["max_lineas"])
+    r = _lineas_de_tarifa(tarifa, prov["nombre"], canal, cfg_precios, cfg["max_lineas"], marcas)
     lineas = r["lineas"]
     avisos = avisos_prov + tarifa.avisos + r["avisos"]
     existe_prov, nuevos, existentes = await _comprobar_erp(departamento, prov, lineas, cfg, avisos)

@@ -521,6 +521,17 @@ class TestTarifasEnLaImportacion(unittest.TestCase):
         self.assertTrue(any("«próximamente»" in a and "MARCADOS" in a for a in r["avisos"]))
         self.assertTrue(any("No se cargan" in a and "fin de vida" in a for a in r["avisos"]))
 
+    def test_la_lista_de_marcas_filtra_antes_de_cargar_y_una_variante_cuenta_como_su_marca(self):
+        self.assertTrue(L.marca_permitida("HIKVISION PRO", ["Hikvision"]))
+        self.assertTrue(L.marca_permitida("hikvision", ["HIKVISION"]))
+        self.assertFalse(L.marca_permitida("HIKVISIONES", ["Hikvision"]))
+        self.assertFalse(L.marca_permitida("", ["Ajax"]))
+        self.assertTrue(L.marca_permitida("Cualquiera", []))
+        t = L.tarifas.leer(TARIFA_DISTRIBUIDOR, "t.csv", "EUR")
+        r = L._lineas_de_tarifa(t, "Asecur", "distribuidor", self.cfg(), 3000, ["Milesight"])
+        self.assertEqual([l["marca"] for l in r["lineas"]], ["Milesight"])
+        self.assertTrue(any("1 productos son de marcas" in a for a in r["avisos"]))
+
     def test_el_mismo_producto_del_distribuidor_llega_al_mismo_articulo(self):
         f = self.lineas(TARIFA_FABRICANTE, "fabricante", "USD", "Milesight")["lineas"][0]
         d = self.lineas(TARIFA_DISTRIBUIDOR, "distribuidor", "EUR", "Asecur")

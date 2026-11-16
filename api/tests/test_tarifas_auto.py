@@ -334,6 +334,23 @@ class TestFlujo(unittest.TestCase):
             r = ejecutar(T.ejecutar(self.cfg(d), subir=self.subir, proponer=mal))
         self.assertEqual((r["novedades"][0]["estado"], "producto cargable" in r["novedades"][0]["motivo"]), ("error", True))
 
+    def test_la_lista_de_marcas_se_valida_y_llega_a_la_propuesta(self):
+        self.assertEqual(T.validar_proveedor({**PROV, "marcas": [" Ajax ", "Dahua"]})["marcas"], ["Ajax", "Dahua"])
+        self.assertNotIn("marcas", T.validar_proveedor(PROV))
+        for malo in ("Ajax", [1], [""], ["x"] * 501):
+            with self.assertRaisesRegex(T.ErrorTarifaAuto, "marcas"):
+                T.validar_proveedor({**PROV, "marcas": malo})
+        vistas = []
+
+        async def proponer(documento, proveedor, canal, agente, departamento, moneda=None, marcas=None):
+            vistas.append(marcas)
+            return await self.proponer(documento, proveedor, canal, agente, departamento, moneda)
+        with tempfile.TemporaryDirectory() as d:
+            self.poner(d, "t.csv", b"1")
+            cfg = {"carpeta_base": d, "max_mb": 5, "proveedores": [{**PROV, "marcas": ["Ajax"]}]}
+            ejecutar(T.ejecutar(cfg, subir=self.subir, proponer=proponer))
+        self.assertEqual(vistas, [["Ajax"]])
+
     def test_un_fichero_que_dio_error_se_reintenta_y_uno_ya_leido_no(self):
         async def mal(*a, **k):
             raise LP.ErrorImportacion("La tarifa tiene más de 3000 productos")
