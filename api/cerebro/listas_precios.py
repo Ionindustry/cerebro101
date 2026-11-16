@@ -280,11 +280,12 @@ async def tabla(documento: str, pagina: int = 1, filas: int = 12) -> dict:
 
 
 async def _existentes(departamento: str, doctype: str, campo: str, valores: list[str], lote: int, extra: list | None = None) -> set[str]:
+    """Los valores que ya existen en el ERP, **en minúsculas** (casefold): el ERP no distingue mayúsculas, así que «X-BLACK» y «X-Black» son el mismo artículo y se comparan así."""
     out: set[str] = set()
     for i in range(0, len(valores), 80):
         trozo = valores[i:i + 80]
         filas = await erpnext.listar(doctype, departamento, filtros=[[campo, "in", trozo]] + (extra or []), campos=[campo], limite=len(trozo) + 5)
-        out |= {str(f.get(campo)) for f in filas}
+        out |= {str(f.get(campo)).casefold() for f in filas}
     return out
 
 
@@ -294,10 +295,11 @@ async def _comprobar_erp(departamento: str, prov: dict, lineas: list[dict], cfg:
         codigos = [l["codigo"] for l in lineas]
         ya = await _existentes(departamento, "Item", "item_code", codigos, cfg["lote"])
         for l in lineas:
-            l["existe"] = l["codigo"] in ya
+            l["existe"] = l["codigo"].casefold() in ya
         filtro = [["tax_id", "=", prov["nif"]]] if prov["nif"] else [["supplier_name", "=", prov["nombre"]]]
         encontrados = await erpnext.listar("Supplier", departamento, filtros=filtro, campos=["name"], limite=3)
-        return bool(encontrados), len(codigos) - len(ya), len(ya)
+        n_ya = sum(1 for l in lineas if l["existe"])
+        return bool(encontrados), len(codigos) - n_ya, n_ya
     except Exception as e:  # noqa: BLE001 — sin ERP se propone igual, avisando de que no se ha podido comprobar
         log.warning("listas de precios: no se pudo comprobar el ERP: %s: %s", type(e).__name__, e)
         avisos.append("No se ha podido consultar el ERP para ver qué artículos y proveedor existen ya: se comprobará al aplicar")
@@ -561,7 +563,13 @@ async def aplicar(importacion: int, departamento: str, ahora: date | None = None
             res["lista_creada"] = True
         codigos = [l["codigo"] for l in lineas]
         ya = await _existentes(departamento, "Item", "item_code", codigos, cfg["lote"])
-        nuevos = [l for l in lineas if l["codigo"] not in ya]
+        vistos_nuevos: set[str] = set()
+        nuevos = []
+        for l in lineas:
+            k = l["codigo"].casefold()
+            if k not in ya and k not in vistos_nuevos:       # dos códigos que solo difieren en mayúsculas son un solo artículo para el ERP
+                vistos_nuevos.add(k)
+                nuevos.append(l)
         docs, res["codigos_quitados"] = articulos_erp.sin_codigos_repetidos([articulos_erp.documento_articulo(l, res["proveedor"], cfg) for l in nuevos])
         marcas = sorted({d["brand"] for d in docs if d.get("brand")})
         if marcas:
@@ -582,7 +590,7 @@ async def aplicar(importacion: int, departamento: str, ahora: date | None = None
                 ya = await _existentes(departamento, "Item", "item_code", codigos, cfg["lote"])
                 por_codigo = {l["codigo"]: l for l in nuevos}
                 for d in docs:
-                    if d["item_code"] in ya:
+                    if d["item_code"].casefold() in ya:
                         res["articulos_creados"] += 1
                         continue
                     for doc in (d, articulos_erp.documento_articulo(por_codigo[d["item_code"]], res["proveedor"], cfg, con_extras=False)):
@@ -602,11 +610,15 @@ async def aplicar(importacion: int, departamento: str, ahora: date | None = None
         for i in range(0, len(codigos), 80):
             trozo = codigos[i:i + 80]
             for r in await erpnext.listar("Item Price", departamento, filtros=[["price_list", "=", lista], ["item_code", "in", trozo]], campos=["name", "item_code", "price_list_rate"], limite=len(trozo) + 20):
-                existentes[str(r["item_code"])] = (str(r["name"]), str(r.get("price_list_rate")))
+                existentes[str(r["item_code"]).casefold()] = (str(r["name"]), str(r.get("price_list_rate")))
         crear = []
+        en_crear: set[str] = set()
         for l in lineas:
-            actual = existentes.get(l["codigo"])
+            actual = existentes.get(l["codigo"].casefold())
+            if actual is None and l["codigo"].casefold() in en_crear:
+                continue                                      # mismo artículo para el ERP (solo cambian las mayúsculas): un solo precio
             if actual is None:
+                en_crear.add(l["codigo"].casefold())
                 d = {"item_code": l["codigo"], "price_list": lista, "buying": 1, "selling": 0, "supplier": res["proveedor"], "currency": moneda, "price_list_rate": float(l["precio"])}
                 if desde:
                     d["valid_from"] = desde
