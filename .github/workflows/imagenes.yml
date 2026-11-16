@@ -65,6 +65,8 @@ jobs:
           context: ${{ matrix.contexto }}
           file: ${{ matrix.dockerfile }}
           platforms: linux/amd64
+          build-args: |
+            CODIGO_VERSION=${{ github.sha }}
           push: ${{ github.event_name != 'pull_request' }}
           tags: |
             ${{ env.IMAGEN }}:latest

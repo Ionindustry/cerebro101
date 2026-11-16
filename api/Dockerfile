@@ -14,5 +14,8 @@ COPY scripts /app/scripts
 COPY db /app/db
 COPY api/tests ./tests
 ENV CEREBRO_CONFIG=/app/config
+# la versión del código (la pone la integración continua): se muestra en /salud y en el panel; va al final para no invalidar la caché de las capas pesadas
+ARG CODIGO_VERSION=desconocida
+ENV CODIGO_VERSION=$CODIGO_VERSION
 EXPOSE 8000
 CMD ["uvicorn", "cerebro.api.main:app", "--host", "0.0.0.0", "--port", "8000"]

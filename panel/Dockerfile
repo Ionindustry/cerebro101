@@ -8,6 +8,9 @@ RUN npm run build
 FROM node:22-slim
 WORKDIR /app
 ENV NODE_ENV=production
+# la versión del código (la pone la integración continua): se enseña al pie del menú
+ARG CODIGO_VERSION=desconocida
+ENV CODIGO_VERSION=$CODIGO_VERSION
 COPY --from=build /app/.next/standalone ./
 COPY --from=build /app/.next/static ./.next/static
 EXPOSE 3000

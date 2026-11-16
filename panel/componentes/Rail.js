@@ -2,6 +2,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
+import { textoVersion } from "../lib/version";
 
 const SECCIONES = [
   { ruta: "/", nombre: "Jarvis" },
@@ -15,13 +16,17 @@ const SECCIONES = [
   { ruta: "/agentes", nombre: "Agentes" },
 ];
 
-export default function Rail() {
+export default function Rail({ version }) {
   const ruta = usePathname();
   const [pendientes, setPendientes] = useState(0);
   const [urgentes, setUrgentes] = useState(0);
   const [usuario, setUsuario] = useState("");
+  const [versionApi, setVersionApi] = useState(null);
   useEffect(() => {
     fetch("/auth/yo").then((r) => (r.ok ? r.json() : null)).then((d) => d && setUsuario(d.usuario)).catch(() => {});
+  }, []);
+  useEffect(() => {
+    fetch("/cerebro/salud").then((r) => (r.ok ? r.json() : null)).then((d) => d && setVersionApi(d.version ?? null)).catch(() => {});
   }, []);
   useEffect(() => {
     const cargar = () => fetch("/cerebro/aprobaciones")
@@ -47,6 +52,7 @@ export default function Rail() {
           {s.ruta === "/aprobaciones" && pendientes > 0 && <span className="contador" aria-label={`${pendientes} pendientes`}>{pendientes}</span>}
         </Link>
       ))}
+      <small className="version" title={textoVersion(version, versionApi).aviso || "Versión del código en uso"}>{textoVersion(version, versionApi).texto}{textoVersion(version, versionApi).aviso && " ⚠"}</small>
       {usuario && (
         <div className="sesion">
           <span>{usuario}</span>

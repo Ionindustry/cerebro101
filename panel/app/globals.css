@@ -461,3 +461,6 @@ ul.lic-fila, ol.lic-fila { list-style: none; margin: 0; padding: 0; }
 
 /* Texto solo para lectores de pantalla (p. ej. «aviso:» junto a una marca ! en la revisión previa de la oferta) */
 .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
+.rail .version { margin-top: auto; padding: 8px 12px 0; font-size: 11px; color: var(--secundario); }
+.rail .sesion { margin-top: 0; }
+@media (max-width: 760px) { .rail .version { display: none; } }
