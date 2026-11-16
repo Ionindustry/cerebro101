@@ -30,6 +30,10 @@ app.conf.task_routes = {"cerebro.tareas.celery_app.ejecutar_programada": {"queue
                         "cerebro.tareas.celery_app.enviar_hoy_por_correo": {"queue": "lote"},
                         "cerebro.tareas.celery_app.vigilar_motor": {"queue": "lote"},
                         "cerebro.tareas.celery_app.purgar_subidas": {"queue": "lote"},
+                        "cerebro.tareas.celery_app.vectorizar_tarifas": {"queue": "lote"},
+                        "cerebro.tareas.celery_app.vigilar_ejecuciones": {"queue": "lote"},
+                        "cerebro.tareas.celery_app.actualizar_cambio": {"queue": "lote"},
+                        "cerebro.tareas.celery_app.actualizar_tarifas": {"queue": "lote"},
                         "cerebro.tareas.celery_app.pedir_viabilidad": {"queue": "peticiones"},
                         "cerebro.tareas.celery_app.analizar_pliegos": {"queue": "peticiones"},
                         "cerebro.tareas.celery_app.volcar_constancia": {"queue": "peticiones"}}

@@ -31,6 +31,8 @@ CREATE TABLE IF NOT EXISTS lineas_vectores (
   creado     timestamptz NOT NULL DEFAULT now(),
   PRIMARY KEY (lista, ref)
 );
+-- atributos normalizados leídos del texto de la línea (api/cerebro/atributos_producto.py): {resolucion_mp: 4, ip: 67, focal_min_mm: 8…}
+ALTER TABLE lineas_vectores ADD COLUMN IF NOT EXISTS atributos jsonb NOT NULL DEFAULT '{}';
 CREATE INDEX IF NOT EXISTS lineas_vectores_embedding_idx ON lineas_vectores USING hnsw (embedding vector_cosine_ops);
 
 -- Cuadernos de investigación (como NotebookLM, en local): fuentes que reúne un agente y sobre las que se pregunta con citas
