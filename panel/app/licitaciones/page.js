@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 import { antiguedadTexto, estadoMotor, ESTADOS_EMBUDO, fechaCivilTexto, nombreFuente, sinLeerTexto, tasaExitoTexto, totalesTexto } from "../../lib/licitaciones";
 import { Fallo, Item, Oportunidad, pedir, pedirCerebro } from "./cliente";
 import ActualizarConcursos from "./ActualizarConcursos";
+import IngestaNuevos from "./IngestaNuevos";
 import Panel from "./Panel";
 
 function EstadoDelMotor() {
@@ -125,6 +126,7 @@ export default function Licitaciones() {
         <Link href="/licitaciones/vencen" className="boton no">Contratos que vencen: cuándo vuelve a salir</Link>
         <Link href="/licitaciones/fichas" className="boton no">Fichas técnicas de producto</Link>
       </p>
+      <IngestaNuevos version={version} />
       <Panel />
       <ResumenDelDia />
       <AvisosDeAlertas />

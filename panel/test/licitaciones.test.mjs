@@ -1314,3 +1314,21 @@ test("actualizar concursos a mano: cuándo hay una ingesta nueva y qué se le di
   assert.match(L.textoActualizacionManual({ p: { estado: "ok", mas_reciente_s: 1200 } }).texto, /Última ingesta del motor: hace 20 min/);
   assert.equal(L.textoActualizacionManual({ p: null }).texto, "");
 });
+
+test("indicador de ingesta: ventanas, consultas y texto", async () => {
+  const L = await import("../lib/licitaciones.js");
+  const v = L.ventanasIngesta(new Date("2026-11-16T09:30:00Z"));         // invierno: Madrid es +01:00
+  assert.deepEqual(v.map((x) => x.clave), ["hoy", "24h", "7d"]);
+  assert.equal(v[0].desde, "2026-11-15T23:00:00.000Z");
+  assert.equal(v[1].desde, "2026-11-15T09:30:00.000Z");
+  assert.equal(v[2].desde, "2026-11-09T09:30:00.000Z");
+  const verano = L.ventanasIngesta(new Date("2026-07-10T09:30:00Z"));     // verano: +02:00
+  assert.equal(verano[0].desde, "2026-07-09T22:00:00.000Z");
+  const q = L.consultasIngesta("2026-11-15T23:00:00.000Z");
+  assert.match(q.nuevas, /publicada_desde=2026-11-15T23%3A00%3A00\.000Z&limit=1$/);
+  assert.match(q.abiertas, /estado=abierta&estado=anuncio_previo/);
+  assert.match(q.novedades, /^tenders\?actualizada_desde=/);
+  assert.equal(L.totalIngestaTexto({ total: { valor: 0, relacion: "eq" } }), "0");
+  assert.match(L.totalIngestaTexto({ total: { valor: 10000, relacion: "gte" } }), /^al menos 10\.?000$/);
+  assert.equal(L.totalIngestaTexto(null), "—");
+});
