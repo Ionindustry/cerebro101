@@ -607,6 +607,21 @@ CREATE TABLE IF NOT EXISTS importaciones_precios (
   aplicada_en  timestamptz
 );
 
+-- Líneas de las tarifas de proveedores vectorizadas (api/cerebro/lineas_vectores.py): el embedding (BGE-M3, local) del texto de cada línea (referencia, marca, descripción y características, SIN precio)
+-- permite encontrar productos por significado aunque no compartan palabras con el pliego. Se rellena en segundo plano y se puede borrar entera: se vuelve a calcular sola.
+CREATE TABLE IF NOT EXISTS lineas_vectores (
+  lista      text NOT NULL,                       -- lista de precios del proveedor (importaciones_precios.lista)
+  ref        text NOT NULL,                       -- referencia de la línea
+  proveedor  text NOT NULL DEFAULT '',
+  marca      text NOT NULL DEFAULT '',
+  texto      text NOT NULL,                       -- lo que se vectoriza y se enseña como evidencia (sin precio)
+  huella     text NOT NULL,                       -- hash del texto: si no cambia, no se recalcula
+  embedding  vector(1024) NOT NULL,
+  creado     timestamptz NOT NULL DEFAULT now(),
+  PRIMARY KEY (lista, ref)
+);
+CREATE INDEX IF NOT EXISTS lineas_vectores_embedding_idx ON lineas_vectores USING hnsw (embedding vector_cosine_ops);
+
 -- Propuestas de precios de VENTA (api/cerebro/precios_venta.py): el sistema calcula el precio de cada artículo desde su mejor coste, Dirección ajusta o excluye y APRUEBA; solo entonces se escribe la lista
 -- «Venta» en el ERP. Un coste o un tipo de cambio que cambian no cambian ningún precio sin una propuesta nueva y su aprobación.
 CREATE TABLE IF NOT EXISTS propuestas_venta (

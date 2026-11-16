@@ -79,6 +79,7 @@ app.conf.beat_schedule = {"vigilar-ejecuciones": {"task": "cerebro.tareas.celery
                           "vigilante-motor": {"task": "cerebro.tareas.celery_app.vigilar_motor", "schedule": 900.0},
                           "tarifas-proveedores": {"task": "cerebro.tareas.celery_app.actualizar_tarifas", "schedule": crontab(minute="40", hour="6")},
                           "purgar-subidas": {"task": "cerebro.tareas.celery_app.purgar_subidas", "schedule": crontab(minute="17", hour="3")},
+                          "vectorizar-tarifas": {"task": "cerebro.tareas.celery_app.vectorizar_tarifas", "schedule": 600.0},
                           "constancia-pendiente": {"task": "cerebro.tareas.celery_app.volcar_constancia", "schedule": 300.0}}
 
 
@@ -221,6 +222,14 @@ def actualizar_tarifas() -> dict:
     from .. import tarifas_auto
     inf = asyncio.run(tarifas_auto.ejecutar())
     return {"proveedores": inf["proveedores"], "novedades": len(inf["novedades"]), "fallos": len(inf["fallos"])}
+
+
+@app.task(name="cerebro.tareas.celery_app.vectorizar_tarifas")
+def vectorizar_tarifas() -> dict:
+    """Cada 10 minutos vectoriza (BGE-M3, local) las líneas de tarifa nuevas o cambiadas, para que las equivalencias de producto las encuentren por significado. Hace hasta 2.000 líneas por pasada;
+    una tarifa grande se completa en varias. Si Ollama no responde, lo deja para la pasada siguiente (cerebro/lineas_vectores.py)."""
+    from .. import lineas_vectores
+    return asyncio.run(lineas_vectores.indexar_pendientes(2000))
 
 
 @app.task(name="cerebro.tareas.celery_app.purgar_subidas")

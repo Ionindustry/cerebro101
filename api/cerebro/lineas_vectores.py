@@ -1,0 +1,130 @@
+"""Las líneas de las tarifas de proveedores, buscables por significado.
+
+Hasta ahora una línea de tarifa solo se encontraba si compartía palabras con lo que pide el pliego (con un pequeño diccionario castellano↔inglés). Aquí cada línea se convierte en un vector con
+BGE-M3 (el mismo modelo local de la base de conocimiento; nada sale de la máquina) y se guarda en `lineas_vectores`. La tabla es un índice: se puede borrar y se recalcula sola.
+
+El vector solo PROPONE candidatos. Que un producto «iguale o supere» lo decide el código con los valores de la ficha (equivalencia.py), nunca el parecido.
+El texto vectorizado NO lleva precio: es lo que se enseña como evidencia a los modelos.
+"""
+from __future__ import annotations
+
+import hashlib
+import logging
+
+import psycopg
+
+from .ajustes import ajustes
+from .llm import embeddings
+
+log = logging.getLogger("cerebro.lineas_vectores")
+LOTE = 32                  # textos por llamada a Ollama
+MAX_TEXTO = 400
+MAX_ESPECIFICACIONES = 6
+CERROJO = 7_310_101      # clave del cerrojo de PostgreSQL de la pasada de vectorización
+SIMILITUD_MINIMA = 0.45    # por debajo, el parecido es ruido (a calibrar con tarifas reales)
+
+
+def _corto(t, n: int) -> str:
+    return " ".join(str(t or "").split())[:n]
+
+
+def texto_de_linea(l: dict) -> str:
+    """Lo que se vectoriza: marca, referencia, descripción y las primeras características. Sin precio ni código interno. Pura."""
+    esp = l.get("especificaciones") if isinstance(l.get("especificaciones"), dict) else {}
+    partes = [_corto(l.get("marca"), 40), _corto(l.get("ref"), 60), _corto(l.get("desc"), 250)]
+    carac = [f"{_corto(k, 30)}: {_corto(v, 40)}" for k, v in list(esp.items())[:MAX_ESPECIFICACIONES] if str(v or "").strip()]
+    texto = " | ".join(p for p in partes if p)
+    if carac:
+        texto += " | " + "; ".join(carac)
+    return texto[:MAX_TEXTO]
+
+
+def huella(texto: str) -> str:
+    return hashlib.sha256(texto.encode("utf-8")).hexdigest()[:32]
+
+
+def pendientes(lineas: list[dict], existentes: dict[str, str]) -> list[dict]:
+    """De las líneas de una lista, las que hay que vectorizar: las nuevas y las que han cambiado de texto. `existentes`: {ref: huella}. Una referencia repetida cuenta una vez. Pura."""
+    vistos, salida = set(), []
+    for l in lineas:
+        if not isinstance(l, dict):
+            continue
+        ref = _corto(l.get("ref") or l.get("codigo"), 80)
+        texto = texto_de_linea(l)
+        if not ref or not texto or ref in vistos:
+            continue
+        vistos.add(ref)
+        h = huella(texto)
+        if existentes.get(ref) != h:
+            salida.append({"ref": ref, "texto": texto, "huella": h, "marca": _corto(l.get("marca"), 60)})
+    return salida
+
+
+def _conectar():
+    return psycopg.AsyncConnection.connect(ajustes.database_url)
+
+
+async def _ultimas_listas(conn) -> list[tuple[str, str, list]]:
+    """La tarifa más reciente (aplicada o propuesta) de cada proveedor y lista: (proveedor, lista, líneas)."""
+    cur = await conn.execute("SELECT DISTINCT ON (proveedor->>'nombre', lista) proveedor->>'nombre', lista, lineas FROM importaciones_precios "
+                             "WHERE estado IN ('propuesta', 'aplicada') ORDER BY proveedor->>'nombre', lista, id DESC")
+    return [(p or "", lista, lineas or []) for p, lista, lineas in await cur.fetchall()]
+
+
+async def indexar_pendientes(maximo: int = 2000, embed=embeddings) -> dict:
+    """Vectoriza hasta `maximo` líneas nuevas o cambiadas (el resto, en la pasada siguiente) y borra las que ya no están en la tarifa. {indexadas, pendientes, listas}. Si Ollama falla, deja lo ya hecho."""
+    hechas, quedan, listas = 0, 0, 0
+    async with await _conectar() as conn:
+        cur = await conn.execute("SELECT pg_try_advisory_lock(%s)", [CERROJO])       # una sola pasada a la vez (se suelta al cerrar la conexión)
+        if not (await cur.fetchone())[0]:
+            return {"indexadas": 0, "pendientes": 0, "listas": 0, "omitida": "ya hay otra pasada en marcha"}
+        for proveedor, lista, lineas in await _ultimas_listas(conn):
+            listas += 1
+            cur = await conn.execute("SELECT ref, huella FROM lineas_vectores WHERE lista = %s", [lista])
+            existentes = {r: h for r, h in await cur.fetchall()}
+            falta = pendientes(lineas, existentes)
+            vigentes = {_corto(l.get("ref") or l.get("codigo"), 80) for l in lineas if isinstance(l, dict)}
+            sobran = [r for r in existentes if r not in vigentes]
+            if sobran:
+                await conn.execute("DELETE FROM lineas_vectores WHERE lista = %s AND ref = ANY(%s)", [lista, sobran])
+                await conn.commit()
+            for i in range(0, len(falta), LOTE):
+                if hechas >= maximo:
+                    quedan += len(falta) - i
+                    break
+                lote = falta[i:i + LOTE]
+                try:
+                    vectores = await embed([x["texto"] for x in lote])
+                except Exception as e:      # noqa: BLE001 - sin Ollama se reintenta en la pasada siguiente
+                    log.warning("lineas_vectores: no se han podido calcular los vectores: %s: %s", type(e).__name__, e)
+                    return {"indexadas": hechas, "pendientes": quedan + len(falta) - i, "listas": listas, "error": type(e).__name__}
+                for x, v in zip(lote, vectores):
+                    await conn.execute(
+                        "INSERT INTO lineas_vectores (lista, ref, proveedor, marca, texto, huella, embedding) VALUES (%s,%s,%s,%s,%s,%s,%s::vector) "
+                        "ON CONFLICT (lista, ref) DO UPDATE SET proveedor = EXCLUDED.proveedor, marca = EXCLUDED.marca, texto = EXCLUDED.texto, huella = EXCLUDED.huella, "
+                        "embedding = EXCLUDED.embedding, creado = now()",
+                        [lista, x["ref"], proveedor, x["marca"], x["texto"], x["huella"], str(v)])
+                await conn.commit()
+                hechas += len(lote)
+    log.info("lineas_vectores: %d líneas vectorizadas, %d pendientes", hechas, quedan)
+    return {"indexadas": hechas, "pendientes": quedan, "listas": listas}
+
+
+async def buscar(consultas: list[str], por_consulta: int = 4, embed=embeddings) -> list[dict]:
+    """Las líneas más parecidas por significado a cada consulta: [{ref, desc, similitud}]. Una por referencia, la mejor puntuación; sin precio. Vacío si la tabla no tiene nada."""
+    consultas = [_corto(q, 300) for q in consultas if _corto(q, 300)]
+    if not consultas:
+        return []
+    vectores = await embed(consultas)
+    mejores: dict[tuple[str, str], dict] = {}
+    async with await _conectar() as conn:
+        for v in vectores:
+            cur = await conn.execute("SELECT lista, ref, texto, 1 - (embedding <=> %s::vector) AS similitud FROM lineas_vectores ORDER BY embedding <=> %s::vector LIMIT %s",
+                                     [str(v), str(v), por_consulta])
+            for lista, ref, texto, sim in await cur.fetchall():
+                if sim < SIMILITUD_MINIMA:
+                    continue
+                k = (lista, ref)
+                if k not in mejores or sim > mejores[k]["similitud"]:
+                    mejores[k] = {"ref": ref, "desc": texto, "similitud": round(float(sim), 3)}
+    return sorted(mejores.values(), key=lambda x: -x["similitud"])

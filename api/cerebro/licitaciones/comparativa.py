@@ -152,9 +152,9 @@ async def _lineas_de_proveedores() -> list[dict]:
     return [l for f in filas for l in (f["lineas"] or [])]
 
 
-async def reunir_evidencias(consultas: list[str], k: int = 3, buscar=None, lineas=None) -> list[dict]:
+async def reunir_evidencias(consultas: list[str], k: int = 3, buscar=None, lineas=None, vectoriales=None) -> list[dict]:
     """La evidencia de producto para esas consultas, con su identificador [P…]: fragmentos de fichas de la base de conocimiento y líneas de listas de proveedores. Si una fuente falla, se sigue con la otra.
-    `buscar` y `lineas` solo para pruebas."""
+    Las líneas de tarifa se buscan por significado (vectores locales, `lineas_vectores`) y por palabras; se unen sin repetir. `buscar`, `lineas` y `vectoriales` solo para pruebas."""
     evid, vistos, usados = [], set(), 0
     for q in consultas:
         try:
@@ -170,8 +170,22 @@ async def reunir_evidencias(consultas: list[str], k: int = 3, buscar=None, linea
             vistos.add(clave)
             usados += len(texto)
             evid.append({"origen": "ficha", "titulo": _corto(f["titulo"], 120), "fuente": _corto(f.get("fuente"), 120), "texto": texto})
+    refs: set[str] = set()
+    if vectoriales is not None or lineas is None:        # en pruebas con `lineas` inyectadas no se toca la base de vectores
+        try:
+            from .. import lineas_vectores as LV
+            for l in await (vectoriales or LV.buscar)(consultas):
+                if len(evid) >= MAX_EVIDENCIAS or usados > MAX_CARACTERES_EVIDENCIA:
+                    break
+                refs.add(l["ref"])
+                evid.append({"origen": "lista de proveedor", "titulo": l["ref"] or "(sin referencia)", "fuente": "", "texto": l["desc"]})
+                usados += len(l["desc"])
+        except Exception as e:      # noqa: BLE001 - sin vectores (Ollama caído, tabla vacía) se sigue por palabras
+            log.warning("comparativa: no se ha podido buscar por significado en las tarifas: %s: %s", type(e).__name__, e)
     try:
         for l in lineas_relevantes(await (lineas or _lineas_de_proveedores)(), consultas, 24):
+            if l["ref"] in refs:
+                continue
             if len(evid) >= MAX_EVIDENCIAS or usados > MAX_CARACTERES_EVIDENCIA:
                 break
             evid.append({"origen": "lista de proveedor", "titulo": l["ref"] or "(sin referencia)", "fuente": "", "texto": l["desc"]})
