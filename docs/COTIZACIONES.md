@@ -20,3 +20,17 @@ Cuando una referencia no tiene precio en las tarifas cargadas, se le pide **coti
 - No elige proveedor ni envía nada sin que una persona lo decida.
 - No negocia ni acepta ofertas: el precio de venta lo sigue fijando Dirección.
 - No envía las cotizaciones ni los contactos a Claude ni a ChatGPT.
+
+## Desde «Preparar la oferta»: cotizar de una vez lo que no tiene precio
+
+En la tarjeta «Equipos y coste real» de la oferta, si hay partidas **sin coste en las tarifas**, sale el bloque «Preparar las cotizaciones». Elige el plazo de entrega (días) y el modo, y el sistema:
+
+1. coge cada partida sin coste, con cantidad y sin otra cotización abierta;
+2. saca la marca del producto (entre las de tus proveedores) y busca quién la distribuye (*Proveedores y marcas*);
+3. crea el **borrador** con el proveedor que más artículos de esa marca tiene y correo de contacto; el correo lo redacta el sistema (solo referencia, cantidad y plazo).
+
+No envía nada: lo revisas y lo envías desde Cotizaciones. Lo que no se puede preparar (sin cantidad, marca no reconocida, sin proveedor o sin su correo) se lista con el motivo.
+
+## Productos que nombra el pliego
+
+La tabla de equivalencias saca del texto del pliego los productos que **nombra** (marca y modelo, y si dice «o equivalente»): lo hace el código, sin modelo de IA, con las marcas conocidas (las de tus tarifas, `config/marcas_alias.yaml` y el ranking de fabricantes), y cada una lleva su cita y su página. Se buscan las fichas de esos modelos y sus datos fijan el mínimo que deben igualar o superar los equivalentes.
