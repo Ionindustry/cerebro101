@@ -31,7 +31,7 @@ from . import resumen as resumen_mod
 
 log = logging.getLogger("cerebro.licitaciones.redaccion_externa")
 AGENTE = "redaccion-externa"
-DEFECTO = {"activa": True, "pasos": ["solucion", "memoria"], "proveedor_por_paso": {}, "max_caracteres_pliego": 90_000, "max_tokens": 10_000, "fragmentos_conocimiento": 6, "max_caracteres_conocimiento": 8_000}
+DEFECTO = {"activa": True, "pasos": ["solucion", "memoria"], "proveedor_por_paso": {}, "max_caracteres_pliego": 250_000, "max_tokens": 10_000, "fragmentos_conocimiento": 6, "max_caracteres_conocimiento": 8_000}
 MAX_DOCUMENTOS = 5
 
 ESQUEMA = {
