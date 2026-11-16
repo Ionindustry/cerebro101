@@ -135,6 +135,13 @@ class TestProtecciones(Base):
             correo._destinatarios(["cliente@ejemplo.es", "Rrhh@101.cat"])
         self.assertIn("propia empresa", str(e.exception))
 
+    def test_solo_las_direcciones_propias_permitidas_expresamente_pasan(self):
+        self.assertEqual(correo._destinatarios("Rrhh@101.cat", ["rrhh@101.cat"]), ["Rrhh@101.cat"])
+        with self.assertRaises(ValueError):                          # otra dirección propia que no está en la lista sigue bloqueada
+            correo._destinatarios(["Rrhh@101.cat", "comercial@101.cat"], ["rrhh@101.cat"])
+        with self.assertRaises(ValueError):
+            correo._destinatarios("Rrhh@101.cat", [])
+
     def test_direccion_no_valida_y_limite(self):
         with self.assertRaises(ValueError):
             correo._destinatarios("esto no es un correo")
