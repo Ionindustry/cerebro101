@@ -64,9 +64,9 @@ class SinPermiso(PermissionError):
 
 # ---- Validación (pura) ----
 
-def limpiar_filtro(f, permitir_vacio: bool = False) -> dict:
-    """Valida el filtro y lo devuelve normalizado (listas sin repetidos). Exige al menos un criterio: un filtro vacío avisaría de todo (salvo una alerta de competencia
-    con competidores concretos, que ya acota por quién gana: `permitir_vacio`)."""
+def limpiar_filtro(f, permitir_vacio: bool = True) -> dict:
+    """Valida el filtro y lo devuelve normalizado (listas sin repetidos). Un filtro vacío es válido: la alerta avisa de todas las licitaciones del evento elegido
+    (el único dato obligatorio de una alerta es el nombre). `permitir_vacio=False` lo exige no vacío."""
     if not isinstance(f, dict):
         raise ErrorAlerta("El filtro debe ser un objeto")
     out: dict = {}

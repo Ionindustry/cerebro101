@@ -178,6 +178,72 @@ class TestFlujo(unittest.TestCase):
         self.assertFalse([c for c in cols if "coste" in c or "precio" in c or "venta" in c])
 
 
+PLIEGO = "Mediciones: 12 ud. de cámara domo PTZ con zoom óptico.\nSuministro de 4 uds de cámara LPR con iluminador IR.\nTotal de 1.500 metros de cable UTP."
+
+
+class TestCantidadesDelPliego(unittest.TestCase):
+    PART = [{"id": 1, "producto": "Hikvision DS-2DE", "parametros": ["Zoom 25x"]}, {"id": 2, "producto": "Milesight MS-TS5511", "parametros": []}]
+
+    def test_verificar_solo_deja_lo_que_figura_en_el_pliego(self):
+        datos = {"cantidades": [
+            {"indice": 0, "cantidad": 12, "cita": "Mediciones: 12 ud. de cámara domo PTZ con zoom óptico."},
+            {"indice": 1, "cantidad": 40, "cita": "Suministro de 4 uds de cámara LPR con iluminador IR."}]}              # la cifra no está en la cita
+        r = P.verificar_cantidades(datos, self.PART, PLIEGO)
+        self.assertEqual({k: v["cantidad"] for k, v in r.items()}, {1: Decimal("12")})
+
+    def test_cita_inventada_o_sin_cantidad_se_descarta(self):
+        datos = {"cantidades": [{"indice": 0, "cantidad": 7, "cita": "Se suministrarán 7 cámaras domo en la sala"}, {"indice": 1, "cantidad": None, "cita": ""}, {"indice": 5, "cantidad": 1, "cita": "x"}, "raro"]}
+        self.assertEqual(P.verificar_cantidades(datos, self.PART, PLIEGO), {})
+        self.assertEqual(P.verificar_cantidades(None, self.PART, PLIEGO), {})
+
+    def test_numeros_con_formato_espanol(self):
+        self.assertIn(Decimal("1500"), P._numeros("Total de 1.500 metros"))
+        self.assertIn(Decimal("2.5"), P._numeros("2,5 m"))
+        d = {"cantidades": [{"indice": 0, "cantidad": 1500, "cita": "Total de 1.500 metros de cable UTP."}]}
+        self.assertEqual(P.verificar_cantidades(d, self.PART, PLIEGO)[1]["cantidad"], Decimal("1500"))
+
+    def test_los_mensajes_no_llevan_costes(self):
+        m = P.mensajes_cantidades(self.PART, PLIEGO)
+        texto = repr(m)
+        self.assertIn("Hikvision DS-2DE", texto)
+        self.assertNotIn("coste", m[1]["content"].lower())
+
+
+@unittest.skipUnless(URL, "sin CEREBRO_TEST_PG")
+class TestCantidadesFlujo(unittest.TestCase):
+    setUp = TestFlujo.setUp
+    tearDown = TestFlujo.tearDown
+    run_ = TestFlujo.run_
+    tabla = TestFlujo.tabla
+
+    def test_se_guardan_como_sugerencia_y_no_cambian_la_cantidad(self):
+        self.tabla()
+        self.run_(P.proponer(ID, "albert"))
+
+        async def consulta(agente, mensajes, esquema, **kw):
+            self.assertNotIn("coste", repr(mensajes).lower().replace("costes", ""))
+            return {"cantidades": [{"indice": 0, "cantidad": 12, "cita": "Mediciones: 12 ud. de cámara domo PTZ con zoom óptico."}]}, "claude"
+        docs = [{"n": 1, "nombre": "PPT", "paginas": [(1, PLIEGO)]}]
+        with mock.patch.object(X, "_documentos_leidos", mock.AsyncMock(return_value=docs)):
+            d = self.run_(P.proponer_cantidades(ID, consulta=consulta))
+        f = d["partidas"][0]
+        self.assertEqual((f["cantidad"], f["cantidad_pliego"]), (None, "12"))
+        self.assertIn("12 ud", f["cita_pliego"])
+        self.assertEqual(d["cantidades"], {"sugeridas": 1, "sin_dato": 0})
+        d = self.run_(P.ajustar(ID, f["id"], f["cantidad_pliego"], None, "albert"))      # la persona la confirma
+        self.assertEqual(d["partidas"][0]["cantidad"], "12")
+        with self.assertRaises(P.ErrorPartida):                                           # ya no hay partidas sin cantidad
+            with mock.patch.object(X, "_documentos_leidos", mock.AsyncMock(return_value=docs)):
+                self.run_(P.proponer_cantidades(ID, consulta=consulta))
+
+    def test_sin_pliegos_se_dice(self):
+        self.tabla()
+        self.run_(P.proponer(ID, "albert"))
+        with mock.patch.object(X, "_documentos_leidos", mock.AsyncMock(return_value=[])):
+            with self.assertRaises(P.ErrorPartida):
+                self.run_(P.proponer_cantidades(ID))
+
+
 @unittest.skipUnless(URL, "sin CEREBRO_TEST_PG")
 class TestNoSaleALaNube(unittest.TestCase):
     """El coste real nunca viaja a Claude ni a ChatGPT: ni en Costes con «externo» ni en los pasos de memoria."""

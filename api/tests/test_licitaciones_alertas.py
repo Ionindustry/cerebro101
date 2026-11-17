@@ -50,7 +50,7 @@ class TestFiltro(unittest.TestCase):
         self.assertEqual(f["importe_max"], "250000.50")
 
     def test_rechaza_lo_que_el_motor_rechazaria_o_no_se_puede_evaluar(self):
-        malos = [{}, [], "cpv", {"cpv": []}, {"cpv": "72"}, {"cpv": ["7"]}, {"cpv": ["72000000x"]}, {"nuts": ["es51"]}, {"estado": ["rara"]}, {"procedimiento": ["x"]},
+        malos = [[], "cpv", {"cpv": []}, {"cpv": "72"}, {"cpv": ["7"]}, {"cpv": ["72000000x"]}, {"nuts": ["es51"]}, {"estado": ["rara"]}, {"procedimiento": ["x"]},
                  {"q": "a"}, {"q": "x" * 201}, {"q": "a\nb"}, {"importe_min": "abc"}, {"importe_min": "1,5"}, {"importe_min": 5}, {"comprador": ["otra cosa"]},
                  {"orden": "importe"}, {"actualizada_desde": "2026-01-01T00:00:00Z"}, {"cpv": ["72"] * 21 + ["73"]}, {"cpv": [f"{n:02d}" for n in range(10, 31)]}]
         for f in malos:
@@ -101,9 +101,9 @@ class TestFiltro(unittest.TestCase):
         for mal in ("B12345678", ["Seguridad SL"], ["B1234567"], [5], ["x" * 9 + "y"], ["Seguridad"], ["ABCDEFGHI"], ["B12345678"] * 1 + [f"A{n:08d}" for n in range(20)]):
             with self.assertRaises(ErrorAlerta, msg=mal):
                 alertas.limpiar_competidores(mal)
+        self.assertEqual(alertas.limpiar_filtro({}), {})                                            # sin criterios: vale (avisa de todas)
         with self.assertRaises(ErrorAlerta):
-            alertas.limpiar_filtro({})
-        self.assertEqual(alertas.limpiar_filtro({}, permitir_vacio=True), {})
+            alertas.limpiar_filtro({}, permitir_vacio=False)
         ficha = {"adjudicaciones": [{"lote": "1", "resultado": "adjudicado", "adjudicatario": {"nombre": "A", "nif": "b12345678"}, "importes": [{"valor": "10", "impuestos": "con_iva"}, {"valor": "8", "moneda": "EUR", "impuestos": "sin_iva"}]},
                                     {"lote": "2", "resultado": "adjudicado", "adjudicatario": {"nombre": "Sin NIF"}, "importes": []}]}
         self.assertEqual([g["importe"] for g in alertas.ganadores(ficha, ["B12345678"])], ["8"])

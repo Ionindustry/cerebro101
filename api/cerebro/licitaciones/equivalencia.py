@@ -317,9 +317,10 @@ def verificar(datos: dict, textos: dict[str, str], texto_pliego: str = "") -> di
     for i, p in enumerate(parametros):                 # el recomendado de cada parámetro sale de la solución con el menor número de productos; el individual (el mejor de su fila) se conserva
         p["recomendado_individual"] = p["recomendado"]
         p["recomendado"] = sol["asignacion"].get(i, "")
-    cubiertos = sum(1 for p in parametros if p["cubierto"])
+    cubiertos = len(sol["asignacion"])                 # con producto VERIFICADO por el código (los mismos que la solución)
+    por_verificar = sum(1 for i, p in enumerate(parametros) if p["cubierto"] and i not in sol["asignacion"])   # el modelo dice que algún producto cumple, pero el código no pudo comprobarlo
     return {"parametros": parametros, "pendientes": pend, "solucion": {k: v for k, v in sol.items() if k != "asignacion"},
-            "comprobacion": {"parametros": len(parametros), "cubiertos": cubiertos, "sin_cubrir": len(parametros) - cubiertos, "corregidos_por_codigo": corregidas,
+            "comprobacion": {"parametros": len(parametros), "cubiertos": cubiertos, "por_verificar": por_verificar, "sin_cubrir": len(parametros) - cubiertos - por_verificar, "corregidos_por_codigo": corregidas,
                              "degradados_a_sin_datos": degradadas, "sin_verificar": sin_verificar}}
 
 

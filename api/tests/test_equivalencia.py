@@ -98,6 +98,8 @@ class TestVerificar(unittest.TestCase):
         self.assertEqual((c["veredicto"], c["verificado"]), ("supera", False))
         self.assertEqual(r["comprobacion"]["sin_verificar"], 1)
         self.assertEqual(r["parametros"][0]["recomendado"], "")                       # lo no verificado no se recomienda
+        k = r["comprobacion"]                                                          # el recuento no cuenta como cubierto lo que el código no pudo comprobar
+        self.assertEqual((k["cubiertos"], k["por_verificar"], k["sin_cubrir"]), (0, 1, 0))
 
     def test_recomienda_el_que_supera_y_ordena_primero_los_buenos(self):
         datos = dato()
