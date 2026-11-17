@@ -46,11 +46,11 @@ export default function Descubrimiento({ id }) {
       {d?.estado === "error" && <p className="aviso" role="alert">{d.error}</p>}
       {d?.estado === "hecha" && c && (
         <>
-          <p className="meta">Búsqueda del {fechaTexto(d.actualizado)}{d.proveedor ? ` con ${d.proveedor === "claude" ? "Claude" : "ChatGPT"}` : ""}. {c.aviso || `${c.comprobacion?.pistas || 0} pistas`}</p>
+          <p className="meta">Búsqueda del {fechaTexto(d.actualizado)}{d.proveedor ? ` con ${d.proveedor === "claude" ? "Claude" : "ChatGPT"}` : ""}. {c.aviso || `${c.comprobacion?.pistas || 0} pistas`}{c.comprobacion?.ya_en_tarifa ? ` · ${c.comprobacion.ya_en_tarifa} ya están en tus tarifas: repite la tabla de equivalencias para que las use` : ""}</p>
           <ul className="lic-lista">
             {c.pistas.map((p, i) => (
               <li key={i} className="tarjeta lic-item">
-                <span className="lic-fila"><span className="titulo">{[p.marca, p.producto, p.referencia].filter(Boolean).join(" ")}</span><span className="lic-etiqueta">{p.parametro}</span>{p.valor_declarado && <strong>{p.valor_declarado}</strong>}</span>
+                <span className="lic-fila"><span className="titulo">{[p.marca, p.producto, p.referencia].filter(Boolean).join(" ")}</span><span className="lic-etiqueta">{p.parametro}</span>{p.en_tarifa && <span className="lic-etiqueta ok" title="La referencia coincide con un artículo de tus tarifas cargadas">En tu tarifa{p.en_tarifa.proveedor ? ` (${p.en_tarifa.proveedor})` : ""}</span>}{c.tarifas_leidas && !p.en_tarifa && <span className="lic-etiqueta" title="No hay ningún artículo con esa referencia en las tarifas cargadas">No está en tu tarifa</span>}{p.valor_declarado && <strong>{p.valor_declarado}</strong>}</span>
                 <span className="meta">{p.fuente} · <a href={p.url} target="_blank" rel="noopener noreferrer nofollow">{p.dominio}</a>{p.valor_declarado ? "" : " · valor sin comprobar en el resumen"}</span>
                 {p.nota && <span className="meta">{p.nota}</span>}
                 {p.dominio_autorizado && p.es_pdf

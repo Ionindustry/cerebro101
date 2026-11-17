@@ -140,6 +140,23 @@ def verificar(datos: dict, resultados: list[dict], hosts: list[str]) -> dict:
             "comprobacion": {"pistas": len(pistas), "descartadas": descartadas, "valores_sin_comprobar": sin_comprobar}}
 
 
+def marcar_en_tarifa(contenido: dict, ofertas: dict, emparejar) -> dict:
+    """Cruza cada pista con las tarifas cargadas (por la referencia, que decide el código, nunca el modelo): `en_tarifa` = {codigo, proveedor, ref} si el producto YA está en una tarifa, o None si no está.
+    No lleva precios: la tarifa es confidencial. Una pista que sí está en la tarifa es un hueco de la tabla (debería haberla encontrado): se cuenta aparte. Pura."""
+    ya = 0
+    for p in contenido.get("pistas", []):
+        codigo = emparejar(" ".join(x for x in (p.get("producto"), p.get("marca"), p.get("referencia")) if x), ofertas)
+        if codigo and codigo in ofertas:
+            o = next(iter(ofertas[codigo].values()))
+            p["en_tarifa"] = {"codigo": codigo, "proveedor": str(o.get("proveedor") or "")[:80], "ref": str(o.get("ref") or "")[:60]}
+            ya += 1
+        else:
+            p["en_tarifa"] = None
+    contenido.setdefault("comprobacion", {})["ya_en_tarifa"] = ya
+    contenido["tarifas_leidas"] = True
+    return contenido
+
+
 # ---------------------------------------------------------------- guardado y estado
 MINUTOS_EN_CURSO = 15       # una búsqueda dura unos minutos; pasado esto sin cerrarse, el worker se reinició a mitad (o cayó) y la fila no se cerrará nunca
 INTERRUMPIDA = "La búsqueda se interrumpió (el servicio se reinició mientras buscaba). Pulsa «Repetir la búsqueda»."
@@ -226,6 +243,12 @@ async def ejecutar(motor_id: str, titulo: str, modelo: str = "auto", buscar=None
                                                                             preferido=X.proveedor_preferido("descubrimiento", modelo))
         contenido = verificar(datos, resultados, fichas.configuracion()["hosts"])
         contenido["consultas"] = [c["consulta"] for c in consultas]
+        try:      # cruce con las tarifas cargadas: ¿esa referencia ya la tengo? (si no se pueden leer, la búsqueda sigue sin el cruce)
+            from . import partidas as PA
+            ofertas_tarifa, _cfg = await PA._material()
+            marcar_en_tarifa(contenido, ofertas_tarifa, PA.emparejar)
+        except Exception as e:      # noqa: BLE001
+            log.info("descubrimiento: no se ha podido cruzar con las tarifas (%s)", type(e).__name__)
         await _cerrar(motor_id, "hecha", contenido, "", proveedor, await externos.modelo_elegido(proveedor))
         return {"estado": "hecha"}
     except externos.ErrorExterno as e:

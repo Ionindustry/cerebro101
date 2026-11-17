@@ -26,6 +26,16 @@ RES = [{"id": "W1", "parametro": "Alcance IR", "titulo": "Milesight MS-C8 · IR 
 
 
 class TestPuros(unittest.TestCase):
+    def test_cada_pista_se_cruza_con_las_tarifas_y_no_lleva_precios(self):
+        from cerebro.licitaciones import partidas as PA
+        ofertas = {"VT-1": {"lista": {"ref": "DS-2CD2143G2-I", "marca": "Hikvision", "proveedor": "Visiotech", "coste": 120}}}
+        c = {"pistas": [{"producto": "Cámara bala 4MP", "marca": "Hikvision", "referencia": "DS-2CD2143G2-I"}, {"producto": "Domo", "marca": "Axis", "referencia": "P3245-LVE"}], "comprobacion": {"pistas": 2}}
+        r = D.marcar_en_tarifa(c, ofertas, PA.emparejar)
+        self.assertEqual(r["pistas"][0]["en_tarifa"], {"codigo": "VT-1", "proveedor": "Visiotech", "ref": "DS-2CD2143G2-I"})
+        self.assertIsNone(r["pistas"][1]["en_tarifa"])
+        self.assertEqual((r["comprobacion"]["ya_en_tarifa"], r["tarifas_leidas"]), (1, True))
+        self.assertNotIn("120", repr(r["pistas"]))                                        # la tarifa es confidencial: ni el coste
+
     def test_solo_se_busca_lo_que_no_esta_cubierto_y_con_tope(self):
         ps = [{"parametro": "A", "valor_exigido": "1 m", "cubierto": True}] + [{"parametro": f"P{i}", "valor_exigido": "2 MP", "requisito": "[R1] Cámara domo", "cubierto": False} for i in range(10)]
         c = D.consultas_de(ps, "Titulo")
