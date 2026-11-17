@@ -79,6 +79,18 @@ class TestEvidencia(unittest.TestCase):
         self.assertEqual([e["origen"] for e in r], ["ficha", "lista de proveedor"])             # la ficha repetida se cuenta una vez
         self.assertNotIn("300", C.texto_de_evidencias(r))
 
+    def test_las_fichas_no_se_comen_el_cupo_de_las_lineas_de_tarifa(self):
+        n = iter(range(1000))
+
+        async def buscar(q, dep, sens, k):
+            return [{"titulo": f"Ficha {next(n)}", "fuente": "x.pdf", "texto": "Texto de ficha " + "a" * 900} for _ in range(3)]
+
+        async def vectoriales(consultas):
+            return [{"ref": "DS-2DE4A425IWG-E", "desc": "Cámara PTZ IP de 4 Mpx", "similitud": 0.64}]
+        r = asyncio.run(C.reunir_evidencias([f"requisito {i}" for i in range(15)], buscar=buscar, vectoriales=vectoriales, lineas=lambda: asyncio.sleep(0, result=[])))
+        self.assertIn("DS-2DE4A425IWG-E", [e["titulo"] for e in r])
+        self.assertLessEqual(sum(e["origen"] == "ficha" for e in r), C.MAX_FICHAS)
+
     def test_si_falla_la_base_de_conocimiento_se_sigue_con_las_listas(self):
         async def buscar(*a):
             raise OSError("sin embeddings")
