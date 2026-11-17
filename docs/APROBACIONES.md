@@ -6,6 +6,9 @@
 (se vuelve a exigir poniendo `[responsable_departamento, direccion]` en el nivel que se quiera) y sigue impidiendo que una misma persona firme dos veces.
 Todo, también lo más delicado (nivel «doble»), se puede firmar en el panel o por voz (`voz_permitida` en `niveles`).
 
+**Decisión (auditoría del Compilador de Pliegos, punto 11):** por ahora **una sola firma**, la de Dirección, también para presentar una licitación; no se añaden firmantes ni
+esquemas nuevos. Una prueba (`test_politica_firma_unica.py`) fija que `simple` y `doble` piden solo `direccion`: si algún día se quiere doble firma, se cambia el YAML y esa prueba a la vez, a conciencia.
+
 ## Qué necesita firma
 La firma depende de **la operación**, no del agente (`supervision` en `config/politicas_aprobacion.yaml`):
 - **Estándar:** lecturas, consultas, borradores, propuestas, cálculos… No piden firma, se ejecutan.
