@@ -45,7 +45,7 @@ _PROHIBIDO = [r"https?:", r"www\.", r"\S+@\S+\.\S+", r"```", r"[{}<>]", r"\$\(",
               r"ignora", r"olvida", r"desobedec", r"anula", r"salta(te)?\b", r"omite\b.*(control|aprobacion|revision|norma|regla)", r"instrucciones? (anterior|previa|del sistema)", r"prompt", r"jailbreak",
               r"contrasena", r"password", r"\btoken\b", r"api[ _-]?key", r"secreto", r"credencial", r"clave (privada|de acceso|api)",
               r"sin (aprobacion|revision|permiso|autorizacion|firma|confirmacion)", r"no (pidas|esperes|requieras) (aprobacion|revision|permiso|confirmacion)", r"auto ?aprueb", r"aprueba (tu|el|la) (propio|propia|oferta|seccion)",
-              r"\bfirma(r|s)? (tu|el|la|por)\b", r"envia(r)? (el|la|los|las|un|una) (oferta|correo|email|mensaje)", r"borra\b|elimina\b|vacia\b", r"fija(r)? (el )?precio", r"precio definitivo",
+              r"\bfirma(r|s)? (tu|el|la|por)\b", r"envia(r)? (el|la|los|las|un|una) (oferta|correo|email|mensaje)", r"borra\b|elimina\b|vacia (la|el|las|los|toda|todo)\b", r"fija(r)? (el )?precio", r"precio definitivo",
               r"desactiva", r"modo (admin|desarrollador|dios)", r"eres ahora", r"actua como", r"finge"]
 _PROHIBIDO_RE = re.compile("|".join(f"(?:{p})" for p in _PROHIBIDO))
 
@@ -78,11 +78,14 @@ def _nombre(p: dict) -> str:
     return f"{h}.{o}" if _IDENT.match(h) and _IDENT.match(o) else "?"
 
 
-def analizar(pasos: list[dict] | None, guardo: bool = False) -> list[tuple[str, str]]:
-    """Los patrones de fallo que muestran las llamadas hechas: [(id_del_patron, leccion)]. `guardo`: si el agente llegó a guardar algo. Pura: mismas llamadas, mismas lecciones."""
+def analizar(pasos: list[dict] | None, guardo: bool = False, respuesta: str = "") -> list[tuple[str, str]]:
+    """Los patrones de fallo que muestran las llamadas hechas: [(id_del_patron, leccion)]. `guardo`: si el agente llegó a guardar algo; `respuesta`: lo que contestó al final. Pura: mismas llamadas,
+    mismas lecciones."""
     pasos = [p for p in (pasos or []) if isinstance(p, dict)]
     if not pasos:
-        return []
+        # Contestó sin haber llamado a ninguna herramienta (o con un texto vacío): no trabajó. Es el fallo típico de un modelo pequeño con demasiado contexto.
+        return [("sin_llamadas", "No contestes sin trabajar: empieza leyendo la oferta con «ofertas» (operación «leer») y guarda cada sección con «guardar_seccion». Aunque te falten datos, "
+                                 "guarda un borrador con [PENDIENTE: lo que falta]; una respuesta vacía no sirve.")] if not guardo else []
     nombres = [_nombre(p) for p in pasos]
     out: list[tuple[str, str]] = []
     repetidas = sum(1 for a, b in zip(nombres, nombres[1:]) if a == b)

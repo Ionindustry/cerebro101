@@ -377,7 +377,7 @@ async def _reintentar_con_lecciones(estado: dict | None, invocar, agente: str, p
         for intento in range(1, L.MAX_REINTENTOS + 1):
             if len(previas) >= len(sel) or (estado or {}).get("error"):
                 break
-            aprendidas = L.analizar((estado or {}).get("pasos"), guardo=bool(previas))
+            aprendidas = L.analizar((estado or {}).get("pasos"), guardo=bool(previas), respuesta=_respuesta(estado))
             if intento > 1 or not aprendidas:                  # el catálogo no bastó (o no reconoció nada): el modelo local propone una lección nueva, que pasa por el mismo guardarraíl
                 nueva = await L.reflexionar(agente, (estado or {}).get("pasos"))
                 if nueva and nueva[0] not in {p for p, _t in aprendidas}:
@@ -479,6 +479,10 @@ async def _paso_escritor(ejecucion_id: int, indice: int, e: dict, defin: dict, i
         if defin["id"] == "costes":
             from . import partidas as partidas_mod
             costes_equipos = await partidas_mod.texto_para(motor_id)
+        if defin["id"] == "costes" and not costes_equipos:              # sin partidas calculadas (la solución aún no tiene productos) el agente no tiene qué costear y contestaba vacío
+            costes_equipos = ("Equipos y coste real: todavía NO hay partidas calculadas (la tabla de equivalencias no ha fijado productos). No te quedes sin escribir: guarda la sección con la ESTRUCTURA de "
+                              "la justificación (partidas previstas: materiales, mano de obra, licencias, mantenimiento, gastos generales y riesgos; criterios de cálculo; por qué el precio es viable según el pliego) "
+                              "y marca [PENDIENTE: cifra] cada importe que deba poner una persona. NO inventes ninguna cifra.")
         peticion = peticion_escritor(defin, motor_id, titulo, sel) + adicional + (f"\n\n{costes_equipos}" if costes_equipos else "")
         estado = await invocar(defin["agente"], peticion)
         estado = await _reintentar_con_lecciones(estado, invocar, defin["agente"], peticion, motor_id, sel)

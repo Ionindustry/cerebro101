@@ -322,6 +322,29 @@ class TestPrepararEvidencias(unittest.TestCase):
             _t, _s, motivos = asyncio.run(C.preparar_evidencias([{"id": "P1", "origen": "ficha", "titulo": "t", "fuente": "", "texto": "x"}]))
         self.assertEqual(motivos, ["categoría especial de datos: salud"])
 
+    def test_una_linea_que_no_se_puede_anonimizar_se_descarta_sola_y_no_bloquea_a_las_demas(self):
+        async def preparar(mensajes):
+            mal = [m for m in mensajes if "DIRECCIÓN POSTAL" in m["content"]]
+            return mensajes, {"s": 1}, (["tras sustituir quedan datos reconocibles: DIRECCION"] if mal else [])
+
+        evid = [{"id": "P1", "origen": "lista de proveedor", "titulo": "DOMO-1", "fuente": "", "texto": "Cámara domo PTZ 4 MP"},
+                {"id": "P2", "origen": "lista de proveedor", "titulo": "RARO", "fuente": "", "texto": "Soporte, DIRECCIÓN POSTAL de la fábrica"},
+                {"id": "P3", "origen": "lista de proveedor", "titulo": "SRV-1", "fuente": "", "texto": "Servidor de grabación 1U"}]
+        with mock.patch.object(C.externos, "_preparar", preparar):
+            ok, texto, _s, motivos = asyncio.run(C.preparar_evidencias_utiles(evid))
+        self.assertEqual(motivos, [])
+        self.assertEqual([e["id"] for e in ok], ["P1", "P3"])
+        self.assertIn("DOMO-1", texto)
+        self.assertNotIn("DIRECCIÓN POSTAL", texto)                       # lo descartado no sale NUNCA
+
+    def test_si_ninguna_se_puede_anonimizar_se_sigue_omitiendo(self):
+        async def preparar(mensajes):
+            return mensajes, {}, ["categoría especial de datos: salud"]
+        with mock.patch.object(C.externos, "_preparar", preparar):
+            ok, texto, _s, motivos = asyncio.run(C.preparar_evidencias_utiles([{"id": "P1", "origen": "ficha", "titulo": "t", "fuente": "", "texto": "x"}, {"id": "P2", "origen": "ficha", "titulo": "u", "fuente": "", "texto": "y"}]))
+        self.assertEqual((ok, texto), ([], ""))
+        self.assertEqual(motivos, ["categoría especial de datos: salud"])
+
 
 if __name__ == "__main__":
     unittest.main()
