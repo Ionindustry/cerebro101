@@ -1,0 +1,60 @@
+{
+ "descripcion": "Secciones de una oferta con y sin fuga del precio fuera del sobre económico",
+ "casos": [
+  {
+   "secciones": [
+    {
+     "sobre": "tecnico",
+     "clave": "memoria",
+     "titulo": "Memoria técnica",
+     "contenido": "Plan de trabajo en 12 semanas con equipo de 6 personas."
+    },
+    {
+     "sobre": "economico",
+     "clave": "precio",
+     "titulo": "Oferta económica",
+     "contenido": "Precio de la oferta: 1.234.567,89 euros. Baja del 12 %."
+    }
+   ],
+   "fugas": []
+  },
+  {
+   "secciones": [
+    {
+     "sobre": "tecnico",
+     "clave": "memoria",
+     "titulo": "Memoria técnica",
+     "contenido": "Nuestro precio ofertado es de 98.500 € IVA excluido, con una baja del 14,5 % sobre el presupuesto."
+    }
+   ],
+   "fugas": [
+    "precio",
+    "baja"
+   ]
+  },
+  {
+   "secciones": [
+    {
+     "sobre": "administrativo",
+     "clave": "otros",
+     "titulo": "Otros documentos",
+     "contenido": "Se ofrecen mejoras sin coste para la administración, valoradas mediante fórmula."
+    }
+   ],
+   "fugas": [
+    "mejora_automatica"
+   ]
+  },
+  {
+   "secciones": [
+    {
+     "sobre": "tecnico",
+     "clave": "solvencia",
+     "titulo": "Solvencia",
+     "contenido": "Hemos ejecutado obras por importe de 2.400.000 € en los últimos cinco años."
+    }
+   ],
+   "fugas": []
+  }
+ ]
+}

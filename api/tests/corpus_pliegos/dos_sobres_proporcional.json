@@ -1,0 +1,16 @@
+{
+ "documentos": [
+  {
+   "n": 1,
+   "nombre": "PCAP.docx",
+   "texto": "Pliego de cláusulas administrativas particulares. Se presentarán dos sobres: archivo electrónico 1 (administrativo y técnico) y archivo electrónico 2 (oferta económica). La puntuación del precio, 70 puntos, será proporcional a la baja: la oferta con mayor baja recibe la máxima puntuación y las demás P = 70 × baja de la oferta / mayor baja."
+  }
+ ],
+ "esperado": {
+  "sobres": 2,
+  "via": "explicito",
+  "formula": "proporcional_baja",
+  "puntos_precio": 70.0,
+  "rectificaciones": 0
+ }
+}

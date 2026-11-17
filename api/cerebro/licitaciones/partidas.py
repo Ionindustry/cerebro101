@@ -347,6 +347,51 @@ def verificar_cantidades(datos: dict | None, partidas: list[dict], texto_pliego:
     return out
 
 
+_UNIDADES = {"ud", "uds", "u", "unidad", "unidades", "m", "ml", "m2", "m3", "mes", "meses", "h", "kg", "l", "pa", "lote", "conjunto", "pieza", "piezas"}
+_PALABRA = re.compile(r"[a-z0-9]{3,}")
+_VACIAS = {"con", "sin", "para", "por", "del", "los", "las", "una", "uno", "tipo", "incluso", "segun", "mas", "que"}
+
+
+def _tokens(t: str) -> set[str]:
+    return {w for w in _PALABRA.findall(PL.normalizar(t or "")) if w not in _VACIAS and not w.isdigit()}
+
+
+def cantidades_de_tablas(partidas: list[dict], texto: str) -> dict[int, dict]:
+    """Las filas de tabla del pliego (el extractor las deja como «descripción | ud | cantidad»: mediciones, cuadros de precios, listas de equipos) que describen cada partida. El código
+    pone la cifra, no el modelo: la fila debe cubrir buena parte de las palabras de la descripción y llevar una cantidad junto a su unidad. Si dos filas distintas encajan con cifras
+    distintas, no se propone nada (hay que mirarlo). Devuelve {id de partida: {cantidad, cita}}. Pura."""
+    filas = []
+    for linea in str(texto or "").splitlines():
+        celdas = [c.strip() for c in linea.split(" | ")]
+        if len(celdas) < 3:
+            continue
+        desc = max(celdas, key=lambda c: len(_tokens(c)))
+        q, hay_unidad = None, False
+        for i, c in enumerate(celdas):
+            if PL.normalizar(c) in _UNIDADES:
+                hay_unidad = True
+                for v in (celdas[i + 1: i + 2] + celdas[i - 1: i]) if i else celdas[i + 1: i + 2]:
+                    n = _numeros(v)
+                    if len(n) == 1 and v.strip().replace(".", "").replace(",", "").isdigit():
+                        q = next(iter(n))
+                        break
+            if q is not None:
+                break
+        if q is not None and q > 0 and hay_unidad:
+            filas.append((_tokens(desc), q, " | ".join(celdas)[:300]))
+    out: dict[int, dict] = {}
+    for p in partidas:
+        mios = _tokens(p.get("producto", "")) | {w for x in (p.get("parametros") or [])[:6] for w in _tokens(x)}
+        buenas = []
+        for toks, q, cita in filas:
+            comunes = toks & mios
+            if toks and len(comunes) >= 2 and len(comunes) / len(toks) >= 0.6:
+                buenas.append((q, cita))
+        if buenas and len({q for q, _ in buenas}) == 1:
+            out[p["id"]] = {"cantidad": buenas[0][0], "cita": buenas[0][1]}
+    return out
+
+
 async def proponer_cantidades(motor_id: str, modelo: str = "auto", consulta=None) -> dict:
     """Pide a Claude o ChatGPT (el pliego es público; no se envía ningún coste) las cantidades que figuran en el pliego para las partidas sin cantidad y las guarda como SUGERENCIA con su cita.
     No cambia la cantidad: la confirma una persona. {partidas, totales, aviso, cantidades: {sugeridas, sin_dato}}."""
@@ -358,13 +403,18 @@ async def proponer_cantidades(motor_id: str, modelo: str = "auto", consulta=None
     docs = await X._documentos_leidos(motor_id)
     if not docs:
         raise ErrorPartida("No hay pliegos descargados con texto: pulsa «Analizar los pliegos»")
-    pliego, _avisos = X.texto_de_pliegos(docs, int(X.configuracion()["max_caracteres_pliego"]))
     texto_plano = "\n".join(t for d in docs for _n, t in d["paginas"])
-    try:
-        datos, _prov = await (consulta or externos.consultar_publico)(Q.AGENTE, mensajes_cantidades(pend, pliego), ESQUEMA_CANTIDADES, max_tokens=3000, timeout=240, preferido=X.proveedor_preferido("equivalencia", modelo))
-    except externos.ErrorExterno as e:
-        raise ErrorPartida(f"No se han podido pedir las cantidades al modelo: {str(e)[:200]}") from None
-    sug = verificar_cantidades(datos, pend, texto_plano)
+    sug = cantidades_de_tablas(pend, texto_plano)      # primero las filas de tabla del pliego (cifra y cita del código); al modelo, solo lo que falta
+    resto = [p for p in pend if p["id"] not in sug]
+    if resto:
+        pliego, _avisos = X.texto_de_pliegos(docs, int(X.configuracion()["max_caracteres_pliego"]))
+        try:
+            datos, _prov = await (consulta or externos.consultar_publico)(Q.AGENTE, mensajes_cantidades(resto, pliego), ESQUEMA_CANTIDADES, max_tokens=3000, timeout=240, preferido=X.proveedor_preferido("equivalencia", modelo))
+        except externos.ErrorExterno as e:
+            if not sug:
+                raise ErrorPartida(f"No se han podido pedir las cantidades al modelo: {str(e)[:200]}") from None
+            datos = None
+        sug.update(verificar_cantidades(datos, resto, texto_plano))
     async with await O._conectar() as conn:
         async with conn.transaction():
             for p in pend:

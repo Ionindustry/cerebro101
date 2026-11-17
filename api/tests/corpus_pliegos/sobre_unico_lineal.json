@@ -1,0 +1,17 @@
+{
+ "documentos": [
+  {
+   "n": 1,
+   "nombre": "Pliego administrativo.pdf",
+   "texto": "Cláusulas administrativas particulares. La oferta se presenta en un único sobre electrónico. Criterio precio: hasta 60 puntos. Se puntuará de forma lineal la baja hasta un máximo del 20 % de baja; a partir de ese umbral no se puntúa más."
+  }
+ ],
+ "esperado": {
+  "sobres": 1,
+  "via": "explicito",
+  "formula": "lineal_umbral",
+  "puntos_precio": 60.0,
+  "baja_tope_pct": 20.0,
+  "rectificaciones": 0
+ }
+}

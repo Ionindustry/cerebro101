@@ -1,0 +1,16 @@
+{
+ "documentos": [
+  {
+   "n": 1,
+   "nombre": "PCAP_obras_centro_civico.pdf",
+   "texto": "PLIEGO DE CLÁUSULAS ADMINISTRATIVAS PARTICULARES. Cláusula 12. Presentación de proposiciones. Las empresas presentarán tres sobres: Sobre A (documentación administrativa), Sobre B (criterios sujetos a juicio de valor) y Sobre C (proposición económica y criterios evaluables mediante fórmulas). Cláusula 15. Criterios de adjudicación. El precio se valorará con 51 puntos mediante proporcionalidad inversa: P = 51 × (1 − r) / (1 − b), siendo b la baja de la oferta y r la baja de la oferta más económica."
+  }
+ ],
+ "esperado": {
+  "sobres": 3,
+  "via": "explicito",
+  "formula": "inversa",
+  "puntos_precio": 51.0,
+  "rectificaciones": 0
+ }
+}

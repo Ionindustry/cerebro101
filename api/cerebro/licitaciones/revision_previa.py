@@ -8,7 +8,7 @@ o con menos calidad (faltan datos de la sociedad, no hay DEUC, no hay pliegos o 
 """
 from __future__ import annotations
 
-from . import aptitud, embudo, empresa, ofertas, plantillas, pliegos, redaccion
+from . import aptitud, embudo, empresa, ofertas, plantillas, pliegos, pliegos_sombra, redaccion
 
 
 def _it(nivel: str, texto: str) -> dict:
@@ -101,11 +101,13 @@ async def _oferta(motor_id: str, deps: dict) -> list[dict]:
 async def revisar(motor_id: str, **sustituciones) -> dict:
     """La revisión previa de una licitación. `sustituciones` permite cambiar de dónde salen los datos (para las pruebas)."""
     deps = {"ficha": plantillas.ficha_del_motor, "elegir": empresa.elegir, "claves": plantillas.claves_disponibles, "deuc": empresa.deuc_base,
-            "documentos": pliegos.documentos, "requisitos": pliegos.requisitos, "oferta": lambda m: ofertas.leer(m, con_contenido=False), "ejecucion": redaccion.ultima, **sustituciones}
+            "documentos": pliegos.documentos, "requisitos": pliegos.requisitos, "oferta": lambda m: ofertas.leer(m, con_contenido=False), "ejecucion": redaccion.ultima, "sombra": pliegos_sombra.revisar_licitacion, **sustituciones}
     ficha, i_ficha = await _ficha(motor_id, deps)
     secciones = [("ficha", "Ficha en el motor", i_ficha), ("sociedad", "Sociedad que presenta la oferta (ERP)", await _sociedad(motor_id, ficha, deps)),
                  ("pliegos", "Pliegos", await _pliegos(motor_id, deps)), ("requisitos", "Requisitos y aptitud según el perfil de la empresa", await _requisitos(motor_id, deps)),
                  ("oferta", "Oferta y última pasada de los agentes", await _oferta(motor_id, deps))]
+    if pliegos_sombra.activo():      # modo sombra: solo informa (interruptor PLIEGOS_ANALISIS_SOMBRA, apagado por defecto)
+        secciones.append(("sombra", "Análisis en sombra de los pliegos (sobres, precio fuera del sobre económico, rectificaciones, fórmula)", await deps["sombra"](motor_id)))
     todos = [i for _, _, items in secciones for i in items]
     bloqueos, avisos = sum(1 for i in todos if i["nivel"] == "bloqueo"), sum(1 for i in todos if i["nivel"] == "aviso")
     return {"licitacion": motor_id, "secciones": [{"id": a, "titulo": b, "items": c} for a, b, c in secciones], "bloqueos": bloqueos, "avisos": avisos,
