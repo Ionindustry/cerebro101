@@ -383,7 +383,7 @@ async def preparar(motor_id: str, titulo: str, ficha: dict, modelo: str = "auto"
         evid = await C.reunir_evidencias(consultas, buscar=buscar, lineas=lineas)
         if not evid:
             return {"estado": "omitida", "resumen": "Sin tabla de equivalencias: no hay evidencia de producto (fichas técnicas ni listas de proveedores relacionadas). Carga las fichas técnicas."}
-        bloque, sesion, motivos = await C.preparar_evidencias(evid)
+        evid, bloque, sesion, motivos = await C.preparar_evidencias_utiles(evid)         # solo lo que sale: lo que no se puede anonimizar se descarta, no bloquea
         if motivos:
             return {"estado": "omitida", "resumen": "Sin tabla de equivalencias: los datos de producto no se pueden anonimizar con garantías, así que no salen a la nube (" + "; ".join(motivos)[:150] + ")."}
         pliego, avisos = X.texto_de_pliegos(docs, int(X.configuracion()["max_caracteres_pliego"]))

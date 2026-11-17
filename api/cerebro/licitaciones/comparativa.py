@@ -205,9 +205,29 @@ async def preparar_evidencias(evid: list[dict]) -> tuple[str, dict, list[str]]:
     """La evidencia lista para enviar: (texto, sesión de anonimización, motivos por los que no se puede enviar). Cada fragmento pasa por la comprobación POR SEPARADO: el límite de
     `max_caracteres` (4.000, config/anonimizacion.yaml) es por texto, y la evidencia entera (hasta MAX_CARACTERES_EVIDENCIA) lo superaba en cuanto había varios candidatos, con lo que no salía
     ninguna. El total sigue acotado por MAX_CARACTERES_EVIDENCIA y la sesión es la misma para todos (la misma etiqueta para el mismo dato, y se deshace en la respuesta)."""
+    _ok, texto, sesion, motivos = await preparar_evidencias_utiles(evid)
+    return texto, sesion, motivos
+
+
+async def preparar_evidencias_utiles(evid: list[dict]) -> tuple[list[dict], str, dict, list[str]]:
+    """Como `preparar_evidencias`, pero una línea que no se puede anonimizar con garantías (p. ej. una descripción de producto con algo que parece una dirección postal) NO bloquea a las demás: se
+    descarta solo esa, se anota en el log y lo que queda sale igualmente. Lo que no se puede anonimizar no sale NUNCA. Devuelve (evidencias que sí van, texto, sesión, motivos); `motivos` solo
+    viene lleno si no queda ninguna evidencia utilizable. Primero se prueba todo junto (lo normal); solo si falla se comprueba una a una."""
     partes = [{"role": "user", "content": f"[{e['id']}] ({e['origen']}) {e['titulo']}\n{e['texto']}"} for e in evid]
     limpios, sesion, motivos = await externos._preparar(partes)
-    return "\n\n".join(m["content"] for m in limpios), sesion, motivos
+    if not motivos:
+        return list(evid), "\n\n".join(m["content"] for m in limpios), sesion, motivos
+    buenas = []
+    for e, parte in zip(evid, partes):
+        _l, _s, m = await externos._preparar([parte])
+        if m:
+            log.warning("comparativa: la evidencia %s (%s) no se puede anonimizar con garantías y no sale a la nube: %s", e["id"], e.get("titulo"), "; ".join(m)[:150])
+        else:
+            buenas.append((e, parte))
+    if not buenas:
+        return [], "", {}, motivos
+    limpios, sesion, motivos = await externos._preparar([p for _e, p in buenas])
+    return [e for e, _p in buenas], "\n\n".join(m["content"] for m in limpios), sesion, motivos
 
 
 # ---- El prompt ----
@@ -356,7 +376,7 @@ async def preparar(motor_id: str, titulo: str, ficha: dict, modelo: str = "auto"
         if not evid:
             return {"estado": "omitida", "resumen": "Sin comparativa: no hay evidencia de producto (fichas técnicas en la base de conocimiento ni listas de proveedores relacionadas). "
                                                       "Carga las fichas técnicas de los productos para poder comparar; no se compara sin datos."}
-        bloque, sesion, motivos = await preparar_evidencias(evid)
+        evid, bloque, sesion, motivos = await preparar_evidencias_utiles(evid)           # solo lo que sale: lo que no se puede anonimizar se descarta, no bloquea
         if motivos:
             log.info("comparativa: la evidencia de producto no se envía (%s)", "; ".join(motivos))
             return {"estado": "omitida", "resumen": "Sin comparativa: los datos de producto no se pueden anonimizar con garantías, así que no salen a la nube (" + "; ".join(motivos)[:150] + ")."}
