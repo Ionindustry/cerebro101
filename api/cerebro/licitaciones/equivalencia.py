@@ -332,11 +332,11 @@ async def preparar(motor_id: str, titulo: str, ficha: dict, modelo: str = "auto"
         evid = await C.reunir_evidencias(consultas, buscar=buscar, lineas=lineas)
         if not evid:
             return {"estado": "omitida", "resumen": "Sin tabla de equivalencias: no hay evidencia de producto (fichas técnicas ni listas de proveedores relacionadas). Carga las fichas técnicas."}
-        limpios, sesion, motivos = await externos._preparar([{"role": "user", "content": C.texto_de_evidencias(evid)}])
+        bloque, sesion, motivos = await C.preparar_evidencias(evid)
         if motivos:
             return {"estado": "omitida", "resumen": "Sin tabla de equivalencias: los datos de producto no se pueden anonimizar con garantías, así que no salen a la nube (" + "; ".join(motivos)[:150] + ")."}
         pliego, avisos = X.texto_de_pliegos(docs, int(X.configuracion()["max_caracteres_pliego"]))
-        mensajes = construir_mensajes(titulo, X.organismo_de(ficha), pliego, texto_reqs, limpios[0]["content"], F.guia(texto_reqs + "\n" + pliego), REF.texto_para_modelo(referencias))
+        mensajes = construir_mensajes(titulo, X.organismo_de(ficha), pliego, texto_reqs, bloque, F.guia(texto_reqs + "\n" + pliego), REF.texto_para_modelo(referencias))
         preferido = X.proveedor_preferido("equivalencia", modelo)
         datos, proveedor = await (consulta or externos.consultar_publico)(AGENTE, mensajes, ESQUEMA, max_tokens=int(X.configuracion()["max_tokens"]), timeout=300, preferido=preferido)
         datos = anon.desanonimizar(datos, sesion) if sesion else datos
