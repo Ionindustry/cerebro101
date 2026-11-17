@@ -282,5 +282,34 @@ class TestFlujo(unittest.TestCase):
             main.app.dependency_overrides.clear()
 
 
+class TestPrepararEvidencias(unittest.TestCase):
+    def test_cada_fragmento_pasa_la_comprobacion_por_separado_no_el_bloque_entero(self):
+        """El límite de 4.000 caracteres de la anonimización es por texto: 12 fragmentos de 1.000 suman más y deben poder salir igualmente."""
+        recibidos = []
+
+        async def preparar(mensajes):
+            recibidos.append([len(m["content"]) for m in mensajes])
+            motivos = ["texto demasiado largo"] if any(len(m["content"]) > 4000 for m in mensajes) else []
+            return mensajes, {"x": 1}, motivos
+
+        evid = [{"id": f"P{i}", "origen": "lista de proveedor", "titulo": f"REF-{i}", "fuente": "", "texto": "cámara bullet 4 MP " * 50} for i in range(1, 13)]
+        with mock.patch.object(C.externos, "_preparar", preparar):
+            texto, sesion, motivos = asyncio.run(C.preparar_evidencias(evid))
+        self.assertEqual(motivos, [])
+        self.assertEqual(len(recibidos[0]), 12)                         # un mensaje por fragmento
+        self.assertGreater(len(texto), 4000)                            # el total supera el límite que antes lo bloqueaba entero
+        self.assertEqual(sesion, {"x": 1})
+        for i in range(1, 13):
+            self.assertIn(f"[P{i}] (lista de proveedor) REF-{i}", texto)
+
+    def test_si_un_fragmento_no_se_puede_anonimizar_no_sale_nada(self):
+        async def preparar(mensajes):
+            return mensajes, {}, ["categoría especial de datos: salud"]
+
+        with mock.patch.object(C.externos, "_preparar", preparar):
+            _t, _s, motivos = asyncio.run(C.preparar_evidencias([{"id": "P1", "origen": "ficha", "titulo": "t", "fuente": "", "texto": "x"}]))
+        self.assertEqual(motivos, ["categoría especial de datos: salud"])
+
+
 if __name__ == "__main__":
     unittest.main()

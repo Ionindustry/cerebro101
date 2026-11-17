@@ -199,6 +199,15 @@ def texto_de_evidencias(evid: list[dict]) -> str:
     return "\n\n".join(f"[{e['id']}] ({e['origen']}) {e['titulo']}\n{e['texto']}" for e in evid)
 
 
+async def preparar_evidencias(evid: list[dict]) -> tuple[str, dict, list[str]]:
+    """La evidencia lista para enviar: (texto, sesión de anonimización, motivos por los que no se puede enviar). Cada fragmento pasa por la comprobación POR SEPARADO: el límite de
+    `max_caracteres` (4.000, config/anonimizacion.yaml) es por texto, y la evidencia entera (hasta MAX_CARACTERES_EVIDENCIA) lo superaba en cuanto había varios candidatos, con lo que no salía
+    ninguna. El total sigue acotado por MAX_CARACTERES_EVIDENCIA y la sesión es la misma para todos (la misma etiqueta para el mismo dato, y se deshace en la respuesta)."""
+    partes = [{"role": "user", "content": f"[{e['id']}] ({e['origen']}) {e['titulo']}\n{e['texto']}"} for e in evid]
+    limpios, sesion, motivos = await externos._preparar(partes)
+    return "\n\n".join(m["content"] for m in limpios), sesion, motivos
+
+
 # ---- El prompt ----
 
 def construir_mensajes(titulo: str, organismo: str, pliego: str, requisitos: str, criterios: str, evidencias: str) -> list[dict]:
@@ -345,13 +354,12 @@ async def preparar(motor_id: str, titulo: str, ficha: dict, modelo: str = "auto"
         if not evid:
             return {"estado": "omitida", "resumen": "Sin comparativa: no hay evidencia de producto (fichas técnicas en la base de conocimiento ni listas de proveedores relacionadas). "
                                                       "Carga las fichas técnicas de los productos para poder comparar; no se compara sin datos."}
-        bloque = texto_de_evidencias(evid)
-        limpios, sesion, motivos = await externos._preparar([{"role": "user", "content": bloque}])
+        bloque, sesion, motivos = await preparar_evidencias(evid)
         if motivos:
             log.info("comparativa: la evidencia de producto no se envía (%s)", "; ".join(motivos))
             return {"estado": "omitida", "resumen": "Sin comparativa: los datos de producto no se pueden anonimizar con garantías, así que no salen a la nube (" + "; ".join(motivos)[:150] + ")."}
         pliego, avisos = X.texto_de_pliegos(docs, int(X.configuracion()["max_caracteres_pliego"]))
-        mensajes = construir_mensajes(titulo, X.organismo_de(ficha), pliego, texto_reqs, criterios_txt, limpios[0]["content"])
+        mensajes = construir_mensajes(titulo, X.organismo_de(ficha), pliego, texto_reqs, criterios_txt, bloque)
         preferido = X.proveedor_preferido("comparativa", modelo)
         datos, proveedor = await (consulta or externos.consultar_publico)(AGENTE, mensajes, ESQUEMA, max_tokens=int(X.configuracion()["max_tokens"]), timeout=300, preferido=preferido)
         datos = anon.desanonimizar(datos, sesion) if sesion else datos
