@@ -20,7 +20,7 @@ class TestIdentificador(unittest.TestCase):
 
     def test_rechaza_lo_que_no_es_un_unico_identificador(self):
         otro = "0b1f7a3e-1111-4222-8333-444444444444"
-        for v in (None, 5, "", "Renting de cámaras", "d9cfcbaa-3f95-4677-961b", f"{U} {otro}", U + "0", "a" + U, "x" * 300 + U, ["x"]):
+        for v in (None, 5, "", "Renting de cámaras", "d9cfcbaa-3f95-4677-961b", f"{U} {otro}", U + "0", "a" + U, "x" * 300 + U, ["x"], f"{U}/history", f"{U}?a=b", f"{U}#x", f"{U}&a=b", f"../{U}", f"{U}%2f", f"{U}\\x"):
             self.assertIsNone(I.limpiar(v), repr(v)[:40])
 
     def test_pliegos_y_ofertas_lo_usan(self):
