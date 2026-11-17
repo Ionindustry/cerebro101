@@ -459,3 +459,59 @@ class TestAislado(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+def pdf_plano(ruta: Path, lineas):
+    """Un PDF SIN formulario con una línea de texto en cada (x, y, texto)."""
+    from pypdf import PdfWriter
+    from pypdf.generic import DecodedStreamObject, DictionaryObject, NameObject
+    w = PdfWriter()
+    pag = w.add_blank_page(612, 792)
+    flujo = DecodedStreamObject()
+    flujo.set_data(("BT /F1 11 Tf " + " ".join(f"1 0 0 1 {x} {y} Tm ({t}) Tj" for x, y, t in lineas) + " ET").encode("latin-1"))
+    fuente = DictionaryObject({NameObject("/Type"): NameObject("/Font"), NameObject("/Subtype"): NameObject("/Type1"), NameObject("/BaseFont"): NameObject("/Helvetica")})
+    pag[NameObject("/Resources")] = DictionaryObject({NameObject("/Font"): DictionaryObject({NameObject("/F1"): w._add_object(fuente)})})
+    pag[NameObject("/Contents")] = w._add_object(flujo)
+    with open(ruta, "wb") as f:
+        w.write(f)
+
+
+import shutil
+import tempfile
+
+
+class TestPdfPlano(unittest.TestCase):
+    def setUp(self):
+        self.d = Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, self.d, True)
+        self.ruta = self.d / "modelo.pdf"
+        pdf_plano(self.ruta, [(50, 700, "MODELO DE DECLARACION"), (50, 660, "Razon social:"), (50, 620, "NIF:"), (50, 580, "Observaciones:"), (50, 540, "Telefono: 931234567")])
+
+    def test_detecta_las_etiquetas_reconocidas_y_no_las_demas(self):
+        det = F.detectar(self.ruta, "pdf")
+        claves = {c["etiqueta"]: c["clave"] for c in det["campos"]}
+        self.assertEqual(claves.get("Razon social"), "empresa.razon_social")
+        self.assertIn("NIF", claves)
+        self.assertNotIn("Observaciones", claves)                                    # no se reconoce: lo deja a una persona
+        self.assertNotIn("Telefono", claves)                                         # ya tiene algo escrito en su línea
+        self.assertTrue(any("encima" in a for a in det["avisos"]))
+
+    def test_rellena_con_anotaciones_a_la_derecha_y_no_toca_el_texto(self):
+        from pypdf import PdfReader
+        det = F.detectar(self.ruta, "pdf")
+        ids = {c["etiqueta"]: c["id"] for c in det["campos"]}
+        salida = self.d / "relleno.pdf"
+        r = F.rellenar(self.ruta, "pdf", salida, {ids["Razon social"]: "101 Tecnologia SL", ids["NIF"]: "B12345678", "zzz": "x"})
+        self.assertEqual(sorted(r["rellenados"]), sorted([ids["Razon social"], ids["NIF"]]))
+        self.assertEqual(r["omitidos"], ["zzz"])
+        pag = PdfReader(str(salida)).pages[0]
+        anot = [a.get_object() for a in pag["/Annots"]]
+        self.assertEqual(sorted(str(a["/Contents"]) for a in anot), ["101 Tecnologia SL", "B12345678"])
+        self.assertTrue(all(float(a["/Rect"][0]) > 70 for a in anot))                # a la derecha de la etiqueta, no encima
+        self.assertIn("Razon social:", pag.extract_text())                           # el contenido original sigue igual
+
+    def test_un_pdf_sin_etiquetas_reconocibles_sigue_diciendo_que_no_se_puede(self):
+        pdf_plano(self.ruta, [(50, 700, "Texto cualquiera sin huecos")])
+        det = F.detectar(self.ruta, "pdf")
+        self.assertEqual(det["campos"], [])
+        self.assertIn("no tiene campos", " ".join(det["avisos"]))

@@ -197,6 +197,7 @@ services:
 
   worker-cortas:          # cola «cortas»: búsqueda en internet y carga de fichas. Aparte del worker general para que no esperen detrás de una oferta larga
     <<: *api
+    volumes: ["./config:/app/config:ro", "datos:/datos"]      # sin secretos/ (contraseñas de correo): estas tareas no mandan correo
     command: python -X faulthandler -m celery -A cerebro.tareas.celery_app worker -Q cortas -c 2 --max-tasks-per-child 20 -n cortas@%h
 
   beat:                   # calendario de tareas programadas (a partir de las fichas): no ejecuta agentes, no necesita secretos
