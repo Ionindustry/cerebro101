@@ -18,6 +18,8 @@ export default function Fichas() {
   const [marca, setMarca] = useState("");
   const [ref, setRef] = useState("");
   const [ej, setEj] = useState(null);
+  const [marcaCarga, setMarcaCarga] = useState("Hikvision");
+  const [infoMarca, setInfoMarca] = useState(null);
 
   const cargar = async () => {
     try { setD(await pedirCerebro("licitaciones/fichas")); setError(null); }
@@ -31,6 +33,15 @@ export default function Fichas() {
     const t = setInterval(cargar, 8000);
     return () => clearInterval(t);
   }, [d]);
+
+  const verMarca = async (m) => { try { setInfoMarca(await pedirCerebro(`licitaciones/fichas/marca/${encodeURIComponent(m.trim())}`)); } catch { setInfoMarca(null); } };
+  useEffect(() => { if (marcaCarga.trim().length >= 2) verMarca(marcaCarga); }, [marcaCarga]);        // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {                                              // mientras la marca se carga, se refresca sola
+    if (infoMarca?.carga?.estado !== "en_curso") return undefined;
+    const t = setInterval(() => verMarca(marcaCarga), 8000);
+    return () => clearInterval(t);
+  }, [infoMarca, marcaCarga]);                                    // eslint-disable-line react-hooks/exhaustive-deps
+  const lanzarMarca = () => accion(async () => { await pedirCerebro("licitaciones/fichas/marca", enviar({ marca: marcaCarga.trim() })); setAviso(`Carga de «${marcaCarga.trim()}» lanzada: baja hasta 40 fichas por pulsación; vuelve a pulsar para seguir.`); await verMarca(marcaCarga); });
 
   const accion = async (f) => {
     setTrabajando(true); setError(null); setAviso(null);
@@ -56,6 +67,22 @@ export default function Fichas() {
       {error && <Fallo e={error} />}
       {aviso && <p className="aviso" role="status">{aviso}</p>}
       {d && (<>
+        <section className="tarjeta">
+          <h2>Todas las fichas de una marca</h2>
+          <p className="meta">Toma los modelos de la marca que hay en tus tarifas y busca el PDF oficial de cada uno en el dominio autorizado del fabricante. Baja hasta 40 por pulsación (respeta el tope diario) y sigue donde lo dejó; lo que no encuentra no lo vuelve a buscar hasta pasadas dos semanas.</p>
+          <p className="lic-fila">
+            <input value={marcaCarga} onChange={(e) => setMarcaCarga(e.target.value)} placeholder="Marca (p. ej. Hikvision)" maxLength={60} aria-label="Marca" disabled={trabajando} />
+            <button className="boton si" disabled={trabajando || marcaCarga.trim().length < 2 || infoMarca?.carga?.estado === "en_curso"} onClick={lanzarMarca}>{infoMarca?.carga?.estado === "en_curso" ? "Cargando…" : "Cargar las fichas de la marca"}</button>
+          </p>
+          {infoMarca && (
+            <div className="meta" role="status">
+              <p>{infoMarca.modelos} modelos de «{infoMarca.marca}» en tus tarifas · {infoMarca.con_ficha} con ficha · {infoMarca.sin_ficha} sin ficha{infoMarca.no_encontradas ? ` (${infoMarca.no_encontradas} buscadas sin encontrar)` : ""}.</p>
+              {infoMarca.carga?.informe?.error && <p className="aviso" role="alert">{infoMarca.carga.informe.error}</p>}
+              {infoMarca.carga?.estado === "terminada" && <p>Última carga: {infoMarca.carga.informe.cargadas} nuevas · {infoMarca.carga.informe.repetidas} ya estaban · {infoMarca.carga.informe.sin_enlace} sin PDF encontrado · {infoMarca.carga.informe.errores?.length || 0} con error{infoMarca.carga.informe.tope_diario ? " · se alcanzó el tope diario de descargas: sigue mañana" : ""}.</p>}
+              {infoMarca.carga?.informe?.errores?.length > 0 && <ul>{infoMarca.carga.informe.errores.map((x, i) => <li key={i}>{x}</li>)}</ul>}
+            </div>
+          )}
+        </section>
         <section className="tarjeta">
           <h2>1. Desde los enlaces de una lista de proveedor</h2>
           <p className="meta">Dominios autorizados: {d.dominios?.length ? d.dominios.join(", ") : "ninguno (añádelos en config/fichas.yaml: solo se descarga de los dominios oficiales de cada fabricante)"}</p>

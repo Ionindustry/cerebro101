@@ -209,7 +209,7 @@ def _proceso_caido(sender=None, exception=None, args=None, **_kw):
     hasta caducar: se cierra aquí al momento (la ejecución como interrumpida, la búsqueda como error) para poder volver a lanzarla enseguida."""
     from billiard.exceptions import WorkerLostError
     nombre = getattr(sender, "name", "")
-    if not isinstance(exception, WorkerLostError) or not args or nombre not in ("cerebro.tareas.celery_app.redactar_oferta", "cerebro.tareas.celery_app.descubrir_opciones"):
+    if not isinstance(exception, WorkerLostError) or not args or nombre not in ("cerebro.tareas.celery_app.redactar_oferta", "cerebro.tareas.celery_app.descubrir_opciones", "cerebro.tareas.celery_app.cargar_fichas_marca"):
         return
     import logging
     log = logging.getLogger("cerebro.tareas")
@@ -218,6 +218,9 @@ def _proceso_caido(sender=None, exception=None, args=None, **_kw):
         if nombre.endswith("redactar_oferta"):
             from ..licitaciones import redaccion
             asyncio.run(redaccion.cerrar(int(args[0]), "El proceso de trabajo se cayó a mitad de la redacción: lo ya escrito se conserva; vuelve a pulsar el botón del paso que falló"))
+        elif nombre.endswith("cargar_fichas_marca"):
+            from ..licitaciones import fichas_marca
+            asyncio.run(fichas_marca._cerrar(str(args[0]).casefold().strip(), "error", {"error": "El proceso de trabajo se cayó durante la carga. Puedes volver a lanzarla: sigue donde lo dejó."}))
         else:
             from ..licitaciones import descubrimiento
             asyncio.run(descubrimiento._cerrar(str(args[0]), "error", error="El proceso de trabajo se cayó mientras buscaba. Pulsa «Repetir la búsqueda»; si vuelve a pasar, avisa a Tecnología."))
@@ -230,6 +233,13 @@ def cargar_fichas(carga_id: int) -> dict:
     """Una persona ha pedido cargar las fichas técnicas de una lista de proveedor: se descargan de los dominios autorizados, pasan por el antivirus y se indexan (cerebro/licitaciones/fichas.py)."""
     from ..licitaciones import fichas
     return asyncio.run(fichas.ejecutar_carga(carga_id))
+
+
+@app.task(name="cerebro.tareas.celery_app.cargar_fichas_marca")
+def cargar_fichas_marca(marca: str, por: str = "") -> dict:
+    """Una persona pide cargar las fichas técnicas de todos los modelos de una marca que vende (cerebro/licitaciones/fichas_marca.py): busca el PDF oficial de cada modelo de sus tarifas y lo carga."""
+    from ..licitaciones import fichas_marca
+    return asyncio.run(fichas_marca.ejecutar(marca, por))
 
 
 @app.task(name="cerebro.tareas.celery_app.descubrir_opciones")
