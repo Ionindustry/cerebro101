@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import hashlib
 import logging
+import re
 
 import psycopg
 
@@ -24,8 +25,51 @@ LOTE = 32                  # textos por llamada a Ollama
 MAX_TEXTO = 400
 MAX_ESPECIFICACIONES = 6
 CERROJO = 7_310_101      # clave del cerrojo de PostgreSQL de la pasada de vectorización
-MAX_TEXTO_LINEA = 450          # una línea de tarifa en la evidencia: las descripciones largas se comían el cupo de caracteres y dejaban fuera productos
+MAX_TEXTO_LINEA = 450          # texto del índice que se enseña cuando no se encuentra la línea original (respaldo)
+MAX_EVIDENCIA_PRODUCTO = 1100  # lo que ve el modelo de UN producto: todas las características de la línea original, de todas las listas que lo traigan
+_NO_ES_CARACTERISTICA = re.compile(r"precio|coste|costo|pvp|tarifa|descuento|margen|dto|neto|iva|stock|proveedor", re.I)   # nada de dinero en la evidencia, aunque venga como «característica»
 SIMILITUD_MINIMA = 0.45    # por debajo, el parecido es ruido (a calibrar con tarifas reales)
+
+
+def texto_completo(l: dict, maximo: int = 700) -> str:
+    """El producto tal como lo describe la línea ORIGINAL de la tarifa: marca, referencia, descripción y TODAS sus características (el índice solo guarda las primeras para poder buscar; el modelo
+    necesita el zoom, la focal, las salidas… aunque estén al final). Sin precio ni nada que se parezca a dinero. Pura."""
+    esp = l.get("especificaciones") if isinstance(l.get("especificaciones"), dict) else {}
+    partes = [_corto(l.get("marca"), 40), _corto(l.get("ref"), 60), _corto(l.get("desc"), 500)]
+    carac = [f"{_corto(k, 40)}: {_corto(v, 80)}" for k, v in esp.items() if str(v or "").strip() and not _NO_ES_CARACTERISTICA.search(str(k))]
+    texto = " | ".join(p for p in partes if p)
+    if carac:
+        texto += " | " + "; ".join(carac)
+    return texto[:maximo]
+
+
+def unir_textos(textos: list[str], maximo: int = MAX_EVIDENCIA_PRODUCTO) -> str:
+    """Los textos de un mismo producto (viene en varias listas de proveedor) sin repetir, hasta `maximo` caracteres: cada lista aporta datos distintos (una dice «32X», otra «zoom» a secas). Pura."""
+    out: list[str] = []
+    vistos: set[str] = set()
+    for t in textos:
+        t = " ".join(str(t or "").split())
+        if t and t.casefold() not in vistos:
+            vistos.add(t.casefold())
+            out.append(t)
+    return " || ".join(out)[:maximo]
+
+
+async def _lineas_de(conn, refs: list[str]) -> dict[str, list[dict]]:
+    """Las líneas ORIGINALES (de la última tarifa de cada proveedor y lista) de esas referencias, por referencia en minúsculas. Si algo falla, vacío: se usa el texto del índice."""
+    if not refs:
+        return {}
+    try:
+        cur = await conn.execute("SELECT l FROM (SELECT DISTINCT ON (proveedor->>'nombre', lista) lineas FROM importaciones_precios WHERE estado IN ('propuesta', 'aplicada') "
+                                 "ORDER BY proveedor->>'nombre', lista, id DESC) t, jsonb_array_elements(t.lineas) l WHERE l->>'ref' = ANY(%s)", [refs])
+        out: dict[str, list[dict]] = {}
+        for (l,) in await cur.fetchall():
+            if isinstance(l, dict):
+                out.setdefault(str(l.get("ref") or "").casefold(), []).append(l)
+        return out
+    except Exception as e:      # noqa: BLE001 — sin las líneas originales se sigue con el texto del índice
+        log.warning("lineas_vectores: no se han podido leer las líneas originales: %s: %s", type(e).__name__, e)
+        return {}
 
 
 def _corto(t, n: int) -> str:
@@ -153,15 +197,23 @@ async def buscar(consultas: list[str], por_consulta: int = 4, embed=embeddings) 
                     continue
                 res = AP.evaluar(rest, attrs or AP.extraer(texto))
                 candidatos.append((AP.orden(res), -float(sim), lista, ref, texto, float(sim), AP.texto_de_comprobacion(res)))
-            por_q.append([((lista, ref), {"ref": ref, "desc": (_corto(texto, MAX_TEXTO_LINEA) + " " + nota).strip(), "similitud": round(sim, 3)})
+            por_q.append([((lista, ref), {"ref": ref, "desc": (_corto(texto, MAX_TEXTO_LINEA) + " " + nota).strip(), "nota": nota, "similitud": round(sim, 3)})
                           for _o, _s, lista, ref, texto, sim, nota in sorted(candidatos)[:por_consulta]])
     # Por turnos: primero el mejor de cada consulta, luego el segundo de cada una... Ordenar todo junto por parecido dejaba que las consultas con mejor puntuación media (p. ej. «licencia del VMS»)
-    # se llevaran todo el cupo de la evidencia y los productos de las demás (domos, servidores…) no llegaban nunca al modelo.
+    # se llevaran todo el cupo de la evidencia y los productos de las demás (domos, servidores…) no llegaban nunca al modelo. Un producto solo cuenta una vez aunque venga en varias listas.
     salida: list[dict] = []
-    vistos: set[tuple[str, str]] = set()
+    vistos: set[str] = set()
     for ronda in range(por_consulta):
         for lista in por_q:
-            if ronda < len(lista) and lista[ronda][0] not in vistos:
-                vistos.add(lista[ronda][0])
+            if ronda < len(lista) and lista[ronda][1]["ref"].casefold() not in vistos:
+                vistos.add(lista[ronda][1]["ref"].casefold())
                 salida.append(lista[ronda][1])
+    # El modelo ve el producto ENTERO (línea original de todas las listas), no el texto recortado del índice: el zoom o la focal suelen estar al final y quedaban fuera.
+    async with await _conectar() as conn:
+        originales = await _lineas_de(conn, [x["ref"] for x in salida])
+    for x in salida:
+        completo = unir_textos([texto_completo(l) for l in originales.get(x["ref"].casefold(), [])])
+        nota = x.pop("nota", "")
+        if completo:
+            x["desc"] = (completo + " " + nota).strip()
     return salida

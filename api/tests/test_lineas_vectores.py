@@ -165,6 +165,31 @@ class TestBase(unittest.TestCase):
         refs = [r["ref"] for r in res]
         self.assertLess(refs.index("DOMO-1"), 2)                         # entre los dos primeros, aunque las licencias puntúen más en su consulta
 
+    def test_el_modelo_ve_el_producto_entero_y_unido_de_todas_las_listas_sin_dinero(self):
+        """El índice guarda solo 400 caracteres y 6 características; el zoom suele estar al final. Lo que se enseña al modelo sale de la línea original, de TODAS las listas del producto."""
+        largo = "Cámara PTZ de gama alta " + "con muchas prestaciones de ejemplo " * 12
+        self.tarifa([{"ref": "DOMO-32", "marca": "Hik", "desc": largo, "precio": "999",
+                      "especificaciones": {"a1": "x", "a2": "x", "a3": "x", "a4": "x", "a5": "x", "a6": "x", "a7": "x", "Zoom óptico": "32x", "Precio neto": "1234", "Coste": "800"}}],
+                    lista="Lista A")
+        self.tarifa([{"ref": "DOMO-32", "marca": "Hik", "desc": "Cámara PTZ óptica varifocal motorizada (zoom)", "precio": "950"}], proveedor="Otro", lista="Lista B")
+        asyncio.run(LV.indexar_pendientes(embed=embed_falso))
+        with mock.patch.object(LV, "SIMILITUD_MINIMA", 0.0):               # el vector de pruebas es de bolsa de palabras: aquí no se prueba el umbral
+            res = asyncio.run(LV.buscar(["Cámara PTZ gama alta con zoom óptico"], embed=embed_falso))
+        self.assertEqual([r["ref"] for r in res], ["DOMO-32"])             # un producto, aunque venga en dos listas
+        d = res[0]["desc"]
+        self.assertIn("Zoom óptico: 32x", d)                                 # la característica del final llegó
+        self.assertIn("varifocal motorizada", d)                             # y lo que aporta la otra lista
+        for dinero in ("999", "950", "1234", "800", "Precio", "Coste"):
+            self.assertNotIn(dinero, d)
+
+    def test_si_no_se_encuentra_la_linea_original_se_usa_el_texto_del_indice(self):
+        self.tarifa([{"ref": "X-1", "desc": "Cámara bullet LPR 4MP lente 8-32mm"}])
+        asyncio.run(LV.indexar_pendientes(embed=embed_falso))
+        with mock.patch.object(LV, "_lineas_de", mock.AsyncMock(return_value={})):
+            res = asyncio.run(LV.buscar(["cámara bullet LPR con lente 8-32mm"], embed=embed_falso))
+        self.assertEqual(res[0]["ref"], "X-1")
+        self.assertIn("LPR", res[0]["desc"])
+
     def test_respeta_el_maximo_por_pasada_y_continua_en_la_siguiente(self):
         self.tarifa([{"ref": f"R{i}", "desc": f"Producto numero{i}"} for i in range(70)])
         r = asyncio.run(LV.indexar_pendientes(maximo=32, embed=embed_falso))
