@@ -50,7 +50,7 @@ function Formulario({ onCrear, trabajando, error }) {
   const correoMal = canal === "correo" && !correoValido(f.correo);
   const competencia = f.tipo === "competencia";
   const sinCriterios = competencia && !competenciaGuardable(f);
-  const sinFiltro = !competencia && Object.keys(filtroDeAlerta(f)).length === 0;      // el servidor no admite una alerta sin criterios: avisaría de todas las licitaciones
+  const sinFiltro = !competencia && Object.keys(filtroDeAlerta(f)).length === 0;      // sin criterios vale: la alerta avisa de todas las licitaciones
   const alternar = (e) => setF((x) => ({ ...x, eventos: x.eventos.includes(e) ? x.eventos.filter((y) => y !== e) : [...x.eventos, e] }));
   const enviarForm = async (ev) => {
     ev.preventDefault();
@@ -106,10 +106,10 @@ function Formulario({ onCrear, trabajando, error }) {
         <legend>Avisar de</legend>
         {EVENTOS_ALERTA.map(([k, t]) => <label key={k}><input type="checkbox" checked={f.eventos.includes(k)} onChange={() => alternar(k)} />{t}</label>)}
       </fieldset>}
-      {sinFiltro && <p className="meta" role="status">Falta un criterio: rellena al menos uno de Texto (2 letras o más), CPV, Zona, Comprador o Importe. Sin criterios la alerta avisaría de todas las licitaciones.</p>}
+      {sinFiltro && <p className="meta" role="status">Sin criterios (Texto, CPV, Zona, Comprador o Importe) la alerta avisará de todas las licitaciones. El nombre es lo único obligatorio.</p>}
       {!competencia && f.eventos.length === 0 && <p className="meta" role="status">Marca al menos un evento en «Avisar de».</p>}
       {error && <p role="alert" className="lic-error" ref={avisoError}>{mensajeAlertas(error.status)}{typeof error.detalle === "string" && error.detalle ? ` (${error.detalle})` : ""}</p>}
-      <div className="lic-fila"><button className="boton si" type="submit" disabled={trabajando || (!competencia && f.eventos.length === 0) || correoMal || sinCriterios || sinFiltro}>{trabajando ? "Guardando…" : "Guardar alerta"}</button></div>
+      <div className="lic-fila"><button className="boton si" type="submit" disabled={trabajando || (!competencia && f.eventos.length === 0) || correoMal || sinCriterios}>{trabajando ? "Guardando…" : "Guardar alerta"}</button></div>
     </form>
   );
 }
