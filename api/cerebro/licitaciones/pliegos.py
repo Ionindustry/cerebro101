@@ -267,7 +267,8 @@ async def _descargas_hoy() -> int:
 
 
 def _id_valido(motor_id) -> str:
-    t = str(motor_id or "").strip().lower()
+    from .identificador import limpiar
+    t = limpiar(motor_id) or ""
     if not RE_UUID.match(t):
         raise ErrorPliego("licitacion debe ser el identificador (UUID) que devuelve «buscar»")
     return t

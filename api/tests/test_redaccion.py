@@ -496,6 +496,11 @@ class TestPeticionConFicha(unittest.TestCase):
         self.assertEqual(R.texto_ficha(None), "")
         self.assertEqual(R.texto_ficha({}), "")
 
+    def test_se_explica_como_usar_pliegos_con_el_identificador_y_los_datos_que_exige_leer(self):
+        t = R.peticion_escritor(self.PASO, "d9cfcbaa-3f95-4677-961b-6c131e529021", "T", self.SEC)
+        self.assertIn("licitacion = d9cfcbaa-3f95-4677-961b-6c131e529021 (el identificador tal cual", t)
+        self.assertIn("«leer» exige ADEMÁS n", t)
+
     def test_se_pide_no_repetir_las_lecturas_que_fallan(self):
         t = R.peticion_escritor(self.PASO, "m1", "T", self.SEC)
         self.assertIn("NO la repitas", t)

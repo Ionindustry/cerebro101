@@ -55,9 +55,11 @@ def _conectar():
 
 
 def _id(motor_id: str) -> str:
-    if not isinstance(motor_id, str) or not motor._UUID.match(motor_id.strip()):
+    from .identificador import limpiar
+    t = limpiar(motor_id)
+    if not t:
         raise ErrorOferta("licitacion debe ser el identificador (UUID) de la licitación")
-    return motor_id.strip().lower()
+    return t
 
 
 def _una_linea(t, n: int) -> str:
