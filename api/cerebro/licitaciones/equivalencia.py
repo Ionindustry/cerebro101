@@ -166,7 +166,7 @@ async def _productos_del_pliego(titulo: str, docs: list[dict], texto_reqs: str, 
     """Primer paso con el modelo externo. Si falla o no devuelve nada, [] y se sigue con las consultas de siempre: nunca rompe la tabla."""
     try:
         pliego, _avisos = X.texto_de_pliegos(docs, MAX_PLIEGO_PRODUCTOS)
-        datos, _prov = await (consulta or externos.consultar_publico)(AGENTE, mensajes_productos(titulo, pliego, texto_reqs), ESQUEMA_PRODUCTOS, max_tokens=2000, timeout=180, preferido=preferido)
+        datos, _prov = await (consulta or externos.consultar_publico)(AGENTE, mensajes_productos(titulo, pliego, texto_reqs), ESQUEMA_PRODUCTOS, max_tokens=4000, timeout=180, preferido=preferido)
         return consultas_de_productos(datos)
     except externos.ErrorExterno as e:
         log.warning("equivalencia: no se han podido listar los productos del pliego (%s); se busca por requisitos", str(e)[:120])

@@ -192,7 +192,7 @@ services:
 
   worker:                 # tareas pedidas y programadas; Jarvis lo atiende la API directamente
     <<: *api
-    command: celery -A cerebro.tareas.celery_app worker -Q peticiones,lote -c 2 -n general@%h
+    command: python -X faulthandler -m celery -A cerebro.tareas.celery_app worker -Q peticiones,lote -c 2 -n general@%h      # -X faulthandler: si un fallo nativo mata un proceso, deja su traza en el registro
 
   beat:                   # calendario de tareas programadas (a partir de las fichas): no ejecuta agentes, no necesita secretos
     <<: *api
