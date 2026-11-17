@@ -3,7 +3,7 @@
   Arranque automatico y vigilancia del Cerebro 101.cat en Windows (Docker Desktop + WSL2).
 
 .DESCRIPTION
-  Registra tres tareas programadas del usuario actual:
+  Registra cuatro tareas programadas del usuario actual:
     "Cerebro - arranque"   al iniciar sesion (con 1 minuto de espera): abre Docker Desktop, espera a que responda y levanta el Cerebro y el ERP
     "Cerebro - copia"      cada dia a las 14:00 (si el PC estaba apagado, en cuanto se enciende): copia de seguridad automatica (scripts/copia_automatica.sh:
                            comprueba la copia, conserva las ultimas 7 y avisa a soporte@ si falla)
@@ -12,6 +12,9 @@
                            si aun asi los puertos publicados siguen sin responder (Docker Desktop deja de reenviarlos, p. ej. tras reiniciar WSL: su
                            com.docker.backend queda mas viejo que wslrelay), reinicia Docker Desktop, pero SOLO si no hay una oferta ni un analisis de pliegos
                            en curso (se cortaria el trabajo) y con tope de 2 reinicios por hora
+    "Cerebro - disco"      cada 30 minutos: mira el espacio libre de las unidades donde viven los discos de WSL y Docker (las lee del registro de Windows) y AVISA
+                           antes de que se llenen: por debajo de 50 GB libres (aviso) y de 20 GB (critico), con una notificacion de Windows y una linea en el registro;
+                           si Docker responde, ademas un correo a soporte@. No depende de Docker: un disco lleno lo deja parado, y esta tarea sigue avisando.
   Todo queda en %USERPROFILE%\cerebro-autoarranque\autoarranque.log
 
   Uso (PowerShell; -Instalar hay que lanzarlo como ADMINISTRADOR, las tareas luego se ejecutan con tu usuario, sin privilegios):
@@ -24,14 +27,15 @@
   (o activar el inicio de sesion automatico). Si el equipo se suspende, todo se para: desactiva la suspension.
 #>
 param(
-  [switch]$Instalar, [switch]$Quitar, [switch]$Arrancar, [switch]$Vigilar, [switch]$Copiar, [switch]$Estado,
-  [string]$Distro = "Ubuntu", [string]$Carpeta = "~/cerebro101"
+  [switch]$Instalar, [switch]$Quitar, [switch]$Arrancar, [switch]$Vigilar, [switch]$Copiar, [switch]$Disco, [switch]$Estado,
+  [string]$Distro = "Ubuntu", [string]$Carpeta = "~/cerebro101",
+  [int]$AvisoGB = 50, [int]$CriticoGB = 20, [string[]]$Unidades = @()
 )
 $ErrorActionPreference = "Continue"
 $Base   = Join-Path $env:USERPROFILE "cerebro-autoarranque"
 $Log    = Join-Path $Base "autoarranque.log"
 $Fichero = Join-Path $Base "estado.json"
-$Tareas = @("Cerebro - arranque", "Cerebro - vigilante", "Cerebro - copia")
+$Tareas = @("Cerebro - arranque", "Cerebro - vigilante", "Cerebro - copia", "Cerebro - disco")
 $DockerDesktop = Join-Path $env:ProgramFiles "Docker\Docker\Docker Desktop.exe"
 if (-not (Test-Path $Base)) { New-Item -ItemType Directory -Path $Base | Out-Null }
 
@@ -99,7 +103,7 @@ function Leer-Estado {
   if (Test-Path $Fichero) { try { return Get-Content $Fichero -Raw | ConvertFrom-Json } catch {} }
   return [pscustomobject]@{ fallos = 0; puertos = 0; recuperaciones = @() }
 }
-function Guardar-Estado($e) { $e | ConvertTo-Json -Depth 3 | Set-Content -Path $Fichero -Encoding UTF8 }
+function Guardar-Estado($e) { $e | ConvertTo-Json -Depth 5 | Set-Content -Path $Fichero -Encoding UTF8 }
 
 # Docker con tiempo maximo y devolviendo lo que imprime (o $null si no responde a tiempo)
 function Docker-Salida([string[]]$Argumentos, [int]$Segundos = 30) {
@@ -142,6 +146,56 @@ function Recuperar-Docker {
   if (Esperar-Docker 300) { Escribir-Log "Docker responde otra vez"; Levantar-Cerebro } else { Escribir-Log "Docker NO ha vuelto a responder en 5 minutos" }
 }
 
+
+# ---- Espacio en disco -------------------------------------------------------------------------------------------------------------------------------------
+# Los discos de Docker Desktop y de WSL son ficheros .vhdx que crecen y NO se encogen solos: si la unidad donde viven se llena, Docker no arranca. Se vigilan las
+# unidades donde estan (se leen del registro: cada distribucion de WSL guarda ahi su carpeta, tambien si se movio a otra unidad) mas las que se pidan con -Unidades.
+function Unidades-Vigiladas {
+  $letras = @()
+  $lxss = "HKCU:\Software\Microsoft\Windows\CurrentVersion\Lxss"
+  foreach ($k in (Get-ChildItem $lxss -ErrorAction SilentlyContinue)) {
+    $ruta = [string](Get-ItemProperty -Path $k.PSPath -ErrorAction SilentlyContinue).BasePath
+    if ($ruta -match '^(\\\\\?\\)?([A-Za-z]):') { $letras += $Matches[2].ToUpper() }
+  }
+  foreach ($u in $Unidades) { if ($u -match '^([A-Za-z]):?$') { $letras += $Matches[1].ToUpper() } }
+  if ($letras.Count -eq 0) { $letras = @("C") }
+  return @($letras | Select-Object -Unique)
+}
+
+function Nivel-Disco([double]$LibreGB) {
+  if ($LibreGB -lt $CriticoGB) { return "critico" }
+  if ($LibreGB -lt $AvisoGB) { return "aviso" }
+  return "ok"
+}
+
+# Notificacion de Windows (no necesita Docker ni correo). Si algo falla no pasa nada: queda el registro.
+function Avisar-Windows([string]$Titulo, [string]$Texto) {
+  try {
+    [void][Windows.UI.Notifications.ToastNotificationManager, Windows.UI.Notifications, ContentType = WindowsRuntime]
+    [void][Windows.Data.Xml.Dom.XmlDocument, Windows.Data.Xml.Dom.XmlDocument, ContentType = WindowsRuntime]
+    $t = [System.Security.SecurityElement]::Escape($Titulo); $m = [System.Security.SecurityElement]::Escape($Texto)
+    $xml = New-Object Windows.Data.Xml.Dom.XmlDocument
+    $xml.LoadXml("<toast><visual><binding template='ToastText02'><text id='1'>$t</text><text id='2'>$m</text></binding></visual></toast>")
+    $aviso = [Windows.UI.Notifications.ToastNotification]::new($xml)
+    [Windows.UI.Notifications.ToastNotificationManager]::CreateToastNotifier("Cerebro 101").Show($aviso)
+  } catch { Escribir-Log "No se pudo mostrar la notificacion de Windows: $($_.Exception.Message)" }
+}
+
+# Correo a soporte@ (los mismos destinatarios que los fallos del motor) SOLO si Docker responde: con el disco lleno suele estar parado y no puede enviarlo.
+function Avisar-Correo([string]$Asunto, [string]$Cuerpo) {
+  if (-not (Docker-Responde)) { Escribir-Log "Docker no responde: el aviso de disco no se envia por correo (queda la notificacion de Windows y este registro)"; return }
+  $orden = "cd $Carpeta && docker compose exec -T api python -m cerebro.avisar_soporte '$Asunto' '$Cuerpo'"
+  $lineas = & wsl.exe -d $Distro -- bash -lc $orden 2>&1
+  foreach ($l in $lineas) { Escribir-Log ("    " + ($l -replace "`0", "")) }
+}
+
+# Cuando se vuelve a avisar de una unidad que sigue en el mismo nivel: critico cada 3 horas, aviso cada 24
+function Toca-Avisar([string]$Nivel, $Previo) {
+  if ($null -eq $Previo -or $Previo.nivel -ne $Nivel -or -not $Previo.aviso) { return $true }
+  $horas = if ($Nivel -eq "critico") { 3 } else { 24 }
+  return (((Get-Date) - [datetime]$Previo.aviso).TotalHours -ge $horas)
+}
+
 if ($Instalar) {
   $destino = Join-Path $Base "autoarranque.ps1"
   if ($PSCommandPath -ne $destino) { Copy-Item -Force $PSCommandPath $destino }
@@ -165,6 +219,11 @@ if ($Instalar) {
   Register-ScheduledTask -TaskName $Tareas[2] -Action (New-ScheduledTaskAction -Execute $powershell -Argument "$comun -Copiar") `
     -Trigger $t3 -Settings $ajustes -Principal $principal -Force | Out-Null
 
+  # Espacio en disco cada 30 minutos (no depende de Docker)
+  $t4 = New-ScheduledTaskTrigger -Once -At (Get-Date).AddMinutes(5) -RepetitionInterval (New-TimeSpan -Minutes 30) -RepetitionDuration (New-TimeSpan -Days 3650)
+  Register-ScheduledTask -TaskName $Tareas[3] -Action (New-ScheduledTaskAction -Execute $powershell -Argument "$comun -Disco -AvisoGB $AvisoGB -CriticoGB $CriticoGB") `
+    -Trigger $t4 -Settings $ajustes -Principal $principal -Force | Out-Null
+
   Escribir-Log "Tareas instaladas para $usuario (distribucion $Distro, carpeta $Carpeta)"
   Write-Host "Instalado. Tareas: $($Tareas -join ' y ')."
   Write-Host "Registro: $Log"
@@ -186,9 +245,44 @@ if ($Estado) {
     if ($x) { $i = Get-ScheduledTaskInfo -TaskName $t; Write-Host ("{0}: {1}; ultima ejecucion {2}; resultado {3}" -f $t, $x.State, $i.LastRunTime, $i.LastTaskResult) }
     else { Write-Host "${t}: NO instalada" }
   }
+  foreach ($u in (Unidades-Vigiladas)) {
+    $d = Get-PSDrive -Name $u -PSProvider FileSystem -ErrorAction SilentlyContinue
+    if ($d) { $g = [math]::Round($d.Free / 1GB, 1); Write-Host ("Disco {0}: {1} GB libres ({2})" -f $u, $g, (Nivel-Disco $g)) }
+  }
   Write-Host ("Docker: " + $(if (Docker-Responde) { "responde" } else { "NO responde" }))
   Write-Host ("API del Cerebro: " + $(if (Api-Responde) { "responde" } else { "NO responde" }))
   if (Test-Path $Log) { Write-Host "--- ultimas lineas del registro ($Log):"; Get-Content $Log -Tail 15 }
+  return
+}
+
+if ($Disco) {
+  if (-not (Tomar-Turno)) { return }
+  $e = Leer-Estado
+  $guardado = @{}
+  foreach ($u in (Unidades-Vigiladas)) {
+    $d = Get-PSDrive -Name $u -PSProvider FileSystem -ErrorAction SilentlyContinue
+    if (-not $d) { continue }
+    $libre = [math]::Round($d.Free / 1GB, 1)
+    $nivel = Nivel-Disco $libre
+    $previo = $null
+    if ($e.PSObject.Properties["discos"] -and $e.discos.PSObject.Properties[$u]) { $previo = $e.discos.$u }
+    $ultimo = if ($previo) { [string]$previo.aviso } else { "" }
+    Write-Host ("Disco {0}: {1} GB libres ({2})" -f $u, $libre, $nivel)
+    if ($nivel -eq "ok") {
+      if ($previo -and $previo.nivel -ne "ok") { Escribir-Log "Disco ${u}: ya tiene $libre GB libres (vuelve a estar bien)" }
+    }
+    elseif (Toca-Avisar $nivel $previo) {
+      $titulo = if ($nivel -eq "critico") { "DISCO ${u}: CASI LLENO" } else { "Disco ${u}: queda poco espacio" }
+      $texto = "Quedan $libre GB libres en ${u}: (aviso por debajo de $AvisoGB GB, critico por debajo de $CriticoGB GB). Si se llena, Docker y el Cerebro dejan de funcionar. Libera espacio."
+      Escribir-Log "$titulo - $texto"
+      Avisar-Windows $titulo $texto
+      Avisar-Correo $titulo ($texto -replace "'", "")
+      $ultimo = (Get-Date).ToString("o")
+    }
+    $guardado[$u] = @{ nivel = $nivel; libreGB = $libre; aviso = $ultimo }
+  }
+  $e | Add-Member -NotePropertyName discos -NotePropertyValue ([pscustomobject]$guardado) -Force
+  Guardar-Estado $e
   return
 }
 
@@ -256,4 +350,4 @@ if ($Vigilar) {
   return
 }
 
-Write-Host "Indica una accion: -Instalar, -Estado, -Quitar (y, solo para uso interno, -Arrancar o -Vigilar). Mira la ayuda: Get-Help .\autoarranque.ps1 -Full"
+Write-Host "Indica una accion: -Instalar, -Estado, -Quitar, -Disco (mira ahora el espacio libre) (y, solo para uso interno, -Arrancar, -Vigilar o -Copiar). Mira la ayuda: Get-Help .\autoarranque.ps1 -Full"

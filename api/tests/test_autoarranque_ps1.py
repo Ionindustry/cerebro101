@@ -61,6 +61,28 @@ class TestScript(unittest.TestCase):
     def test_el_estado_trae_el_contador_de_puertos(self):
         self.assertIn("puertos = 0", T)
 
+    def test_vigila_el_espacio_en_disco_sin_depender_de_docker(self):
+        self.assertIn("[switch]$Disco", T)
+        self.assertIn("[int]$AvisoGB = 50, [int]$CriticoGB = 20", T)
+        self.assertIn('"Cerebro - disco"', T)
+        self.assertIn("-Disco -AvisoGB $AvisoGB -CriticoGB $CriticoGB", T)         # la tarea instalada lanza el modo -Disco con los umbrales
+        self.assertIn("HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Lxss", T)   # las unidades se leen del registro (donde vive cada distribucion de WSL)
+        self.assertIn("function Nivel-Disco", T)
+        self.assertIn("function Avisar-Windows", T)
+        i = T.index("if ($Disco) {")
+        self.assertNotIn("Esperar-Docker", T[i:T.index("if ($Copiar)")])                # no espera a Docker: con el disco lleno estara parado
+        self.assertLess(T.index("Avisar-Windows $titulo $texto"), T.index("Avisar-Correo $titulo"))    # primero lo que no necesita Docker
+
+    def test_el_correo_de_disco_solo_sale_si_docker_responde(self):
+        i = T.index("function Avisar-Correo")
+        self.assertLess(T.index("Docker-Responde", i), T.index("wsl.exe", i))
+
+    def test_los_avisos_no_se_repiten_cada_media_hora(self):
+        i = T.index("function Toca-Avisar")
+        f = T[i:i + 600]
+        self.assertIn('"critico") { 3 } else { 24 }', f)                                 # critico cada 3 h, aviso cada 24 h
+        self.assertIn("-ge $horas", f)
+
 
 if __name__ == "__main__":
     unittest.main()
