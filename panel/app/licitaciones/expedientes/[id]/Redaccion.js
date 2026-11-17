@@ -248,7 +248,8 @@ export default function Redaccion({ id, o, alCambiar }) {
         Lo que falte se completa en el ERP (si es un dato de la empresa) o a mano en el documento.
         Los <strong>modelos de proposición económica</strong> se rellenan con el precio cuando una persona lo fija (importe en número y en letra, IVA y total); el precio nunca lo escribe un agente.</p>
       <div className="lic-fila"><button className="boton no" onClick={rellenar} disabled={trabajando || trabajandoAgentes || (hayVarias && !sociedad) || !o?.existe} title={o?.existe ? "Rellena de nuevo desde el original todas las plantillas del concurso" : "Primero hay que preparar la oferta"}>Rellenar las plantillas del concurso</button></div>
-      {plant?.documentos?.length === 0 && <p className="meta">Todavía no hay plantillas rellenadas. Primero baja y lee los documentos del pliego (tarjeta «Pliegos»): se buscan las plantillas en Word y en PDF con formulario.</p>}
+      {plant?.documentos?.length === 0 && <p className="meta" role="status">{plant.mensaje || "Todavía no hay plantillas rellenadas. Primero baja y lee los documentos del pliego (tarjeta «Pliegos»): se buscan las plantillas en Word y en PDF con formulario."}</p>}
+      {plant?.revisados?.length > 0 && plant?.documentos?.length === 0 && <p className="meta">Documentos revisados: {plant.revisados.map((d) => `${d.n}. ${d.nombre}`).join(" · ")}</p>}
       {(plant?.documentos || []).map((d) => {
         const bloquean = pendientesQueBloquean(d);
         return (

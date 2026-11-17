@@ -326,6 +326,21 @@ class TestBaseDeDatos(unittest.TestCase):
         self.assertTrue(any(x["id"] == dudoso["id"] for x in r["documentos"][0]["rellenados"]))
         self.assertEqual(len(r["documentos"]), 1)
 
+    def test_si_no_se_rellena_nada_la_respuesta_dice_que_se_reviso_y_por_que(self):
+        r = self.preparar(empresa="101 Telecom S.L.")                        # ningún documento bajado
+        self.assertEqual((r["documentos"], r["revisados"]), ([], []))
+        self.assertIn("primero baja y lee", r["mensaje"])
+        self.documento(1, "Pliego administrativo.docx", "docx", lambda c: docx(c, "<w:p><w:r><w:t>Solo texto, sin huecos.</w:t></w:r></w:p>"))
+        self.documento(2, "Pliego técnico.docx", "docx", lambda c: docx(c, "<w:p><w:r><w:t>Otro texto sin huecos.</w:t></w:r></w:p>"))
+        r = self.preparar(empresa="101 Telecom S.L.")
+        self.assertEqual(r["documentos"], [])
+        self.assertEqual([d["nombre"] for d in r["revisados"]], ["Pliego administrativo.docx", "Pliego técnico.docx"])
+        self.assertIn("He revisado 2 documentos", r["mensaje"])
+        self.assertIn("ninguno tiene huecos", r["mensaje"])
+        self.documento(3, "Anexo I - Declaración responsable.docx", "docx", docx)
+        r = self.preparar(empresa="101 Telecom S.L.")
+        self.assertIn("he preparado 1", r["mensaje"])
+
     def test_pdf_con_formulario_y_pdf_plano(self):
         self.documento(1, "Modelo.pdf", "pdf", lambda r: pdf_con_formulario(r, [("a", "Razón social"), ("b", "NIF/CIF"), ("c", "Nombre y apellidos del representante")]))
         def plano(ruta):
