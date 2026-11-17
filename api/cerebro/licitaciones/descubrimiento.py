@@ -28,7 +28,8 @@ from . import redaccion_externa as X
 
 log = logging.getLogger("cerebro.descubrimiento")
 AGENTE = "comparador-productos"
-MAX_PARAMETROS = 6
+MAX_PARAMETROS = 8
+MAX_PENDIENTES = 4
 MAX_RESULTADOS = 5
 MAX_PISTAS = 20
 
@@ -47,17 +48,29 @@ ESQUEMA = {
 }
 
 
-def consultas_de(parametros: list[dict], titulo: str = "") -> list[dict]:
-    """Una consulta por parámetro sin cubrir (los primeros): [{parametro, consulta}]. Salen del pliego: parámetro, valor exigido y el requisito del que vienen. Pura."""
+def acreditado(p: dict) -> bool:
+    """¿El parámetro tiene ya un producto con el valor comprobado por el código? Sale de la solución de la tabla («recomendado»); en tablas antiguas, de «cubierto». Pura."""
+    return bool(p.get("recomendado")) or (bool(p.get("cubierto")) and "recomendado" not in p)
+
+
+def consultas_de(parametros: list[dict], titulo: str = "", pendientes: list[str] | None = None) -> list[dict]:
+    """Una consulta por parámetro sin producto acreditado (los primeros; también los «por verificar a mano») y una por cada «dato que falta» de la tabla (una ficha, una referencia):
+    [{parametro, consulta}]. Salen del pliego y de la propia tabla. Pura."""
     out = []
     for p in parametros:
-        if p.get("cubierto"):
+        if acreditado(p):
             continue
         base = re.sub(r"\[R\d+\]", "", str(p.get("requisito") or "")).strip() or titulo
         q = " ".join(f"{C._corto(base, 80)} {C._corto(p.get('parametro'), 60)} {C._corto(p.get('valor_exigido'), 30)} ficha técnica datasheet".split())
         out.append({"parametro": C._corto(p.get("parametro"), 120), "consulta": q[:280]})
         if len(out) >= MAX_PARAMETROS:
             break
+    vistos = {x["consulta"].lower() for x in out}
+    for t in [C._corto(x, 160) for x in (pendientes or []) if C._corto(x, 160)][:MAX_PENDIENTES]:
+        q = " ".join(f"{t} ficha técnica datasheet".split())[:280]
+        if q.lower() not in vistos:
+            vistos.add(q.lower())
+            out.append({"parametro": "Dato que falta: " + C._corto(t, 100), "consulta": q})
     return out
 
 
@@ -78,7 +91,7 @@ def texto_de_resultados(res: list[dict]) -> str:
     return "\n\n".join(f"[{r['id']}] (para: {r['parametro']}) {r['titulo']}\n{r['url']}\n{r['resumen']}" for r in res)
 
 
-def construir_mensajes(titulo: str, parametros: list[dict], resultados: str) -> list[dict]:
+def construir_mensajes(titulo: str, parametros: list[dict], resultados: str, pendientes: list[str] | None = None) -> list[dict]:
     sistema = (
         "Eres un ingeniero de preventa de 101.cat que busca alternativas de producto para una licitación pública. Recibes los parámetros del pliego que aún no tienen producto acreditado y los RESULTADOS de "
         "una búsqueda en internet. Propones pistas de productos que podrían cubrirlos. Respondes en español.\n"
@@ -90,6 +103,8 @@ def construir_mensajes(titulo: str, parametros: list[dict], resultados: str) -> 
         "5. Nada de precios. Pocas pistas buenas mejor que muchas vagas."
     )
     pars = "\n".join(f"- {C._corto(p.get('parametro'), 100)}: {C._corto(p.get('valor_exigido'), 40)}" for p in parametros)
+    if pendientes:
+        pars += "\n" + "\n".join(f"- Dato que falta: {C._corto(x, 140)}" for x in pendientes[:MAX_PENDIENTES])
     return [{"role": "system", "content": sistema},
             {"role": "user", "content": f"Licitación: {C._corto(titulo, 200)}\n\nParámetros sin producto acreditado:\n{pars}\n\nRESULTADOS de la búsqueda:\n««««\n{resultados}\n»»»»"}]
 
@@ -171,8 +186,9 @@ async def ejecutar(motor_id: str, titulo: str, modelo: str = "auto", buscar=None
         if not eq:
             await _cerrar(motor_id, "error", error="Primero hace falta la tabla de equivalencias: pulsa «Preparar la oferta» (o repite el paso de equivalencias).")
             return {"estado": "error"}
-        sin_cubrir = [p for p in eq["contenido"].get("parametros", []) if not p.get("cubierto")]
-        consultas = consultas_de(sin_cubrir, titulo)
+        sin_cubrir = [p for p in eq["contenido"].get("parametros", []) if not acreditado(p)]
+        pendientes = [str(x) for x in (eq["contenido"].get("pendientes") or []) if str(x).strip()][:MAX_PENDIENTES]
+        consultas = consultas_de(sin_cubrir, titulo, pendientes)
         if not consultas:
             await _cerrar(motor_id, "hecha", {"pistas": [], "sin_pistas": [], "dominios_sin_autorizar": {}, "comprobacion": {"pistas": 0, "descartadas": 0, "valores_sin_comprobar": 0},
                                               "aviso": "Todos los parámetros tienen ya un producto acreditado: no hace falta buscar más."})
@@ -189,7 +205,7 @@ async def ejecutar(motor_id: str, titulo: str, modelo: str = "auto", buscar=None
         if not resultados:
             await _cerrar(motor_id, "error", error="La búsqueda en internet no ha devuelto resultados" + (" (el buscador no responde o ha rechazado la consulta)" if fallos else "") + ". Inténtalo más tarde.")
             return {"estado": "error"}
-        mensajes = construir_mensajes(titulo, sin_cubrir, texto_de_resultados(resultados))
+        mensajes = construir_mensajes(titulo, sin_cubrir, texto_de_resultados(resultados), pendientes)
         datos, proveedor = await (consulta or externos.consultar_publico)(AGENTE, mensajes, ESQUEMA, max_tokens=int(X.configuracion()["max_tokens"]), timeout=300,
                                                                             preferido=X.proveedor_preferido("descubrimiento", modelo))
         contenido = verificar(datos, resultados, fichas.configuracion()["hosts"])
@@ -202,3 +218,21 @@ async def ejecutar(motor_id: str, titulo: str, modelo: str = "auto", buscar=None
         log.warning("descubrimiento de %s: %s: %s", motor_id, type(e).__name__, e)
         await _cerrar(motor_id, "error", error=f"Fallo interno ({type(e).__name__})")
     return {"estado": "error"}
+
+
+async def lanzar_automatica(motor_id: str, modelo: str = "auto") -> bool:
+    """Al terminar la tabla de equivalencias: si quedan parámetros sin producto acreditado o datos que faltan, lanza la búsqueda en internet en segundo plano (la misma que el botón). Nunca lanza
+    una excepción ni bloquea la preparación de la oferta: si ya hay una búsqueda en curso o algo falla, no hace nada. True si la ha lanzado."""
+    try:
+        motor_id = O._id(motor_id)
+        eq = await Q.leer(motor_id)
+        c = (eq or {}).get("contenido") or {}
+        if not consultas_de(c.get("parametros", []), "", c.get("pendientes")):
+            return False
+        await iniciar(motor_id, "automático")
+        from ..tareas.celery_app import app
+        app.send_task("cerebro.tareas.celery_app.descubrir_opciones", args=[motor_id, modelo], queue="peticiones")
+        return True
+    except Exception as e:      # noqa: BLE001 — es un extra: no puede romper la preparación de la oferta
+        log.info("descubrimiento automático de %s: no se ha lanzado (%s: %s)", motor_id, type(e).__name__, str(e)[:120])
+        return False

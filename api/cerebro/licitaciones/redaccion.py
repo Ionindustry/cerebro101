@@ -511,6 +511,9 @@ async def _paso_equivalencia(ejecucion_id: int, indice: int, e: dict, defin: dic
     from . import equivalencia
     res = await equivalencia.preparar(e["licitacion"], titulo, ficha or {}, modelo=e.get("modelo") or "auto")
     await _marcar(ejecucion_id, indice, estado=HECHO if res["estado"] == "hecha" else OMITIDO, error="", resumen=res["resumen"][:MAX_RESUMEN], secciones=[], fin=_iso(_ahora(None)))
+    if res["estado"] == "hecha":
+        from . import descubrimiento
+        await descubrimiento.lanzar_automatica(e["licitacion"], e.get("modelo") or "auto")      # busca en internet lo que la tabla no ha podido cubrir; en segundo plano
 
 
 async def _paso_encargos(ejecucion_id: int, indice: int, e: dict, defin: dict, titulo: str, ficha: dict) -> None:

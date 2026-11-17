@@ -38,7 +38,7 @@ export default function Descubrimiento({ id }) {
   return (
     <div>
       <h4>Más opciones en internet</h4>
-      <p className="meta">Busca productos que podrían cubrir lo que aún no tiene producto acreditado. Son pistas por verificar: no valen como evidencia hasta cargar la ficha técnica del fabricante.</p>
+      <p className="meta">Busca en internet productos, referencias y fichas para lo que aún no tiene producto acreditado (también lo que hay que verificar a mano y los «datos que faltan»). Se lanza sola al terminar la tabla de equivalencias; aquí puedes repetirla. Son pistas por verificar: no valen como evidencia hasta cargar la ficha técnica del fabricante.</p>
       <button className="boton no" disabled={trabajando || d?.estado === "en_curso"} onClick={buscar}>{d?.estado === "en_curso" ? "Buscando…" : d ? "Repetir la búsqueda" : "Buscar más opciones en internet"}</button>
       {error && <p className="aviso" role="alert">{error.detalle || "No se ha podido hacer."}</p>}
       {aviso && <p className="aviso" role="status">{aviso}</p>}
