@@ -24,6 +24,7 @@ LOTE = 32                  # textos por llamada a Ollama
 MAX_TEXTO = 400
 MAX_ESPECIFICACIONES = 6
 CERROJO = 7_310_101      # clave del cerrojo de PostgreSQL de la pasada de vectorización
+MAX_TEXTO_LINEA = 450          # una línea de tarifa en la evidencia: las descripciones largas se comían el cupo de caracteres y dejaban fuera productos
 SIMILITUD_MINIMA = 0.45    # por debajo, el parecido es ruido (a calibrar con tarifas reales)
 
 
@@ -140,7 +141,7 @@ async def buscar(consultas: list[str], por_consulta: int = 4, embed=embeddings) 
     if not consultas:
         return []
     vectores = await embed(consultas)
-    mejores: dict[tuple[str, str], dict] = {}
+    por_q: list[list[tuple[tuple[str, str], dict]]] = []
     async with await _conectar() as conn:
         for q, v in zip(consultas, vectores):
             rest = AP.restricciones(q)
@@ -152,8 +153,15 @@ async def buscar(consultas: list[str], por_consulta: int = 4, embed=embeddings) 
                     continue
                 res = AP.evaluar(rest, attrs or AP.extraer(texto))
                 candidatos.append((AP.orden(res), -float(sim), lista, ref, texto, float(sim), AP.texto_de_comprobacion(res)))
-            for _o, _s, lista, ref, texto, sim, nota in sorted(candidatos)[:por_consulta]:
-                k = (lista, ref)
-                if k not in mejores or sim > mejores[k]["similitud"]:
-                    mejores[k] = {"ref": ref, "desc": (texto + " " + nota).strip(), "similitud": round(sim, 3)}
-    return sorted(mejores.values(), key=lambda x: -x["similitud"])
+            por_q.append([((lista, ref), {"ref": ref, "desc": (_corto(texto, MAX_TEXTO_LINEA) + " " + nota).strip(), "similitud": round(sim, 3)})
+                          for _o, _s, lista, ref, texto, sim, nota in sorted(candidatos)[:por_consulta]])
+    # Por turnos: primero el mejor de cada consulta, luego el segundo de cada una... Ordenar todo junto por parecido dejaba que las consultas con mejor puntuación media (p. ej. «licencia del VMS»)
+    # se llevaran todo el cupo de la evidencia y los productos de las demás (domos, servidores…) no llegaban nunca al modelo.
+    salida: list[dict] = []
+    vistos: set[tuple[str, str]] = set()
+    for ronda in range(por_consulta):
+        for lista in por_q:
+            if ronda < len(lista) and lista[ronda][0] not in vistos:
+                vistos.add(lista[ronda][0])
+                salida.append(lista[ronda][1])
+    return salida

@@ -156,6 +156,15 @@ class TestBase(unittest.TestCase):
         with psycopg.connect(self.url) as c:
             self.assertEqual(c.execute("SELECT atributos->>'resolucion_mp' FROM lineas_vectores WHERE ref='CUATRO'").fetchone()[0], "4.0")
 
+    def test_cada_consulta_aporta_su_mejor_producto_antes_de_que_una_repita(self):
+        self.tarifa([{"ref": "LIC-1", "desc": "Licencia plataforma gestion"}, {"ref": "LIC-2", "desc": "Licencia plataforma gestion ampliada"},
+                     {"ref": "LIC-3", "desc": "Licencia plataforma gestion enterprise"},
+                     {"ref": "DOMO-1", "desc": "Domo PTZ zoom optico exterior con ranura tarjeta carcasa metalica antivandalica cable soporte pared"}])
+        asyncio.run(LV.indexar_pendientes(embed=embed_falso))
+        res = asyncio.run(LV.buscar(["Licencia plataforma gestion", "Domo PTZ zoom optico"], por_consulta=3, embed=embed_falso))
+        refs = [r["ref"] for r in res]
+        self.assertLess(refs.index("DOMO-1"), 2)                         # entre los dos primeros, aunque las licencias puntúen más en su consulta
+
     def test_respeta_el_maximo_por_pasada_y_continua_en_la_siguiente(self):
         self.tarifa([{"ref": f"R{i}", "desc": f"Producto numero{i}"} for i in range(70)])
         r = asyncio.run(LV.indexar_pendientes(maximo=32, embed=embed_falso))
