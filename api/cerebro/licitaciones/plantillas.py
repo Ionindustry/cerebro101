@@ -329,7 +329,22 @@ async def preparar(motor_id: str, ficha: dict | None, usuario: str, empresa: str
             await _guardar(motor_id, doc, "error", nombre, "", "", 0, [], [], [str(e)[:300]], {}, str(usuario))
     if n is None:
         await _deuc(motor_id, fuente, nombre, {}, str(usuario), any(re.search(r"(?i)deuc|espd", d["nombre"]) for d in docs))
-    return await listar(motor_id)
+    r = await listar(motor_id)
+    if n is None:                # lo que se ha hecho, a la vista: si no se rellena nada, la persona tiene que saber qué se revisó y por qué
+        r["revisados"] = [{"n": d["n"], "nombre": d["nombre"], "formato": d["formato"]} for d in docs]
+        r["mensaje"] = mensaje_de_revision(len(docs), len(r["documentos"]))
+    return r
+
+
+def mensaje_de_revision(revisados: int, preparados: int) -> str:
+    """Qué dice la pantalla tras pulsar «Rellenar las plantillas del concurso». Pura."""
+    if revisados == 0:
+        return ("No hay documentos del pliego bajados y limpios en formato Word, ODT, Excel, PDF o ZIP: primero baja y lee los documentos del pliego (tarjeta «Pliegos»). "
+                "Los documentos que no son de esos formatos no se pueden rellenar.")
+    if preparados == 0:
+        return (f"He revisado {revisados} documento{'s' if revisados != 1 else ''} del pliego y ninguno tiene huecos que rellenar: solo se rellenan Word, ODT, Excel o PDF con huecos o formulario. "
+                "Si los modelos de declaración o los anexos vienen escritos dentro del texto del pliego, el agente Administrativo prepara su texto en «Declaración responsable / DEUC» (botón «Preparar la oferta»).")
+    return f"He revisado {revisados} documento{'s' if revisados != 1 else ''} y he preparado {preparados}."
 
 
 def _publico(f: dict) -> dict:
