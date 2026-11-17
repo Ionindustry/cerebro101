@@ -122,6 +122,7 @@ function Pliegos({ id }) {
   const [d, setD] = useState(undefined);              // undefined = consultando; null = sin acceso
   const [error, setError] = useState(null);
   const [trabajando, setTrabajando] = useState(null);  // número del documento que se está bajando, o "revisando"
+  const [avisoLectura, setAvisoLectura] = useState(null);
   const cargar = async () => {
     try { setD(await pedirCerebro(`licitaciones/pliegos/${encodeURIComponent(id)}`)); setError(null); }
     catch (e) { if (e.status === 403 || e.status === 401) setD(null); else { setError(e); setD((x) => (x === undefined ? null : x)); } }
@@ -148,6 +149,12 @@ function Pliegos({ id }) {
   const analizar = async () => {
     setTrabajando("analizando"); setError(null);
     try { await pedirCerebro(`licitaciones/pliegos/${encodeURIComponent(id)}/analizar`, { method: "POST" }); await cargar(); }
+    catch (e) { setError(e); }
+    finally { setTrabajando(null); }
+  };
+  const releer = async () => {
+    setTrabajando("releyendo"); setError(null); setAvisoLectura(null);
+    try { await pedirCerebro(`licitaciones/pliegos/${encodeURIComponent(id)}/releer`, { method: "POST" }); setAvisoLectura("Volviendo a leer los pliegos (tardan un par de minutos). Después, repite «Proponer cantidades»."); }
     catch (e) { setError(e); }
     finally { setTrabajando(null); }
   };
@@ -183,6 +190,10 @@ function Pliegos({ id }) {
             <button className="boton no" disabled={trabajando !== null || an?.enCurso} onClick={analizar} title="Descarga los pliegos y el Analista anota los requisitos en borrador (solo licitaciones en estudio)">
               {trabajando === "analizando" ? "Encolando…" : an ? "Repetir el análisis de los pliegos" : "Analizar los pliegos con el Analista"}
             </button>
+            <button className="boton no" disabled={trabajando !== null || docs.length === 0} onClick={releer} title="Vuelve a leer el texto de los documentos ya guardados (las tablas salen por filas). No baja nada">
+              {trabajando === "releyendo" ? "Encolando…" : "Volver a leer los pliegos"}
+            </button>
+            {avisoLectura && <span className="meta" role="status">{avisoLectura}</span>}
           </p>
         );
       })()}

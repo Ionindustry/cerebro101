@@ -669,6 +669,20 @@ async def analizar_pliegos_de_la_licitacion(motor_id: str, usuario: Usuario = De
     return {"licitacion": motor_id, "encolado": True}
 
 
+@app.post("/licitaciones/pliegos/{motor_id}/releer", status_code=202)
+async def releer_pliegos_de_la_licitacion(motor_id: str, usuario: Usuario = Depends(usuario_actual)):
+    """«Volver a leer los pliegos»: repite la lectura del texto de los documentos ya guardados (sin bajar nada) para aprovechar mejoras del extractor, como las tablas por filas."""
+    _exige_licitaciones(usuario)
+    try:
+        from ..tareas.celery_app import app as celery
+        celery.send_task("cerebro.tareas.celery_app.releer_pliegos", args=[motor_id], queue="cortas")
+    except Exception as e:      # noqa: BLE001
+        log.warning("pliegos: no se ha podido encolar la relectura de %s: %s", motor_id, type(e).__name__)
+        raise HTTPException(503, "No se ha podido encolar la relectura: inténtalo de nuevo") from None
+    log.info("pliegos: %s pide volver a leer los pliegos de %s", usuario.id, motor_id)
+    return {"licitacion": motor_id, "encolado": True}
+
+
 @app.post("/licitaciones/pliegos/{motor_id}/descargar")
 async def descargar_pliego(motor_id: str, entrada: DescargaPliego, usuario: Usuario = Depends(usuario_actual)):
     """«Descargar y analizar»: baja el documento nº n a cuarentena, lo pasa por el antivirus y lee su texto. Tarda unos segundos."""
@@ -1091,7 +1105,12 @@ async def cargar_fichas_de_una_marca(entrada: MarcaFichas, usuario: Usuario = De
         await fichas_de_marca.iniciar(entrada.marca, usuario.id)
     except fichas_tecnicas.ErrorFicha as e:
         raise HTTPException(409 if "en curso" in str(e) else 422, str(e)) from None
-    celery.send_task("cerebro.tareas.celery_app.cargar_fichas_marca", args=[entrada.marca.strip(), usuario.id], queue="cortas")
+    try:
+        from ..tareas.celery_app import app as celery
+        celery.send_task("cerebro.tareas.celery_app.cargar_fichas_marca", args=[entrada.marca.strip(), usuario.id], queue="cortas")
+    except Exception as e:      # noqa: BLE001 — la carga no puede quedarse «en curso» si no llegó a la cola
+        await fichas_de_marca._cerrar(entrada.marca.casefold().strip(), "error", {"error": f"No se ha podido encolar ({type(e).__name__})"})
+        raise HTTPException(503, "No se ha podido encolar la carga: inténtalo de nuevo") from None
     log.info("fichas: %s lanza la carga de la marca %s", usuario.id, entrada.marca[:60])
     return {"estado": "en_curso"}
 
@@ -1114,6 +1133,7 @@ async def cargar_fichas_de_una_lista(entrada: CargaFichas, usuario: Usuario = De
         carga = await fichas_tecnicas.iniciar_carga(entrada.importacion, usuario.id)
     except fichas_tecnicas.ErrorFicha as e:
         raise HTTPException(409 if "en curso" in str(e) else 404, str(e)) from None
+    from ..tareas.celery_app import app as celery
     celery.send_task("cerebro.tareas.celery_app.cargar_fichas", args=[carga], queue="cortas")
     log.info("fichas: %s lanza la carga %s (lista %s)", usuario.id, carga, entrada.importacion)
     return {"carga": carga}
@@ -1278,7 +1298,12 @@ async def buscar_mas_opciones_en_internet(motor_id: str, entrada: RedactarEntrad
         await descubrimiento_ofertas.iniciar(motor_id, usuario.id)
     except (ofertas_licitaciones.ErrorOferta, LookupError) as e:
         raise _oferta_error(e) from None
-    celery.send_task("cerebro.tareas.celery_app.descubrir_opciones", args=[motor_id, (entrada.modelo if entrada and getattr(entrada, "modelo", None) else "auto")], queue="cortas")
+    try:
+        from ..tareas.celery_app import app as celery
+        celery.send_task("cerebro.tareas.celery_app.descubrir_opciones", args=[motor_id, (entrada.modelo if entrada and getattr(entrada, "modelo", None) else "auto")], queue="cortas")
+    except Exception as e:      # noqa: BLE001 — la búsqueda no puede quedarse «en curso» si no llegó a la cola
+        await descubrimiento_ofertas._cerrar(motor_id, "error", error=f"No se ha podido encolar la búsqueda ({type(e).__name__}): inténtalo de nuevo")
+        raise HTTPException(503, "No se ha podido encolar la búsqueda: inténtalo de nuevo") from None
     log.info("descubrimiento: %s busca más opciones para %s", usuario.id, motor_id)
     return {"estado": "en_curso"}
 

@@ -462,6 +462,24 @@ async def extraer(did: int, lector=None, timeout: float = 130) -> dict:
             return _ficha_publica(await cur.fetchone())
 
 
+async def releer(motor_id: str) -> dict:
+    """Vuelve a leer el texto de los documentos ya guardados y limpios (p. ej. tras mejorar el extractor: las tablas ahora salen por filas). No baja nada ni cambia el estado de seguridad.
+    {documentos, releidos, con_error}."""
+    motor_id = _id_valido(motor_id)
+    async with await _conectar() as conn:
+        cur = await conn.execute("SELECT id FROM pliegos_documentos WHERE motor_id = %s AND estado IN ('limpio', 'con_macros') ORDER BY n, id", [motor_id])
+        ids = [f["id"] for f in await cur.fetchall()]
+    ok = mal = 0
+    for did in ids:
+        try:
+            r = await extraer(did)
+            ok += 1 if r.get("paginas") is not None else 0
+            mal += 0 if r.get("paginas") is not None else 1
+        except ErrorPliego:
+            mal += 1
+    return {"documentos": len(ids), "releidos": ok, "con_error": mal}
+
+
 # ---- Lo que lee el agente: páginas, búsqueda y requisitos con cita comprobada ----
 
 async def _documento(conn, motor_id: str, n) -> dict:
