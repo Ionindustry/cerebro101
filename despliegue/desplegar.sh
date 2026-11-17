@@ -168,7 +168,7 @@ instalar() {
     python3 scripts/erpnext_blindar.py
     "${ERP[@]}" restart backend queue-short queue-long >/dev/null
     "${ERP[@]}" exec -T backend bench --site "$(valor ERPNEXT_SITE)" set-config host_name "https://$(valor DOM_ERP)" >/dev/null
-    "${COMPOSE[@]}" up -d --no-build --force-recreate --no-deps --scale proxy=0 api worker beat   # leen las claves nuevas
+    "${COMPOSE[@]}" up -d --no-build --force-recreate --no-deps --scale proxy=0 api worker worker-cortas beat   # leen las claves nuevas
   else
     paso "4" "ERPNext omitido (--sin-erp)"
   fi
@@ -201,7 +201,7 @@ Pendiente, a mano:
        ufw allow OpenSSH && ufw allow 80,443/tcp && ufw allow 443/udp && ufw enable
   2. Copias de seguridad cada noche:  0 3 * * *  cd $RAIZ && ./scripts/copia_seguridad.sh --parar   (y llevad la carpeta copias/ fuera del servidor)
   3. Guardad una copia del .env en un gestor de contraseñas: no está en git y sin él no se pueden restaurar los datos.
-  4. Claves externas (Jev, Grok, correo…) en el .env; después: docker compose -f docker-compose.yml -f despliegue/docker-compose.produccion.yml up -d api worker beat
+  4. Claves externas (Jev, Grok, correo…) en el .env; después: docker compose -f docker-compose.yml -f despliegue/docker-compose.produccion.yml up -d api worker worker-cortas beat
 RESUMEN
 }
 

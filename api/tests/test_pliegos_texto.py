@@ -160,6 +160,39 @@ def extraer_de_fichero(datos, **cambios):
             os.chdir(cwd)
 
 
+def docx_con_tabla(antes, filas, despues):
+    ns = 'xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"'
+    par = lambda t: f"<w:p><w:r><w:t>{t}</w:t></w:r></w:p>"
+    tabla = "<w:tbl>" + "".join("<w:tr>" + "".join(f"<w:tc>{par(c)}</w:tc>" for c in f) + "</w:tr>" for f in filas) + "</w:tbl>"
+    b = io.BytesIO()
+    with zipfile.ZipFile(b, "w") as z:
+        z.writestr("[Content_Types].xml", "<Types/>")
+        z.writestr("word/document.xml", f"<w:document {ns}><w:body>{par(antes)}{tabla}{par(despues)}</w:body></w:document>")
+    return b.getvalue()
+
+
+class TestTablas(unittest.TestCase):
+    def test_una_tabla_de_word_sale_por_filas_con_sus_celdas_separadas(self):
+        r = X.extraer(docx_con_tabla("Mediciones", [["Partida", "Unidad", "Cantidad"], ["Cable UTP", "m", "1.250"], ["Cámara IP", "ud", "12"]], "Fin"), "docx")
+        t = "\n".join(x["texto"] for x in r["paginas"])
+        self.assertIn("Partida | Unidad | Cantidad", t)
+        self.assertIn("Cámara IP | ud | 12", t)
+        self.assertLess(t.index("Mediciones"), t.index("Partida"))
+        self.assertLess(t.index("Cámara IP"), t.index("Fin"))                       # y respeta el orden del documento
+
+    def test_una_pagina_de_pdf_con_columnas_sale_por_filas_y_se_avisa(self):
+        filas = [f"Partida {i}          m2          {i * 10}          {i * 3},50" for i in range(1, 7)]
+        r = X.extraer(pdf([["Cuadro de precios"] + filas, ["Texto normal de otra página sin columnas."]]), "pdf")
+        self.assertIn("Partida 3 | m2 | 30 | 9,50", r["paginas"][0]["texto"])
+        self.assertNotIn(" | ", r["paginas"][1]["texto"])
+        self.assertTrue(any("Tablas leídas por filas" in a and "1" in a for a in r["avisos"]))
+
+    def test_un_texto_corrido_no_se_toma_por_tabla(self):
+        r = X.extraer(pdf([["Este es un párrafo normal con varias líneas de texto corrido."] * 8]), "pdf")
+        self.assertNotIn(" | ", r["paginas"][0]["texto"])
+        self.assertFalse(any("Tablas" in a for a in r["avisos"]))
+
+
 class TestOcr(unittest.TestCase):
     def test_las_paginas_sin_texto_se_leen_con_ocr_y_se_avisa_de_cuales(self):
         datos = pdf([["Pagina con texto seleccionable, de sobra para no necesitar OCR."], [""], [""], ["Otra pagina con texto seleccionable normal y corriente."], [""]])

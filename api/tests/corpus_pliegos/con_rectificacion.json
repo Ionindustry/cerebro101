@@ -1,0 +1,20 @@
+{
+ "documentos": [
+  {
+   "n": 1,
+   "nombre": "PCAP.pdf",
+   "texto": "Pliego de cláusulas administrativas particulares. Tres sobres: sobre 1, sobre 2 y sobre 3. Plazo de presentación hasta el 10 de marzo de 2026."
+  },
+  {
+   "n": 2,
+   "nombre": "Rectificación_PCAP_12-03-2026.pdf",
+   "texto": "RECTIFICACIÓN DE ERRORES. Fecha 12/03/2026. Donde dice 10 de marzo, se modifica la cláusula 7.2 y la cláusula 9: el plazo queda ampliado. Queda sin efecto el apartado 4.1."
+  }
+ ],
+ "esperado": {
+  "sobres": 3,
+  "rectificaciones": 1,
+  "clausulas_min": 2,
+  "fecha": "2026-03-12"
+ }
+}

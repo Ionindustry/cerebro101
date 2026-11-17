@@ -8,7 +8,7 @@ Cómo revisarla: para cada departamento, mira si le sobra algo (principio de mí
 python3 scripts/erpnext_roles_cerebro.py --todos      # rol por departamento y usuario técnico con solo ese rol
 python3 scripts/auditar_acceso_erp.py                 # comprueba que cada uno ve lo que dice la política y nada más
 ```
-Después, `docker compose up -d --force-recreate --no-deps api worker beat` (la API lee la política y las claves al arrancar).
+Después, `docker compose up -d --force-recreate --no-deps api worker worker-cortas beat` (la API lee la política y las claves al arrancar).
 
 ## areas  (11 agentes: director-areas, esp-cctv, esp-incendios, esp-accesos, esp-redes, esp-television…)
 

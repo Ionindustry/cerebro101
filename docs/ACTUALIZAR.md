@@ -30,4 +30,4 @@ El token es una contraseña: no se escribe en chats, ficheros del repositorio ni
 ## Volver a una versión anterior
 
 Cada imagen se publica también con el código completo de su commit como etiqueta. Con `CEREBRO_VERSION=<código del commit>` en el `.env`, `docker compose pull api panel` y
-`docker compose up -d --no-build api worker beat panel licitaciones-eventos`, el servidor vuelve a esa versión. (Las migraciones de la base de datos no se deshacen solas: solo añaden.)
+`docker compose up -d --no-build api worker worker-cortas beat panel licitaciones-eventos`, el servidor vuelve a esa versión. (Las migraciones de la base de datos no se deshacen solas: solo añaden.)

@@ -209,6 +209,29 @@ class TestCantidadesDelPliego(unittest.TestCase):
         self.assertNotIn("coste", m[1]["content"].lower())
 
 
+TABLA = ("Capítulo 3. Mediciones\nDescripción | Unidad | Cantidad\nCámara domo PTZ con zoom óptico 25x | ud | 12\nCámara LPR con iluminador IR | ud | 4\n"
+         "Cable UTP cat 6 | m | 1.500\nSwitch PoE 24 puertos gestionable | ud | 3\nSwitch PoE 24 puertos gestionable | ud | 5\nSoporte de pared | ud | 20")
+
+
+class TestCantidadesDeTablas(unittest.TestCase):
+    PART = [{"id": 1, "producto": "Hikvision DS-2DE domo PTZ", "parametros": ["Zoom óptico 25x"]}, {"id": 2, "producto": "Cable UTP Cat6", "parametros": []},
+            {"id": 3, "producto": "Switch PoE 24 puertos", "parametros": []}, {"id": 4, "producto": "Servidor rack", "parametros": []}]
+
+    def test_la_cifra_sale_de_la_fila_de_la_tabla_con_su_cita(self):
+        r = P.cantidades_de_tablas(self.PART, TABLA)
+        self.assertEqual(r[1]["cantidad"], Decimal("12"))
+        self.assertIn("Cámara domo PTZ", r[1]["cita"])
+        self.assertEqual(r[2]["cantidad"], Decimal("1500"))                 # «1.500» es mil quinientos
+
+    def test_dos_filas_con_cifras_distintas_no_se_adivinan_y_lo_que_no_esta_se_deja(self):
+        r = P.cantidades_de_tablas(self.PART, TABLA)
+        self.assertNotIn(3, r)                                              # el switch sale con 3 y con 5: lo mira una persona
+        self.assertNotIn(4, r)                                              # el servidor no figura
+
+    def test_sin_tablas_no_se_inventa_nada(self):
+        self.assertEqual(P.cantidades_de_tablas(self.PART, "Se suministrarán 12 cámaras domo PTZ."), {})
+
+
 @unittest.skipUnless(URL, "sin CEREBRO_TEST_PG")
 class TestCantidadesFlujo(unittest.TestCase):
     setUp = TestFlujo.setUp
@@ -235,6 +258,22 @@ class TestCantidadesFlujo(unittest.TestCase):
         with self.assertRaises(P.ErrorPartida):                                           # ya no hay partidas sin cantidad
             with mock.patch.object(X, "_documentos_leidos", mock.AsyncMock(return_value=docs)):
                 self.run_(P.proponer_cantidades(ID, consulta=consulta))
+
+    def test_si_las_tablas_lo_resuelven_todo_no_se_llama_al_modelo(self):
+        self.tabla()
+        self.run_(P.proponer(ID, "albert"))
+        llamadas = []
+
+        async def consulta(*a, **k):
+            llamadas.append(1)
+            return {"cantidades": []}, "claude"
+        docs = [{"n": 1, "nombre": "PPT", "paginas": [(1, "Descripción | Unidad | Cantidad\nCámara Milesight MS-C8573 de resolución 4 MP | ud | 12\nCámara LPR con iluminador IR | ud | 4")]}]
+        with mock.patch.object(X, "_documentos_leidos", mock.AsyncMock(return_value=docs)):
+            d = self.run_(P.proponer_cantidades(ID, consulta=consulta))
+        self.assertGreaterEqual(d["cantidades"]["sugeridas"], 1)
+        self.assertEqual(d["partidas"][0]["cantidad_pliego"], "12")
+        self.assertEqual(d["partidas"][0]["cantidad"], None)                  # sigue siendo una sugerencia
+        self.assertEqual((d["cantidades"]["sin_dato"], llamadas), (0, []))
 
     def test_sin_pliegos_se_dice(self):
         self.tabla()

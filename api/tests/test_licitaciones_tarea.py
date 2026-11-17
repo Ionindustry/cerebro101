@@ -71,6 +71,14 @@ class TestRastreo(unittest.TestCase):
         self.assertIsNone(inspect.signature(celery_app._ejecutar).parameters["peticion"].default)
 
 
+class TestColas(unittest.TestCase):
+    def test_las_tareas_cortas_van_a_su_cola_y_las_largas_no(self):
+        r = celery_app.app.conf.task_routes
+        for t in ("descubrir_opciones", "cargar_fichas_marca", "cargar_fichas"):
+            self.assertEqual(r[f"cerebro.tareas.celery_app.{t}"]["queue"], "cortas")
+        self.assertNotIn("cerebro.tareas.celery_app.redactar_oferta", r)         # la oferta larga sigue en «peticiones» (se envía con su cola)
+
+
 class TestProcesoCaido(unittest.TestCase):
     def test_si_muere_el_proceso_se_cierra_la_ejecucion_como_interrumpida(self):
         from billiard.exceptions import WorkerLostError

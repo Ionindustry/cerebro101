@@ -88,6 +88,6 @@ Rellena la columna «Tu valor» (en papel, en un Excel, donde quieras) y luego c
 
 - **«El departamento “licitaciones” no tiene permitido consultar…»**: al usuario técnico de ERPNext le faltan permisos. Se arregla con
   `python3 scripts/erpnext_roles_cerebro.py --departamento licitaciones` y después
-  `docker compose up -d --force-recreate --no-deps api worker beat`.
+  `docker compose up -d --force-recreate --no-deps api worker worker-cortas beat`.
 - **Falta un dato que ya has cargado:** casi siempre es el enlace (**Links**) de la dirección o del contacto con la empresa (apartados 2.2 y 2.3), o el cargo del representante que no es una de las palabras permitidas.
 - **No aparece «DNI» o «Poder»:** no se han creado los campos personalizados (2.4) o el nombre interno no coincide con `empresa.campos`.

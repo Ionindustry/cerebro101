@@ -48,6 +48,27 @@ def textos(r, nivel):
     return [i["texto"] for s in r["secciones"] for i in s["items"] if i["nivel"] == nivel]
 
 
+class TestSombra(unittest.TestCase):
+    def test_apagado_por_defecto_no_aparece_y_encendido_solo_informa(self):
+        import os
+        os.environ.pop("PLIEGOS_ANALISIS_SOMBRA", None)
+        llamadas = []
+
+        async def sombra(m):
+            llamadas.append(m)
+            return [{"nivel": "aviso", "texto": "El pliego parece pedir 2 sobre(s)"}]
+        r = ejecutar(R.revisar(ID, **dobles(sombra=sombra)))
+        self.assertEqual((llamadas, [s["id"] for s in r["secciones"] if s["id"] == "sombra"]), ([], []))
+        os.environ["PLIEGOS_ANALISIS_SOMBRA"] = "1"
+        try:
+            r2 = ejecutar(R.revisar(ID, **dobles(sombra=sombra)))
+        finally:
+            del os.environ["PLIEGOS_ANALISIS_SOMBRA"]
+        self.assertEqual(llamadas, [ID])
+        self.assertIn("sombra", [s["id"] for s in r2["secciones"]])
+        self.assertEqual(r2["bloqueos"], r["bloqueos"])           # solo avisos: no bloquea nada
+
+
 class TestRevision(unittest.TestCase):
     def test_con_avisos_pero_sin_bloqueos_se_puede_lanzar(self):
         r = ejecutar(R.revisar(ID, **dobles()))

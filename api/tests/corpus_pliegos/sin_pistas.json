@@ -1,0 +1,14 @@
+{
+ "documentos": [
+  {
+   "n": 1,
+   "nombre": "Memoria.pdf",
+   "texto": "Memoria descriptiva de las obras de reforma de la cubierta. Superficie 1.200 m2."
+  }
+ ],
+ "esperado": {
+  "sobres": null,
+  "rectificaciones": 0,
+  "formula": null
+ }
+}

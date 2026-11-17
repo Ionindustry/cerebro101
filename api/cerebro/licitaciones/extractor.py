@@ -167,6 +167,20 @@ def _con_ocr(ruta: str, paginas: list[str], avisos: list[str]) -> None:
         avisos.append("El PDF casi no tiene texto, ni siquiera con OCR (parece un escaneo en blanco o ilegible): hace falta que lo revise una persona")
 
 
+_HUECO = re.compile(r" {3,}")
+
+
+def _tabular(layout: str) -> bool:
+    """Una página «de tabla»: varias líneas con dos o más huecos grandes entre columnas (mediciones, cuadros de precios, listas de equipos)."""
+    return sum(1 for l in layout.splitlines() if len(_HUECO.findall(l.strip())) >= 2) >= 4
+
+
+def _como_tabla(layout: str) -> str:
+    """El texto con la disposición en columnas del PDF, con cada hueco entre columnas marcado « | » (una fila por línea)."""
+    filas = [_HUECO.sub(" | ", l.strip()) for l in layout.splitlines() if l.strip()]
+    return _limpiar("\n".join(filas))
+
+
 def _pdf(datos: bytes, ruta: str | None = None) -> tuple[list[str], str, list[str]]:
     from pypdf import PdfReader
     from pypdf.errors import PyPdfError
@@ -176,13 +190,24 @@ def _pdf(datos: bytes, ruta: str | None = None) -> tuple[list[str], str, list[st
         if lector.is_encrypted and not lector.decrypt(""):
             raise NoSePuedeLeer("El PDF está protegido con contraseña: no se puede leer sin ella")
         total = len(lector.pages)
-        paginas = [_limpiar(p.extract_text() or "") for p in lector.pages[:PAGINAS_MAX]]
+        paginas, con_tablas = [], []
+        for i, p in enumerate(lector.pages[:PAGINAS_MAX], 1):
+            texto = _limpiar(p.extract_text() or "")
+            try:
+                lay = p.extract_text(extraction_mode="layout") or ""
+                if texto and _tabular(lay):      # las tablas salen por filas, con sus columnas separadas por « | »
+                    texto, _ = _como_tabla(lay), con_tablas.append(i)
+            except (PyPdfError, ValueError, KeyError, TypeError, AttributeError, RecursionError):      # la disposición es un extra: si falla, el texto de siempre
+                pass
+            paginas.append(texto)
     except NoSePuedeLeer:
         raise
     except (PyPdfError, ValueError, KeyError, TypeError, OSError, RecursionError, AttributeError) as e:
         raise NoSePuedeLeer(f"No se ha podido leer el PDF ({type(e).__name__})") from e
     if total > PAGINAS_MAX:
         avisos.append(f"Solo se han leído las {PAGINAS_MAX} primeras páginas de {total}")
+    if con_tablas:
+        avisos.append("Tablas leídas por filas (columnas separadas por « | ») en las páginas " + _rangos(con_tablas) + ": comprueba las cifras importantes")
     _con_ocr(ruta, paginas, avisos)
     return paginas, "página", avisos
 
@@ -206,7 +231,17 @@ def _docx(datos: bytes) -> tuple[list[str], str, list[str]]:
         raiz = ElementTree.fromstring(z.read("word/document.xml"))
     except ElementTree.ParseError as e:
         raise NoSePuedeLeer("El documento Word está dañado") from e
-    texto = "\n".join(_texto_xml(raiz, {ns + "p"}, {ns + "t"}))
+    cuerpo = raiz.find(ns + "body")
+    lineas = []
+    for hijo in (list(cuerpo) if cuerpo is not None else []):
+        if hijo.tag == ns + "tbl":      # una tabla = una línea por fila, con las celdas separadas por « | »
+            for fila in hijo.iter(ns + "tr"):
+                celdas = [" ".join(_texto_xml(c, {ns + "p"}, {ns + "t"})) for c in fila if c.tag == ns + "tc"]
+                if any(c.strip() for c in celdas):
+                    lineas.append(" | ".join(celdas))
+        else:
+            lineas.extend(_texto_xml(hijo, {ns + "p"}, {ns + "t"}))
+    texto = "\n".join(lineas) if cuerpo is not None else "\n".join(_texto_xml(raiz, {ns + "p"}, {ns + "t"}))
     return _en_bloques(_limpiar(texto)), "bloque", (["Se ignoran las macros y los objetos incrustados"] if "word/vbaProject.bin" in z.namelist() else [])
 
 

@@ -518,9 +518,53 @@ def quitar_proteccion_pdf(ruta: Path, destino: Path) -> dict:
         raise ErrorFormulario(f"El PDF no se puede leer ({type(e).__name__})") from None
 
 
+MAX_PAGINAS_PLANO = 30
+MAX_ETIQUETAS_PLANO = 60
+
+
+def _etiquetas_planas(lector) -> list[dict]:
+    """PDF SIN formulario: las etiquetas «Razón social:» con su posición, para escribir a su derecha. Se miran solo las líneas de texto que terminan en «:» y cuyo dato se reconoce (la misma regla
+    `emparejar` que en Word y Excel). Si a la derecha de la etiqueta ya hay texto en la misma línea, no se toca. Devuelve [{pagina, x, y, ancho, tam, etiqueta, clave}]."""
+    out = []
+    for n, pag in enumerate(lector.pages[:MAX_PAGINAS_PLANO]):
+        piezas = []
+
+        def visita(texto, cm, tm, fuente, tam, _p=piezas):
+            if texto and texto.strip():
+                try:
+                    x, y = tm[4], tm[5]
+                    t = float(tam or 10) * (abs(tm[3]) or 1.0)
+                    _p.append({"t": texto, "x": float(x), "y": float(y), "tam": min(max(t, 6.0), 14.0)})
+                except (TypeError, ValueError, IndexError):
+                    pass
+        try:
+            pag.extract_text(visitor_text=visita)
+        except Exception:      # noqa: BLE001 — un PDF hostil puede fallar de muchas maneras: esa página no se rellena
+            continue
+        for i, a in enumerate(piezas):
+            t = " ".join(a["t"].split())
+            if not t.endswith(":") or len(t) > 90 or len(out) >= MAX_ETIQUETAS_PLANO:
+                continue
+            ancho = a["tam"] * 0.5 * len(a["t"].rstrip())
+            derecha = a["x"] + ancho
+            if any(abs(b["y"] - a["y"]) < a["tam"] * 0.6 and b["x"] > a["x"] + 1 for j, b in enumerate(piezas) if j != i):
+                continue      # ya hay algo escrito en esa línea
+            clave = emparejar(t, t, False)
+            if clave:
+                out.append({"pagina": n, "x": round(derecha + 6, 1), "y": round(a["y"] - 1, 1), "ancho": 230.0, "tam": round(a["tam"], 1), "etiqueta": t.rstrip(":").strip(), "clave": clave})
+    return out
+
+
 def detectar_pdf(ruta: Path) -> dict:
-    _, campos = _campos_pdf(ruta)
+    lector, campos = _campos_pdf(ruta)
     out, avisos = [], []
+    if not campos:
+        planas = _etiquetas_planas(lector)
+        if planas:
+            avisos.append("Este PDF no tiene formulario: se escribirá encima, a la derecha de cada etiqueta reconocida («Razón social:», «NIF:»…). Comprueba el resultado a simple vista: la posición es una estimación")
+            nombres = {f"f{i}": c for i, c in enumerate(planas, 1)}
+            return {"formato": "pdf", "campos": [{"id": k, "tipo": "texto", "etiqueta": c["etiqueta"][-90:], "clave": c["clave"], "opcional": False, "fijo": False} for k, c in nombres.items()],
+                    "avisos": avisos, "_nombres": {}, "_planos": nombres}
     for i, (nombre, f) in enumerate(campos.items(), 1):
         tipo = str(f.get("/FT", ""))
         etiqueta = str(f.get("/TU") or nombre)
@@ -539,6 +583,8 @@ def rellenar_pdf(ruta: Path, destino: Path, valores: dict[str, str]) -> dict:
     from pypdf import PdfWriter
     from pypdf.generic import BooleanObject, NameObject
     det = detectar_pdf(ruta)
+    if det.get("_planos"):
+        return _rellenar_pdf_plano(ruta, destino, valores, det["_planos"])
     nombres = det["_nombres"]
     permitidos = {c["id"] for c in det["campos"] if c["tipo"] == "texto" and not c["fijo"]}
     asignar, hechos, omitidos = {}, [], []
@@ -553,6 +599,36 @@ def rellenar_pdf(ruta: Path, destino: Path, valores: dict[str, str]) -> dict:
     for pagina in w.pages:
         w.update_page_form_field_values(pagina, asignar, auto_regenerate=False)
     w._root_object["/AcroForm"][NameObject("/NeedAppearances")] = BooleanObject(True)
+    destino.parent.mkdir(parents=True, exist_ok=True)
+    tmp = destino.with_suffix(destino.suffix + ".tmp")
+    with open(tmp, "wb") as f:
+        w.write(f)
+    tmp.replace(destino)
+    return {"rellenados": hechos, "omitidos": omitidos}
+
+
+def _rellenar_pdf_plano(ruta: Path, destino: Path, valores: dict[str, str], planos: dict[str, dict]) -> dict:
+    """Escribe cada valor como una anotación de texto («FreeText») a la derecha de su etiqueta. No toca el contenido de la página y se puede borrar desde cualquier visor de PDF."""
+    from pypdf import PdfWriter
+    from pypdf.annotations import FreeText
+    lector, _ = _campos_pdf(ruta)
+    w = PdfWriter(clone_from=lector)
+    hechos, omitidos = [], []
+    for fid, v in valores.items():
+        c = planos.get(fid)
+        limpio = re.sub(r"\s+", " ", _CTRL.sub("", str(v))).strip() if v is not None else ""
+        if not c or not limpio:
+            omitidos.append(fid)
+            continue
+        pag = w.pages[c["pagina"]]
+        ancho_pag = float(pag.mediabox.width)
+        x2 = min(c["x"] + max(c["ancho"], 6.0 * len(limpio)), ancho_pag - 20)
+        if x2 - c["x"] < 20:
+            omitidos.append(fid)
+            continue
+        w.add_annotation(page_number=c["pagina"], annotation=FreeText(text=limpio[:200], rect=(c["x"], c["y"] - 2, x2, c["y"] + c["tam"] + 3), font="Helvetica", bold=False, italic=False,
+                                                                       font_size=f"{c['tam']:g}pt", font_color="000000", border_color=None, background_color=None))
+        hechos.append(fid)
     destino.parent.mkdir(parents=True, exist_ok=True)
     tmp = destino.with_suffix(destino.suffix + ".tmp")
     with open(tmp, "wb") as f:
@@ -698,6 +774,7 @@ def detectar(ruta: Path, formato: str) -> dict:
     if formato == "pdf":
         r = detectar_pdf(ruta)
         r.pop("_nombres", None)
+        r.pop("_planos", None)
         return r
     raise ErrorFormulario(f"De momento solo se rellenan plantillas en Word (.docx), Excel (.xlsx) y PDF con formulario; este es {formato}: hay que rellenarlo a mano")
 

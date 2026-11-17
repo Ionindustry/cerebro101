@@ -41,6 +41,6 @@ AYUDA
 fi
 
 echo "→ Cerebro: reiniciando con las imágenes nuevas"
-docker compose up -d --no-build api worker beat panel licitaciones-eventos conversor
+docker compose up -d --no-build api worker worker-cortas beat panel licitaciones-eventos conversor
 docker compose ps --format "table {{.Name}}\t{{.Status}}" | head -30
 echo "Listo. Versión del código: $(git rev-parse --short HEAD)"

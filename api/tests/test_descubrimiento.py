@@ -165,6 +165,19 @@ class TestFlujo(unittest.TestCase):
         asyncio.run(D.iniciar(ID, "albert"))                                              # se puede volver a lanzar
         self.assertEqual(asyncio.run(D.leer(ID))["estado"], "en_curso")
 
+    def test_en_cola_hasta_que_el_worker_empieza_y_el_reinicio_solo_cierra_lo_empezado(self):
+        asyncio.run(D.iniciar(ID, "albert"))
+        self.assertTrue(asyncio.run(D.leer(ID))["en_cola"])                              # esperando en la cola «cortas»
+        self.assertEqual(asyncio.run(D.interrumpir_huerfanas()), 0)                      # un reinicio no toca lo que aún no empezó
+        self.assertEqual(asyncio.run(D.leer(ID))["estado"], "en_curso")
+        asyncio.run(D.empezar(ID))
+        self.assertFalse(asyncio.run(D.leer(ID))["en_cola"])
+        self.assertEqual(asyncio.run(D.interrumpir_huerfanas()), 1)                      # ya empezada y sin worker vivo: interrumpida
+        d = asyncio.run(D.leer(ID))
+        self.assertEqual((d["estado"], d["error"], d["en_cola"]), ("error", D.INTERRUMPIDA, False))
+        asyncio.run(D.iniciar(ID, "albert"))                                              # repetir vuelve a «en cola»
+        self.assertTrue(asyncio.run(D.leer(ID))["en_cola"])
+
     def test_automatica_lanza_la_busqueda_si_quedan_huecos_y_no_si_esta_todo_cubierto(self):
         envio = mock.MagicMock()
         with mock.patch("cerebro.tareas.celery_app.app.send_task", envio):
