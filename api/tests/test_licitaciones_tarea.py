@@ -71,5 +71,25 @@ class TestRastreo(unittest.TestCase):
         self.assertIsNone(inspect.signature(celery_app._ejecutar).parameters["peticion"].default)
 
 
+class TestProcesoCaido(unittest.TestCase):
+    def test_si_muere_el_proceso_se_cierra_la_ejecucion_como_interrumpida(self):
+        from billiard.exceptions import WorkerLostError
+        cerrar = mock.AsyncMock()
+        with mock.patch("cerebro.licitaciones.redaccion.cerrar", cerrar):
+            celery_app._proceso_caido(sender=celery_app.redactar_oferta, exception=WorkerLostError("signal 11"), args=(42,))
+        cerrar.assert_awaited_once()
+        self.assertEqual(cerrar.await_args.args[0], 42)
+        self.assertIn("se cayó", cerrar.await_args.args[1])
+
+    def test_otros_fallos_y_otras_tareas_no_se_tocan(self):
+        from billiard.exceptions import WorkerLostError
+        cerrar = mock.AsyncMock()
+        with mock.patch("cerebro.licitaciones.redaccion.cerrar", cerrar):
+            celery_app._proceso_caido(sender=celery_app.redactar_oferta, exception=ValueError("x"), args=(42,))
+            celery_app._proceso_caido(sender=celery_app.cargar_fichas, exception=WorkerLostError("x"), args=(42,))
+            celery_app._proceso_caido(sender=celery_app.redactar_oferta, exception=WorkerLostError("x"), args=())
+        cerrar.assert_not_awaited()
+
+
 if __name__ == "__main__":
     unittest.main()

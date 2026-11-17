@@ -13,6 +13,7 @@ import uuid
 
 from celery import Celery
 from celery.schedules import crontab
+from celery.signals import task_failure
 
 from ..ajustes import ajustes
 from ..llm import ModeloNoDisponible, ModeloOcupado, ModeloTimeout
@@ -200,6 +201,22 @@ def redactar_oferta(self, ejecucion_id: int) -> dict:
     except Exception as e:      # noqa: BLE001 — la ejecución no puede quedarse «en curso» para siempre
         logging.getLogger("cerebro.tareas").warning("redactar_oferta %s: %s: %s", ejecucion_id, type(e).__name__, e)
         return asyncio.run(redaccion.cerrar(ejecucion_id, f"No se ha podido terminar la redacción ({type(e).__name__})"))
+
+
+@task_failure.connect
+def _proceso_caido(sender=None, exception=None, args=None, **_kw):
+    """Si el proceso que ejecutaba «Preparar la oferta» muere de golpe (un fallo nativo, falta de memoria), Celery no vuelve a entrar en la tarea y la ejecución se quedaría «en curso» hasta caducar:
+    se cierra aquí como interrumpida para poder volver a lanzarla enseguida."""
+    from billiard.exceptions import WorkerLostError
+    if not isinstance(exception, WorkerLostError) or getattr(sender, "name", "") != "cerebro.tareas.celery_app.redactar_oferta" or not args:
+        return
+    import logging
+    from ..licitaciones import redaccion
+    logging.getLogger("cerebro.tareas").warning("redactar_oferta %s: el proceso de trabajo se cayó (%s)", args[0], str(exception)[:120])
+    try:
+        asyncio.run(redaccion.cerrar(int(args[0]), "El proceso de trabajo se cayó a mitad de la redacción: lo ya escrito se conserva; vuelve a pulsar el botón del paso que falló"))
+    except Exception as e:      # noqa: BLE001 — si tampoco se puede cerrar, caducará sola
+        logging.getLogger("cerebro.tareas").warning("redactar_oferta %s: no se ha podido cerrar tras la caída: %s", args[0], type(e).__name__)
 
 
 @app.task(name="cerebro.tareas.celery_app.cargar_fichas")
