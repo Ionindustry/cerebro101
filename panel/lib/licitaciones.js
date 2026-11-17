@@ -1380,7 +1380,8 @@ export function exigidoTexto(p) {
 export function resumenEquivalencia(c) {
   const k = c?.comprobacion;
   if (!k) return "";
-  return `${k.parametros} parámetros · ${k.cubiertos} con producto que iguala o supera · ${k.sin_cubrir} sin cubrir`;
+  const pv = Number(k.por_verificar) || 0;
+  return `${k.parametros} parámetros · ${k.cubiertos} con producto que iguala o supera${pv ? ` · ${pv} por verificar a mano` : ""} · ${k.sin_cubrir} sin cubrir`;
 }
 
 // ---- Cómo se hace, en cada caso, un paso sensible (Administrativo y Costes) ----

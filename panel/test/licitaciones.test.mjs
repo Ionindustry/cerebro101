@@ -1245,6 +1245,7 @@ test("la tabla de equivalencias se resume y se escribe el valor exigido", async 
   assert.equal(exigidoTexto({ operador: ">=", valor_exigido: "4 MP" }), "mínimo 4 MP");
   assert.equal(exigidoTexto({ operador: "texto", valor_exigido: "H.265" }), "H.265");
   assert.equal(resumenEquivalencia({ comprobacion: { parametros: 7, cubiertos: 5, sin_cubrir: 2 } }), "7 parámetros · 5 con producto que iguala o supera · 2 sin cubrir");
+  assert.equal(resumenEquivalencia({ comprobacion: { parametros: 15, cubiertos: 8, por_verificar: 3, sin_cubrir: 4 } }), "15 parámetros · 8 con producto que iguala o supera · 3 por verificar a mano · 4 sin cubrir");
   assert.equal(resumenEquivalencia(null), "");
 });
 
