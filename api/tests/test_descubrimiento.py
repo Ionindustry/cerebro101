@@ -138,5 +138,17 @@ class TestFlujo(unittest.TestCase):
             asyncio.run(D.iniciar(ID, "otra"))
 
 
+    def test_una_busqueda_en_curso_que_nunca_se_cerro_se_marca_como_interrumpida_y_se_puede_repetir(self):
+        asyncio.run(D.iniciar(ID, "albert"))
+        self.assertEqual(asyncio.run(D.leer(ID))["estado"], "en_curso")                  # reciente: sigue buscando
+        with psycopg.connect(O.ajustes.database_url, autocommit=True) as c:
+            c.execute("UPDATE ofertas_descubrimiento SET actualizado = now() - interval '20 minutes' WHERE motor_id = %s", [ID])
+        d = asyncio.run(D.leer(ID))
+        self.assertEqual((d["estado"], d["error"]), ("error", D.INTERRUMPIDA))
+        self.assertEqual(asyncio.run(D.leer(ID))["estado"], "error")                     # y se queda cerrada
+        asyncio.run(D.iniciar(ID, "albert"))                                              # se puede volver a lanzar
+        self.assertEqual(asyncio.run(D.leer(ID))["estado"], "en_curso")
+
+
 if __name__ == "__main__":
     unittest.main()

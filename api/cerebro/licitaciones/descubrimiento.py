@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import logging
 import re
+from datetime import datetime, timezone
 from urllib.parse import urlparse
 
 from .. import modelos_externos as externos
@@ -125,11 +126,22 @@ def verificar(datos: dict, resultados: list[dict], hosts: list[str]) -> dict:
 
 
 # ---------------------------------------------------------------- guardado y estado
+MINUTOS_EN_CURSO = 15       # una búsqueda dura unos minutos; pasado esto sin cerrarse, el worker se reinició a mitad (o cayó) y la fila no se cerrará nunca
+INTERRUMPIDA = "La búsqueda se interrumpió (el servicio se reinició mientras buscaba). Pulsa «Repetir la búsqueda»."
+
+
 async def leer(motor_id: str) -> dict | None:
+    """El estado de la búsqueda. Una «en curso» de hace más de MINUTOS_EN_CURSO se cierra aquí como error: si no, el panel dice «Buscando…» para siempre y deja el botón desactivado."""
     motor_id = O._id(motor_id)
     async with await O._conectar() as conn:
-        cur = await conn.execute("SELECT estado, proveedor, modelo, contenido, error, creado, actualizado FROM ofertas_descubrimiento WHERE motor_id = %s", [motor_id])
+        cur = await conn.execute("SELECT estado, proveedor, modelo, contenido, error, creado, actualizado, "
+                                 "(estado = 'en_curso' AND actualizado < now() - make_interval(mins => %s)) AS caducada FROM ofertas_descubrimiento WHERE motor_id = %s", [MINUTOS_EN_CURSO, motor_id])
         f = await cur.fetchone()
+        if f and f.pop("caducada"):
+            await conn.execute("UPDATE ofertas_descubrimiento SET estado = 'error', error = %s, actualizado = now() WHERE motor_id = %s AND estado = 'en_curso'", [INTERRUMPIDA, motor_id])
+            f = {**f, "estado": "error", "error": INTERRUMPIDA, "actualizado": datetime.now(timezone.utc)}
+        elif f:
+            f.pop("caducada", None)
     return None if not f else {**f, "creado": f["creado"].isoformat(), "actualizado": f["actualizado"].isoformat()}
 
 
@@ -137,7 +149,7 @@ async def iniciar(motor_id: str, por: str) -> None:
     """Marca la búsqueda como en curso. Si ya hay una en curso reciente, es un error (no se duplican las búsquedas)."""
     motor_id = O._id(motor_id)
     async with await O._conectar() as conn:
-        cur = await conn.execute("SELECT 1 FROM ofertas_descubrimiento WHERE motor_id = %s AND estado = 'en_curso' AND actualizado > now() - interval '15 minutes'", [motor_id])
+        cur = await conn.execute("SELECT 1 FROM ofertas_descubrimiento WHERE motor_id = %s AND estado = 'en_curso' AND actualizado > now() - make_interval(mins => %s)", [motor_id, MINUTOS_EN_CURSO])
         if await cur.fetchone():
             raise O.ErrorOferta("Ya hay una búsqueda en curso para esta licitación")
         await conn.execute("INSERT INTO ofertas_descubrimiento (motor_id, estado, por) VALUES (%s, 'en_curso', %s) ON CONFLICT (motor_id) DO UPDATE SET "

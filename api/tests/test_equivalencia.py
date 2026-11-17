@@ -182,6 +182,47 @@ class TestSolucion(unittest.TestCase):
         self.assertNotIn("asignacion", r["solucion"])
 
 
+class TestProductosDelPliego(unittest.TestCase):
+    """Primer paso de la tabla: QUÉ productos pide el pliego, para buscar cada uno por su nombre en las tarifas (y no los requisitos sueltos, que no dicen de qué producto hablan)."""
+    DOCS = [{"n": 1, "nombre": "PPT", "paginas": [(1, "Se suministrarán 4 cámaras domo PTZ con zoom óptico 21x y un servidor de grabación.")]}]
+
+    def test_las_consultas_salen_limpias_sin_repetir_y_acotadas(self):
+        datos = {"productos": [{"producto": "Domo PTZ", "consulta": "cámara domo PTZ zoom 21x IP66"}, {"producto": "dup", "consulta": "CÁMARA DOMO PTZ ZOOM 21X IP66"},
+                               {"producto": "Servidor", "consulta": ""}, "basura", {"producto": "SAI", "consulta": "SAI 1500 VA rack"}]}
+        self.assertEqual(E.consultas_de_productos(datos), ["cámara domo PTZ zoom 21x IP66", "Servidor", "SAI 1500 VA rack"])
+        self.assertEqual(E.consultas_de_productos(None), [])
+        self.assertEqual(E.consultas_de_productos({"productos": "no es una lista"}), [])
+        muchos = {"productos": [{"producto": f"p{i}", "consulta": f"consulta distinta {i}"} for i in range(40)]}
+        self.assertEqual(len(E.consultas_de_productos(muchos)), E.MAX_PRODUCTOS)
+
+    def test_el_modelo_recibe_el_pliego_y_los_requisitos_pero_ninguna_evidencia(self):
+        m = E.mensajes_productos("Videovigilancia", "TEXTO DEL PLIEGO", "- Zoom 21x")
+        todo = " ".join(x["content"] for x in m)
+        self.assertIn("TEXTO DEL PLIEGO", todo)
+        self.assertIn("Zoom 21x", todo)
+        self.assertNotIn("EVIDENCIA", todo)
+        self.assertIn("TEXTO DE TERCEROS", todo)
+
+    def test_devuelve_las_consultas_del_modelo(self):
+        vistos = []
+
+        async def consulta(agente, mensajes, esquema, **kw):
+            vistos.append(esquema)
+            return {"productos": [{"producto": "Domo", "consulta": "cámara domo PTZ zoom 21x"}]}, "claude"
+        r = asyncio.run(E._productos_del_pliego("t", self.DOCS, "- r", consulta, None))
+        self.assertEqual(r, ["cámara domo PTZ zoom 21x"])
+        self.assertIs(vistos[0], E.ESQUEMA_PRODUCTOS)
+
+    def test_si_el_modelo_falla_no_se_rompe_y_se_sigue_por_requisitos(self):
+        async def cae(*a, **k):
+            raise E.externos.ErrorExterno("sin modelo")
+
+        async def rara(*a, **k):
+            raise ValueError("raro")
+        self.assertEqual(asyncio.run(E._productos_del_pliego("t", self.DOCS, "- r", cae, None)), [])
+        self.assertEqual(asyncio.run(E._productos_del_pliego("t", self.DOCS, "- r", rara, None)), [])
+
+
 @unittest.skipUnless(URL and hasattr(psycopg, "AsyncConnection"), "sin CEREBRO_TEST_PG")
 class TestPaso(unittest.TestCase):
     def setUp(self):
