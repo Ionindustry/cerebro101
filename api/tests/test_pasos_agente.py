@@ -77,5 +77,57 @@ class TestPasos(unittest.TestCase):
         self.assertIn("respuesta en 1 pasos", "\n".join(g.output))
 
 
+def correr_con(decisiones, ficha_id="rastreador"):
+    """Ejecuta el agente con una lista de decisiones del modelo; devuelve (resultado, mensajes que vio el modelo en cada vuelta, llamadas reales a herramientas)."""
+    vistos, reales, it = [], [], iter(decisiones)
+
+    async def paso(ficha, estado, mensajes):
+        vistos.append([dict(m) for m in mensajes])
+        return next(it)
+
+    async def usar(ficha, herramienta, operacion, **kw):
+        reales.append((herramienta, operacion, kw))
+        return {"ok": True, "texto": "x" * 3000}
+
+    async def nada(*a, **k):
+        return None
+
+    with mock.patch.object(nodos, "_paso_del_agente", paso), mock.patch.object(nodos.H, "usar", usar), mock.patch.object(nodos.H, "disponibles_para", lambda f: []), \
+            mock.patch.object(nodos, "sistema_agente", lambda f, d: "sistema"), mock.patch.object(nodos.actividad, "marcar", nada), \
+            mock.patch.object(nodos.actividad, "contar", nada), mock.patch.object(nodos, "inyectar", lambda f, e, h, a: a):
+        r = asyncio.run(nodos._ejecutar_agente({"peticion": "lee el pliego"}, Ficha(ficha_id)))
+    return r, vistos, reales
+
+
+def llamada(op, **args):
+    return {"tipo": "herramienta", "herramienta": "pliegos", "operacion": op, "argumentos": args}
+
+
+class TestAtascos(unittest.TestCase):
+    def test_la_misma_llamada_con_los_mismos_argumentos_no_se_vuelve_a_ejecutar_y_se_le_dice_que_avance(self):
+        r, vistos, reales = correr_con([llamada("texto", n=1), llamada("texto", n=1), {"tipo": "respuesta", "respuesta": "listo"}])
+        self.assertEqual(len(reales), 1)                                  # la repetida no llegó a la herramienta
+        self.assertIn("NO la repitas", vistos[2][-1]["content"])
+        self.assertEqual(r["respuesta"], "listo")
+
+    def test_con_otros_argumentos_si_se_ejecuta(self):
+        _r, _v, reales = correr_con([llamada("texto", n=1), llamada("texto", n=2), {"tipo": "respuesta", "respuesta": "listo"}])
+        self.assertEqual(len(reales), 2)
+
+    def test_los_resultados_viejos_se_recortan_y_los_ultimos_no(self):
+        _r, vistos, _reales = correr_con([llamada("texto", n=i) for i in range(1, 7)] + [{"tipo": "respuesta", "respuesta": "listo"}])
+        resultados = [m["content"] for m in vistos[-1] if m["content"].startswith("Resultado: ")]
+        self.assertIn("recortado", resultados[0])
+        self.assertNotIn("recortado", resultados[-1])
+        self.assertEqual(vistos[-1][0]["content"], "sistema")             # lo del principio (reglas) nunca se toca
+
+    def test_en_los_ultimos_pasos_se_le_avisa_de_que_guarde(self):
+        m = nodos.MAX_PASOS                                              # 5 para un agente normal
+        _r, vistos, _reales = correr_con([llamada("texto", n=i) for i in range(1, m)] + [{"tipo": "respuesta", "respuesta": "listo"}])
+        ultimos = [v[-1]["content"] for v in vistos[1:]]
+        self.assertTrue(all("AVISO DEL SISTEMA" in c for c in ultimos[-nodos.AVISO_ULTIMOS_PASOS + 1:]))
+        self.assertNotIn("AVISO DEL SISTEMA", vistos[1][-1]["content"].split("x" * 10)[0])
+
+
 if __name__ == "__main__":
     unittest.main()
