@@ -81,6 +81,15 @@ class TestProcesoCaido(unittest.TestCase):
         self.assertEqual(cerrar.await_args.args[0], 42)
         self.assertIn("se cayó", cerrar.await_args.args[1])
 
+    def test_si_muere_durante_la_busqueda_en_internet_se_cierra_como_error(self):
+        from billiard.exceptions import WorkerLostError
+        cerrar = mock.AsyncMock()
+        with mock.patch("cerebro.licitaciones.descubrimiento._cerrar", cerrar):
+            celery_app._proceso_caido(sender=celery_app.descubrir_opciones, exception=WorkerLostError("signal 11"), args=("0b1f7a3e-1111-4222-8333-444444444477", "auto"))
+        cerrar.assert_awaited_once()
+        self.assertEqual(cerrar.await_args.args[:2], ("0b1f7a3e-1111-4222-8333-444444444477", "error"))
+        self.assertIn("se cayó", cerrar.await_args.kwargs["error"])
+
     def test_otros_fallos_y_otras_tareas_no_se_tocan(self):
         from billiard.exceptions import WorkerLostError
         cerrar = mock.AsyncMock()
