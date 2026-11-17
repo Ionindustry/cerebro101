@@ -35,6 +35,8 @@ AGENTE = "comparador-productos"
 TIPOS_REQUISITO = ("tecnico", "criterio_juicio_valor", "criterio_automatico", "garantia")
 MAX_REQUISITOS = 12
 MAX_EVIDENCIAS = 30
+MAX_FICHAS = 12                  # cupo de las fichas: el resto es para las líneas de tarifa (antes las fichas se comían todo el tope y no llegaban los productos)
+MAX_CARACTERES_FICHAS = 6_000
 MAX_CARACTERES_EVIDENCIA = 14_000
 MAX_ESPECIFICACIONES_EVIDENCIA = 24
 MAX_TEXTO_LINEA = 1300
@@ -165,7 +167,7 @@ async def reunir_evidencias(consultas: list[str], k: int = 3, buscar=None, linea
         for f in fragmentos:
             clave = (f["titulo"], f["texto"][:80])
             texto = _corto(f["texto"], 1200)
-            if clave in vistos or usados + len(texto) > MAX_CARACTERES_EVIDENCIA or len(evid) >= MAX_EVIDENCIAS:
+            if clave in vistos or usados + len(texto) > MAX_CARACTERES_FICHAS or len(evid) >= MAX_FICHAS:
                 continue
             vistos.add(clave)
             usados += len(texto)
