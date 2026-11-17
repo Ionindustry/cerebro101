@@ -362,6 +362,40 @@ def texto_plantillas(resultado: dict | None, error: str = "") -> str:
             "Nunca escribas el valor: sale del ERP. Los datos que faltan en el ERP los completa una persona allí.")
 
 
+async def _claves_guardadas(motor_id: str, sel: list[dict], agente: str) -> set[str]:
+    despues = {s["clave"]: s for s in (await O.leer(motor_id, con_contenido=False))["secciones"]}
+    return {s["clave"] for s in sel if despues.get(s["clave"], {}).get("estado") != "vacia" and despues[s["clave"]]["por"] == f"agente:{agente}"}
+
+
+async def _reintentar_con_lecciones(estado: dict | None, invocar, agente: str, peticion: str, motor_id: str, sel: list[dict]) -> dict | None:
+    """Si el agente no ha guardado todo lo que tenía que guardar, el código reconoce qué le pasó (cerebro/lecciones.py), se lo corrige en el encargo y reintenta, hasta `MAX_REINTENTOS` veces.
+    Lo que se corrige con éxito queda como lección activa de ese agente; lo que no, cuenta como fallo de la lección y el paso queda para una persona. Solo toca el modelo local: nunca reintenta
+    a Claude/ChatGPT ni cambia lo que sale de 101.cat."""
+    from .. import lecciones as L
+    try:
+        previas = await _claves_guardadas(motor_id, sel, agente)
+        for intento in range(1, L.MAX_REINTENTOS + 1):
+            if len(previas) >= len(sel) or (estado or {}).get("error"):
+                break
+            aprendidas = L.analizar((estado or {}).get("pasos"), guardo=bool(previas))
+            if intento > 1 or not aprendidas:                  # el catálogo no bastó (o no reconoció nada): el modelo local propone una lección nueva, que pasa por el mismo guardarraíl
+                nueva = await L.reflexionar(agente, (estado or {}).get("pasos"))
+                if nueva and nueva[0] not in {p for p, _t in aprendidas}:
+                    aprendidas = aprendidas + [nueva]
+            if not aprendidas:
+                break
+            log.warning("redacción: %s no ha guardado %d de %d secciones de %s; reintento %d con la corrección: %s", agente, len(sel) - len(previas), len(sel), motor_id, intento, ", ".join(p for p, _t in aprendidas))
+            nuevo = await invocar(agente, peticion + L.texto_de_reintento(aprendidas))
+            ahora = await _claves_guardadas(motor_id, sel, agente)
+            await L.anotar_resultado(agente, aprendidas, exito=len(ahora) > len(previas))
+            estado, previas = nuevo, ahora
+    except FALLOS_DEL_MODELO:
+        raise
+    except Exception as ex:      # noqa: BLE001 — el aprendizaje nunca puede romper el paso: se queda con lo que había
+        log.warning("redacción: no se ha podido reintentar a %s con lecciones: %s: %s", agente, type(ex).__name__, ex)
+    return estado
+
+
 async def _paso_escritor(ejecucion_id: int, indice: int, e: dict, defin: dict, invocar, titulo: str, ficha: dict | None = None) -> None:
     motor_id = e["licitacion"]
     adicional, resumen_plantillas = "", ""
@@ -445,7 +479,9 @@ async def _paso_escritor(ejecucion_id: int, indice: int, e: dict, defin: dict, i
         if defin["id"] == "costes":
             from . import partidas as partidas_mod
             costes_equipos = await partidas_mod.texto_para(motor_id)
-        estado = await invocar(defin["agente"], peticion_escritor(defin, motor_id, titulo, sel) + adicional + (f"\n\n{costes_equipos}" if costes_equipos else ""))
+        peticion = peticion_escritor(defin, motor_id, titulo, sel) + adicional + (f"\n\n{costes_equipos}" if costes_equipos else "")
+        estado = await invocar(defin["agente"], peticion)
+        estado = await _reintentar_con_lecciones(estado, invocar, defin["agente"], peticion, motor_id, sel)
     despues = {s["clave"]: s for s in (await O.leer(motor_id, con_contenido=False))["secciones"]}
     escritas = [s["clave"] for s in sel if despues.get(s["clave"], {}).get("estado") != "vacia" and despues[s["clave"]]["por"] == f"agente:{defin['agente']}"]
     faltan = [s["clave"] for s in sel if s["clave"] not in escritas]

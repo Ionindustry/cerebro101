@@ -30,6 +30,26 @@ MAX_PASOS = 5
 # unas 10-15; con 5 pasos se quedaban sin guardar nada («No he podido terminar la tarea en el número máximo de pasos»).
 MAX_PASOS_AGENTE = {"analista-pliegos": 25, "arquitecto-solucion": 25, "redactor-memoria": 25, "administrativo-licitaciones": 25, "costes-licitacion": 25, "precio-licitacion": 20,
                     "evaluador-ofertas": 20}
+# Contra los tres atascos de un modelo local pequeño (contexto de 8.192): repetir la misma llamada, llenar el contexto de resultados viejos y no darse cuenta de que se le acaban los pasos.
+RESULTADOS_RECIENTES = 3          # los últimos resultados de herramienta se dejan enteros; los anteriores se recortan
+MAX_RESULTADO_VIEJO = 500
+AVISO_ULTIMOS_PASOS = 4
+
+
+def recortar_resultados_viejos(mensajes: list[dict]) -> None:
+    """Los resultados de herramienta anteriores a los últimos se recortan (el modelo ya los usó): así el contexto no se llena y no se pierde la petición ni las reglas del principio. Modifica la lista."""
+    idx = [i for i, m in enumerate(mensajes) if m["role"] == "user" and m["content"].startswith("Resultado: ")]
+    for i in idx[:-RESULTADOS_RECIENTES]:
+        c = mensajes[i]["content"]
+        if len(c) > MAX_RESULTADO_VIEJO:
+            mensajes[i] = {**mensajes[i], "content": c[:MAX_RESULTADO_VIEJO] + " […recortado: ya lo leíste; si lo necesitas, vuelve a pedirlo con otros argumentos]"}
+
+
+def aviso_de_pasos(restan: int) -> str:
+    return (f"\n\n[AVISO DEL SISTEMA: te quedan {restan} pasos. No leas más: guarda YA con las herramientas lo que tengas hecho (cada sección, con «guardar_seccion») y, cuando esté guardado, responde con el resumen. "
+            "Una sección guardada con [PENDIENTE: …] vale más que ninguna.]")
+
+
 INYECTAR_DEPARTAMENTO = {"erpnext", "conocimiento", "correo", "calendario", "cuaderno", "listas_precios"}
 PIDE_CUADERNO = re.compile(r"\bcuadern|\bquadern|notebook\s*lm", re.I)
 
@@ -193,7 +213,9 @@ def con_adjuntos(ficha, peticion):
 async def _ejecutar_agente(estado: Estado, ficha) -> Estado:
     ficha = con_adjuntos(ficha, estado.get("peticion"))
     disponibles = H.disponibles_para(ficha)
-    mensajes = [{"role": "system", "content": sistema_agente(ficha, disponibles)},
+    from .. import lecciones
+    sistema = sistema_agente(ficha, disponibles) + lecciones.bloque(await lecciones.activas(ficha.id, estado["peticion"]))          # lo aprendido de fallos anteriores (cerebro/lecciones.py)
+    mensajes = [{"role": "system", "content": sistema},
                 {"role": "user", "content": estado["peticion"]}]
     pasos: list[dict] = []
     solo_local = False
@@ -206,8 +228,10 @@ async def _ejecutar_agente(estado: Estado, ficha) -> Estado:
         log.info("agente %s: %s en %d pasos · %.0f s en total (modelo %.0f s, herramientas %.0f s)", ficha.id, motivo, len(pasos) + (1 if motivo == "respuesta" else 0),
                  time.perf_counter() - t0, t_modelo, t_herramientas)
 
+    hechas: set[str] = set()
     for n in range(1, maximo + 1):
         await actividad.marcar(ficha.id, "Pensando")
+        recortar_resultados_viejos(mensajes)
         t1 = time.perf_counter()
         d = await _paso_del_agente(ficha, {**estado, "solo_local": True} if solo_local else estado, mensajes)
         dt = time.perf_counter() - t1
@@ -222,9 +246,15 @@ async def _ejecutar_agente(estado: Estado, ficha) -> Estado:
         args = inyectar(ficha, estado, d.get("herramienta", ""), d.get("argumentos") or {})
         await actividad.marcar(ficha.id, f"Usando {d.get('herramienta', '?')} · {d.get('operacion', '?')}")
         t2 = time.perf_counter()
+        llamada = json.dumps([d.get("herramienta"), d.get("operacion"), args], sort_keys=True, default=str)
+        repetida = llamada in hechas
+        hechas.add(llamada)
         try:
-            resultado = await H.usar(ficha, d.get("herramienta", ""), d.get("operacion", ""),
-                                     sensibilidad=estado.get("sensibilidad"), usuario=estado.get("usuario"), **args)
+            if repetida:           # la misma llamada con los mismos argumentos: no se vuelve a ejecutar, se le dice que avance
+                log.warning("agente %s: repite %s.%s con los mismos argumentos (vuelta %d/%d)", ficha.id, d.get("herramienta"), d.get("operacion"), n, maximo)
+                resultado = {"aviso": "Esta llamada ya la hiciste y su resultado está más arriba. NO la repitas: pasa a lo siguiente (leer lo que aún no has leído o guardar lo que ya tienes)."}
+            else:
+                resultado = await H.usar(ficha, d.get("herramienta", ""), d.get("operacion", ""), sensibilidad=estado.get("sensibilidad"), usuario=estado.get("usuario"), **args)
         except Exception as e:  # el error vuelve al modelo para que corrija o cambie de plan
             resultado = {"error": str(e)}
         t_herramientas += time.perf_counter() - t2
@@ -236,9 +266,9 @@ async def _ejecutar_agente(estado: Estado, ficha) -> Estado:
                       "ok": not (isinstance(resultado, dict) and "error" in resultado)})
         if pasos[-1]["ok"] and H.es_confidencial(d.get("herramienta", "")):
             solo_local = True                                                         # ya hay datos confidenciales en la conversación: desde aquí, solo modelos locales
+        restan = maximo - n
         mensajes += [{"role": "assistant", "content": json.dumps(d, ensure_ascii=False)},
-                     {"role": "user", "content": "Resultado: " + json.dumps(resultado, ensure_ascii=False,
-                                                                            default=str)[:limite_resultado()]}]
+                     {"role": "user", "content": "Resultado: " + json.dumps(resultado, ensure_ascii=False, default=str)[:limite_resultado()] + (aviso_de_pasos(restan) if 0 < restan <= AVISO_ULTIMOS_PASOS else "")}]
     resumen("sin terminar")
     # Qué llamó y en qué orden, a la vista en el panel: sin esto no se sabe si el agente repetía lo mismo, fallaba siempre en una herramienta o simplemente necesitaba más vueltas
     llamadas = ", ".join(f"{p['herramienta']}.{p['operacion']}{'' if p['ok'] else ' (error)'}" for p in pasos)
