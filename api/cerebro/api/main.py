@@ -1167,6 +1167,16 @@ async def proponer_partidas_de_la_oferta(motor_id: str, usuario: Usuario = Depen
         raise _error_partida(e) from None
 
 
+@app.post("/licitaciones/ofertas/{motor_id}/partidas/cantidades")
+async def proponer_cantidades_de_la_oferta(motor_id: str, usuario: Usuario = Depends(usuario_actual)):
+    """Sugiere las cantidades que figuran en el pliego técnico (mediciones, prescripciones), con su cita literal. Son sugerencias: la cantidad la confirma una persona."""
+    _exige_licitaciones(usuario)
+    try:
+        return await partidas_ofertas.proponer_cantidades(motor_id)
+    except (partidas_ofertas.ErrorPartida, ofertas_licitaciones.ErrorOferta, LookupError) as e:
+        raise _error_partida(e) from None
+
+
 @app.post("/licitaciones/ofertas/{motor_id}/partidas")
 async def anadir_partida_a_la_oferta(motor_id: str, entrada: PartidaEntrada, usuario: Usuario = Depends(usuario_actual)):
     """Añade un producto a mano (marca y referencia, para casarlo con las tarifas) con su cantidad."""

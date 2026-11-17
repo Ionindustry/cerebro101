@@ -18,6 +18,7 @@ export default function Partidas({ id, version }) {
   const [modoCot, setModoCot] = useState("manual");
   const [plazoCot, setPlazoCot] = useState("15");
   const [prep, setPrep] = useState(null);
+  const [avisoCant, setAvisoCant] = useState("");
   const cargar = useCallback(async () => {
     try { setD(await pedirCerebro(`licitaciones/ofertas/${encodeURIComponent(id)}/partidas`)); }
     catch { setD((x) => (x === undefined ? null : x)); }
@@ -41,6 +42,7 @@ export default function Partidas({ id, version }) {
       <p><strong>Coste total: {eurosTexto(t.coste_eur)}</strong> · venta de referencia con margen: {eurosTexto(t.venta_referencia_eur)} (sin IVA) · {t.completas} de {t.partidas} partidas completas</p>
       {faltaEnPartidasTexto(t) && <p className="aviso" role="note">{faltaEnPartidasTexto(t)}</p>}
       {d.aviso && <p className="aviso" role="alert">{d.aviso}</p>}
+      {avisoCant && <p className="meta" role="status">{avisoCant} Son sugerencias con la cita del pliego: confirma cada una con «Usar».</p>}
       {error && <p className="aviso" role="alert">{error.detalle || "No se ha podido hacer."}</p>}
       {d.partidas.some((p) => !p.excluida && p.coste_unit_eur === null) && (
         <div className="lic-aviso" role="group" aria-label="Pedir cotización de lo que no tiene precio">
@@ -67,6 +69,9 @@ export default function Partidas({ id, version }) {
       )}
       <p className="lic-fila">
         <button className="boton si" disabled={trabajando} onClick={() => hacer(() => pedirCerebro(`${ruta}/proponer`, enviar({})))}>{d.partidas.length ? "Actualizar desde la tabla de equivalencias" : "Calcular desde la tabla de equivalencias"}</button>
+        {d.partidas.some((p) => !p.excluida && p.cantidad === null) && (
+          <button className="boton no" disabled={trabajando} onClick={() => hacer(async () => { const r = await pedirCerebro(`${ruta}/cantidades`, enviar({})); setAvisoCant(r.cantidades ? `Cantidades del pliego: ${r.cantidades.sugeridas} sugerida(s), ${r.cantidades.sin_dato} sin dato en el pliego.` : ""); setAbierto(true); return r; })}>Proponer cantidades desde el pliego</button>
+        )}
       </p>
       {abierto && (
         <>
@@ -79,7 +84,9 @@ export default function Partidas({ id, version }) {
                     <><span className="lic-etiqueta aviso">{p.motivo}</span> <a href={`/cotizaciones?${new URLSearchParams({ ref: referenciaDeProducto(p.producto), cantidad: p.cantidad ? String(Math.round(Number(p.cantidad)) || 1) : "1", licitacion: String(id), partida: String(p.id) })}`}>Pedir cotización</a></>)}
                     {p.origen_coste === "cotizacion" && <span className="lic-etiqueta abierta" title={`Cotización de proveedor ${p.cotizacion}${p.plazo_dias != null ? ` · entrega en ${p.plazo_dias} días` : ""}${p.validez_hasta ? ` · válida hasta ${p.validez_hasta}` : ""}`}>cotización de proveedor</span>}</td>
                   <td><input defaultValue={p.cantidad ?? ""} inputMode="decimal" size={6} aria-label={`Cantidad de ${p.producto}`} disabled={trabajando}
-                    onBlur={(e) => { const v = cantidadAEnvio(e.target.value); if (v !== (p.cantidad ?? null)) hacer(() => pedirCerebro(`${ruta}/${p.id}`, enviar({ cantidad: v }))); }} /></td>
+                    onBlur={(e) => { const v = cantidadAEnvio(e.target.value); if (v !== (p.cantidad ?? null)) hacer(() => pedirCerebro(`${ruta}/${p.id}`, enviar({ cantidad: v }))); }} />
+                    {p.cantidad === null && p.cantidad_pliego && (
+                      <div className="meta">El pliego sugiere <strong>{p.cantidad_pliego}</strong> <button className="boton no" disabled={trabajando} title={p.cita_pliego} onClick={() => hacer(() => pedirCerebro(`${ruta}/${p.id}`, enviar({ cantidad: p.cantidad_pliego })))}>Usar</button><br />«{p.cita_pliego}»</div>)}</td>
                   <td>{eurosTexto(p.coste_unit_eur)}{p.avisos?.length > 0 && <span className="meta" title={p.avisos.join(" · ")}> ⚠</span>}</td>
                   <td>{p.proveedor ? `${p.proveedor} (${p.canal})` : "—"}</td>
                   <td>{eurosTexto(p.subtotal_eur)}</td>

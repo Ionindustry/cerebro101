@@ -801,6 +801,9 @@ CREATE TABLE IF NOT EXISTS ofertas_partidas (
   actualizado timestamptz NOT NULL DEFAULT now(),
   UNIQUE (motor_id, clave)
 );
+-- Cantidad que SUGIERE el pliego técnico (mediciones, prescripciones) con su cita literal. Solo es una sugerencia: la cantidad la confirma una persona
+ALTER TABLE ofertas_partidas ADD COLUMN IF NOT EXISTS cantidad_pliego numeric;
+ALTER TABLE ofertas_partidas ADD COLUMN IF NOT EXISTS cita_pliego text;
 
 -- Actualización periódica de tarifas de proveedor (api/cerebro/tarifas_auto.py): cada fichero nuevo (de una carpeta o bajado de una dirección autorizada) genera UNA propuesta de importación con su resumen de cambios
 -- frente a la última aplicada. Nada se aplica solo: la firma Dirección en la pantalla «Precios». Un mismo fichero (mismo contenido) no se procesa dos veces.
