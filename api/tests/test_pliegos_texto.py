@@ -365,6 +365,16 @@ class TestFlujo(unittest.TestCase):
         igual = ejecutar(P.obtener(ID, 1, consulta=self.consulta, descargar=rechaza, analizar=analizar, cfg=CFG))
         self.assertEqual((igual["id"], igual["paginas"]), (r["id"], 3))                          # el análisis automático usa lo subido en vez de fallar
 
+    def test_releer_vuelve_a_leer_lo_guardado_con_el_extractor_actual_sin_bajar_nada(self):
+        r = self.bajar()
+        with psycopg.connect(P.ajustes.database_url, autocommit=True) as c:      # el texto guardado es el de un extractor antiguo
+            c.execute("UPDATE pliegos_paginas SET texto = 'texto viejo'")
+        res = ejecutar(P.releer(ID))
+        self.assertEqual(res, {"documentos": 1, "releidos": 1, "con_error": 0})
+        self.assertNotIn("texto viejo", ejecutar(P.leer(ID, 1, 1))["texto"])
+        self.assertEqual(ejecutar(P.listar(ID))[0]["id"], r["id"])                  # el mismo documento, sin duplicar
+        self.assertEqual(ejecutar(P.releer("0b1f7a3e-1111-4222-8333-4444444444ff")), {"documentos": 0, "releidos": 0, "con_error": 0})
+
     def test_un_documento_infectado_o_sin_analizar_no_tiene_texto_ni_se_busca(self):
         r = self.bajar(veredicto=P.Veredicto("infectado", "dañino"))
         self.assertEqual((r["estado"], r["paginas"]), ("infectado", None))

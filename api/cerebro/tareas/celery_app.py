@@ -41,7 +41,8 @@ app.conf.task_routes = {"cerebro.tareas.celery_app.ejecutar_programada": {"queue
                         "cerebro.tareas.celery_app.volcar_constancia": {"queue": "peticiones"},
                         "cerebro.tareas.celery_app.descubrir_opciones": {"queue": "cortas"},
                         "cerebro.tareas.celery_app.cargar_fichas_marca": {"queue": "cortas"},
-                        "cerebro.tareas.celery_app.cargar_fichas": {"queue": "cortas"}}
+                        "cerebro.tareas.celery_app.cargar_fichas": {"queue": "cortas"},
+                        "cerebro.tareas.celery_app.releer_pliegos": {"queue": "cortas"}}
 
 
 def _calendario() -> dict:
@@ -237,6 +238,13 @@ def cargar_fichas(carga_id: int) -> dict:
     """Una persona ha pedido cargar las fichas técnicas de una lista de proveedor: se descargan de los dominios autorizados, pasan por el antivirus y se indexan (cerebro/licitaciones/fichas.py)."""
     from ..licitaciones import fichas
     return asyncio.run(fichas.ejecutar_carga(carga_id))
+
+
+@app.task(name="cerebro.tareas.celery_app.releer_pliegos")
+def releer_pliegos(motor_id: str) -> dict:
+    """Vuelve a leer el texto de los pliegos ya guardados de una licitación (cerebro/licitaciones/pliegos.py::releer)."""
+    from ..licitaciones import pliegos
+    return asyncio.run(pliegos.releer(motor_id))
 
 
 @app.task(name="cerebro.tareas.celery_app.cargar_fichas_marca")
