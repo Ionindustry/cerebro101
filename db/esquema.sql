@@ -886,3 +886,19 @@ CREATE TABLE IF NOT EXISTS cotizaciones (
   actualizado  timestamptz NOT NULL DEFAULT now()
 );
 CREATE INDEX IF NOT EXISTS cotizaciones_estado_idx ON cotizaciones (estado, creado);
+
+-- Lecciones aprendidas de los agentes (api/cerebro/lecciones.py): cuando un agente de «Preparar la oferta» falla, el código detecta el patrón (catálogo fijo), le da una corrección y reintenta;
+-- si con ella lo consigue, la lección pasa a «activa» y se añade al prompt de ese agente en las siguientes ejecuciones. Estados: prueba, activa, descartada (falló), revocada (la quitó Dirección).
+CREATE TABLE IF NOT EXISTS lecciones_agentes (
+  id         bigserial PRIMARY KEY,
+  agente     text NOT NULL,
+  patron     text NOT NULL,
+  texto      text NOT NULL,
+  estado     text NOT NULL DEFAULT 'prueba' CHECK (estado IN ('prueba', 'activa', 'descartada', 'revocada')),
+  exitos     int NOT NULL DEFAULT 0,
+  fallos     int NOT NULL DEFAULT 0,
+  creada     timestamptz NOT NULL DEFAULT now(),
+  actualizada timestamptz NOT NULL DEFAULT now(),
+  embedding  real[],                               -- RAG: se recuperan solo las lecciones parecidas a la tarea (BGE-M3 local, 1024 números), puede ser nulo. real[] y no vector: son pocas filas y así la tabla no exige la extensión
+  UNIQUE (agente, patron)
+);

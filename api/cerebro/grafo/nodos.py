@@ -213,7 +213,9 @@ def con_adjuntos(ficha, peticion):
 async def _ejecutar_agente(estado: Estado, ficha) -> Estado:
     ficha = con_adjuntos(ficha, estado.get("peticion"))
     disponibles = H.disponibles_para(ficha)
-    mensajes = [{"role": "system", "content": sistema_agente(ficha, disponibles)},
+    from .. import lecciones
+    sistema = sistema_agente(ficha, disponibles) + lecciones.bloque(await lecciones.activas(ficha.id, estado["peticion"]))          # lo aprendido de fallos anteriores (cerebro/lecciones.py)
+    mensajes = [{"role": "system", "content": sistema},
                 {"role": "user", "content": estado["peticion"]}]
     pasos: list[dict] = []
     solo_local = False
