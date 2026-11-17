@@ -223,9 +223,11 @@ async def buscar(texto: str | None = None, cpv: list[str] | None = None, nuts: l
 
 async def parecidas(id: str, limite: int = 10) -> dict:
     """Expedientes parecidos a uno dado (por significado), con el porqué: mismo comprador o CPV en común."""
-    if not isinstance(id, str) or not _UUID.match(id.strip()):
+    from ..licitaciones.identificador import limpiar
+    id = limpiar(id) or ""
+    if not _UUID.match(id):
         raise ValueError("id debe ser el identificador (UUID) que devuelve «buscar»")
-    r = await _get(f"/tenders/{id.strip().lower()}/parecidas", {"limit": max(1, min(int(limite), 25))})
+    r = await _get(f"/tenders/{id}/parecidas", {"limit": max(1, min(int(limite), 25))})
     return {"resultados": [_resumen(x) for x in r.get("items", [])],
             "aviso": "cercania de 0 a 1 (más es más parecido); motivos: mismo_comprador y/o cpv_comun. Que se parezcan no implica que sean el mismo contrato"}
 
@@ -240,9 +242,11 @@ async def novedades_desde(desde: str, texto: str | None = None, cpv: list[str] |
 
 
 async def ficha(id: str) -> dict:
-    if not isinstance(id, str) or not _UUID.match(id.strip()):
+    from ..licitaciones.identificador import limpiar
+    id = limpiar(id) or ""
+    if not _UUID.match(id):
         raise ValueError("id debe ser el identificador (UUID) que devuelve «buscar», p. ej. 0b1f7a3e-1111-4222-8333-444444444444")
-    f = await _get(f"/tenders/{id.strip().lower()}")
+    f = await _get(f"/tenders/{id}")
     out = _resumen(f)
     out["estado_origen"] = f.get("estado_origen")
     out["procedimiento"] = f.get("procedimiento")

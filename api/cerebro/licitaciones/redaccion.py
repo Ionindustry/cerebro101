@@ -297,6 +297,8 @@ def peticion_escritor(paso: dict, motor_id: str, titulo: str, secciones: list[di
         + "Cómo hacerlo:\n"
         "1. Lee la oferta con la herramienta «ofertas» (operación «leer») y la ficha con «licitaciones» (operación «ficha»). Lee lo que pide el pliego con «pliegos» (requisitos confirmados y texto) "
         "y apóyate en «conocimiento» y en los datos de 101.cat.\n"
+        f"   Con «pliegos» usa siempre licitacion = {motor_id} (el identificador tal cual, sin comillas ni nada más): «requisitos» (solo licitacion) trae lo que pide el pliego; «buscar» (licitacion y consulta) busca palabras en los documentos; "
+        "«documentos» (solo licitacion) lista los documentos; «leer» exige ADEMÁS n (número de documento, el de «documentos») y pagina: no la llames sin ellos.\n"
         "2. Para CADA una de estas secciones, guarda el borrador con «ofertas», operación «guardar_seccion» (licitacion, sobre, clave, contenido y citas):\n"
         f"{lista}\n"
         "3. En «citas» pon los ids de los requisitos confirmados del pliego en los que te apoyas.\n\n"
