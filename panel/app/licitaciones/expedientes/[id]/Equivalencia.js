@@ -60,7 +60,7 @@ export default function Equivalencia({ id, version }) {
               </li>
             ))}
           </ul>
-          {c.pendientes.length > 0 && (<><h4>Datos que faltan</h4><ul>{c.pendientes.map((x, i) => <li key={i}>{x}</li>)}</ul></>)}
+          {c.pendientes.length > 0 && (<><h4>Datos que faltan</h4><ul>{c.pendientes.map((x, i) => <li key={i}>{x}</li>)}</ul><p className="meta">Al terminar la tabla se buscan en internet las referencias y fichas de estos datos y de lo que no tiene producto acreditado: el resultado sale abajo, en «Más opciones en internet», donde también puedes repetir la búsqueda a mano.</p></>)}
         </>
       )}
     </section>

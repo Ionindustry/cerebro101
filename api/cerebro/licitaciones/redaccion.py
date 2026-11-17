@@ -276,18 +276,32 @@ def _criterios_texto(ficha: dict) -> str:
     return "\n".join(out) or "(la ficha no trae criterios: míralos en el pliego)"
 
 
-def peticion_escritor(paso: dict, motor_id: str, titulo: str, secciones: list[dict]) -> str:
+def texto_ficha(ficha: dict | None) -> str:
+    """Los datos básicos de la licitación en pocas líneas, para dárselos al agente ya leídos (así no depende de volver a pedirlos al motor). Vacío si no hay ficha. Pura."""
+    f = ficha if isinstance(ficha, dict) else {}
+    if not f:
+        return ""
+    comprador = (f.get("comprador") or {}).get("nombre") if isinstance(f.get("comprador"), dict) else f.get("comprador")
+    datos = [("Título", f.get("titulo")), ("Expediente", f.get("expediente")), ("Órgano de contratación", comprador), ("Importe", f.get("importe")),
+             ("Plazo de presentación", f.get("plazo_presentacion")), ("Procedimiento", f.get("procedimiento"))]
+    lineas = [f"- {k}: {O._una_linea(str(v), 200)}" for k, v in datos if v not in (None, "", {}, [])]
+    return "\n".join(lineas)
+
+
+def peticion_escritor(paso: dict, motor_id: str, titulo: str, secciones: list[dict], ficha: dict | None = None) -> str:
     lista = "\n".join(f"- sobre «{s['sobre']}», clave «{s['clave']}»: {s['titulo']}\n    Guía: {O._una_linea(s['guia'], 700)}" for s in secciones)
     return (
         f"Prepara el BORRADOR de la oferta de 101.cat para la licitación «{titulo}» (identificador {motor_id}). Es tu parte del trabajo en equipo: {paso['titulo']}.\n"
         f"{paso.get('contexto', '')}\n\n"
-        "Cómo hacerlo:\n"
+        + (f"Datos de la licitación (ya leídos: no hace falta volver a pedirlos al motor):\n{texto_ficha(ficha)}\n\n" if texto_ficha(ficha) else "")
+        + "Cómo hacerlo:\n"
         "1. Lee la oferta con la herramienta «ofertas» (operación «leer») y la ficha con «licitaciones» (operación «ficha»). Lee lo que pide el pliego con «pliegos» (requisitos confirmados y texto) "
         "y apóyate en «conocimiento» y en los datos de 101.cat.\n"
         "2. Para CADA una de estas secciones, guarda el borrador con «ofertas», operación «guardar_seccion» (licitacion, sobre, clave, contenido y citas):\n"
         f"{lista}\n"
         "3. En «citas» pon los ids de los requisitos confirmados del pliego en los que te apoyas.\n\n"
         "Reglas:\n"
+        "- Cada herramienta de lectura se llama UNA vez con los mismos datos: si responde con un error o sin nada, NO la repitas; sigue con lo que tengas y guarda el borrador marcando [PENDIENTE: …] lo que falte.\n"
         "- Trabajas SOLO y de forma automática: nadie va a contestar a una pregunta. NO pidas confirmación ni permiso y no preguntes si debes seguir: haz el trabajo con las herramientas. "
         "Sé eficiente (pocas lecturas) y guarda CADA sección en cuanto la tengas escrita, no al final.\n"
         "- Si no hay requisitos confirmados o te falta información, guarda igualmente el borrador (sin citas si no las hay) y marca lo que falta con [PENDIENTE: …].\n"
@@ -483,7 +497,7 @@ async def _paso_escritor(ejecucion_id: int, indice: int, e: dict, defin: dict, i
             costes_equipos = ("Equipos y coste real: todavía NO hay partidas calculadas (la tabla de equivalencias no ha fijado productos). No te quedes sin escribir: guarda la sección con la ESTRUCTURA de "
                               "la justificación (partidas previstas: materiales, mano de obra, licencias, mantenimiento, gastos generales y riesgos; criterios de cálculo; por qué el precio es viable según el pliego) "
                               "y marca [PENDIENTE: cifra] cada importe que deba poner una persona. NO inventes ninguna cifra.")
-        peticion = peticion_escritor(defin, motor_id, titulo, sel) + adicional + (f"\n\n{costes_equipos}" if costes_equipos else "")
+        peticion = peticion_escritor(defin, motor_id, titulo, sel, ficha) + adicional + (f"\n\n{costes_equipos}" if costes_equipos else "")
         estado = await invocar(defin["agente"], peticion)
         estado = await _reintentar_con_lecciones(estado, invocar, defin["agente"], peticion, motor_id, sel)
     despues = {s["clave"]: s for s in (await O.leer(motor_id, con_contenido=False))["secciones"]}
@@ -511,6 +525,9 @@ async def _paso_equivalencia(ejecucion_id: int, indice: int, e: dict, defin: dic
     from . import equivalencia
     res = await equivalencia.preparar(e["licitacion"], titulo, ficha or {}, modelo=e.get("modelo") or "auto")
     await _marcar(ejecucion_id, indice, estado=HECHO if res["estado"] == "hecha" else OMITIDO, error="", resumen=res["resumen"][:MAX_RESUMEN], secciones=[], fin=_iso(_ahora(None)))
+    if res["estado"] == "hecha":
+        from . import descubrimiento
+        await descubrimiento.lanzar_automatica(e["licitacion"], e.get("modelo") or "auto")      # busca en internet lo que la tabla no ha podido cubrir; en segundo plano
 
 
 async def _paso_encargos(ejecucion_id: int, indice: int, e: dict, defin: dict, titulo: str, ficha: dict) -> None:

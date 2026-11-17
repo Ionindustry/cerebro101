@@ -34,6 +34,22 @@ class TestPuros(unittest.TestCase):
         self.assertNotIn("[R1]", c[0]["consulta"])
         self.assertIn("datasheet", c[0]["consulta"])
 
+    def test_tambien_se_buscan_los_por_verificar_y_los_datos_que_faltan(self):
+        ps = [{"parametro": "Verificado", "valor_exigido": "4 MP", "cubierto": True, "recomendado": "Milesight MS-C8"},
+              {"parametro": "Por verificar", "valor_exigido": "H.265", "cubierto": True, "recomendado": ""},
+              {"parametro": "Antigua cubierta", "valor_exigido": "1 m", "cubierto": True},                     # tabla antigua sin «recomendado»: cubierta
+              {"parametro": "Sin producto", "valor_exigido": "40 m", "cubierto": False, "recomendado": ""}]
+        c = D.consultas_de(ps, "Titulo", ["Ficha técnica de la cámara LPR", "Ficha técnica de la cámara LPR", "Certificado ENS"])
+        self.assertEqual([x["parametro"] for x in c], ["Por verificar", "Sin producto", "Dato que falta: Ficha técnica de la cámara LPR", "Dato que falta: Certificado ENS"])
+        self.assertTrue(all("datasheet" in x["consulta"] for x in c))
+        self.assertTrue(D.acreditado(ps[0]) and D.acreditado(ps[2]) and not D.acreditado(ps[1]) and not D.acreditado(ps[3]))
+        m = D.construir_mensajes("T", [ps[1]], "[W1] x", ["Certificado ENS"])
+        self.assertIn("Dato que falta: Certificado ENS", m[1]["content"])
+
+    def test_los_datos_que_faltan_tienen_tope(self):
+        c = D.consultas_de([], "T", [f"Ficha {i}" for i in range(10)])
+        self.assertEqual(len(c), D.MAX_PENDIENTES)
+
     def test_los_resultados_se_numeran_sin_repetir_ni_aceptar_http(self):
         r = D.numerar([{"parametro": "A", "resultados": [{"url": "https://a.com/x", "titulo": "t"}, {"url": "http://b.com/y"}, {"url": "https://a.com/x"}]},
                        {"parametro": "B", "resultados": [{"url": "https://c.com/z"}]}])
@@ -148,6 +164,26 @@ class TestFlujo(unittest.TestCase):
         self.assertEqual(asyncio.run(D.leer(ID))["estado"], "error")                     # y se queda cerrada
         asyncio.run(D.iniciar(ID, "albert"))                                              # se puede volver a lanzar
         self.assertEqual(asyncio.run(D.leer(ID))["estado"], "en_curso")
+
+    def test_automatica_lanza_la_busqueda_si_quedan_huecos_y_no_si_esta_todo_cubierto(self):
+        envio = mock.MagicMock()
+        with mock.patch("cerebro.tareas.celery_app.app.send_task", envio):
+            self.assertFalse(asyncio.run(D.lanzar_automatica(ID)))                          # sin tabla: nada
+            self.tabla(cubierto=True)
+            self.assertFalse(asyncio.run(D.lanzar_automatica(ID)))                          # todo cubierto: nada
+            envio.assert_not_called()
+            self.tabla(cubierto=False)
+            self.assertTrue(asyncio.run(D.lanzar_automatica(ID, "claude")))
+            envio.assert_called_once()
+            self.assertEqual(envio.call_args.kwargs["args"], [ID, "claude"])
+            self.assertEqual(asyncio.run(D.leer(ID))["estado"], "en_curso")
+            self.assertFalse(asyncio.run(D.lanzar_automatica(ID)))                          # ya hay una en curso: no duplica
+            self.assertEqual(envio.call_count, 1)
+
+    def test_automatica_nunca_rompe(self):
+        self.tabla(cubierto=False)
+        with mock.patch("cerebro.tareas.celery_app.app.send_task", side_effect=RuntimeError("sin redis")):
+            self.assertFalse(asyncio.run(D.lanzar_automatica(ID)))
 
 
 if __name__ == "__main__":

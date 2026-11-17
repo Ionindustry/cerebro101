@@ -205,18 +205,27 @@ def redactar_oferta(self, ejecucion_id: int) -> dict:
 
 @task_failure.connect
 def _proceso_caido(sender=None, exception=None, args=None, **_kw):
-    """Si el proceso que ejecutaba «Preparar la oferta» muere de golpe (un fallo nativo, falta de memoria), Celery no vuelve a entrar en la tarea y la ejecución se quedaría «en curso» hasta caducar:
-    se cierra aquí como interrumpida para poder volver a lanzarla enseguida."""
+    """Si el proceso que ejecutaba «Preparar la oferta» o la búsqueda en internet muere de golpe (un fallo nativo, falta de memoria), Celery no vuelve a entrar en la tarea y la fila se quedaría «en curso»
+    hasta caducar: se cierra aquí al momento (la ejecución como interrumpida, la búsqueda como error) para poder volver a lanzarla enseguida."""
     from billiard.exceptions import WorkerLostError
-    if not isinstance(exception, WorkerLostError) or getattr(sender, "name", "") != "cerebro.tareas.celery_app.redactar_oferta" or not args:
+    nombre = getattr(sender, "name", "")
+    if not isinstance(exception, WorkerLostError) or not args or nombre not in ("cerebro.tareas.celery_app.redactar_oferta", "cerebro.tareas.celery_app.descubrir_opciones", "cerebro.tareas.celery_app.cargar_fichas_marca"):
         return
     import logging
-    from ..licitaciones import redaccion
-    logging.getLogger("cerebro.tareas").warning("redactar_oferta %s: el proceso de trabajo se cayó (%s)", args[0], str(exception)[:120])
+    log = logging.getLogger("cerebro.tareas")
+    log.warning("%s %s: el proceso de trabajo se cayó (%s)", nombre.rsplit(".", 1)[-1], args[0], str(exception)[:120])
     try:
-        asyncio.run(redaccion.cerrar(int(args[0]), "El proceso de trabajo se cayó a mitad de la redacción: lo ya escrito se conserva; vuelve a pulsar el botón del paso que falló"))
+        if nombre.endswith("redactar_oferta"):
+            from ..licitaciones import redaccion
+            asyncio.run(redaccion.cerrar(int(args[0]), "El proceso de trabajo se cayó a mitad de la redacción: lo ya escrito se conserva; vuelve a pulsar el botón del paso que falló"))
+        elif nombre.endswith("cargar_fichas_marca"):
+            from ..licitaciones import fichas_marca
+            asyncio.run(fichas_marca._cerrar(str(args[0]).casefold().strip(), "error", {"error": "El proceso de trabajo se cayó durante la carga. Puedes volver a lanzarla: sigue donde lo dejó."}))
+        else:
+            from ..licitaciones import descubrimiento
+            asyncio.run(descubrimiento._cerrar(str(args[0]), "error", error="El proceso de trabajo se cayó mientras buscaba. Pulsa «Repetir la búsqueda»; si vuelve a pasar, avisa a Tecnología."))
     except Exception as e:      # noqa: BLE001 — si tampoco se puede cerrar, caducará sola
-        logging.getLogger("cerebro.tareas").warning("redactar_oferta %s: no se ha podido cerrar tras la caída: %s", args[0], type(e).__name__)
+        log.warning("%s: no se ha podido cerrar tras la caída: %s", args[0], type(e).__name__)
 
 
 @app.task(name="cerebro.tareas.celery_app.cargar_fichas")
@@ -224,6 +233,13 @@ def cargar_fichas(carga_id: int) -> dict:
     """Una persona ha pedido cargar las fichas técnicas de una lista de proveedor: se descargan de los dominios autorizados, pasan por el antivirus y se indexan (cerebro/licitaciones/fichas.py)."""
     from ..licitaciones import fichas
     return asyncio.run(fichas.ejecutar_carga(carga_id))
+
+
+@app.task(name="cerebro.tareas.celery_app.cargar_fichas_marca")
+def cargar_fichas_marca(marca: str, por: str = "") -> dict:
+    """Una persona pide cargar las fichas técnicas de todos los modelos de una marca que vende (cerebro/licitaciones/fichas_marca.py): busca el PDF oficial de cada modelo de sus tarifas y lo carga."""
+    from ..licitaciones import fichas_marca
+    return asyncio.run(fichas_marca.ejecutar(marca, por))
 
 
 @app.task(name="cerebro.tareas.celery_app.descubrir_opciones")

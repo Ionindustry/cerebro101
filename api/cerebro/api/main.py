@@ -50,6 +50,7 @@ from ..licitaciones import partidas as partidas_ofertas
 from ..licitaciones import cotizar_partidas
 from ..licitaciones import descubrimiento as descubrimiento_ofertas
 from ..licitaciones import fichas as fichas_tecnicas
+from ..licitaciones import fichas_marca as fichas_de_marca
 from ..licitaciones import reglas as reglas_licitaciones
 from ..licitaciones import simulador as simulador_licitaciones
 from ..licitaciones import embudo as embudo_licitaciones
@@ -1069,6 +1070,30 @@ async def cargar_fichas_de_ejemplo(usuario: Usuario = Depends(usuario_actual)):
     _exige_licitaciones(usuario)
     log.info("fichas: %s carga los modelos de ejemplo", usuario.id)
     return await fichas_tecnicas.cargar_ejemplos(usuario.id)
+
+
+class MarcaFichas(BaseModel):
+    marca: str = Field(min_length=2, max_length=60)
+
+
+@app.get("/licitaciones/fichas/marca/{marca}")
+async def fichas_de_una_marca(marca: str, usuario: Usuario = Depends(usuario_actual)):
+    """Cuántos modelos de la marca hay en tus tarifas, cuántos tienen ficha cargada y cómo va la última carga."""
+    _exige_licitaciones(usuario)
+    return await fichas_de_marca.estado(marca[:60])
+
+
+@app.post("/licitaciones/fichas/marca")
+async def cargar_fichas_de_una_marca(entrada: MarcaFichas, usuario: Usuario = Depends(usuario_actual)):
+    """Lanza en segundo plano la carga de las fichas de los modelos de la marca que hay en tus tarifas (hasta 40 por pulsación, reanudable; solo de dominios autorizados)."""
+    _exige_licitaciones(usuario)
+    try:
+        await fichas_de_marca.iniciar(entrada.marca, usuario.id)
+    except fichas_tecnicas.ErrorFicha as e:
+        raise HTTPException(409 if "en curso" in str(e) else 422, str(e)) from None
+    celery.send_task("cerebro.tareas.celery_app.cargar_fichas_marca", args=[entrada.marca.strip(), usuario.id], queue="peticiones")
+    log.info("fichas: %s lanza la carga de la marca %s", usuario.id, entrada.marca[:60])
+    return {"estado": "en_curso"}
 
 
 @app.get("/licitaciones/fichas/revisar/{importacion}")

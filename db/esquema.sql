@@ -743,6 +743,23 @@ CREATE TABLE IF NOT EXISTS fichas_cargas (
   terminada   timestamptz
 );
 
+-- Carga de fichas de TODA una marca (api/cerebro/licitaciones/fichas_marca.py): una fila por marca con el estado y el informe de la última ejecución, y una fila por modelo ya buscado para no repetir lo que no se encontró.
+CREATE TABLE IF NOT EXISTS fichas_marca_cargas (
+  marca       text PRIMARY KEY,                     -- en minúsculas
+  estado      text NOT NULL DEFAULT 'en_curso' CHECK (estado IN ('en_curso', 'terminada', 'error')),
+  informe     jsonb NOT NULL DEFAULT '{}',
+  por         text NOT NULL DEFAULT '',
+  actualizada timestamptz NOT NULL DEFAULT now()
+);
+CREATE TABLE IF NOT EXISTS fichas_marca_intentos (
+  marca     text NOT NULL,
+  modelo    text NOT NULL,                          -- el modelo base, sin opciones de lente ni de color
+  estado    text NOT NULL CHECK (estado IN ('cargada', 'repetida', 'sin_enlace', 'error')),
+  motivo    text NOT NULL DEFAULT '',
+  intentada timestamptz NOT NULL DEFAULT now(),
+  PRIMARY KEY (marca, modelo)
+);
+
 -- Tabla de equivalencias «iguala o supera» (api/cerebro/licitaciones/equivalencia.py): parámetros medibles del pliego técnico frente a los productos del catálogo, con el veredicto fijado por el código. Una fila por licitación.
 CREATE TABLE IF NOT EXISTS ofertas_equivalencia (
   motor_id    uuid PRIMARY KEY,                     -- la licitación (sin clave ajena: el esquema se aplica por trozos en las pruebas)

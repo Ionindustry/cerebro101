@@ -478,5 +478,27 @@ class TestTextos(unittest.TestCase):
         self.assertEqual(R.seleccion(R.PASOS[6], [{"sobre": "economico", "clave": "x", "estado": "vacia", "por": "", "version": 0}], False), [])
 
 
+
+class TestPeticionConFicha(unittest.TestCase):
+    PASO = {"titulo": "Administrativo", "contexto": ""}
+    SEC = [{"sobre": "administrativo", "clave": "deuc", "titulo": "DEUC", "guia": "g"}]
+
+    def test_los_datos_de_la_ficha_van_ya_leidos_en_el_encargo(self):
+        ficha = {"titulo": "Renting de cámaras", "expediente": "EXP-1", "comprador": {"nombre": "Ayuntamiento X"}, "importe": "100000", "plazo_presentacion": "2026-12-01"}
+        t = R.peticion_escritor(self.PASO, "m1", "Renting de cámaras", self.SEC, ficha)
+        self.assertIn("ya leídos", t)
+        self.assertIn("Órgano de contratación: Ayuntamiento X", t)
+        self.assertIn("Expediente: EXP-1", t)
+
+    def test_sin_ficha_el_encargo_sigue_igual_y_no_dice_que_ya_esta_leida(self):
+        t = R.peticion_escritor(self.PASO, "m1", "T", self.SEC)
+        self.assertNotIn("ya leídos", t)
+        self.assertEqual(R.texto_ficha(None), "")
+        self.assertEqual(R.texto_ficha({}), "")
+
+    def test_se_pide_no_repetir_las_lecturas_que_fallan(self):
+        t = R.peticion_escritor(self.PASO, "m1", "T", self.SEC)
+        self.assertIn("NO la repitas", t)
+
 if __name__ == "__main__":
     unittest.main()
