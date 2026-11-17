@@ -240,7 +240,10 @@ async def _ejecutar_agente(estado: Estado, ficha) -> Estado:
                      {"role": "user", "content": "Resultado: " + json.dumps(resultado, ensure_ascii=False,
                                                                             default=str)[:limite_resultado()]}]
     resumen("sin terminar")
-    return {"respuesta": "No he podido terminar la tarea en el número máximo de pasos.", "pasos": pasos,
+    # Qué llamó y en qué orden, a la vista en el panel: sin esto no se sabe si el agente repetía lo mismo, fallaba siempre en una herramienta o simplemente necesitaba más vueltas
+    llamadas = ", ".join(f"{p['herramienta']}.{p['operacion']}{'' if p['ok'] else ' (error)'}" for p in pasos)
+    log.warning("agente %s: sin terminar en %d pasos: %s", ficha.id, maximo, llamadas)
+    return {"respuesta": "No he podido terminar la tarea en el número máximo de pasos." + (f" Llamadas hechas, en orden: {llamadas}." if llamadas else ""), "pasos": pasos,
             "acciones": []}
 
 
