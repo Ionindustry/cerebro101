@@ -68,7 +68,7 @@ importar() {
   cat "$d/INFO.txt"
 
   paso "Parando los servicios que usan los datos"
-  for srv in proxy panel api worker beat langfuse langfuse-worker; do    # uno a uno: si falta alguno (p. ej. el proxy sin producción) no impide parar el resto
+  for srv in proxy panel api worker worker-cortas beat langfuse langfuse-worker; do    # uno a uno: si falta alguno (p. ej. el proxy sin producción) no impide parar el resto
     docker compose stop "$srv" >/dev/null 2>&1 || true
   done
   docker compose up -d postgres langfuse-db langfuse-clickhouse langfuse-minio >/dev/null

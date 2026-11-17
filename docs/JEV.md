@@ -16,7 +16,7 @@ Hay tres vías, siempre con la misma interfaz, y **los agentes pasan solos de un
 ## Poner Jev (nube) operativo
 ```bash
 python3 scripts/jev_activar.py           # pide la clave (de console.typesafe.ai) sin mostrarla, la prueba y, si funciona, la guarda en el .env
-docker compose up -d --force-recreate --no-deps api worker beat
+docker compose up -d --force-recreate --no-deps api worker worker-cortas beat
 ```
 Comprobar solo la clave que ya hay: `python3 scripts/jev_activar.py --probar`. La clave solo vive en el `.env`; no se sube a git ni se pega en ningún chat.
 Antes de usarlo con datos reales: contrato de encargado de tratamiento y retención cero con TypeSafe (`docs/PENDIENTES.md`).

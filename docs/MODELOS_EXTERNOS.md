@@ -9,7 +9,7 @@ pero solo mientras Dirección los tenga **conectados** en el panel. Por defecto 
    ```bash
    python3 scripts/modelos_activar.py claude      # clave de console.anthropic.com
    python3 scripts/modelos_activar.py chatgpt     # clave de platform.openai.com
-   docker compose up -d --force-recreate --no-deps api worker beat
+   docker compose up -d --force-recreate --no-deps api worker worker-cortas beat
    ```
    El script comprueba la clave (sin gastar ni enviar datos) y solo la guarda si funciona. Va al `.env`, que no se sube a git.
 2. **Conectar** desde el panel: **Agentes → Modelos externos**. Cada modelo tiene su interruptor, un botón **Probar** (una pregunta sin datos de nadie)

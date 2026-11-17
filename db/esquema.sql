@@ -784,6 +784,7 @@ CREATE TABLE IF NOT EXISTS ofertas_descubrimiento (
   creado      timestamptz NOT NULL DEFAULT now(),
   actualizado timestamptz NOT NULL DEFAULT now()
 );
+ALTER TABLE ofertas_descubrimiento ADD COLUMN IF NOT EXISTS empezada timestamptz;   -- NULL mientras la tarea espera en la cola; el panel dice «en cola» hasta que un worker la coge
 
 -- Registro de lo que sale a Claude o ChatGPT en los pasos sensibles de «Preparar la oferta» (Administrativo, Costes): quién lo confirmó, qué paso, qué proveedor y cuánto texto privado (anonimizado) viajó. NO guarda el contenido.
 CREATE TABLE IF NOT EXISTS ofertas_envios_externos (

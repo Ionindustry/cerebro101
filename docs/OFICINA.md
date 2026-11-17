@@ -33,4 +33,4 @@ en la pantalla al entrar.
 Quien no es de dirección ve el **estado** y la ficha pública de todos los agentes, pero el **detalle** de lo que hacen (herramienta, pasos, acciones, aprobaciones pendientes) solo de los de sus propios departamentos.
 
 ## Ponerlo en marcha
-`git pull` y `docker compose up -d --build api worker beat panel`. La tabla `actividad_agentes` la crea el servicio «migraciones» al arrancar.
+`git pull` y `docker compose up -d --build api worker worker-cortas beat panel`. La tabla `actividad_agentes` la crea el servicio «migraciones» al arrancar.

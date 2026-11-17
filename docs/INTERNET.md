@@ -17,7 +17,7 @@
 
 ```bash
 git pull origin main
-docker compose up -d --build api worker beat
+docker compose up -d --build api worker worker-cortas beat
 docker compose up -d searxng
 ```
 

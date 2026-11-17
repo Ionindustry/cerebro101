@@ -149,7 +149,7 @@ async def leer(motor_id: str) -> dict | None:
     """El estado de la búsqueda. Una «en curso» de hace más de MINUTOS_EN_CURSO se cierra aquí como error: si no, el panel dice «Buscando…» para siempre y deja el botón desactivado."""
     motor_id = O._id(motor_id)
     async with await O._conectar() as conn:
-        cur = await conn.execute("SELECT estado, proveedor, modelo, contenido, error, creado, actualizado, "
+        cur = await conn.execute("SELECT estado, proveedor, modelo, contenido, error, creado, actualizado, (empezada IS NULL) AS en_cola, "
                                  "(estado = 'en_curso' AND actualizado < now() - make_interval(mins => %s)) AS caducada FROM ofertas_descubrimiento WHERE motor_id = %s", [MINUTOS_EN_CURSO, motor_id])
         f = await cur.fetchone()
         if f and f.pop("caducada"):
@@ -157,6 +157,8 @@ async def leer(motor_id: str) -> dict | None:
             f = {**f, "estado": "error", "error": INTERRUMPIDA, "actualizado": datetime.now(timezone.utc)}
         elif f:
             f.pop("caducada", None)
+        if f and f["estado"] != "en_curso":
+            f["en_cola"] = False
     return None if not f else {**f, "creado": f["creado"].isoformat(), "actualizado": f["actualizado"].isoformat()}
 
 
@@ -168,7 +170,20 @@ async def iniciar(motor_id: str, por: str) -> None:
         if await cur.fetchone():
             raise O.ErrorOferta("Ya hay una búsqueda en curso para esta licitación")
         await conn.execute("INSERT INTO ofertas_descubrimiento (motor_id, estado, por) VALUES (%s, 'en_curso', %s) ON CONFLICT (motor_id) DO UPDATE SET "
-                           "estado = 'en_curso', error = '', por = EXCLUDED.por, actualizado = now()", [motor_id, por])
+                           "estado = 'en_curso', error = '', por = EXCLUDED.por, empezada = NULL, actualizado = now()", [motor_id, por])
+
+
+async def empezar(motor_id: str) -> None:
+    """El worker ha cogido la tarea: deja de estar «en cola»."""
+    async with await O._conectar() as conn:
+        await conn.execute("UPDATE ofertas_descubrimiento SET empezada = now(), actualizado = now() WHERE motor_id = %s AND estado = 'en_curso'", [motor_id])
+
+
+async def interrumpir_huerfanas() -> int:
+    """Al arrancar el worker de «cortas»: las búsquedas que ya habían empezado y siguen «en curso» las mató el reinicio. Las que aún no empezaron siguen en la cola y se hacen."""
+    async with await O._conectar() as conn:
+        cur = await conn.execute("UPDATE ofertas_descubrimiento SET estado = 'error', error = %s, actualizado = now() WHERE estado = 'en_curso' AND empezada IS NOT NULL RETURNING 1", [INTERRUMPIDA])
+        return len(await cur.fetchall())
 
 
 async def _cerrar(motor_id: str, estado: str, contenido: dict | None = None, error: str = "", proveedor: str | None = None, modelo: str | None = None) -> None:
@@ -182,6 +197,7 @@ async def ejecutar(motor_id: str, titulo: str, modelo: str = "auto", buscar=None
     """Hace la búsqueda y deja el resultado (o el motivo del fallo) en la tabla. Nunca lanza: la tarea no puede dejar la fila «en curso»."""
     motor_id = O._id(motor_id)
     try:
+        await empezar(motor_id)
         eq = await Q.leer(motor_id)
         if not eq:
             await _cerrar(motor_id, "error", error="Primero hace falta la tabla de equivalencias: pulsa «Preparar la oferta» (o repite el paso de equivalencias).")
@@ -231,7 +247,7 @@ async def lanzar_automatica(motor_id: str, modelo: str = "auto") -> bool:
             return False
         await iniciar(motor_id, "automático")
         from ..tareas.celery_app import app
-        app.send_task("cerebro.tareas.celery_app.descubrir_opciones", args=[motor_id, modelo], queue="peticiones")
+        app.send_task("cerebro.tareas.celery_app.descubrir_opciones", args=[motor_id, modelo], queue="cortas")
         return True
     except Exception as e:      # noqa: BLE001 — es un extra: no puede romper la preparación de la oferta
         log.info("descubrimiento automático de %s: no se ha lanzado (%s: %s)", motor_id, type(e).__name__, str(e)[:120])

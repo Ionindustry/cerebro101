@@ -3,6 +3,7 @@
 Jarvis lo atiende la API directamente, sin cola, para que la conversación en directo
 nunca espere. Las demás tareas van a dos colas:
   - peticiones: tareas largas pedidas por personas
+  - cortas:     tareas de unos minutos (búsqueda en internet, carga de fichas): tienen su propio worker para no esperar detrás de una oferta larga
   - lote:       tareas programadas (Radar, noticias, tarifas…), sobre todo de noche
 El calendario se genera a partir del campo «horario» de cada ficha de agente.
 """
@@ -37,7 +38,10 @@ app.conf.task_routes = {"cerebro.tareas.celery_app.ejecutar_programada": {"queue
                         "cerebro.tareas.celery_app.actualizar_tarifas": {"queue": "lote"},
                         "cerebro.tareas.celery_app.pedir_viabilidad": {"queue": "peticiones"},
                         "cerebro.tareas.celery_app.analizar_pliegos": {"queue": "peticiones"},
-                        "cerebro.tareas.celery_app.volcar_constancia": {"queue": "peticiones"}}
+                        "cerebro.tareas.celery_app.volcar_constancia": {"queue": "peticiones"},
+                        "cerebro.tareas.celery_app.descubrir_opciones": {"queue": "cortas"},
+                        "cerebro.tareas.celery_app.cargar_fichas_marca": {"queue": "cortas"},
+                        "cerebro.tareas.celery_app.cargar_fichas": {"queue": "cortas"}}
 
 
 def _calendario() -> dict:
@@ -339,9 +343,20 @@ from celery.signals import worker_ready  # noqa: E402
 
 
 @worker_ready.connect
-def _al_arrancar_el_worker(**_):
-    """Un worker que arranca no tiene ninguna tarea en marcha: las preparaciones de oferta que quedaron «en curso» eran de la vida anterior (el reinicio las mató) y se cierran como interrumpidas."""
+def _al_arrancar_el_worker(sender=None, **_):
+    """Un worker que arranca no tiene ninguna tarea en marcha: lo que quedó «en curso» de su cola era de la vida anterior (el reinicio lo mató) y se cierra como interrumpido.
+    Cada worker revisa solo lo suyo: el general las preparaciones de oferta; el de «cortas», las búsquedas en internet ya empezadas (las que siguen en cola no se tocan)."""
     import logging
+    nombre = str(getattr(sender, "hostname", "") or "")
+    if nombre.startswith("cortas@"):
+        try:
+            from ..licitaciones import descubrimiento
+            n = asyncio.run(descubrimiento.interrumpir_huerfanas())
+            if n:
+                logging.getLogger("cerebro.tareas").warning("worker cortas: %d búsqueda(s) en internet interrumpidas por el reinicio", n)
+        except Exception as e:      # noqa: BLE001
+            logging.getLogger("cerebro.tareas").warning("worker cortas: no se han podido revisar las búsquedas huérfanas: %s: %s", type(e).__name__, e)
+        return
     try:
         from ..licitaciones import redaccion
         ids = asyncio.run(redaccion.interrumpir_huerfanas())
