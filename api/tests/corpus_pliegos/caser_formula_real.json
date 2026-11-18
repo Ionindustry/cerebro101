@@ -4,7 +4,7 @@
   {
    "n": 1,
    "nombre": "PCAP CASER.pdf",
-   "texto": "Pliego de cláusulas administrativas particulares. Las personas licitadoras deberán confeccionar y presentar hasta tres sobres electrónicos, señalados con las letras A, B y C, a través de herramienta de preparación y presentación de ofertas. Se otorgarán 60 puntos al licitador que ofrezca el precio más bajo (sin IVA) y cero puntos al\\nprecio de licitación indicado en este pliego. La puntuación del resto de las ofertas se calculará\\nsegún la siguiente fórmula:\\nA x Pmax\\nP = ----------------\\nB\\nSiendo:\\nP = Puntos asignados a cada oferta.\\nPmax = Puntuación máxima a asignar (60 puntos).\\nA = Baja económica de la oferta a valorar (Precio de licitación – precio ofertado)\\nB = Máxima baja económica (Precio de licitación – precio ofertado más bajo)"
+   "texto": "Pliego de cláusulas administrativas particulares. Las personas licitadoras deberán confeccionar y presentar hasta tres sobres electrónicos, señalados con las letras A, B y C, a través de herramienta de preparación y presentación de ofertas. Se otorgarán 60 puntos al licitador que ofrezca el precio más bajo (sin IVA) y cero puntos al\nprecio de licitación indicado en este pliego. La puntuación del resto de las ofertas se calculará\nsegún la siguiente fórmula:\nA x Pmax\nP = ----------------\nB\nSiendo:\nP = Puntos asignados a cada oferta.\nPmax = Puntuación máxima a asignar (60 puntos).\nA = Baja económica de la oferta a valorar (Precio de licitación – precio ofertado)\nB = Máxima baja económica (Precio de licitación – precio ofertado más bajo)"
   }
  ],
  "esperado": {
