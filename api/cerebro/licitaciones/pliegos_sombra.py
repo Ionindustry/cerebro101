@@ -245,9 +245,30 @@ def sugerir_formulas(texto: str) -> list[dict]:
     return out
 
 
-def avisos_formulas(sugerencias: list[dict], reglas_anotadas: dict | None) -> list[dict]:
+_RE_CRITERIO_ECONOMICO = re.compile(r"criterio\s+([a-d])\s*[:.\-]\s*(oferta economica[^()]{0,70}?)\s*\((?:hasta\s+)?(\d{1,3})\s*puntos\)")
+
+
+def criterios_economicos(texto: str) -> list[dict]:
+    """Si el pliego reparte el precio en varios criterios que se suman («Criterio A: Oferta Económica de Suministro (Hasta 65 Puntos)» + «Criterio B: … Mantenimiento (Hasta 10 Puntos)»),
+    cada uno con su letra, su descripción y sus puntos. Vacío si solo hay uno o ninguno. Pura."""
+    t = _plano(texto)
+    vistos, out = set(), []
+    for m in _RE_CRITERIO_ECONOMICO.finditer(t):
+        letra = m.group(1)
+        if letra not in vistos:
+            vistos.add(letra)
+            out.append({"criterio": letra.upper(), "descripcion": m.group(2).strip(), "puntos": float(m.group(3))})
+    return out if len(out) >= 2 else []
+
+
+def avisos_formulas(sugerencias: list[dict], reglas_anotadas: dict | None, criterios: list[dict] | None = None) -> list[dict]:
     if reglas_anotadas:
         return []
+    if criterios and sugerencias:
+        s = sugerencias[0]
+        lista = "; ".join(f"criterio {c['criterio']}: {c['descripcion']}, {c['puntos']:g} puntos" for c in criterios)
+        return [{"nivel": "aviso", "texto": f"El precio se puntúa en {len(criterios)} criterios que se SUMAN ({lista}). Parece que cada uno usa la fórmula «{s['formula']}». «Reglas de precio» solo admite una fórmula: "
+                                            f"anota la del criterio principal ({criterios[0]['puntos']:g} puntos) y deja los demás en la nota; el simulador no los suma por ti"}]
     if not sugerencias:
         return [{"nivel": "ok", "texto": "No se ha reconocido ninguna fórmula de puntuación del precio en los pliegos: anótala a mano en «Reglas de precio» si el pliego la trae"}]
     s = sugerencias[0]
@@ -263,7 +284,7 @@ def revisar(documentos: list[dict], secciones: list[dict], reglas_anotadas: dict
     # los sobres, mejor en el PCAP; si no hay PCAP identificado, en todo el texto
     pcap = "\n".join(str(d.get("texto") or "") for d in documentos if clasificar_documento(d.get("nombre", ""), d.get("texto", "")) == "pcap") or todo
     return (comparar_sobres(detectar_sobres(pcap)) + avisos_fugas(fugas_economicas(secciones, mejoras_van_en_el_economico(pcap))) + avisos_rectificaciones(rectificaciones(documentos))
-            + avisos_formulas(sugerir_formulas(pcap), reglas_anotadas))
+            + avisos_formulas(sugerir_formulas(pcap), reglas_anotadas, criterios_economicos(pcap)))
 
 
 async def revisar_licitacion(motor_id: str, documentos=None, secciones=None, reglas_anotadas=None) -> list[dict]:

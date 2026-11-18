@@ -36,6 +36,8 @@ class TestCorpus(unittest.TestCase):
                 if rect:
                     self.assertGreaterEqual(len(rect[0]["clausulas"]), e["clausulas_min"])
                     self.assertEqual(rect[0]["fecha"], e["fecha"])
+                if "criterios_economicos" in e:
+                    self.assertEqual(len(S.criterios_economicos(pcap)), e["criterios_economicos"])
                 sug = S.sugerir_formulas(pcap)
                 if "formula" in e:
                     self.assertEqual(sug[0]["formula"] if sug else None, e["formula"])
@@ -74,6 +76,15 @@ class TestAvisos(unittest.TestCase):
         self.assertEqual(S.clasificar_documento("PPT.pdf"), "ppt")
         self.assertEqual(S.clasificar_documento("doc1.pdf", "Pliego de prescripciones técnicas particulares"), "ppt")
         self.assertEqual(S.clasificar_documento("x.pdf", ""), "otro")
+
+    def test_con_varios_criterios_de_precio_el_aviso_lo_dice_y_no_los_suma(self):
+        crit = [{"criterio": "A", "descripcion": "oferta economica de suministro", "puntos": 65.0}, {"criterio": "B", "descripcion": "oferta economica de mantenimiento", "puntos": 10.0}]
+        sug = [{"formula": "proporcional_baja", "cita": "x", "puntos_precio": 65.0}]
+        a = S.avisos_formulas(sug, None, crit)[0]["texto"]
+        self.assertIn("2 criterios que se SUMAN", a)
+        self.assertIn("65 puntos", a)
+        self.assertIn("10 puntos", a)
+        self.assertEqual(S.criterios_economicos("Criterio A: Oferta Económica de Suministro (Hasta 65 Puntos)"), [])      # uno solo no es «varios»
 
     def test_sin_reglas_anotadas_sugiere_y_con_reglas_calla(self):
         sug = [{"formula": "inversa", "cita": "proporcionalidad inversa", "puntos_precio": 51.0}]
