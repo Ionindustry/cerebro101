@@ -199,34 +199,35 @@ def avisos_rectificaciones(lista: list[dict]) -> list[dict]:
 
 # ---- 5. Fórmulas de puntuación sugeridas ----
 
-_RE_PUNTUACION = re.compile(r"(?:formula|puntuacion|se valorara|se puntuara)[^.]{0,200}")
+_RE_PUNTUACION = re.compile(r"formula|puntuacion|se valorara|se puntuara|se otorgaran \d+ puntos")
+VENTANA_FORMULA = 600       # lo que se mira tras la palabra clave: la fórmula y la definición de sus letras ocupan varias líneas
 
 
 def sugerir_formulas(texto: str) -> list[dict]:
-    """Sugerencias de {formula (de reglas.FORMULAS), puntos_precio?, baja_tope_pct?, cita}. Son PISTAS para que una persona las confirme en «Reglas de precio»: no se guardan ni se aplican solas."""
+    """Sugerencias de {formula (de reglas.FORMULAS), puntos_precio?, baja_tope_pct?, cita}. Son PISTAS para que una persona las confirme en «Reglas de precio»: no se guardan ni se aplican solas.
+    Una sugerencia por fórmula distinta (el mismo párrafo suele nombrarla varias veces)."""
     t = _plano(texto)
     out = []
     for m in _RE_PUNTUACION.finditer(t):
-        frase = m.group(0)
+        frase = t[m.start(): m.start() + VENTANA_FORMULA]
         formula = None
         if re.search(r"proporcional\w* inversa|inversamente proporcional|\(1 ?- ?r\)|\(1 ?- ?b\)|oferta mas baja .*dividid", frase):
             formula = "inversa"
-        elif re.search(r"proporcional\w* (?:directa )?a la baja|baja de la oferta .*mayor baja|(?:mayor|mejor) baja|baja .*/ ?baja", frase):
+        elif re.search(r"proporcional\w* (?:directa )?a la baja|baja de la oferta .*mayor baja|(?:mayor|mejor|maxima) baja|baja .*/ ?baja", frase):
             formula = "proporcional_baja"
         elif re.search(r"(?:baja|descuento).{0,40}(?:maxim|tope|umbral|a partir de)|(?:maxim|tope|umbral).{0,40}(?:baja|descuento)|lineal", frase):
             formula = "lineal_umbral"
-        if not formula:
+        if not formula or any(o["formula"] == formula for o in out):
             continue
-        s = {"formula": formula, "cita": _cita(t, m.start(), m.end(), 20)}
-        p = re.search(r"(\d{1,3}(?:[.,]\d+)?)\s*puntos", t[max(0, m.start() - 160): m.end() + 160])
+        s = {"formula": formula, "cita": _cita(t, m.start(), m.start() + 160, 0)}
+        p = re.search(r"(\d{1,3}(?:[.,]\d+)?)\s*puntos", t[max(0, m.start() - 160): m.start() + 300])
         if p:
             s["puntos_precio"] = float(p.group(1).replace(",", "."))
         if formula == "lineal_umbral":
             u = re.search(r"(\d{1,2}(?:[.,]\d+)?)\s*(?:%|por ?ciento)", frase)
             if u:
                 s["baja_tope_pct"] = float(u.group(1).replace(",", "."))
-        if all(o["formula"] != formula or o["cita"] != s["cita"] for o in out):
-            out.append(s)
+        out.append(s)
         if len(out) >= 3:
             break
     return out
