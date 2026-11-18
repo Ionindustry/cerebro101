@@ -1,4 +1,4 @@
-"""Descarga las voces de Piper (voz de salida de Jarvis) en servicios/voz/voces/: castellano (davefx) y catalán (upc_ona).
+"""Descarga las voces de Piper (voz de salida de ARES) en servicios/voz/voces/: castellano (davefx) y catalán (upc_ona).
 
     python3 scripts/voces_descargar.py            # las dos
     python3 scripts/voces_descargar.py --solo es  # solo castellano

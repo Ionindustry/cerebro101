@@ -1,15 +1,15 @@
-# Voz de Jarvis
+# Voz de ARES
 
-Jarvis te escucha (voz a texto con Whisper) y te contesta en voz alta (texto a voz con Piper). Todo corre en tu servidor, sin enviar audio fuera.
+ARES te escucha (voz a texto con Whisper) y te contesta en voz alta (texto a voz con Piper). Todo corre en tu servidor, sin enviar audio fuera.
 
 ## Hablarle
 
-- Elige el micrófono (por ejemplo, el de la webcam) en la lista **Micrófono** de Jarvis y pulsa el botón del micrófono; vuelve a pulsarlo para terminar.
+- Elige el micrófono (por ejemplo, el de la webcam) en la lista **Micrófono** de ARES y pulsa el botón del micrófono; vuelve a pulsarlo para terminar.
 - Whisper usa la tarjeta gráfica si tiene las librerías de NVIDIA (están en la imagen); si no puede, pasa solo a la CPU con el modelo `small` y lo cuenta en el log (`docker compose logs voz`).
 
 ## Que te conteste por voz
 
-- El interruptor **Respuesta por voz** (junto al micrófono) está activo por defecto: Jarvis lee en alto cada respuesta, también las de preguntas escritas. Se recuerda en el navegador. **Callar** corta lo que esté diciendo; si le hablas, se calla solo.
+- El interruptor **Respuesta por voz** (junto al micrófono) está activo por defecto: ARES lee en alto cada respuesta, también las de preguntas escritas. Se recuerda en el navegador. **Callar** corta lo que esté diciendo; si le hablas, se calla solo.
 - Se lee el texto limpio (sin marcas de formato, enlaces ni código) y como máximo unas frases: las respuestas larguísimas se cortan al final de una frase. La voz es catalana si el texto lo parece y castellana en otro caso.
 - **Las voces hay que descargarlas una vez**, en el servidor (no vienen en el repositorio, pesan unos 60 MB cada una):
 
@@ -18,7 +18,7 @@ Jarvis te escucha (voz a texto con Whisper) y te contesta en voz alta (texto a v
   docker compose restart voz
   ```
 
-  Si falta la voz, Jarvis lo dice en pantalla en vez de quedarse mudo.
+  Si falta la voz, ARES lo dice en pantalla en vez de quedarse mudo.
 
 ## Cambiar la voz (por ejemplo, una voz femenina en castellano)
 
@@ -35,7 +35,7 @@ PIPER_VOZ_ES=/voces/es_ES-sharvard-medium.onnx
 PIPER_LOCUTOR_ES=F
 ```
 
-y `docker compose up -d --force-recreate voz`. Si la voz no suena como esperas, prueba `PIPER_LOCUTOR_ES=M`, o los números `0` y `1`. Si el nombre del locutor no existe, Jarvis dice en pantalla cuáles hay. Para volver a la de siempre, borra esas dos líneas y recrea la voz. Otras voces: https://huggingface.co/rhasspy/piper-voices (cada una son dos ficheros, `.onnx` y `.onnx.json`, que van a `servicios/voz/voces/`).
+y `docker compose up -d --force-recreate voz`. Si la voz no suena como esperas, prueba `PIPER_LOCUTOR_ES=M`, o los números `0` y `1`. Si el nombre del locutor no existe, ARES dice en pantalla cuáles hay. Para volver a la de siempre, borra esas dos líneas y recrea la voz. Otras voces: https://huggingface.co/rhasspy/piper-voices (cada una son dos ficheros, `.onnx` y `.onnx.json`, que van a `servicios/voz/voces/`).
 
 *Sin verificar:* la voz `sharvard` y sus locutores no se han podido oír desde el entorno de desarrollo; si ninguno te convence, dímelo y se prueba otra.
 

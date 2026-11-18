@@ -21,7 +21,7 @@
 	}
 }
 
-# Panel de Jarvis
+# Panel de ARES
 {$DOM_PANEL} {
 	import tls_{$TLS_MODO}
 	import seguridad

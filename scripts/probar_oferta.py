@@ -1,5 +1,5 @@
 """Revisión previa («pre-vuelo») de «Preparar la oferta con los agentes» para una licitación: comprueba, SIN cambiar nada ni llamar a ningún modelo, que están los ingredientes y dice qué falta.
-Es la misma revisión que el botón «Revisar antes de preparar la oferta» de la ficha del expediente en Jarvis (cerebro/licitaciones/revision_previa.py).
+Es la misma revisión que el botón «Revisar antes de preparar la oferta» de la ficha del expediente en ARES (cerebro/licitaciones/revision_previa.py).
 
     docker compose exec api python /app/scripts/probar_oferta.py                  # elige la licitación «en estudio» con mejor encaje
     docker compose exec api python /app/scripts/probar_oferta.py <id del motor>   # una licitación concreta (el UUID de la ficha)
@@ -36,7 +36,7 @@ async def main() -> int:
         print(f"No se ha podido leer el embudo: {type(e).__name__}: {e}")
         return 1
     if not fila:
-        print("No hay ninguna licitación «en estudio» en el embudo: pasa una a «en estudio» desde Jarvis (o indica su id).")
+        print("No hay ninguna licitación «en estudio» en el embudo: pasa una a «en estudio» desde ARES (o indica su id).")
         return 1
     print(f"\nLicitación: {fila.get('titulo')}\n  id del motor: {fila['motor_id']} · estado en el embudo: {fila.get('estado') or 'no está'} · encaje: {fila.get('encaje')}")
     r = await revision_previa.revisar(str(fila["motor_id"]))

@@ -10,7 +10,7 @@ salvo la visita a la página pública, con los mismos controles que la herramien
 
 ## Cómo se usa
 
-En Jarvis basta con pedirlo: «Investiga en internet las obligaciones de los carteles de videovigilancia, guárdalo en un cuaderno
+En ARES basta con pedirlo: «Investiga en internet las obligaciones de los carteles de videovigilancia, guárdalo en un cuaderno
 llamado *Carteles videovigilancia* y respóndeme citando las fuentes». El agente:
 
 1. `investigar`: busca el tema y guarda las mejores páginas (4 por defecto, hasta 8) en el cuaderno; lo crea si no existe.

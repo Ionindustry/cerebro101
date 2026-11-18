@@ -8,7 +8,7 @@ Cada fase dura unas 4 semanas y solo empieza si la anterior cumple su criterio d
 - [x] Registro de 115 agentes como configuración validada
 - [x] Políticas de aprobación y de sensibilidad de datos en código
 - [x] Grafo de orquestación: Director General → departamento → agente → aprobaciones
-- [x] Panel de Jarvis con conversación, bandeja de aprobaciones y directorio de agentes
+- [x] Panel de ARES con conversación, bandeja de aprobaciones y directorio de agentes
 - [x] Motor de cotización (cuadra con el contador corregido) y comparador de instaladores
 - [x] Conectores directos de correo (IMAP/SMTP), calendario (CalDAV) y datos abiertos de contratación, sin n8n
 - [ ] Configurar el servidor de correo y las cuentas técnicas por departamento
@@ -43,7 +43,7 @@ incidencias graves.
 - [ ] Operaciones: red de instaladores (captación, acuerdos, comparador en producción)
 - [ ] Áreas de Servicio: catálogo de paquetes por área y Previsión de Demanda
 - [ ] Personas
-- [ ] Voz de Jarvis (Whisper y Piper) en producción
+- [ ] Voz de ARES (Whisper y Piper) en producción
 
 **Criterio de paso:** calendario editorial, campañas y proyectos funcionando dentro del Cerebro.
 

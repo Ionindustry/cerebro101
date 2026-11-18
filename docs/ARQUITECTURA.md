@@ -2,7 +2,7 @@
 
 ## Recorrido de una petición
 
-1. **Jarvis** recibe voz (Whisper la pasa a texto) o texto desde el panel e identifica al usuario (Keycloak).
+1. **ARES** recibe voz (Whisper la pasa a texto) o texto desde el panel e identifica al usuario (Keycloak).
 2. **Director General** (`grafo/nodos.py: enrutar`) elige el departamento con el modelo rápido y salida estructurada.
 3. **Director del departamento** (`elegir_agente`) elige el agente adecuado entre los de su departamento.
 4. **Agente** (`ejecutar_agente`) trabaja en un bucle de hasta 5 pasos: en cada paso usa una herramienta o da
@@ -27,7 +27,7 @@ puede llegar horas después y el flujo continúa donde se quedó.
 | Aprobaciones | `cerebro/aprobaciones/` | Reglas (probadas) y persistencia de la bandeja |
 | Cotizador | `cerebro/cotizador/motor.py` | Motor determinista del contador de instalaciones |
 | Red de instaladores | `cerebro/red_instaladores/comparador.py` | Puntuación por precio, rapidez y eficiencia |
-| API | `cerebro/api/main.py` | Endpoints para panel, Jarvis y aprobaciones |
+| API | `cerebro/api/main.py` | Endpoints para panel, ARES y aprobaciones |
 | Tareas programadas | `cerebro/tareas/celery_app.py` | Calendario generado a partir del horario de cada ficha |
 
 ## Principios
@@ -43,7 +43,7 @@ puede llegar horas después y el flujo continúa donde se quedó.
 ## Uso de la tarjeta gráfica
 
 Ollama mantiene cargados el modelo rápido, el principal y los embeddings; visión y juez se cargan bajo demanda
-(`keep_alive` de 5 minutos). Jarvis lo atiende la API directamente, sin cola; las tareas programadas van a la
+(`keep_alive` de 5 minutos). ARES lo atiende la API directamente, sin cola; las tareas programadas van a la
 cola `lote` y están concentradas de noche en las fichas.
 
 

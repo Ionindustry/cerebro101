@@ -1,6 +1,6 @@
-"""El DEUC base de cada sociedad, subido desde Jarvis.
+"""El DEUC base de cada sociedad, subido desde ARES.
 
-La persona sube al chat el DEUC ya rellenado con los datos de la empresa (Word o PDF con formulario) y le pide a Jarvis que lo guarde para una sociedad. El agente PROPONE la acción
+La persona sube al chat el DEUC ya rellenado con los datos de la empresa (Word o PDF con formulario) y le pide a ARES que lo guarde para una sociedad. El agente PROPONE la acción
 (`plantillas.guardar_deuc`); una persona la aprueba viendo qué fichero es y para qué sociedad; solo entonces se guarda. El fichero ya pasó por la cuarentena y el antivirus de las subidas
 (cerebro/subidas.py); aquí se comprueba además que es lo que dice ser (un Word de verdad, o un PDF CON campos de formulario) y que no lleva macros.
 
@@ -52,7 +52,7 @@ async def _revisar(documento: str, empresa: str | None, usuario: str | None = No
     except (S.ErrorSubida, S.NoExiste) as e:
         raise ErrorDeuc(str(e)) from None
     if not usuario or f["usuario"] != usuario:         # solo se guarda un documento que la persona que lo pide ha subido ella (el sistema pone `usuario`, no el modelo)
-        raise ErrorDeuc("Ese documento no lo has subido tú: súbelo tú mismo desde Jarvis para guardarlo como DEUC base")
+        raise ErrorDeuc("Ese documento no lo has subido tú: súbelo tú mismo desde ARES para guardarlo como DEUC base")
     if f["estado"] != "limpio":
         raise ErrorDeuc("Ese documento lleva macros: no se admite como DEUC (guárdalo sin macros)")
     if f["formato"] not in FORMATOS:
@@ -102,7 +102,7 @@ async def guardar(documento: str, empresa: str | None = None, por: str = "agente
 
 
 async def actual_de(empresa: str) -> dict | None:
-    """La ficha de la versión más reciente subida desde Jarvis para la sociedad, o None."""
+    """La ficha de la versión más reciente subida desde ARES para la sociedad, o None."""
     async with await O._conectar() as conn:
         cur = await conn.execute("SELECT id, nombre, formato, sha256, bytes, por, creado FROM deuc_base WHERE empresa = %s ORDER BY creado DESC, id DESC LIMIT 1", [empresa])
         f = await cur.fetchone()
@@ -110,7 +110,7 @@ async def actual_de(empresa: str) -> dict | None:
 
 
 async def base_local(empresa: str) -> tuple[str, bytes, str] | None:
-    """(nombre, contenido, formato) del DEUC base subido desde Jarvis, o None si no hay. Se comprueba que el fichero sigue siendo el que se guardó (mismo sha256)."""
+    """(nombre, contenido, formato) del DEUC base subido desde ARES, o None si no hay. Se comprueba que el fichero sigue siendo el que se guardó (mismo sha256)."""
     f = await actual_de(empresa)
     if not f:
         return None
@@ -118,7 +118,7 @@ async def base_local(empresa: str) -> tuple[str, bytes, str] | None:
     try:
         datos = ruta.read_bytes()
     except OSError:
-        raise ErrorDeuc("El DEUC base de la sociedad ya no está en el servidor: vuelve a subirlo desde Jarvis") from None
+        raise ErrorDeuc("El DEUC base de la sociedad ya no está en el servidor: vuelve a subirlo desde ARES") from None
     if hashlib.sha256(datos).hexdigest() != f["sha256"]:
-        raise ErrorDeuc("El DEUC base de la sociedad ha cambiado en el disco: vuelve a subirlo desde Jarvis")
+        raise ErrorDeuc("El DEUC base de la sociedad ha cambiado en el disco: vuelve a subirlo desde ARES")
     return f["nombre"], datos, f["formato"]

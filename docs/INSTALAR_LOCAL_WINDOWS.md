@@ -57,7 +57,7 @@ La primera vez descarga imágenes y los modelos de Ollama (varios GB): tarda. De
 
 | Servicio | Dirección |
 | --- | --- |
-| Panel de Jarvis | http://localhost:3000 |
+| Panel de ARES | http://localhost:3000 |
 | API (documentación) | http://localhost:8000/docs |
 | Keycloak | http://localhost:8080 |
 | Langfuse (registro) | http://localhost:3001 |
@@ -139,10 +139,10 @@ COPIA_RESTIC_CLAVE=/home/pc/.restic-clave
 
 La próxima copia crea el repositorio y deja ahí la copia incremental; si restic falla, la copia se marca como fallida y avisa a soporte@. Para recuperar la última: `RESTIC_REPOSITORY=/mnt/d/Copias101/restic RESTIC_PASSWORD_FILE=/home/pc/.restic-clave restic restore latest --tag cerebro --target /tmp/restaurar`.
 
-**Configurarla desde Jarvis (Dirección):** en la tarjeta «Copias de seguridad» (barra superior) el botón **Configurar** cambia cuántas copias se conservan en el servidor (1–60, por defecto 7), la **segunda ubicación** (una carpeta como `/mnt/d/Copias101`; vacía = sin segunda copia), cuántas se conservan allí (0 = no se borra nunca) y a los cuántos días sin copia correcta se avisa a soporte@ (1–14, por defecto 3). Lo fijado en Jarvis manda sobre el `.env`; sin nada fijado todo sigue como antes. Se aplica en la próxima copia (la de las 14:00). La hora no se cambia desde Jarvis: es la tarea de Windows «Cerebro - copia». Las rutas se comprueban (solo carpetas dentro de `/mnt/<unidad>/`, `/media/…`, `/srv/…` o `/home/…`) y el script de copias no acepta ninguna otra.
+**Configurarla desde ARES (Dirección):** en la tarjeta «Copias de seguridad» (barra superior) el botón **Configurar** cambia cuántas copias se conservan en el servidor (1–60, por defecto 7), la **segunda ubicación** (una carpeta como `/mnt/d/Copias101`; vacía = sin segunda copia), cuántas se conservan allí (0 = no se borra nunca) y a los cuántos días sin copia correcta se avisa a soporte@ (1–14, por defecto 3). Lo fijado en ARES manda sobre el `.env`; sin nada fijado todo sigue como antes. Se aplica en la próxima copia (la de las 14:00). La hora no se cambia desde ARES: es la tarea de Windows «Cerebro - copia». Las rutas se comprueban (solo carpetas dentro de `/mnt/<unidad>/`, `/media/…`, `/srv/…` o `/home/…`) y el script de copias no acepta ninguna otra.
 
 **Comprobar que la copia se puede restaurar:** `./scripts/probar_restauracion.sh` (en Ubuntu, desde la raíz) restaura la última copia en una base de datos **temporal** (que se borra al terminar; tus datos no se tocan),
-cuenta tablas y filas y comprueba `SHA256SUMS`; el volcado de ERPNext no se restaura (pisaría el ERP): se comprueba que está completo. Hazlo de vez en cuando. **En Jarvis**, en la pantalla «Agentes», la tarjeta
+cuenta tablas y filas y comprueba `SHA256SUMS`; el volcado de ERPNext no se restaura (pisaría el ERP): se comprueba que está completo. Hazlo de vez en cuando. **En ARES**, en la pantalla «Agentes», la tarjeta
 **«Copias de seguridad»** muestra la fecha y el tamaño de la última copia, si salió bien y si la restauración se ha probado. Y un vigilante (cada 6 horas) **avisa por correo a `soporte@101.cat` si pasan más de 3 días
 sin una copia correcta** (por ejemplo, si el PC estuvo apagado); no repite el aviso hasta pasadas 24 horas.
 
@@ -162,6 +162,6 @@ Guarda en `copias/<fecha>/` las bases de datos del Cerebro y de Langfuse, la del
 | --- | --- |
 | `could not select device driver "nvidia"` | No hay GPU para Docker: usa `docker-compose.sin-gpu.yml` (paso 3) |
 | `bad interpreter: /bin/bash^M` o `\r: command not found` | Clonaste en Windows y los `.sh` tienen saltos de línea CRLF. Vuelve a clonar dentro de WSL |
-| Jarvis responde «el modelo de IA no está disponible» o tarda minutos | Ollama sin memoria o sin modelos: `docker compose logs ollama` y `curl localhost:8000/salud/modelos`. Cierra ERPNext si no lo usas |
+| ARES responde «el modelo de IA no está disponible» o tarda minutos | Ollama sin memoria o sin modelos: `docker compose logs ollama` y `curl localhost:8000/salud/modelos`. Cierra ERPNext si no lo usas |
 | Docker Desktop se queda sin memoria | Sube el límite en `%UserProfile%\.wslconfig` (`[wsl2]` → `memory=12GB`) y ejecuta `wsl --shutdown` |
 | Error 429 al descargar imágenes | Límite de Docker Hub: espera unos minutos o inicia sesión con `docker login` |

@@ -1,4 +1,4 @@
-# Tipos de producto para el ranking de ventas (Jarvis → Ventas): cada línea de venta del ERP se asigna a UN tipo.
+# Tipos de producto para el ranking de ventas (ARES → Ventas): cada línea de venta del ERP se asigna a UN tipo.
 # Primero se mira el «Grupo de artículo» de ERPNext (grupos, sin importar mayúsculas ni acentos) y, si no encaja,
 # las palabras en el nombre o descripción del artículo. Lo que no encaja va a «Otros». Se edita aquí y vale al reiniciar la API.
 tipos:

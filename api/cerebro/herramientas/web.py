@@ -1,4 +1,4 @@
-"""Internet para Jarvis: buscar en la web (SearXNG propio) y leer una página pública.
+"""Internet para ARES: buscar en la web (SearXNG propio) y leer una página pública.
 
 Normas que aplica el código (no solo las instrucciones):
   - Lo que se busca sale del servidor hacia buscadores públicos: una consulta con nombres de clientes, proveedores o empleados, DNI, IBAN,

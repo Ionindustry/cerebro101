@@ -105,7 +105,7 @@ export default function Oficina() {
     <>
       <header className="of-cabecera">
         <div>
-          <div className="of-etiqueta"><i /> JARVIS / OFICINA</div>
+          <div className="of-etiqueta"><i /> ARES / OFICINA</div>
           <h1 className="of-titulo">Oficina<span>.</span></h1>
         </div>
         <div className="of-chips" aria-live="polite">

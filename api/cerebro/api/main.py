@@ -1,4 +1,4 @@
-"""API del Cerebro: la usan el panel, Jarvis (voz) y las tareas programadas."""
+"""API del Cerebro: la usan el panel, ARES (voz) y las tareas programadas."""
 from __future__ import annotations
 
 import asyncio
@@ -173,12 +173,12 @@ def _exigir_direccion(usuario: Usuario) -> None:
 
 
 _CACHE_HOY: dict = {}
-CACHE_HOY_S = 30         # Jarvis pide «Hoy» cada minuto desde cada pestaña abierta: la misma lista (mismos permisos) se reutiliza 30 s para no repetir las consultas al ERP, al motor y al antivirus
+CACHE_HOY_S = 30         # ARES pide «Hoy» cada minuto desde cada pestaña abierta: la misma lista (mismos permisos) se reutiliza 30 s para no repetir las consultas al ERP, al motor y al antivirus
 
 
 @app.get("/hoy")
 async def que_hacer_hoy(usuario: Usuario = Depends(usuario_actual)):
-    """«Qué hacer hoy»: lo que necesita atención de quien abre Jarvis, ordenado por urgencia: aprobaciones pendientes de sus departamentos, plazos de licitaciones y requisitos por revisar (Dirección y Licitaciones) y el estado
+    """«Qué hacer hoy»: lo que necesita atención de quien abre ARES, ordenado por urgencia: aprobaciones pendientes de sus departamentos, plazos de licitaciones y requisitos por revisar (Dirección y Licitaciones) y el estado
     del sistema (Dirección y Tecnología). Solo lee. La lista depende SOLO de los permisos (roles y departamentos), no de quién eres: por eso se puede reutilizar entre pestañas con los mismos permisos."""
     datos = await _hoy_de(usuario)
     try:
@@ -232,13 +232,13 @@ async def desarchivar_en_hoy(c: ClaveHoy, usuario: Usuario = Depends(usuario_act
 
 @app.get("/salud/antivirus")
 async def salud_antivirus(usuario: Usuario = Depends(usuario_actual)):
-    """El estado del antivirus para Jarvis: si responde y de cuándo son sus firmas (los documentos se rechazan con firmas de más de 48 horas)."""
+    """El estado del antivirus para ARES: si responde y de cuándo son sus firmas (los documentos se rechazan con firmas de más de 48 horas)."""
     return await antivirus.estado()
 
 
 @app.get("/salud/copias")
 async def salud_copias(usuario: Usuario = Depends(usuario_actual)):
-    """La tarjeta «Copias de seguridad» de Jarvis: la última copia (fecha, tamaño, si salió bien), la última correcta, si se ha probado la restauración y si hay que preocuparse (más de 3 días sin una buena).
+    """La tarjeta «Copias de seguridad» de ARES: la última copia (fecha, tamaño, si salió bien), la última correcta, si se ha probado la restauración y si hay que preocuparse (más de 3 días sin una buena).
     Sin rutas del servidor."""
     return await copias.estado()
 
@@ -330,7 +330,7 @@ class DocumentoEntrada(BaseModel):
 
 @app.post("/documentos/subir")
 async def subir_documento(entrada: DocumentoEntrada, usuario: Usuario = Depends(usuario_actual)):
-    """Sube un documento al chat de Jarvis (JSON con el fichero en base64: la pasarela del panel solo lleva JSON). Pasa por cuarentena y antivirus; el agente solo recibirá su texto."""
+    """Sube un documento al chat de ARES (JSON con el fichero en base64: la pasarela del panel solo lleva JSON). Pasa por cuarentena y antivirus; el agente solo recibirá su texto."""
     cfg = subidas.configuracion()
     if len(entrada.base64) > cfg["max_mb"] * 1_400_000:
         raise HTTPException(413, f"El documento pesa más de {cfg['max_mb']} MB")

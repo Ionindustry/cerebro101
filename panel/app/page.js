@@ -11,7 +11,7 @@ const SUGERENCIAS = [
   "Resumen del día",
 ];
 
-export default function Jarvis() {
+export default function ARES() {
   const [mensajes, setMensajes] = useState([]);
   const [texto, setTexto] = useState("");
   const [estado, setEstado] = useState("listo"); // listo | escuchando | pensando
@@ -25,7 +25,7 @@ export default function Jarvis() {
   const [micId, setMicId] = useState("");
   const [nivelMic, setNivelMic] = useState(0);
   const [avisoMic, setAvisoMic] = useState("");
-  const [vozActiva, setVozActiva] = useState(true);       // Jarvis contesta en voz alta (también a lo escrito)
+  const [vozActiva, setVozActiva] = useState(true);       // ARES contesta en voz alta (también a lo escrito)
   const [hablando, setHablando] = useState(false);
   const audio = useRef(null);
   const [entorno, setEntorno] = useState(null);           // lo que el navegador permite; se lee tras pintar para no chocar con el servidor
@@ -151,7 +151,7 @@ export default function Jarvis() {
   async function alternarMicrofono() {
     if (estado === "escuchando") return grabadora.current?.stop();
     setAvisoMic("");
-    pararAudio();                                        // si Jarvis está hablando y le hablas, se calla
+    pararAudio();                                        // si ARES está hablando y le hablas, se calla
     let flujo;
     try {
       try {
@@ -262,11 +262,11 @@ export default function Jarvis() {
         <form className="compositor" onSubmit={(e) => { e.preventDefault(); enviar(texto); }}>
           <input ref={ficheroRef} type="file" accept={ACCEPT} onChange={adjuntar} hidden />
           <button type="button" className="clip" onClick={() => ficheroRef.current?.click()} disabled={estado === "pensando" || subiendo} aria-label="Adjuntar un documento (PDF, Word, Excel, CSV)" title="Adjuntar un documento">📎</button>
-          <input value={texto} onChange={(e) => setTexto(e.target.value)} placeholder="Escribe o habla con Jarvis"
-                 aria-label="Mensaje para Jarvis" disabled={estado === "pensando"} />
+          <input value={texto} onChange={(e) => setTexto(e.target.value)} placeholder="Escribe o habla con ARES"
+                 aria-label="Mensaje para ARES" disabled={estado === "pensando"} />
           {texto && <button className="enviar" type="submit">Enviar</button>}
           <button type="button" className="microfono" data-estado={estado} onClick={alternarMicrofono}
-                  aria-label={estado === "escuchando" ? "Dejar de escuchar" : "Hablar con Jarvis"} disabled={estado === "pensando"}>
+                  aria-label={estado === "escuchando" ? "Dejar de escuchar" : "Hablar con ARES"} disabled={estado === "pensando"}>
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
               <rect x="9" y="3" width="6" height="12" rx="3" /><path d="M5 11a7 7 0 0 0 14 0M12 18v3" />
             </svg>

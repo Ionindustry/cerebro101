@@ -4,7 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import { CATEGORIAS, NIVELES, hoyIndicadores, hoyResumen, hrefSeguro } from "../../lib/hoy";
 import { Barras, Cifra } from "../licitaciones/buscar/Dashboard";
 
-// «Qué hacer hoy»: lo que necesita atención de quien abre Jarvis, en una sola lista ordenada por urgencia. Solo lee: cada elemento lleva a la pantalla donde se resuelve.
+// «Qué hacer hoy»: lo que necesita atención de quien abre ARES, en una sola lista ordenada por urgencia. Solo lee: cada elemento lleva a la pantalla donde se resuelve.
 export default function Hoy() {
   const [d, setD] = useState(undefined);       // undefined = cargando; null = error
   const cargar = useCallback(() => fetch("/cerebro/hoy").then((r) => { if (r.status === 401) { window.location.href = "/auth/login"; return null; } if (!r.ok) throw new Error(); return r.json(); }).then(setD).catch(() => setD(null)), []);

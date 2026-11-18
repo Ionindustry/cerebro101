@@ -13,7 +13,7 @@ Los agentes pueden **leer** los buzones de la empresa (administracion@, rrhh@, c
 | `responder` | Contesta a un mensaje recibido: va al remitente, con «Re:» y en el mismo hilo | **Sí** |
 | `enviar` | Envía un correo nuevo | **Sí** |
 
-En la pantalla **Aprobaciones** de Jarvis, quien aprueba ve **de qué buzón sale, para quién, el asunto, el texto exacto
+En la pantalla **Aprobaciones** de ARES, quien aprueba ve **de qué buzón sale, para quién, el asunto, el texto exacto
 que se enviará** y, si es una respuesta, el mensaje original. Aprobar es lo único que envía el correo.
 
 ## Adjuntos: leerlos, entenderlos y guardarlos en el ERP/CRM
@@ -85,7 +85,7 @@ por las del Plan General Contable** de la empresa). Requiere que el departamento
 
    Debe decir `IMAP ok · SMTP ok` en cada buzón con contraseña. No hace falta reiniciar: la API relee `secretos/buzones.env` cuando cambia.
    Los cambios en `config/buzones.yaml` sí necesitan `docker compose restart api worker`.
-5. **Prueba con un agente:** pídele a Jarvis, por ejemplo, «lee los correos sin leer de RR.HH.» y después «contesta al primero diciendo que lo hemos recibido»;
+5. **Prueba con un agente:** pídele a ARES, por ejemplo, «lee los correos sin leer de RR.HH.» y después «contesta al primero diciendo que lo hemos recibido»;
    verás la respuesta en **Aprobaciones** antes de que salga.
 
 ## Qué proveedor de correo tienes

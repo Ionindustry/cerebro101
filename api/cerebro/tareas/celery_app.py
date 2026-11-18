@@ -1,6 +1,6 @@
 """Tareas programadas y colas de trabajo.
 
-Jarvis lo atiende la API directamente, sin cola, para que la conversación en directo
+ARES lo atiende la API directamente, sin cola, para que la conversación en directo
 nunca espere. Las demás tareas van a dos colas:
   - peticiones: tareas largas pedidas por personas
   - cortas:     tareas de unos minutos (búsqueda en internet, carga de fichas): tienen su propio worker para no esperar detrás de una oferta larga

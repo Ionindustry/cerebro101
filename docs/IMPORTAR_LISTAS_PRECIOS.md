@@ -1,6 +1,6 @@
 # Importar una lista de precios de un proveedor
 
-Sube la lista (Excel `.xlsx`, CSV o PDF) con el botón 📎 del chat de Jarvis y escribe, por ejemplo: **«Importa esta lista de precios de Visiotech»**. El agente **Catálogo de Proveedores** (Operaciones)
+Sube la lista (Excel `.xlsx`, CSV o PDF) con el botón 📎 del chat de ARES y escribe, por ejemplo: **«Importa esta lista de precios de Visiotech»**. El agente **Catálogo de Proveedores** (Operaciones)
 la prepara, y **una persona de Dirección la aprueba** en la bandeja de aprobaciones antes de que se escriba nada en el ERP.
 
 ## Qué pasa, paso a paso

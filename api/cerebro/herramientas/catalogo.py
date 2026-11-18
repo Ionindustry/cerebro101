@@ -118,7 +118,7 @@ async def tarifas_pendientes() -> dict:
     pend = [a for a in d["actualizaciones"] if a["estado"] == "pendiente"]
     return {"pendientes": [{"id": a["id"], "proveedor": a["proveedor_id"], "fichero": a["nombre"], "cambios": {k: a["cambios"].get(k) for k in ("articulos", "nuevos", "retirados", "suben", "bajan", "variacion_media_pct", "sospechosa", "avisos", "mayores")}} for a in pend],
             "proveedores_con_error": [{"proveedor": p["id"], "error": p["error"]} for p in d["proveedores"] if p["error"]], "errores_configuracion": d["errores_configuracion"],
-            "nota": "Las aplica Dirección en Jarvis → Precios; tú solo avisas."}
+            "nota": "Las aplica Dirección en ARES → Precios; tú solo avisas."}
 
 
 registrar(Herramienta(

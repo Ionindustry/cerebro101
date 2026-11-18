@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Deja una tarifa de proveedor (Excel o CSV) en la carpeta que vigila el sistema: /datos/tarifas/<proveedor>/ (en el volumen de datos de Docker).
-# A la mañana siguiente (o al pulsar «Comprobar ahora» en Jarvis → Precios) se prepara una propuesta con los cambios; NO se carga nada en el ERP hasta que Dirección lo firma.
+# A la mañana siguiente (o al pulsar «Comprobar ahora» en ARES → Precios) se prepara una propuesta con los cambios; NO se carga nada en el ERP hasta que Dirección lo firma.
 #
 # Uso:  ./scripts/tarifa_subir.sh <id-del-proveedor> /ruta/a/la_tarifa.xlsx
 #   · <id-del-proveedor> es el «id» que pusiste en config/tarifas_auto.yaml (por ejemplo: milesight).
@@ -16,4 +16,4 @@ nombre="$(date +%Y%m%d-%H%M)-$(basename "$fichero")"
 docker compose exec -T api mkdir -p "/datos/tarifas/$id"
 docker compose cp "$fichero" "api:/datos/tarifas/$id/$nombre"
 echo "Hecho: $fichero → /datos/tarifas/$id/$nombre"
-echo "Se mirará en la próxima comprobación diaria; para verlo ya: Jarvis → Precios → Tarifas de proveedores → «Comprobar ahora»."
+echo "Se mirará en la próxima comprobación diaria; para verlo ya: ARES → Precios → Tarifas de proveedores → «Comprobar ahora»."

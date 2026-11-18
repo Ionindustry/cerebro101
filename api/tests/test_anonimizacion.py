@@ -74,7 +74,7 @@ class TestCapas(unittest.TestCase):
             self.assertNotIn(nombre, r.texto)
 
     def test_terminos_del_negocio_se_conservan(self):
-        t = "Control de Accesos y Contra Incendios para el parking de 101.cat; Jarvis lo revisa. Atención al Cliente."
+        t = "Control de Accesos y Contra Incendios para el parking de 101.cat; ARES lo revisa. Atención al Cliente."
         self.assertEqual(limpiar(t).texto, t)
 
     def test_conservar_tiene_prioridad(self):

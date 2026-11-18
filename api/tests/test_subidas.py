@@ -1,4 +1,4 @@
-"""Documentos subidos al chat de Jarvis: qué se admite (por contenido), antivirus, texto por páginas, adjuntar al mensaje, caducidad y la ruta de la API."""
+"""Documentos subidos al chat de ARES: qué se admite (por contenido), antivirus, texto por páginas, adjuntar al mensaje, caducidad y la ruta de la API."""
 import asyncio
 import base64
 import io
@@ -87,7 +87,7 @@ class TestFlujo(unittest.TestCase):
             c.execute(f"CREATE SCHEMA {self.schema}")
             c.execute(f"SET search_path = {self.schema}")
             t = ESQUEMA.read_text(encoding="utf-8")
-            i = t.index("-- Documentos que una persona sube al chat de Jarvis")
+            i = t.index("-- Documentos que una persona sube al chat de ARES")
             c.execute(t[i:t.index("\n\n--", i) if "\n\n--" in t[i:] else len(t)])
         sep = "&" if "?" in URL else "?"
         self.carpeta = tempfile.TemporaryDirectory()

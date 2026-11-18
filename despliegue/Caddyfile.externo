@@ -1,4 +1,4 @@
-# Proxy inverso del acceso externo (instalación local): solo el panel de Jarvis y el inicio de sesión. Las direcciones salen del .env (DOM_PANEL, DOM_AUTH).
+# Proxy inverso del acceso externo (instalación local): solo el panel de ARES y el inicio de sesión. Las direcciones salen del .env (DOM_PANEL, DOM_AUTH).
 # Caddy obtiene y renueva los certificados de Let's Encrypt solo; hace falta que los dos nombres apunten a esta IP y que lleguen los puertos 80 y 443.
 {
 	email {$CORREO_ADMIN}
@@ -22,7 +22,7 @@
 	}
 }
 
-# Panel de Jarvis
+# Panel de ARES
 {$DOM_PANEL} {
 	import tls_{$TLS_MODO}
 	import seguridad

@@ -191,7 +191,7 @@ instalar() {
   cat <<RESUMEN
 
 Listo.
-  Panel de Jarvis ........ https://$(valor DOM_PANEL)
+  Panel de ARES ........ https://$(valor DOM_PANEL)
   Inicio de sesión ....... https://$(valor DOM_AUTH)   (consola de administración: solo desde $(valor IPS_ADMIN))
   ERPNext ................ https://$(valor DOM_ERP)     (usuario Administrator; contraseña: ERPNEXT_ADMIN_PASSWORD en .env)
   Registro de decisiones . https://$(valor DOM_TRAZAS)  (usuario $(valor LANGFUSE_INIT_USER_EMAIL); contraseña: LANGFUSE_INIT_USER_PASSWORD en .env)

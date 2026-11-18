@@ -208,7 +208,7 @@ async def estado(probar: bool = False, transporte_nube=None, transporte_jeff=Non
 
     Sin `probar` solo se hacen comprobaciones ligeras (¿responde jeff y tiene su modelo?, ¿están la clave y la activación de Jev?) y se reutiliza el resultado
     de hace menos de un minuto. Antes se hacía siempre una pregunta real a jeff (un modelo de lenguaje) y a Jev: el panel la repetía cada minuto, tardaba
-    hasta 15 s (o 2 min con el modelo cargándose) y competía con las respuestas de Jarvis. `probar` hace esa pregunta de prueba, sin datos de nadie."""
+    hasta 15 s (o 2 min con el modelo cargándose) y competía con las respuestas de ARES. `probar` hace esa pregunta de prueba, sin datos de nadie."""
     if not probar and _CACHE["datos"] and _tiempo.monotonic() - _CACHE["cuando"] < 60:
         return _CACHE["datos"]
     from ..llm import estado_modelos

@@ -1,4 +1,4 @@
-"""«Qué hacer hoy»: lo que necesita atención de la persona que abre Jarvis, en una sola lista ordenada por urgencia.
+"""«Qué hacer hoy»: lo que necesita atención de la persona que abre ARES, en una sola lista ordenada por urgencia.
 
 Junta lo que ya existe por separado: las aprobaciones pendientes (de SUS departamentos), las licitaciones en estudio con plazo cerca y sus requisitos por revisar (seguimiento del resumen diario), lo último nuevo del resumen
 de licitaciones, y —para Dirección y Tecnología— el estado del sistema: antivirus, copias de seguridad y motor de licitaciones. Solo LEE y no llama a ningún modelo ni cambia nada. Cada elemento lleva el enlace a
