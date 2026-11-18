@@ -43,7 +43,8 @@
    ],
    "fugas": [
     "mejora_automatica"
-   ]
+   ],
+   "mejoras_en_economico": true
   },
   {
    "secciones": [
@@ -55,6 +56,41 @@
     }
    ],
    "fugas": []
+  },
+  {
+   "secciones": [
+    {
+     "sobre": "tecnico",
+     "clave": "solucion",
+     "titulo": "Descripción de la solución",
+     "contenido": "La puntuación se calcula como P = 60 × A / B, donde A = presupuesto de licitación (372.500 € sin IVA) − precio ofertado y B = la mayor baja."
+    }
+   ],
+   "fugas": []
+  },
+  {
+   "secciones": [
+    {
+     "sobre": "tecnico",
+     "clave": "solucion",
+     "titulo": "Descripción de la solución",
+     "contenido": "Cada mejora puntúa por el simple hecho de ofrecerla y es gratuita para el ayuntamiento. 2.1 Garantía de 5 años."
+    }
+   ],
+   "fugas": []
+  },
+  {
+   "secciones": [
+    {
+     "sobre": "tecnico",
+     "clave": "solucion",
+     "titulo": "Descripción de la solución",
+     "contenido": "Nuestro precio ofertado es 300.000 € sin IVA, con presupuesto de licitación de 372.500 €."
+    }
+   ],
+   "fugas": [
+    "precio"
+   ]
   }
  ]
 }
