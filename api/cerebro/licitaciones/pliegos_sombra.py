@@ -93,7 +93,16 @@ _RE_PALABRAS_OFERTA = re.compile(r"\b(?:oferta|ofert\w+|precio|baja)\b")
 _RE_MEJORA_AUTOMATICA = re.compile(r"\bmejoras?\b[^.]{0,80}\b(?:sin coste|gratuit\w+|sin cargo|valorad\w+ (?:mediante|por) formula|evaluable\w* (?:mediante|por) formula)|\bcriterios? (?:evaluables? )?(?:de forma )?automatic\w+")
 
 
-def fugas_economicas(secciones: list[dict]) -> list[dict]:
+_RE_IMPORTE_DEL_PLIEGO = re.compile(r"(?:presupuesto|valor estimado|precio de licitacion|importe de licitacion|base de licitacion|tipo de licitacion)[^.\d]{0,60}$")
+_RE_MEJORAS_EN_ECONOMICO = re.compile(r"\bmejoras?\b[^.]{0,160}\bsobre\s+(?:electronico\s+)?(?:c|3|economico)\b|\bsobre\s+(?:electronico\s+)?(?:c|3|economico)\b[^.]{0,160}\bmejoras?\b")
+
+
+def mejoras_van_en_el_economico(texto_pliego: str) -> bool:
+    """¿Manda el propio pliego las mejoras valorables por fórmula al sobre económico? Si no lo dice, no se asume: en muchos pliegos las mejoras van en otro sobre."""
+    return bool(_RE_MEJORAS_EN_ECONOMICO.search(_plano(texto_pliego)))
+
+
+def fugas_economicas(secciones: list[dict], mejoras_en_economico: bool = False) -> list[dict]:
     """Secciones que NO son del sobre económico y dejan ver el precio de la oferta (importes, baja) o mejoras valorables por fórmula. En los pliegos con sobres separados, adelantar el precio
     en el sobre administrativo o técnico puede excluir la oferta. Cada salida: {sobre, clave, titulo, tipo, fragmento}."""
     out = []
@@ -105,15 +114,18 @@ def fugas_economicas(secciones: list[dict]) -> list[dict]:
         halladas = []
         for m in _RE_IMPORTE.finditer(t):
             frase = t[max(0, m.start() - 120): m.end() + 60]
+            if _RE_IMPORTE_DEL_PLIEGO.search(t[max(0, m.start() - 70): m.start()]):
+                continue      # «presupuesto de licitación (372.500 €)»: es un dato público del pliego, no el precio de la oferta
             if _RE_PALABRAS_OFERTA.search(frase):
                 halladas.append(("precio", m))
                 break
         for m in _RE_BAJA.finditer(t):
             halladas.append(("baja", m))
             break
-        for m in _RE_MEJORA_AUTOMATICA.finditer(t):
-            halladas.append(("mejora_automatica", m))
-            break
+        if mejoras_en_economico:
+            for m in _RE_MEJORA_AUTOMATICA.finditer(t):
+                halladas.append(("mejora_automatica", m))
+                break
         for tipo, m in halladas:
             out.append({"sobre": s.get("sobre"), "clave": s.get("clave"), "titulo": s.get("titulo"), "tipo": tipo, "fragmento": _cita(t, m.start(), m.end(), 50)})
     return out
@@ -250,7 +262,7 @@ def revisar(documentos: list[dict], secciones: list[dict], reglas_anotadas: dict
     todo = "\n".join(str(d.get("texto") or "") for d in documentos)
     # los sobres, mejor en el PCAP; si no hay PCAP identificado, en todo el texto
     pcap = "\n".join(str(d.get("texto") or "") for d in documentos if clasificar_documento(d.get("nombre", ""), d.get("texto", "")) == "pcap") or todo
-    return (comparar_sobres(detectar_sobres(pcap)) + avisos_fugas(fugas_economicas(secciones)) + avisos_rectificaciones(rectificaciones(documentos))
+    return (comparar_sobres(detectar_sobres(pcap)) + avisos_fugas(fugas_economicas(secciones, mejoras_van_en_el_economico(pcap))) + avisos_rectificaciones(rectificaciones(documentos))
             + avisos_formulas(sugerir_formulas(pcap), reglas_anotadas))
 
 

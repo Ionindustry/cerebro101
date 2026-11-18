@@ -48,10 +48,17 @@ class TestCorpus(unittest.TestCase):
             for s in S.sugerir_formulas("\n".join(d["texto"] for d in c["documentos"])):
                 self.assertIn(s["formula"], reglas.FORMULAS)
 
+    def test_las_mejoras_solo_se_avisan_si_el_pliego_las_manda_al_sobre_economico(self):
+        seccion = [{"sobre": "tecnico", "clave": "m", "titulo": "M", "contenido": "Se ofrecen mejoras sin coste para la administración, valoradas mediante fórmula."}]
+        self.assertEqual(S.fugas_economicas(seccion), [])                                   # no se asume: depende del pliego
+        self.assertFalse(S.mejoras_van_en_el_economico("Las mejoras se presentarán en el sobre B junto a la memoria."))
+        self.assertTrue(S.mejoras_van_en_el_economico("Sobre C: oferta económica y las mejoras valorables mediante fórmula."))
+        self.assertEqual([f["tipo"] for f in S.fugas_economicas(seccion, True)], ["mejora_automatica"])
+
     def test_fugas_del_precio_fuera_del_sobre_economico(self):
         for i, c in enumerate(json.loads((CORPUS / "fugas.json").read_text(encoding="utf-8"))["casos"]):
             with self.subTest(i):
-                self.assertEqual([f["tipo"] for f in S.fugas_economicas(c["secciones"])], c["fugas"])
+                self.assertEqual([f["tipo"] for f in S.fugas_economicas(c["secciones"], c.get("mejoras_en_economico", False))], c["fugas"])
 
 
 class TestAvisos(unittest.TestCase):
