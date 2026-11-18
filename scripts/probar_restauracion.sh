@@ -8,7 +8,7 @@
 #   · cerebro.sql.gz, langfuse.sql.gz y licitaciones.sql.gz (los que haya): se restauran en una base temporal, tienen tablas y se cuentan sus filas;
 #   · erpnext.sql.gz (MariaDB): NO se restaura (el volcado «todas las bases» recrearía las de verdad y pisaría el ERP): se comprueba que está completo (termina con «Dump completed») y trae tablas y datos.
 # Una copia que nunca se ha restaurado puede estar rota sin que lo sepas: prueba esto de vez en cuando (y tras cambiar algo importante). Deja el resultado en copias/restauracion.json y, si está
-# el Cerebro en marcha, lo anota para la tarjeta «Copias de seguridad» de Jarvis. Sale con código 1 si algo falla.
+# el Cerebro en marcha, lo anota para la tarjeta «Copias de seguridad» de ARES. Sale con código 1 si algo falla.
 #
 # Variables (para pruebas): RESTAURAR_PG_CEREBRO, RESTAURAR_PG_LANGFUSE, RESTAURAR_PG_LIC = comando psql (sin -d) de cada servidor; RESTAURAR_REGISTRAR = comando que anota el resultado.
 set -uo pipefail
@@ -80,5 +80,5 @@ else
   OK=false; MSG="${FALLOS[*]}"
 fi
 printf '{"fecha": "%s", "ok": %s, "carpeta": "%s", "mensaje": "%s"}\n' "$(date -Is)" "$OK" "$DEST" "$(printf '%s' "$MSG" | tr -d '"\\' | tr '\n' ' ' | cut -c1-400)" > "$RAIZ_COPIAS/restauracion.json" 2>/dev/null || true
-$REGISTRAR "$OK" "$DEST" "$(printf '%s' "$MSG" | cut -c1-400)" >/dev/null 2>&1 || echo "Aviso: no se ha podido anotar el resultado en Jarvis (el Cerebro no responde)" >&2
+$REGISTRAR "$OK" "$DEST" "$(printf '%s' "$MSG" | cut -c1-400)" >/dev/null 2>&1 || echo "Aviso: no se ha podido anotar el resultado en ARES (el Cerebro no responde)" >&2
 [ "$OK" = true ]

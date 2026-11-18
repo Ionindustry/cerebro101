@@ -47,7 +47,7 @@ class TestCopiaAutomatica(unittest.TestCase):
         reg.write_text(f'#!/usr/bin/env bash\necho "$@" >> "{self.dir / "registro.txt"}"\n')
         reg.chmod(0o755)
         cfg = self.dir / "config.sh"
-        cfg.write_text(f"#!/usr/bin/env bash\ncat <<'FIN'\n{config}FIN\n")                # lo que diría «python -m cerebro.copias config»: lo fijado en Jarvis
+        cfg.write_text(f"#!/usr/bin/env bash\ncat <<'FIN'\n{config}FIN\n")                # lo que diría «python -m cerebro.copias config»: lo fijado en ARES
         cfg.chmod(0o755)
         for i in range(previas_extra):
             (Path(extra) / f"2026-09-{10 + i:02d}_0300").mkdir(parents=True, exist_ok=True)
@@ -64,7 +64,7 @@ class TestCopiaAutomatica(unittest.TestCase):
         self.assertGreater(estado["bytes"], 0)
         self.assertFalse(self.avisos.exists())
         anotado = (self.dir / "registro.txt").read_text()
-        self.assertIn("true", anotado)                                                     # lo anota para la tarjeta de Jarvis
+        self.assertIn("true", anotado)                                                     # lo anota para la tarjeta de ARES
         self.assertRegex(anotado, r"copia correcta \d+")
 
     def test_rota_las_antiguas_y_solo_las_que_son_copias(self):

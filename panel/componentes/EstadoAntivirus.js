@@ -2,7 +2,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { antivirusResumen } from "../lib/antivirus";
 
-// La tarjeta «Antivirus»: si ClamAV responde y de cuándo son sus firmas. Con firmas de más de 48 horas, el sistema rechaza los pliegos y los documentos que se suben a Jarvis.
+// La tarjeta «Antivirus»: si ClamAV responde y de cuándo son sus firmas. Con firmas de más de 48 horas, el sistema rechaza los pliegos y los documentos que se suben a ARES.
 export default function EstadoAntivirus() {
   const [e, setE] = useState(null);
   const [abierto, setAbierto] = useState(false);
@@ -19,7 +19,7 @@ export default function EstadoAntivirus() {
       {abierto && (
         <div className="jev-panel" role="region" aria-label="Estado del antivirus">
           <ul>{r.lineas.map((l) => <li key={l}><div>{l}</div></li>)}</ul>
-          <p className="meta">Los pliegos y los documentos que subes a Jarvis solo se aceptan si el antivirus los analiza con firmas de menos de {e.limite_horas} horas. Se avisa por correo a soporte@ si pasan {e.aviso_horas} horas sin firmas nuevas.</p>
+          <p className="meta">Los pliegos y los documentos que subes a ARES solo se aceptan si el antivirus los analiza con firmas de menos de {e.limite_horas} horas. Se avisa por correo a soporte@ si pasan {e.aviso_horas} horas sin firmas nuevas.</p>
           {r.ayuda && <p className="jev-ayuda"><code>{r.ayuda}</code></p>}
           <button className="of-boton" onClick={cargar}>Comprobar ahora</button>
         </div>

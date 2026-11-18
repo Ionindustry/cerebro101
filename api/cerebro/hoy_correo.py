@@ -1,7 +1,7 @@
 """Resumen de «Hoy» por correo cada mañana de día laborable, para el equipo de licitaciones (concursos@, con copia a notificaciones@: config/buzones.yaml → avisos.copia).
 
-Es la misma lista que la pantalla «Hoy» de Jarvis, vista como el departamento de Licitaciones (sus aprobaciones, plazos, requisitos por revisar y novedades; NO el estado del sistema, que va a soporte@), pero
-sin abrir Jarvis. Solo se envía si hay algo URGENTE o por mirar (si solo hay novedades o no hay nada, no es ruido: no se envía) y UNA vez al día. La tarea corre cada hora y envía en la ventana de
+Es la misma lista que la pantalla «Hoy» de ARES, vista como el departamento de Licitaciones (sus aprobaciones, plazos, requisitos por revisar y novedades; NO el estado del sistema, que va a soporte@), pero
+sin abrir ARES. Solo se envía si hay algo URGENTE o por mirar (si solo hay novedades o no hay nada, no es ruido: no se envía) y UNA vez al día. La tarea corre cada hora y envía en la ventana de
 `resumen_hoy` (config/licitaciones.yaml: desde las 08:30 hasta `hasta_hora`): si el equipo estaba apagado a las 08:30, sale en cuanto se enciende dentro de la ventana. Sin IA.
 """
 from __future__ import annotations
@@ -68,7 +68,7 @@ def redactar(lista: dict, ahora: datetime, cfg: dict, zona: str = "Europe/Madrid
             if i.get("href") and str(i["href"]).startswith("/"):
                 lineas.append(f"  {cfg['url_panel']}{i['href']}")
         lineas.append("")
-    lineas += ["--", "Resumen automático de 101.cat (la misma lista que la pantalla «Hoy» de Jarvis). Solo se envía si hay algo urgente o por mirar, una vez al día laborable."]
+    lineas += ["--", "Resumen automático de 101.cat (la misma lista que la pantalla «Hoy» de ARES). Solo se envía si hay algo urgente o por mirar, una vez al día laborable."]
     return asunto, "\n".join(lineas)
 
 

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Pasa Keycloak (el inicio de sesión de Jarvis) del modo desarrollo con base H2 al MODO PRODUCCIÓN con PostgreSQL, SIN perder usuarios, contraseñas ni ajustes.
+# Pasa Keycloak (el inicio de sesión de ARES) del modo desarrollo con base H2 al MODO PRODUCCIÓN con PostgreSQL, SIN perder usuarios, contraseñas ni ajustes.
 #
 # Qué hace, en este orden, y se detiene SIN CAMBIAR NADA si algo falla:
 #   1. Copia de seguridad de los datos actuales (copias/keycloak-postgres-FECHA/h2). Los datos viejos NO se tocan nunca: quedan en su volumen por si hay que volver.
@@ -10,7 +10,7 @@
 #
 # Uso:  ./scripts/keycloak_a_postgres.sh            (hacer el cambio)
 #       ./scripts/keycloak_a_postgres.sh --deshacer  (volver al modo anterior; los usuarios creados DESPUÉS del cambio no estarán en el volumen viejo)
-# Mientras dura (unos 3-5 minutos) nadie puede iniciar sesión en Jarvis. No lo ejecutes mientras «Preparar la oferta» está trabajando: el panel pediría iniciar sesión de nuevo.
+# Mientras dura (unos 3-5 minutos) nadie puede iniciar sesión en ARES. No lo ejecutes mientras «Preparar la oferta» está trabajando: el panel pediría iniciar sesión de nuevo.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
@@ -135,4 +135,4 @@ echo
 echo "Listo: Keycloak funciona ya en modo producción con PostgreSQL y conserva sus usuarios."
 echo "  · Copia de seguridad y exportación: $copia  (contienen contraseñas cifradas: no las compartas)"
 echo "  · Los datos viejos siguen en el volumen anterior por si quieres volver:  ./scripts/keycloak_a_postgres.sh --deshacer"
-echo "  · Prueba ahora a iniciar sesión en Jarvis."
+echo "  · Prueba ahora a iniciar sesión en ARES."

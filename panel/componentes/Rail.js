@@ -5,7 +5,7 @@ import { useEffect, useState } from "react";
 import { textoVersion } from "../lib/version";
 
 const SECCIONES = [
-  { ruta: "/", nombre: "Jarvis" },
+  { ruta: "/", nombre: "ARES" },
   { ruta: "/hoy", nombre: "Hoy" },
   { ruta: "/oficina", nombre: "Oficina" },
   { ruta: "/licitaciones", nombre: "Licitaciones" },

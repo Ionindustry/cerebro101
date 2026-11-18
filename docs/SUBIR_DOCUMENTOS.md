@@ -1,6 +1,6 @@
-# Subir documentos al chat de Jarvis
+# Subir documentos al chat de ARES
 
-En el chat de Jarvis, el botón 📎 sube un documento (PDF, Word, Excel `.xlsx`, OpenDocument, CSV o texto, hasta 100 MB) y se adjunta al mensaje que escribas a continuación. Jarvis **lee su texto** con la herramienta
+En el chat de ARES, el botón 📎 sube un documento (PDF, Word, Excel `.xlsx`, OpenDocument, CSV o texto, hasta 100 MB) y se adjunta al mensaje que escribas a continuación. ARES **lee su texto** con la herramienta
 `documentos_subidos`; no recibe el fichero.
 
 ## Qué pasa con el documento

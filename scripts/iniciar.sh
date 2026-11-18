@@ -8,6 +8,6 @@ command -v nvidia-smi >/dev/null && nvidia-smi --query-gpu=name,memory.total --f
 docker compose up -d --build postgres redis ollama
 ./scripts/cargar_modelos.sh
 docker compose up -d --build
-echo "Panel de Jarvis:  http://localhost:3000"
+echo "Panel de ARES:  http://localhost:3000"
 echo "API del Cerebro:  http://localhost:8000/docs"
 echo "Registro (Langfuse): http://localhost:3001"

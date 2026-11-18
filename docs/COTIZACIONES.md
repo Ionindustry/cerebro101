@@ -1,14 +1,14 @@
 # Cotizaciones a proveedores
 
-Cuando una referencia no tiene precio en las tarifas cargadas, se le pide **cotización** a un proveedor que la distribuya. Pantalla: **Jarvis → Cotizaciones** (Dirección y Licitaciones; solo Dirección envía).
+Cuando una referencia no tiene precio en las tarifas cargadas, se le pide **cotización** a un proveedor que la distribuya. Pantalla: **ARES → Cotizaciones** (Dirección y Licitaciones; solo Dirección envía).
 
 ## Reglas (decididas por Dirección)
 1. **El correo lo redacta siempre el sistema**, con la plantilla de `config/cotizaciones.yaml`. No lo escribe un modelo ni una persona, y no se edita.
-2. **Lleva solo tres datos: referencia, cantidad y plazo de entrega** (en días o con fecha límite). Nunca el cliente, la licitación, la marca, precios nuestros ni nada más. La licitación y la partida de las que viene solo se guardan en Jarvis.
+2. **Lleva solo tres datos: referencia, cantidad y plazo de entrega** (en días o con fecha límite). Nunca el cliente, la licitación, la marca, precios nuestros ni nada más. La licitación y la partida de las que viene solo se guardan en ARES.
 3. **Dos modos, a elegir en cada caso:**
    - **«La envía el sistema cuando Dirección confirma»:** al pulsar «Enviar al proveedor» y confirmar, sale desde el buzón del departamento (`buzon_departamento` en la configuración; hoy `administracion@`). Queda constancia a nombre de quien firmó. Si el envío falla, sigue en borrador y se puede reintentar.
    - **«La mando yo»:** el sistema deja el correo redactado; se abre en tu programa de correo o se copia, y después se pulsa «Ya lo he enviado».
-4. **Se guarda en los dos sitios:** en Jarvis (tabla `cotizaciones`) y, como **borrador**, en ERPNext como «Petición de cotización» (*Request for Quotation*). Para esto último el artículo y el proveedor tienen que existir en el ERP (no se crean desde aquí); si no, la pantalla dice por qué y la cotización sigue válida en Jarvis.
+4. **Se guarda en los dos sitios:** en ARES (tabla `cotizaciones`) y, como **borrador**, en ERPNext como «Petición de cotización» (*Request for Quotation*). Para esto último el artículo y el proveedor tienen que existir en el ERP (no se crean desde aquí); si no, la pantalla dice por qué y la cotización sigue válida en ARES.
 
 ## Flujo
 - **Partida sin coste → «Pedir cotización»** (Equipos y coste real): abre la pantalla con la referencia (la palabra con letras y números más larga del producto), la cantidad y la partida ya puestas.

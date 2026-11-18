@@ -120,7 +120,7 @@ class TestEmpresa(unittest.TestCase):
 
 class TestDeucBase(unittest.TestCase):
     def setUp(self):
-        p = mock.patch.object(D, "base_local", mock.AsyncMock(return_value=None))       # sin nada subido desde Jarvis (eso se prueba con base de datos más abajo)
+        p = mock.patch.object(D, "base_local", mock.AsyncMock(return_value=None))       # sin nada subido desde ARES (eso se prueba con base de datos más abajo)
         p.start()
         self.addCleanup(p.stop)
 
@@ -554,7 +554,7 @@ class TestBaseDeDatos(unittest.TestCase):
         self.assertIn("sin campos de formulario", d["avisos"][0])
 
     def subido(self, formato="docx", estado="limpio", contenido=None, nombre="DEUC 101.docx"):
-        """Un documento subido a Jarvis, ya analizado, en una carpeta de prueba."""
+        """Un documento subido a ARES, ya analizado, en una carpeta de prueba."""
         limpio = self.dir / "subidas" / "limpio"
         limpio.mkdir(parents=True, exist_ok=True)
         ruta = limpio / f"abc.{formato}"
@@ -580,7 +580,7 @@ class TestBaseDeDatos(unittest.TestCase):
         r = ejecutar(D.guardar("abc", "101 Telecom S.L.", "agente:administrativo-licitaciones", "albert"))
         self.assertEqual((r["guardado"], r["sociedad"], r["formato"]), (True, "101 Telecom S.L.", "docx"))
         self.assertEqual(len(list((self.dir / "deuc").rglob("*.docx"))), 1)
-        # hay además uno más reciente adjunto en el ERP: lo subido desde Jarvis tiene prioridad
+        # hay además uno más reciente adjunto en el ERP: lo subido desde ARES tiene prioridad
         self.poner_deuc(nombre="DEUC del ERP.docx")
         d = next(x for x in self.preparar(empresa="101 Telecom S.L.")["documentos"] if x["documento"] == 0)
         self.assertEqual(d["estado"], "lista_para_firma")

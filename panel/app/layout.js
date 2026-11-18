@@ -4,7 +4,7 @@ import "./globals.css";
 import Rail from "../componentes/Rail";
 import ActualizacionLicitaciones from "../componentes/ActualizacionLicitaciones";
 
-export const metadata = { title: "Jarvis · Cerebro 101.cat" };
+export const metadata = { title: "ARES · Cerebro 101.cat" };
 
 export const dynamic = "force-dynamic";            // la versión se lee al arrancar el contenedor, no al construir
 

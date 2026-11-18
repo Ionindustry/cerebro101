@@ -1,4 +1,4 @@
-"""Estado de las copias de seguridad para Jarvis y aviso a soporte@ si pasan días sin una copia correcta.
+"""Estado de las copias de seguridad para ARES y aviso a soporte@ si pasan días sin una copia correcta.
 
 Las copias las hace el servidor (scripts/copia_automatica.sh, desde una tarea de Windows): fuera de los contenedores. Esos scripts ANOTAN aquí su resultado (`python -m cerebro.copias registrar …`, por
 `docker compose exec`) y de ahí salen la tarjeta «Copias de seguridad» (última copia, su tamaño, si salió bien y si la restauración se ha probado) y el vigilante: cada 6 horas (tarea
@@ -26,7 +26,7 @@ REPETIR_AVISO_H = 24
 CONSERVAR = 60          # filas que se guardan de cada tipo
 
 
-# ---- Ajustes que se cambian desde Jarvis (tabla copias_ajustes). El script de copias los lee por `python -m cerebro.copias config`; si no hay nada guardado, manda lo de siempre (.env y valores por defecto).
+# ---- Ajustes que se cambian desde ARES (tabla copias_ajustes). El script de copias los lee por `python -m cerebro.copias config`; si no hay nada guardado, manda lo de siempre (.env y valores por defecto).
 DEFECTOS = {"conservar": 7, "extra": "", "conservar_extra": 0, "dias_aviso": DIAS_SIN_COPIA}
 # la segunda copia va a un disco o unidad que ve el servidor (WSL): /mnt/<unidad>/…, /media/<usuario>/…, /srv/… o /home/<usuario>/…; siempre dentro de una carpeta, nunca la raíz de la unidad
 RE_EXTRA = re.compile(r"^/(?:mnt/[a-z]|media/[A-Za-z0-9._-]+|srv|home/[A-Za-z0-9._-]+)/[A-Za-z0-9._-]+(?:/[A-Za-z0-9._-]+)*$")
@@ -68,7 +68,7 @@ def validar(datos: dict) -> dict:
 
 
 async def ajustes_guardados() -> dict:
-    """Lo que hay guardado en la tabla (solo lo que alguien ha fijado desde Jarvis). {} si la tabla no existe o la base falla."""
+    """Lo que hay guardado en la tabla (solo lo que alguien ha fijado desde ARES). {} si la tabla no existe o la base falla."""
     try:
         async with await _conectar() as conn:
             cur = await conn.execute("SELECT clave, valor, por, actualizado FROM copias_ajustes")
@@ -83,7 +83,7 @@ def _valor(clave: str, texto):
 
 
 async def en_vigor() -> dict:
-    """Los ajustes en vigor: {"valores": {...}, "fijados": {clave: {por, actualizado}}}. Lo no fijado desde Jarvis lleva el valor por defecto (el script puede usar antes lo que ponga el .env)."""
+    """Los ajustes en vigor: {"valores": {...}, "fijados": {clave: {por, actualizado}}}. Lo no fijado desde ARES lleva el valor por defecto (el script puede usar antes lo que ponga el .env)."""
     g = await ajustes_guardados()
     valores = dict(DEFECTOS)
     fijados = {}
@@ -148,7 +148,7 @@ def evaluar(ultima_ok: datetime | None, inicio: datetime | None, ahora: datetime
 
 
 async def estado(ahora: datetime | None = None, dias: int | None = None) -> dict:
-    """Lo que enseña la tarjeta de Jarvis."""
+    """Lo que enseña la tarjeta de ARES."""
     ahora = ahora or datetime.now(timezone.utc)
     dias = dias if dias is not None else await _dias_aviso()
     async with await _conectar() as conn:
@@ -189,7 +189,7 @@ def main(argv: list[str]) -> int:
         tam = int(argv[5]) if len(argv) > 5 and argv[5].isdigit() else None
         asyncio.run(registrar(tipo, ok, carpeta, mensaje, tam))
         return 0
-    if argv[:1] == ["config"]:                        # lo que se ha fijado en Jarvis, como «clave=valor» (lo lee scripts/copia_automatica.sh)
+    if argv[:1] == ["config"]:                        # lo que se ha fijado en ARES, como «clave=valor» (lo lee scripts/copia_automatica.sh)
         for k, f in asyncio.run(ajustes_guardados()).items():
             if k in DEFECTOS and "\n" not in str(f["valor"]):
                 print(f"{k}={f['valor']}")

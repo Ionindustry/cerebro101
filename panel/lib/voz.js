@@ -1,4 +1,4 @@
-// Respuesta de Jarvis por voz: limpiar el texto antes de leerlo, elegir idioma y explicar los fallos. Sin dependencias: se prueba con node --test.
+// Respuesta de ARES por voz: limpiar el texto antes de leerlo, elegir idioma y explicar los fallos. Sin dependencias: se prueba con node --test.
 
 // Lo que se lee en alto no puede llevar marcas de formato, enlaces ni código: se dicen mal o no se dicen
 export function limpiarParaHablar(texto = "") {
@@ -33,7 +33,7 @@ export function detectarIdioma(texto = "") {
 }
 
 export function mensajeErrorVoz(estado, detalle = "") {
-  if (estado === 503) return detalle || "Falta la voz de Jarvis en el servidor: python3 scripts/voces_descargar.py y docker compose restart voz.";
+  if (estado === 503) return detalle || "Falta la voz de ARES en el servidor: python3 scripts/voces_descargar.py y docker compose restart voz.";
   if (estado === 401) return "La sesión ha caducado. Recarga la página.";
   if (estado === 0) return "No he podido contactar con el servicio de voz.";
   return detalle || `La voz ha fallado (error ${estado}).`;

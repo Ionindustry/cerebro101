@@ -1,4 +1,4 @@
-// Elección del micrófono de Jarvis (el de una webcam USB, el del portátil, un auricular…). Sin dependencias del navegador: se prueba con node --test.
+// Elección del micrófono de ARES (el de una webcam USB, el del portátil, un auricular…). Sin dependencias del navegador: se prueba con node --test.
 
 // Solo las entradas de audio; el navegador a veces repite el «predeterminado» y el «comunicaciones» de Windows con otro id
 export const soloEntradas = (dispositivos = []) =>
@@ -46,6 +46,6 @@ export function mensajeTranscripcion(estado, texto = "") {
 // Texto bajo la lista cuando no hay micrófonos a la vista: sin dirección segura el navegador ni siquiera ofrece el micrófono
 export function ayudaSinMicrofonos(contextoSeguro, hayApi) {
   if (!hayApi || !contextoSeguro)
-    return "El navegador no deja usar el micrófono en esta dirección. Abre Jarvis en http://localhost:3000 (no con una IP ni con 127.0.0.1).";
+    return "El navegador no deja usar el micrófono en esta dirección. Abre ARES en http://localhost:3000 (no con una IP ni con 127.0.0.1).";
   return "No veo ningún micrófono. Conecta la cámara o el auricular y pulsa «Detectar micrófonos»; si el navegador pregunta, elige «Permitir».";
 }

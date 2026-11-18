@@ -5,7 +5,7 @@
 #   · COMPRUEBA la copia: cada .gz se descomprime de prueba, ninguno está vacío y SHA256SUMS coincide;
 #   · conserva solo las últimas COPIA_CONSERVAR (7) y borra las más antiguas (solo dentro de copias/auto/);
 #   · si COPIA_EXTRA apunta a otra carpeta (otro disco, una unidad de red, un USB: /mnt/d/Copias101), deja ahí una segunda copia: una copia en el mismo disco no te salva de que el disco falle;
-#   · deja el resultado en copias/estado.json (fecha, ok, carpeta, tamaño, error) y lo anota para la tarjeta «Copias de seguridad» de Jarvis (y el vigilante que avisa si pasan 3 días sin una buena);
+#   · deja el resultado en copias/estado.json (fecha, ok, carpeta, tamaño, error) y lo anota para la tarjeta «Copias de seguridad» de ARES (y el vigilante que avisa si pasan 3 días sin una buena);
 #   · si algo falla, AVISA por correo a soporte@ (los mismos destinatarios que los fallos del motor) y sale con código 1.
 # Una copia no sirve de nada sin probar la restauración: ver docs/SEGURIDAD.md. Y guarda una copia del .env en un gestor de contraseñas (no está en git).
 #
@@ -23,7 +23,7 @@ BASE="${COPIA_BASE:-copias/auto}"
 EXTRA="${COPIA_EXTRA:-}"
 [ -z "$EXTRA" ] && [ -f .env ] && EXTRA="$({ grep -E '^COPIA_EXTRA=' .env || true; } | head -1 | cut -d= -f2- | sed 's/[[:space:]]#.*$//')"      # también se puede fijar en el .env
 CONSERVAR_EXTRA="${COPIA_CONSERVAR_EXTRA:-0}"        # 0 = en la segunda ubicación no se borra nunca (como siempre)
-# Lo que se haya fijado en Jarvis (botón «Configurar» de Copias de seguridad) manda sobre el .env; sin nada fijado (o con la API parada) se queda como arriba. Solo se aceptan valores con la forma esperada.
+# Lo que se haya fijado en ARES (botón «Configurar» de Copias de seguridad) manda sobre el .env; sin nada fijado (o con la API parada) se queda como arriba. Solo se aceptan valores con la forma esperada.
 CONFIG="$(${COPIA_CONFIG:-docker compose exec -T api python -m cerebro.copias config} 2>/dev/null || true)"
 ajuste() { printf '%s\n' "$CONFIG" | sed -n "s/^$1=//p" | head -1 | tr -d '\r'; }
 v="$(ajuste conservar)"; [[ "$v" =~ ^[0-9]{1,2}$ ]] && [ "$v" -ge 1 ] && CONSERVAR="$v"
@@ -40,7 +40,7 @@ RESTIC_CLAVE="${COPIA_RESTIC_CLAVE:-$(leer_env COPIA_RESTIC_CLAVE)}"
 RESTIC="${COPIA_RESTIC:-restic}"
 COMANDO="${COPIA_COMANDO:-./scripts/copia_seguridad.sh}"
 AVISAR="${COPIA_AVISAR:-docker compose exec -T api python -m cerebro.avisar_soporte}"
-REGISTRAR="${COPIA_REGISTRAR:-docker compose exec -T api python -m cerebro.copias registrar copia}"      # anota el resultado para la tarjeta de Jarvis y el vigilante de copias
+REGISTRAR="${COPIA_REGISTRAR:-docker compose exec -T api python -m cerebro.copias registrar copia}"      # anota el resultado para la tarjeta de ARES y el vigilante de copias
 ESTADO="$(dirname "$BASE")/estado.json"
 CARPETA="$BASE/$(date +%Y-%m-%d_%H%M)"
 mkdir -p "$BASE" "$(dirname "$ESTADO")"
@@ -109,5 +109,5 @@ mapfile -t viejas < <(ls -1d "$BASE"/[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]_
 for d in "${viejas[@]}"; do [ -n "$d" ] && rm -rf -- "$d" && echo "   borrada $d"; done
 
 estado true "$CARPETA" "$BYTES" "copia correcta"
-$REGISTRAR true "$CARPETA" "copia correcta" "$BYTES" >/dev/null 2>&1 || echo "Aviso: no se ha podido anotar la copia en Jarvis (el Cerebro no responde)" >&2
+$REGISTRAR true "$CARPETA" "copia correcta" "$BYTES" >/dev/null 2>&1 || echo "Aviso: no se ha podido anotar la copia en ARES (el Cerebro no responde)" >&2
 echo "Copia correcta: $CARPETA ($(numfmt --to=iec "$BYTES" 2>/dev/null || echo "$BYTES bytes"))"

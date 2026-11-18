@@ -1,4 +1,4 @@
-# SearXNG: el buscador propio de Jarvis (servicio `searxng` de docker-compose.yml). Solo se alcanza desde la red interna del Cerebro.
+# SearXNG: el buscador propio de ARES (servicio `searxng` de docker-compose.yml). Solo se alcanza desde la red interna del Cerebro.
 # Une las respuestas de varios buscadores públicos sin cuenta ni claves; el Cerebro filtra antes que ninguna consulta lleve datos de la empresa.
 use_default_settings: true
 

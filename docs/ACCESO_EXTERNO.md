@@ -1,6 +1,6 @@
 # Acceso desde fuera (HTTPS) para una instalación local
 
-Para abrir Jarvis y los enlaces de los correos desde el móvil o desde otra oficina cuando el sistema corre en un PC con Docker Desktop (Windows y WSL). Pensado para `brain.101.cat` (panel) y `auth.101.cat` (inicio de sesión). Para un servidor Linux completo, con Keycloak en producción, ver [DESPLIEGUE.md](DESPLIEGUE.md).
+Para abrir ARES y los enlaces de los correos desde el móvil o desde otra oficina cuando el sistema corre en un PC con Docker Desktop (Windows y WSL). Pensado para `brain.101.cat` (panel) y `auth.101.cat` (inicio de sesión). Para un servidor Linux completo, con Keycloak en producción, ver [DESPLIEGUE.md](DESPLIEGUE.md).
 
 ## Antes de empezar (y por qué)
 

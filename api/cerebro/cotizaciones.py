@@ -418,7 +418,7 @@ async def enviar_al_erp(cid: int, item_code: str, por: str, crear=None, leer_ite
         d = await crear("Request for Quotation", doc_rfq(f, item_code, f["proveedor"]), "operaciones")
     except Exception as e:  # noqa: BLE001 — el ERP puede rechazarlo por muchos motivos: no bloquea la cotización
         log.warning("cotizaciones: el ERP no ha aceptado la petición de la %s: %s", cid, type(e).__name__)
-        return await _guardar_erp(cid, {"estado": "error", "motivo": f"El ERP no ha aceptado la petición de cotización ({type(e).__name__}). La cotización sigue válida en Jarvis."})
+        return await _guardar_erp(cid, {"estado": "error", "motivo": f"El ERP no ha aceptado la petición de cotización ({type(e).__name__}). La cotización sigue válida en ARES."})
     log.info("cotizaciones: %s crea la petición de cotización %s en el ERP para la %s", por, d.get("name"), cid)
     return await _guardar_erp(cid, {"estado": "creada", "nombre": str(d.get("name") or "")[:140], "item": item_code})
 

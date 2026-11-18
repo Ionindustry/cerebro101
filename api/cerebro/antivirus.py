@@ -1,8 +1,8 @@
 """Vigilancia del antivirus (ClamAV): firmas al día y servicio en marcha.
 
-Los pliegos y los documentos que se suben a Jarvis solo se aceptan si el antivirus los analiza con firmas de menos de `firmas_max_horas` (48 h; pliegos.py: falla cerrado). Si `freshclam` deja de actualizar
+Los pliegos y los documentos que se suben a ARES solo se aceptan si el antivirus los analiza con firmas de menos de `firmas_max_horas` (48 h; pliegos.py: falla cerrado). Si `freshclam` deja de actualizar
 (p. ej. el DNS de Docker falló al encender el PC), el sistema empieza a rechazar documentos y nadie se entera hasta que algo falla. Aquí se mira ANTES: cada 3 horas (tarea `vigilar_antivirus`) se pregunta a clamd por
-su versión y, si las firmas tienen más de `HORAS_AVISO` (36) horas o clamd no responde, se avisa a soporte@ (una vez cada 24 h por problema). La tarjeta de Jarvis (pantalla Agentes) lo enseña con `estado()`. Sin IA.
+su versión y, si las firmas tienen más de `HORAS_AVISO` (36) horas o clamd no responde, se avisa a soporte@ (una vez cada 24 h por problema). La tarjeta de ARES (pantalla Agentes) lo enseña con `estado()`. Sin IA.
 """
 from __future__ import annotations
 
@@ -73,7 +73,7 @@ async def vigilar(enviar=None, ahora: datetime | None = None, consultar=None) ->
         return {"estado": "ya_avisado", "antivirus": e["estado"]}
     from . import avisar_soporte
     asunto = "Antivirus: las firmas están viejas" if e["estado"] == "viejas" else "Antivirus: no responde"
-    cuerpo = (f"{e['motivo']}.\n\nMientras siga así, los documentos que se suban a Jarvis y los pliegos de las licitaciones se rechazan o quedan en cuarentena.\n\nQué hacer, en el servidor:\n"
+    cuerpo = (f"{e['motivo']}.\n\nMientras siga así, los documentos que se suban a ARES y los pliegos de las licitaciones se rechazan o quedan en cuarentena.\n\nQué hacer, en el servidor:\n"
               "  docker compose logs --tail 30 clamav\n  docker compose exec clamav sh -c \"getent hosts database.clamav.net\"   (si no sale nada, es el DNS de Docker)\n"
               "  docker compose exec clamav freshclam --log=/tmp/freshclam.log\n  docker compose exec clamav clamdscan --reload\n  docker compose restart clamav")
     ok, mal = avisar_soporte.avisar(asunto, cuerpo, enviar)

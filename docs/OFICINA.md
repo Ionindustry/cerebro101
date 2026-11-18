@@ -1,7 +1,7 @@
-# Pestaña «Oficina» de Jarvis
+# Pestaña «Oficina» de ARES
 
 Una vista isométrica de la empresa: cada departamento es una sala con sus mesas, y cada agente es una cápsula negra en su puesto
-(estilo gris y negro con coral como señal, como la imagen de referencia). Está en el menú de Jarvis, entre «Jarvis» y «Aprobaciones».
+(estilo gris y negro con coral como señal, como la imagen de referencia). Está en el menú de ARES, entre «ARES» y «Aprobaciones».
 
 ## Qué se ve
 Una escena 3D (three.js) con luz y sombras suaves, grises claros, muros bajos, árboles low-poly y los agentes como cápsulas negras de pie delante de su mesa. Se centra sola

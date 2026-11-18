@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Hace que Keycloak (el inicio de sesión de Jarvis) CONSERVE sus usuarios y ajustes cuando se recrea el contenedor.
+# Hace que Keycloak (el inicio de sesión de ARES) CONSERVE sus usuarios y ajustes cuando se recrea el contenedor.
 #
 # Hasta ahora Keycloak (modo desarrollo) guardaba sus datos dentro del contenedor: al recrearlo (actualizar la imagen, `docker compose up --force-recreate`…) se perdían los usuarios.
 # Ahora tiene un volumen propio (keycloak-datos). Este script lo estrena SIN perder lo que ya hay: para Keycloak, copia sus datos actuales (también quedan en copias/keycloak-FECHA/),

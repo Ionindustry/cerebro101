@@ -65,7 +65,7 @@ x-api: &api
     ANONIMIZACION_NER: "${ANONIMIZACION_NER:-heuristico}"
     ANONIMIZACION_MODELO_SPACY: "${ANONIMIZACION_MODELO_SPACY:-es_core_news_md}"
     AGENT_REACH_URL: "${AGENT_REACH_URL:-http://agent-reach:8090}"
-    SEARXNG_URL: "${SEARXNG_URL:-http://searxng:8080}"           # buscador propio de Jarvis (internet)
+    SEARXNG_URL: "${SEARXNG_URL:-http://searxng:8080}"           # buscador propio de ARES (internet)
     # Motor de licitaciones (carpeta licitaciones/): su API interna y la credencial. Sin credencial la herramienta avisa y no llama.
     # El motor se une a la red «cerebro» con licitaciones/compose.cerebro.yaml; si no corre, la herramienta responde que no está disponible.
     LICITACIONES_API_URL: "${LICITACIONES_API_URL:-http://licitaciones-api:8080}"
@@ -78,7 +78,7 @@ x-api: &api
     FICHAS_DIR: "${FICHAS_DIR:-/datos/licitaciones/fichas}"          # fichas técnicas de producto descargadas o subidas (volumen datos)
     SUBIDAS_DIR: "${SUBIDAS_DIR:-/datos/subidas}"                     # documentos que se suben al chat (volumen datos)
     OFERTAS_DIR: "${OFERTAS_DIR:-/datos/licitaciones/ofertas}"       # documentación administrativa rellenada de las ofertas (volumen datos)
-    DEUC_DIR: "${DEUC_DIR:-/datos/licitaciones/deuc}"                 # DEUC base de cada sociedad, subido desde Jarvis (volumen datos)
+    DEUC_DIR: "${DEUC_DIR:-/datos/licitaciones/deuc}"                 # DEUC base de cada sociedad, subido desde ARES (volumen datos)
     # Calendarios (los buzones de correo van por secretos/buzones.env, no por el .env)
     CALENDARIO_USUARIO: "${CALENDARIO_USUARIO:-}"
     CALENDARIO_CLAVE: "${CALENDARIO_CLAVE:-}"
@@ -192,7 +192,7 @@ services:
     networks: [conversion]
     restart: unless-stopped
 
-  worker:                 # tareas pedidas y programadas; Jarvis lo atiende la API directamente
+  worker:                 # tareas pedidas y programadas; ARES lo atiende la API directamente
     <<: *api
     command: python -X faulthandler -m celery -A cerebro.tareas.celery_app worker -Q peticiones,lote -c 2 --max-tasks-per-child 20 -n general@%h      # -X faulthandler: si un fallo nativo mata un proceso, deja su traza en el registro
 
@@ -298,7 +298,7 @@ services:
     networks: [cerebro]
     restart: unless-stopped
 
-  searxng:                # buscador propio de Jarvis (internet): sin claves, solo en la red interna; la API le pregunta con consultas ya filtradas
+  searxng:                # buscador propio de ARES (internet): sin claves, solo en la red interna; la API le pregunta con consultas ya filtradas
     image: searxng/searxng:latest
     environment:
       SEARXNG_SECRET: "${SEARXNG_SECRET:-cerebro-searxng-solo-red-interna}"

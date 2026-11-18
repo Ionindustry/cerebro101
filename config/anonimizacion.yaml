@@ -4,7 +4,7 @@
 max_caracteres: 4000          # un texto más largo no se envía (menos es más: mandad solo lo necesario)
 
 # Términos que nunca se sustituyen (la propia empresa y sus marcas)
-conservar: ["101.cat", "101cat", "Cerebro", "Jarvis"]
+conservar: ["101.cat", "101cat", "Cerebro", "ARES"]
 
 # Nombres propios que ya conocéis y no están en ERPNext (se suman a los de ERPNext)
 entidades_extra:

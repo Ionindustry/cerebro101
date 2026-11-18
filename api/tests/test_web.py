@@ -1,4 +1,4 @@
-"""Internet para Jarvis: buscar (SearXNG simulado), consulta sin datos personales, lectura de páginas públicas sin alcanzar servicios internos."""
+"""Internet para ARES: buscar (SearXNG simulado), consulta sin datos personales, lectura de páginas públicas sin alcanzar servicios internos."""
 import asyncio
 import unittest
 from datetime import datetime, timezone

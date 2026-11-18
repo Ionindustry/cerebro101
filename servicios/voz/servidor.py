@@ -1,4 +1,4 @@
-"""Servicio de voz de Jarvis: voz a texto (faster-whisper) y texto a voz (Piper), todo local.
+"""Servicio de voz de ARES: voz a texto (faster-whisper) y texto a voz (Piper), todo local.
 
 Whisper usa la tarjeta gráfica (WHISPER_DISPOSITIVO=cuda) si puede. Si las librerías de NVIDIA no están o la tarjeta falla al transcribir
 («libcublas.so.12 is not found»), el servicio pasa solo a la CPU con un modelo más pequeño (WHISPER_MODELO_CPU, por defecto «small») y lo dice en el log:
@@ -81,7 +81,7 @@ async def _arranque(_app):
     yield
 
 
-app = FastAPI(title="Voz de Jarvis", lifespan=_arranque)
+app = FastAPI(title="Voz de ARES", lifespan=_arranque)
 
 
 @app.get("/salud")

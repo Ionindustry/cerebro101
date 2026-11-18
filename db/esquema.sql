@@ -362,7 +362,7 @@ CREATE TABLE IF NOT EXISTS licitaciones_analisis_pliego (
   actualizado   timestamptz NOT NULL DEFAULT now()
 );
 
--- Copias de seguridad (api/cerebro/copias.py): lo que anotan scripts/copia_automatica.sh y scripts/probar_restauracion.sh para la tarjeta «Copias de seguridad» de Jarvis y para avisar a soporte@ si pasan
+-- Copias de seguridad (api/cerebro/copias.py): lo que anotan scripts/copia_automatica.sh y scripts/probar_restauracion.sh para la tarjeta «Copias de seguridad» de ARES y para avisar a soporte@ si pasan
 -- días sin una copia correcta. `aviso` = aviso enviado a soporte@ (para no repetirlo cada hora); `inicio` = desde cuándo se vigila (sin copias anotadas aún).
 CREATE TABLE IF NOT EXISTS copias_registro (
   id      bigserial PRIMARY KEY,
@@ -584,7 +584,7 @@ ALTER TABLE ofertas_ejecuciones ADD COLUMN IF NOT EXISTS modelo text NOT NULL DE
 CREATE UNIQUE INDEX IF NOT EXISTS ofertas_ejecuciones_una_en_curso ON ofertas_ejecuciones (motor_id) WHERE estado = 'en_curso';
 CREATE INDEX IF NOT EXISTS ofertas_ejecuciones_motor ON ofertas_ejecuciones (motor_id, id DESC);
 
--- Documentos que una persona sube al chat de Jarvis (api/cerebro/subidas.py): pasan por cuarentena y antivirus como los pliegos, y de ellos solo se ofrece su TEXTO a los agentes (nunca el fichero).
+-- Documentos que una persona sube al chat de ARES (api/cerebro/subidas.py): pasan por cuarentena y antivirus como los pliegos, y de ellos solo se ofrece su TEXTO a los agentes (nunca el fichero).
 CREATE TABLE IF NOT EXISTS documentos_subidos (
   id        uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   usuario   text NOT NULL,
@@ -664,7 +664,7 @@ CREATE TABLE IF NOT EXISTS referencias_mercado (
 );
 CREATE INDEX IF NOT EXISTS referencias_mercado_codigo ON referencias_mercado (codigo) WHERE NOT retirada;
 
--- DEUC base de cada sociedad, subido desde Jarvis (api/cerebro/licitaciones/deuc.py): un Word o un PDF con formulario con los datos de la empresa ya rellenados. El fichero está en
+-- DEUC base de cada sociedad, subido desde ARES (api/cerebro/licitaciones/deuc.py): un Word o un PDF con formulario con los datos de la empresa ya rellenados. El fichero está en
 -- DEUC_DIR/<sociedad>/<sha256>.<formato>; aquí queda quién lo subió y cuándo (la versión más reciente de cada sociedad es la que se usa; las anteriores se conservan).
 CREATE TABLE IF NOT EXISTS deuc_base (
   id        bigserial PRIMARY KEY,
@@ -856,7 +856,7 @@ CREATE TABLE IF NOT EXISTS tarifas_vigilancia (
   novedades     integer NOT NULL DEFAULT 0
 );
 
--- Ajustes de las copias de seguridad que se cambian desde Jarvis (api/cerebro/copias.py): cuántas se conservan, segunda ubicación, cuántas allí y a los cuántos días sin copia se avisa. Solo lo fijado aquí;
+-- Ajustes de las copias de seguridad que se cambian desde ARES (api/cerebro/copias.py): cuántas se conservan, segunda ubicación, cuántas allí y a los cuántos días sin copia se avisa. Solo lo fijado aquí;
 -- lo no fijado sigue como siempre (.env y valores por defecto). Los lee scripts/copia_automatica.sh en cada copia.
 CREATE TABLE IF NOT EXISTS copias_ajustes (
   clave       text PRIMARY KEY,

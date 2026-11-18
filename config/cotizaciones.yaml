@@ -1,4 +1,4 @@
-# Cotizaciones a proveedores (Jarvis → Cotizaciones; api/cerebro/cotizaciones.py).
+# Cotizaciones a proveedores (ARES → Cotizaciones; api/cerebro/cotizaciones.py).
 # El correo lo REDACTA SIEMPRE el sistema con esta plantilla y lleva SOLO tres datos: referencia, cantidad y plazo de entrega. Nunca el cliente, la licitación, precios nuestros ni nada más.
 # Dos modos, a elegir en cada caso:
 #   enviar  → el sistema lo envía desde el buzón del departamento, cuando Dirección pulsa «Enviar» y confirma en el panel (queda constancia a su nombre).

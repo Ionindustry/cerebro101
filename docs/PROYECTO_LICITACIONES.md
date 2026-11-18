@@ -272,7 +272,7 @@ módulos con pruebas, y si un pliego trae una fórmula nueva, se añade como mó
 5. **Búsqueda paginada con `search_after`** y facetas precalculadas; nunca `from/size` profundos.
 6. **Pliegos bajo demanda**: solo se descargan los documentos de expedientes que encajan o que alguien abre (el documento los
    descarga todos). Ahorra disco, ancho de banda y antivirus.
-7. **Aislamiento de recursos**: el motor no comparte cola ni GPU con Jarvis; la IA solo se usa para lo que encaja. Presupuesto de
+7. **Aislamiento de recursos**: el motor no comparte cola ni GPU con ARES; la IA solo se usa para lo que encaja. Presupuesto de
    memoria fijado por servicio (OpenSearch y el grafo compiten por la RAM del servidor con Ollama).
 8. **Mensajería que no se desborda**: límites `MaxAckPending`, caducidad de mensajes, *dead-letter* y métricas de retraso. Es la
    lección del atasco de octubre de 2026 en el Cerebro (1,1 millones de tareas encoladas sin que nadie lo viera).
@@ -287,7 +287,7 @@ módulos con pruebas, y si un pliego trae una fórmula nueva, se añade como mó
     Alimenta al agente Precio (umbral de baja anormal) y a Inteligencia Competitiva.
 13. **Plazos al calendario** del Cerebro: fin de presentación, aclaraciones y plazo de recurso.
 14. **Contratos menores**, si se confirma la fuente.
-15. **Jarvis responde al momento** «¿qué licitaciones hay hoy de videovigilancia en Girona?» desde la API.
+15. **ARES responde al momento** «¿qué licitaciones hay hoy de videovigilancia en Girona?» desde la API.
 
 ## 8. Integración con el Cerebro
 
@@ -299,9 +299,9 @@ módulos con pruebas, y si un pliego trae una fórmula nueva, se añade como mó
 - **Resumen diario: sección «Seguimiento»**: además de las novedades (oportunidades, adjudicaciones, anuladas, alertas), el resumen de las 16:00 lista las licitaciones **en estudio** y **presentadas**
   con el plazo (urgente si quedan ≤ 7 días, vencido si ya pasó), los requisitos del pliego por revisar y cuántos bloquean a 101.cat según su perfil (`aptitud.py`). Sale de la base de datos del Cerebro,
   no del motor, así que aparece aunque el motor no responda; si no se puede leer lo dice. `resumen.seguimiento_max` (config/licitaciones.yaml) limita las que se detallan.
-- **DEUC desde Jarvis: solo lo subido por quien lo pide.** «Guardar DEUC» comprueba que el documento lo subió la misma persona que hizo la petición. Esa persona la pone el sistema (`usuario` en `herramientas/base.usar`,
+- **DEUC desde ARES: solo lo subido por quien lo pide.** «Guardar DEUC» comprueba que el documento lo subió la misma persona que hizo la petición. Esa persona la pone el sistema (`usuario` en `herramientas/base.usar`,
   oculto al modelo como `agente` y `sensibilidad`), no el agente: un agente no puede guardar como DEUC base un documento de otra persona aunque conozca su identificador. Además, una persona aprueba la acción viendo el fichero.
-- **Análisis automático de los pliegos** (`analisis_pliego.py`, tarea de Celery `analizar_pliegos`): al pasar una licitación a «en estudio» (desde Jarvis, con «Estudiar» o cambiando el estado) se encola el análisis: se
+- **Análisis automático de los pliegos** (`analisis_pliego.py`, tarea de Celery `analizar_pliegos`): al pasar una licitación a «en estudio» (desde ARES, con «Estudiar» o cambiando el estado) se encola el análisis: se
   descargan sus pliegos (los que por su nombre son pliegos o condiciones, hasta `max_documentos`; cuarentena y antivirus como siempre) y el **Analista de Pliegos** anota los requisitos con su **cita literal**
   (comprobada contra la página), **en borrador**: una persona los confirma. Con ellos, la sugerencia de aptitud (`aptitud.py`) y el «Seguimiento» del resumen diario dicen cuántos requisitos hay por revisar y cuántos
   bloquean. Acotado (config/licitaciones.yaml → `analisis_pliegos`: `max_por_dia` licitaciones nuevas al día, `max_documentos`); una fila por licitación (`licitaciones_analisis_pliego`) evita repetirlo; un fallo
@@ -313,13 +313,13 @@ módulos con pruebas, y si un pliego trae una fórmula nueva, se añade como mó
   `notificaciones@101.cat` la lista de «Hoy» vista como el departamento de Licitaciones (sus aprobaciones, plazos, requisitos por revisar y novedades; el estado del sistema va a `soporte@`), **solo si hay algo urgente o por mirar**. Si el equipo
   estaba apagado a las 08:30, sale en cuanto se enciende dentro de la ventana.
 - **Datos de la sociedad en el ERP**: guía y hoja para reunirlos y cargarlos (Company, Dirección, Contacto del representante y los dos campos personalizados DNI y Poder): [DATOS_SOCIEDAD_ERP.md](DATOS_SOCIEDAD_ERP.md).
-- **«Qué hacer hoy»** (`hoy.py`, `GET /hoy`, pantalla **Hoy** de Jarvis con contador de urgentes en el menú): una sola lista, ordenada por urgencia, de lo que necesita atención de quien abre Jarvis, **según sus permisos**: las aprobaciones
+- **«Qué hacer hoy»** (`hoy.py`, `GET /hoy`, pantalla **Hoy** de ARES con contador de urgentes en el menú): una sola lista, ordenada por urgencia, de lo que necesita atención de quien abre ARES, **según sus permisos**: las aprobaciones
   pendientes de sus departamentos (urgente si alguna espera más de 24 h), las licitaciones en estudio con plazo próximo o vencido y los requisitos del pliego por revisar (Dirección y Licitaciones), lo nuevo del último resumen y el
   estado del sistema —antivirus, copias de seguridad y motor de licitaciones— (Dirección y Tecnología). Solo lee, sin IA; cada elemento enlaza a la pantalla donde se resuelve y una fuente que falla se omite con un aviso.
   Corrige de paso un fallo de permisos: `bandeja.pendientes` trataba un conjunto vacío de departamentos como «todos» (una persona sin departamentos veía todas las aprobaciones).
-- **Vigilancia del antivirus** (`antivirus.py`, tarea de Celery cada 3 h, sin IA): los pliegos y los documentos que se suben a Jarvis solo se aceptan con firmas de ClamAV de menos de 48 h (falla cerrado). Si `freshclam` deja de actualizar
+- **Vigilancia del antivirus** (`antivirus.py`, tarea de Celery cada 3 h, sin IA): los pliegos y los documentos que se suben a ARES solo se aceptan con firmas de ClamAV de menos de 48 h (falla cerrado). Si `freshclam` deja de actualizar
   (p. ej. el DNS de Docker falló al encender el PC), se avisa **por correo a `soporte@`** cuando las firmas pasan de **36 h** (antes de que se empiecen a rechazar documentos) o si clamd no responde, una vez cada 24 h, con los comandos
-  para arreglarlo. La tarjeta **«Antivirus»** de la pantalla Agentes de Jarvis enseña la fecha de las firmas y su edad.
+  para arreglarlo. La tarjeta **«Antivirus»** de la pantalla Agentes de ARES enseña la fecha de las firmas y su edad.
 - **Aviso de plazos urgentes** (`plazos.py`, tarea de Celery cada hora, sin IA): una licitación **en estudio** a la que le quedan 3 días, 1 día o el mismo día del plazo de presentación se avisa **una vez por umbral**
   por correo a `concursos@101.cat` con copia a `notificaciones@101.cat` (config/buzones.yaml → `avisos.copia`), con cuántos requisitos hay por revisar y cuántos bloquean según el perfil. Solo entre las 07:00 y las 21:00;
   si el servidor de correo falla, no se anota y se reintenta a la hora siguiente. Se configura en config/licitaciones.yaml → `plazos`.
@@ -629,8 +629,8 @@ Muchos pliegos traen sus modelos en Word antiguo (`.doc`), OpenDocument (`.odt`)
 
 El DEUC (documento europeo único de contratación) se adjunta **ya rellenado con los datos de la empresa**; en cada concurso solo se completan los campos propios del concurso, y los rellenan los agentes eligiendo la clave de cada hueco (el valor siempre sale de la ficha, nunca lo escribe el modelo).
 
-- **Subirlo desde Jarvis (lo normal):** en el chat de Jarvis se sube el DEUC (Word `.docx` o PDF con formulario, con los datos de la empresa ya rellenados) y se pide «guarda este DEUC para 101 Telecom». El agente Administrativo propone la acción `plantillas.guardar_deuc`; **una persona la aprueba** viendo el fichero, el formato y la sociedad, y solo entonces se guarda. Antes se comprueba que no lleva macros, que es un Word de verdad o un PDF con campos de formulario editables, y que la sociedad existe en el ERP (si hay varias, hay que decir cuál). Se guarda en el volumen de datos (`DEUC_DIR`), con todas las versiones; la más reciente es la que se usa. No va a la ficha de empresa del ERP porque adjuntar un fichero a una Company obligaría a dar al usuario técnico permiso de escritura sobre las empresas.
-- **Alternativa — adjunto en el ERP:** un Word o PDF con «DEUC» (o «ESPD») en el nombre adjunto a la ficha de empresa (Company). Lo subido desde Jarvis tiene prioridad sobre un adjunto del ERP.
+- **Subirlo desde ARES (lo normal):** en el chat de ARES se sube el DEUC (Word `.docx` o PDF con formulario, con los datos de la empresa ya rellenados) y se pide «guarda este DEUC para 101 Telecom». El agente Administrativo propone la acción `plantillas.guardar_deuc`; **una persona la aprueba** viendo el fichero, el formato y la sociedad, y solo entonces se guarda. Antes se comprueba que no lleva macros, que es un Word de verdad o un PDF con campos de formulario editables, y que la sociedad existe en el ERP (si hay varias, hay que decir cuál). Se guarda en el volumen de datos (`DEUC_DIR`), con todas las versiones; la más reciente es la que se usa. No va a la ficha de empresa del ERP porque adjuntar un fichero a una Company obligaría a dar al usuario técnico permiso de escritura sobre las empresas.
+- **Alternativa — adjunto en el ERP:** un Word o PDF con «DEUC» (o «ESPD») en el nombre adjunto a la ficha de empresa (Company). Lo subido desde ARES tiene prioridad sobre un adjunto del ERP.
 - **Dónde está (adjunto en el ERP):** cada sociedad tiene su DEUC base, un **Word (.docx)** con «DEUC» (o «ESPD») en el nombre, **adjunto a su ficha de empresa (Company) en el ERP** (Adjuntos). Si hay varios, se usa el más reciente. Si hay varias sociedades, cada una tiene el suyo. Se lee con la clave del departamento de Licitaciones (categoría «sistema»: `Company` y `File`), no lo leen los agentes.
 - **Qué se hace:** al preparar la documentación administrativa se copia el DEUC base a la oferta (el original del ERP no se toca) y se rellenan los huecos del concurso: órgano de contratación («Nombre oficial»), título del contrato, número de expediente, CPV, procedimiento, valor estimado y fecha del plazo. Aparece en la tarjeta como «DEUC de la sociedad» (documento 0) y sigue el mismo ciclo que los demás: lo dudoso lo elige un agente con `plantillas.rellenar` (documento 0) o una persona; lo firma una persona.
 - **Si la sociedad no tiene DEUC base:** no se inventa nada. Solo se avisa cuando el pliego trae un DEUC («adjunta el DEUC base a la empresa en el ERP»).

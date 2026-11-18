@@ -45,7 +45,7 @@ async def _sociedad(motor_id: str, ficha: dict, deps: dict) -> list[dict]:
         items.append(_it("aviso", f"No se han podido comprobar los datos de la sociedad: {type(e).__name__}"))
     try:
         dd = await deps["deuc"](nombre)
-        items.append(_it("ok", f"DEUC base: «{dd[0]}» ({dd[2]})") if dd else _it("aviso", "No hay DEUC base de esta sociedad: súbelo a Jarvis (agente Administrativo: «Guarda este documento como DEUC base de 101.cat»)"))
+        items.append(_it("ok", f"DEUC base: «{dd[0]}» ({dd[2]})") if dd else _it("aviso", "No hay DEUC base de esta sociedad: súbelo a ARES (agente Administrativo: «Guarda este documento como DEUC base de 101.cat»)"))
     except Exception as e:      # noqa: BLE001
         items.append(_it("aviso", f"No se ha podido comprobar el DEUC base: {type(e).__name__}"))
     return items

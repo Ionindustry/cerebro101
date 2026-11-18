@@ -44,7 +44,7 @@ Las tarifas reales de los proveedores son confidenciales: **no se guardan en el 
 
 ## Actualización periódica de tarifas (por carpeta y por servicio web)
 
-Cada día a las 6:40 (y al pulsar «Comprobar ahora» en **Jarvis → Precios → Tarifas de proveedores**) el sistema mira cada proveedor de `config/tarifas_auto.yaml`. La lista viene **vacía**: añade tus proveedores (el fichero trae un ejemplo comentado).
+Cada día a las 6:40 (y al pulsar «Comprobar ahora» en **ARES → Precios → Tarifas de proveedores**) el sistema mira cada proveedor de `config/tarifas_auto.yaml`. La lista viene **vacía**: añade tus proveedores (el fichero trae un ejemplo comentado).
 
 - **Por carpeta:** deja el Excel o CSV en `/datos/tarifas/<id>/` con `./scripts/tarifa_subir.sh <id> /ruta/a/la_tarifa.xlsx` (ventana Ubuntu; en WSL tus ficheros de Windows están en `/mnt/c/Users/TU_USUARIO/Downloads/`). Cualquier fichero con contenido nuevo cuenta; los ya vistos no se repiten.
 - **Por servicio web:** una dirección `https` de un dominio de `hosts` (cada redirección se revalida; anti-SSRF, tamaño máximo). Formatos `csv`, `xlsx` o `json` (la lista y las columnas del JSON se indican en la configuración). Si pide clave, en la configuración solo va el **nombre** (`clave_secreto`); la clave va en `secretos/tarifas.env` (una línea `NOMBRE=valor`, fuera de git; no la pegues en ningún chat) y no sale en ningún registro.
@@ -67,7 +67,7 @@ El agente **Catálogo de Proveedores** (que trabaja cada noche a la 1:00 y a pet
 ## Avisos de precios en «Hoy»
 Para Dirección, «Hoy» muestra una tarjeta por cada propuesta de precios de venta pendiente (las 3 más nuevas) con enlace directo a ella (`/precios?propuesta=N`). Dice si hay artículos por debajo del margen mínimo, si usa costes provisionales o de respaldo y, si lleva 7 días o más sin revisar, que sus costes y el cambio pueden estar desactualizados (urgente a partir de 14 días o si falló al aplicarse). Solo lee: no cambia ningún precio.
 
-## Ventas por tipo (Jarvis → Ventas, solo Dirección)
+## Ventas por tipo (ARES → Ventas, solo Dirección)
 Los 5, 10, 15 o 25 artículos y fabricantes que más venden en cada tipo (videovigilancia, control de accesos, intrusión, incendio, intercom, redes, software, servicios), por importe neto de los pedidos de venta confirmados del ERP en 30 días a 2 años. El tipo de cada línea sale de `config/tipos_producto.yaml`: primero el grupo de artículo del ERP y, si no encaja, palabras del nombre; lo que no encaja va a «Otros» y la pantalla avisa si pesa más del 25 %.
 Dirección necesita permiso de lectura de «Sales Order» (ya lo tiene en `config/erp_acceso.yaml`). La lectura usa campos de la línea del pedido (artículo, grupo, marca, cantidad, importe neto) y está probada con datos simulados, no con tu ERP real: si ERPNext rechaza la consulta, la pantalla dice que no ha podido leer los pedidos.
 

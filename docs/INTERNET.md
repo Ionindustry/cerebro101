@@ -1,4 +1,4 @@
-# Internet, fecha y hora para Jarvis
+# Internet, fecha y hora para ARES
 
 ## Qué hay
 
@@ -21,7 +21,7 @@ docker compose up -d --build api worker worker-cortas beat
 docker compose up -d searxng
 ```
 
-Para probarlo, en Jarvis: «¿qué día es hoy?» y «¿qué novedades hay sobre la normativa de videovigilancia?». Si el buscador no responde: `docker compose logs --tail 30 searxng`.
+Para probarlo, en ARES: «¿qué día es hoy?» y «¿qué novedades hay sobre la normativa de videovigilancia?». Si el buscador no responde: `docker compose logs --tail 30 searxng`.
 
 ## Qué falta
 

@@ -28,7 +28,7 @@ def cargar_servidor():
         def transcribe(self, ruta, vad_filter=True):
             if self.device == "cuda":
                 raise RuntimeError("Library libcublas.so.12 is not found or cannot be loaded")
-            return iter([Segmento(" hola "), Segmento("Jarvis ")]), Info()
+            return iter([Segmento(" hola "), Segmento("ARES ")]), Info()
 
     falso = types.ModuleType("faster_whisper")
     falso.WhisperModel = FalsoWhisper
@@ -43,7 +43,7 @@ class TestVoz(unittest.TestCase):
     def test_si_la_tarjeta_falla_pasa_a_cpu_y_transcribe(self):
         s, cargas = cargar_servidor()
         texto, idioma = s._transcribir_fichero("/tmp/x.webm")
-        self.assertEqual((texto, idioma), ("hola Jarvis", "es"))
+        self.assertEqual((texto, idioma), ("hola ARES", "es"))
         self.assertEqual(cargas, [("large-v3-turbo", "cuda", "float16"), ("small", "cpu", "int8")])
         self.assertEqual(s._estado["dispositivo"], "cpu")
         self.assertIn("libcublas", s._estado["alternativa"])
@@ -68,14 +68,14 @@ class TestVoz(unittest.TestCase):
             texto, _ = s._transcribir_fichero("/tmp/x.webm")
         finally:
             del os.environ["WHISPER_DISPOSITIVO"], os.environ["WHISPER_MODELO"]
-        self.assertEqual((texto, cargas), ("hola Jarvis", [("tiny", "cpu", "int8")]))
+        self.assertEqual((texto, cargas), ("hola ARES", [("tiny", "cpu", "int8")]))
 
     def test_la_api_transcribe_y_cuenta_su_estado(self):
         from fastapi.testclient import TestClient
         s, _ = cargar_servidor()
         with TestClient(s.app) as c:
             r = c.post("/transcribir", files={"audio": ("voz.webm", io.BytesIO(b"datos"), "audio/webm")})
-            self.assertEqual((r.status_code, r.json()), (200, {"texto": "hola Jarvis", "idioma": "es"}))
+            self.assertEqual((r.status_code, r.json()), (200, {"texto": "hola ARES", "idioma": "es"}))
             e = c.get("/salud").json()
         self.assertEqual((e["dispositivo"], e["modelo"], e["cargado"]), ("cpu", "small", True))
 

@@ -1,6 +1,6 @@
 # Keycloak en modo producción con PostgreSQL
 
-Keycloak es el inicio de sesión de Jarvis. Hasta ahora arrancaba en **modo desarrollo** (`start-dev`) con una base de datos **H2 en un fichero**: sirve para probar, pero no es lo recomendado para producción (más frágil ante cortes y actualizaciones). Este cambio lo pasa al **modo producción** (`start`, arranque optimizado) con su **propia base PostgreSQL**, **sin perder usuarios, contraseñas ni ajustes**.
+Keycloak es el inicio de sesión de ARES. Hasta ahora arrancaba en **modo desarrollo** (`start-dev`) con una base de datos **H2 en un fichero**: sirve para probar, pero no es lo recomendado para producción (más frágil ante cortes y actualizaciones). Este cambio lo pasa al **modo producción** (`start`, arranque optimizado) con su **propia base PostgreSQL**, **sin perder usuarios, contraseñas ni ajustes**.
 
 Es para la instalación local (un PC con Docker Desktop). El servidor completo (`despliegue/desplegar.sh` + `despliegue/docker-compose.produccion.yml`) ya lleva Keycloak así y no necesita esto.
 
@@ -12,7 +12,7 @@ git pull --ff-only
 ./scripts/keycloak_a_postgres.sh
 ```
 
-Tarda unos 3-5 minutos y **durante ese rato nadie puede iniciar sesión en Jarvis**. No lo hagas mientras «Preparar la oferta» está trabajando (el panel pediría iniciar sesión de nuevo; el trabajo del worker no se pierde, pero es mejor no mezclarlo).
+Tarda unos 3-5 minutos y **durante ese rato nadie puede iniciar sesión en ARES**. No lo hagas mientras «Preparar la oferta» está trabajando (el panel pediría iniciar sesión de nuevo; el trabajo del worker no se pierde, pero es mejor no mezclarlo).
 
 El script, y se detiene **sin cambiar nada** si algo falla:
 
@@ -22,7 +22,7 @@ El script, y se detiene **sin cambiar nada** si algo falla:
 4. Activa `despliegue/docker-compose.keycloak-postgres.yml` en `COMPOSE_FILE` del `.env` y arranca Keycloak con PostgreSQL importando esa exportación.
 5. Comprueba que responde, que el administrador entra y que hay usuarios. Si algo no cuadra, **vuelve atrás solo**.
 
-Al terminar, **prueba a iniciar sesión en Jarvis**.
+Al terminar, **prueba a iniciar sesión en ARES**.
 
 ## Qué cambia y qué no
 

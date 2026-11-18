@@ -1,4 +1,4 @@
-"""Documentos que una persona sube al chat de Jarvis.
+"""Documentos que una persona sube al chat de ARES.
 
 Mismo trato que los pliegos (cerebro/licitaciones/pliegos.py): se comprueba por su CONTENIDO qué son, pasan por cuarentena y antivirus (ClamAV), el texto se extrae en un proceso aparte, sin
 secretos y con límites, y a los agentes solo les llega ese texto, nunca el fichero. Aceptados: PDF, Word, Excel (.xlsx), OpenDocument y CSV/texto. Se rechazan ZIP, Excel antiguo (.xls),
@@ -333,7 +333,7 @@ async def buscar(doc_id: str, consulta: str, limite: int = 8) -> dict:
 
 
 async def para_chat(usuario: str, ids: list[str]) -> str:
-    """El texto que se añade a la petición de Jarvis cuando la persona adjunta documentos. Lo construye el sistema (no el usuario ni el modelo) y solo con documentos
+    """El texto que se añade a la petición de ARES cuando la persona adjunta documentos. Lo construye el sistema (no el usuario ni el modelo) y solo con documentos
     que ESA persona ha subido y que han pasado el antivirus."""
     if not isinstance(ids, list) or len(ids) > 5:
         raise ErrorSubida("Puedes adjuntar hasta 5 documentos por mensaje")
