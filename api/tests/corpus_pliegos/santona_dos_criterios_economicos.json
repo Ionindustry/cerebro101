@@ -1,0 +1,17 @@
+{
+ "descripcion": "Ayuntamiento de Santoña: el precio se puntúa en dos criterios que se suman (A suministro 65 puntos + B mantenimiento 10 puntos); cláusula real",
+ "documentos": [
+  {
+   "n": 1,
+   "nombre": "PCAP Santoña.pdf",
+   "texto": "Pliego de cláusulas administrativas particulares.\\nCriterio 1.1 Oferta Económica de Suministro e Instalación (Fase I - Criterio A) 65 Puntos\nCriterio 1.2 Oferta Económica de Mantenimiento Anual (Fase I - Criterio B) 10 Puntos\n1. VALORACIÓN DE LAS OFERTAS ECONÓMICAS (HASTA 75 PUNTOS)\nLas proposiciones económicas presentadas en el Archivo 2 deberán estructurarse obligatoriamente de forma desglosada en dos componentes independientes (Criterio A y Criterio B). La puntuación económica total resultará de la suma aritmética de ambas valoraciones (P1 + P2)\n1.1. Criterio A: Oferta Económica de Suministro e Instalación (Hasta 65 Puntos)\nSe valora el importe ofertado para el suministro, instalación y puesta en servicio de la Fase I (Tipo máximo de licitación: 155.722,00 € sin IVA). La oferta más económica (mayor baja) obtendrá 65 puntos. A las ofertas que no realicen baja se les asignará 0 puntos. Al resto de ofertas se les asignará la puntuación proporcional mediante la siguiente fórmula de interpolación lineal:\nP1: Puntuación asignada en el Criterio A a la oferta que se evalúa.\nT1: Tipo máximo de licitación del suministro e instalación (155.722,00 € sin IVA)\nS1: Oferta de suministro e instalación más barata (menor precio neto) entre las admitidas.\n1.2. Criterio B: Oferta Económica de Mantenimiento Anual (Hasta 10 Puntos)\nSe valora el canon anual ofertado para el mantenimiento preventivo, correctivo y evolutivo de la Fase I (Tipo máximo estimado: 10.900,54 €/año sin IVA). La oferta de mantenimiento más barata obtendrá 10 puntos, y la oferta que coincida con el tipo máximo obtendrá 0 puntos."
+  }
+ ],
+ "esperado": {
+  "sobres": null,
+  "rectificaciones": 0,
+  "formula": "proporcional_baja",
+  "puntos_precio": 65.0,
+  "criterios_economicos": 2
+ }
+}
