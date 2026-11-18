@@ -101,7 +101,8 @@ def _salida(f: dict) -> dict:
     return {"motor_id": str(f["motor_id"]), "formula": f["formula"], "puntos_precio": float(f["puntos_precio"]), "puntos_total": float(f["puntos_total"]),
             "baja_tope_pct": None if f["baja_tope_pct"] is None else float(f["baja_tope_pct"]),
             "baja_anormal_pct": None if f["baja_anormal_pct"] is None else float(f["baja_anormal_pct"]),
-            "nota": f["nota"], "por": f["por"], "actualizado": f["actualizado"].isoformat()}
+            "nota": f["nota"], "por": f["por"], "actualizado": f["actualizado"].isoformat(),
+            "origen": f.get("origen") or "persona", "cita": f.get("cita") or "", "criterios": f.get("criterios") or []}
 
 
 async def leer(motor_id: str) -> dict | None:
@@ -121,12 +122,33 @@ async def guardar(motor_id: str, datos: dict, usuario: str) -> dict:
             """INSERT INTO licitaciones_reglas_precio (motor_id, formula, puntos_precio, puntos_total, baja_tope_pct, baja_anormal_pct, nota, por)
                VALUES (%s,%s,%s,%s,%s,%s,%s,%s)
                ON CONFLICT (motor_id) DO UPDATE SET formula = EXCLUDED.formula, puntos_precio = EXCLUDED.puntos_precio, puntos_total = EXCLUDED.puntos_total,
-                 baja_tope_pct = EXCLUDED.baja_tope_pct, baja_anormal_pct = EXCLUDED.baja_anormal_pct, nota = EXCLUDED.nota, por = EXCLUDED.por, actualizado = now()
+                 baja_tope_pct = EXCLUDED.baja_tope_pct, baja_anormal_pct = EXCLUDED.baja_anormal_pct, nota = EXCLUDED.nota, por = EXCLUDED.por, origen = 'persona', actualizado = now()
                RETURNING *""",
             [motor_id.strip().lower(), v["formula"], v["puntos_precio"], v["puntos_total"], v["baja_tope_pct"], v["baja_anormal_pct"], v["nota"], str(usuario)[:200]])
         f = await cur.fetchone()
     log.info("reglas de precio: %s anota %s (%s)", usuario, motor_id, v["formula"])
     return _salida(f)
+
+
+async def guardar_automatica(motor_id: str, regla: dict, cita: str, criterios: list[dict], por: str = "automático") -> dict | None:
+    """Guarda la regla DEDUCIDA del pliego (origen «automática», con su cita). Nunca pisa la de una persona: si ya hay una de una persona no hace nada y devuelve None."""
+    from psycopg.types.json import Jsonb
+    _comprobar_id(motor_id)
+    v = validar(regla)
+    async with await _conectar() as conn:
+        cur = await conn.execute(
+            """INSERT INTO licitaciones_reglas_precio (motor_id, formula, puntos_precio, puntos_total, baja_tope_pct, baja_anormal_pct, nota, por, origen, cita, criterios)
+               VALUES (%s,%s,%s,%s,%s,%s,%s,%s,'automatica',%s,%s)
+               ON CONFLICT (motor_id) DO UPDATE SET formula = EXCLUDED.formula, puntos_precio = EXCLUDED.puntos_precio, puntos_total = EXCLUDED.puntos_total,
+                 baja_tope_pct = EXCLUDED.baja_tope_pct, baja_anormal_pct = EXCLUDED.baja_anormal_pct, nota = EXCLUDED.nota, por = EXCLUDED.por, cita = EXCLUDED.cita,
+                 criterios = EXCLUDED.criterios, actualizado = now()
+               WHERE licitaciones_reglas_precio.origen = 'automatica'
+               RETURNING *""",
+            [motor_id.strip().lower(), v["formula"], v["puntos_precio"], v["puntos_total"], v["baja_tope_pct"], v["baja_anormal_pct"], v["nota"], por[:200], cita[:600], Jsonb(criterios)])
+        f = await cur.fetchone()
+    if f:
+        log.info("reglas de precio: deducida del pliego para %s (%s, %s puntos)", motor_id, v["formula"], v["puntos_precio"])
+    return _salida(f) if f else None
 
 
 async def borrar(motor_id: str) -> bool:
