@@ -810,6 +810,20 @@ async def guardar_reglas_precio(entrada: ReglasPrecioEntrada, usuario: Usuario =
         raise HTTPException(422, str(e)) from None
 
 
+class DeducirReglasEntrada(BaseModel):
+    modelo: str = "auto"              # si los patrones no bastan, con qué modelo externo leer el pliego: auto, claude o chatgpt
+
+
+@app.post("/licitaciones/reglas-precio/{motor_id}/deducir")
+async def deducir_reglas_precio(motor_id: str, entrada: DeducirReglasEntrada | None = None, usuario: Usuario = Depends(usuario_actual)):
+    """Deduce del pliego cómo puntúa el precio (patrones del código y, si no bastan, un modelo cuyo resultado COMPRUEBA el código) y lo guarda como regla «automática». Nunca pisa la anotada por una persona."""
+    _exige_licitaciones(usuario)
+    if not motor_lic._UUID.match(motor_id.strip()):
+        raise HTTPException(422, "Identificador de licitación no válido")
+    from ..licitaciones import reglas_auto
+    return await reglas_auto.asegurar(motor_id, con_modelo=True, modelo=(entrada.modelo if entrada else "auto"))
+
+
 @app.post("/licitaciones/reglas-precio/{motor_id}/borrar")
 async def borrar_reglas_precio(motor_id: str, usuario: Usuario = Depends(usuario_actual)):
     _exige_licitaciones(usuario)

@@ -300,10 +300,16 @@ async def simular_completo(motor_id: str, coste=None, presupuesto_erp: str | Non
             extra.append(f"El coste del ERP es INCOMPLETO: {len(detalle_erp['sin_coste'])} línea(s) del presupuesto no tienen coste en el ERP y no se han contado; el margen real será menor")
     reglas = None
     try:
+        from . import reglas_auto
+        await reglas_auto.asegurar(motor_id)    # si nadie ha anotado la regla, se deduce del pliego (nunca pisa la de una persona)
         reglas = await reglas_mod.leer(motor_id)
     except Exception:  # noqa: BLE001 - sin las reglas se simula igual, avisando
         log.exception("simulador: no se pudieron leer las reglas de precio de %s", motor_id)
         extra.append("No se han podido leer las reglas de puntuación anotadas: se simula suponiendo que gana la mejor oferta económica")
+    if reglas and reglas.get("origen") == "automatica":
+        crit = reglas.get("criterios") or []
+        extra.append("La regla de puntuación del precio se ha DEDUCIDA automáticamente del pliego y nadie la ha confirmado" + (f" («{(reglas.get('cita') or '')[:140]}»)" if reglas.get("cita") else "")
+                     + (f". El precio se puntúa en {len(crit)} criterios que se suman; se usa el principal ({reglas['puntos_precio']:g} puntos)" if len(crit) > 1 else "") + ". Revísala en «Reglas de precio»")
     r = await simular(motor_id, coste, cfg=cfg, reglas=reglas)
     if detalle_erp:
         r["coste_erp"] = {k: detalle_erp[k] for k in ("presupuesto", "coste", "completo", "lineas", "sin_coste")}

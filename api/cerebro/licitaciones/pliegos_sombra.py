@@ -262,6 +262,9 @@ def criterios_economicos(texto: str) -> list[dict]:
 
 
 def avisos_formulas(sugerencias: list[dict], reglas_anotadas: dict | None, criterios: list[dict] | None = None) -> list[dict]:
+    if reglas_anotadas and reglas_anotadas.get("origen") == "automatica":
+        return [{"nivel": "ok", "texto": f"La fórmula del precio se ha deducido sola del pliego: «{reglas_anotadas.get('formula')}», {reglas_anotadas.get('puntos_precio'):g} puntos"
+                                         + (f" («{(reglas_anotadas.get('cita') or '')[:120]}»)" if reglas_anotadas.get("cita") else "") + ". El simulador ya la usa; confírmala o corrígela en «Reglas de precio»"}]
     if reglas_anotadas:
         return []
     if criterios and sugerencias:

@@ -375,33 +375,45 @@ function Parecidas({ id }) {
 function ReglasPrecio({ id, alGuardar }) {
   const [f, setF] = useState(reglasAFormulario(null));
   const [hay, setHay] = useState(false);
+  const [auto, setAuto] = useState(null);   // la regla deducida sola del pliego (origen «automatica»), mientras nadie la confirme
   const [msg, setMsg] = useState(null);
   const [trabajando, setTrabajando] = useState(false);
+  const aplicar = (r) => { setF(reglasAFormulario(r)); setHay(true); setAuto(r.origen === "automatica" ? r : null); };
   useEffect(() => {
     let vivo = true;
-    pedirCerebro(`licitaciones/reglas-precio/${id}`).then((r) => { if (vivo && r?.formula) { setF(reglasAFormulario(r)); setHay(true); } }).catch(() => {});
+    pedirCerebro(`licitaciones/reglas-precio/${id}`).then((r) => { if (vivo && r?.formula) aplicar(r); }).catch(() => {});
     return () => { vivo = false; };
   }, [id]);
+  const deducir = async () => {
+    setTrabajando(true); setMsg(null);
+    try {
+      const r = await pedirCerebro(`licitaciones/reglas-precio/${id}/deducir`, enviar({}));
+      if (r?.regla) { aplicar(r.regla); setMsg({ ok: r.estado === "persona" ? "Ya hay una regla anotada por una persona: no se toca." : "Fórmula deducida del pliego. Revísala y vuelve a simular." }); alGuardar?.(); }
+      else setMsg({ error: r?.estado === "sin_pliegos" ? "Todavía no hay pliegos leídos de esta licitación." : "No se ha podido deducir la fórmula del pliego (o es una que el simulador no sabe calcular). Anótala a mano." });
+    } catch (e) { setMsg({ error: mensajeReglas(e.status) }); }
+    finally { setTrabajando(false); }
+  };
   const poner = (k) => (e) => setF((x) => ({ ...x, [k]: e.target.value }));
   const guardar = async (ev) => {
     ev.preventDefault();
     const { cuerpo, error } = reglasAEnvio(id, f);
     if (error) { setMsg({ error }); return; }
     setTrabajando(true); setMsg(null);
-    try { await pedirCerebro("licitaciones/reglas-precio", enviar(cuerpo)); setHay(true); setMsg({ ok: "Reglas guardadas. Vuelve a simular para usarlas." }); alGuardar?.(); }
+    try { await pedirCerebro("licitaciones/reglas-precio", enviar(cuerpo)); setHay(true); setAuto(null); setMsg({ ok: "Reglas guardadas. Vuelve a simular para usarlas." }); alGuardar?.(); }
     catch (e) { setMsg({ error: mensajeReglas(e.status) }); }
     finally { setTrabajando(false); }
   };
   const quitar = async () => {
     setTrabajando(true); setMsg(null);
-    try { await pedirCerebro(`licitaciones/reglas-precio/${id}/borrar`, { method: "POST" }); setF(reglasAFormulario(null)); setHay(false); setMsg({ ok: "Reglas quitadas." }); alGuardar?.(); }
+    try { await pedirCerebro(`licitaciones/reglas-precio/${id}/borrar`, { method: "POST" }); setF(reglasAFormulario(null)); setHay(false); setAuto(null); setMsg({ ok: "Reglas quitadas." }); alGuardar?.(); }
     catch (e) { setMsg({ error: mensajeReglas(e.status) }); }
     finally { setTrabajando(false); }
   };
   return (
     <details className="lic-informe">
-      <summary>Reglas de puntuación del pliego {hay ? "(anotadas)" : "(opcional)"}</summary>
-      <p className="meta">Mira en el pliego el apartado de criterios de adjudicación y copia aquí cómo puntúa el precio. Con eso el simulador calcula los puntos de precio de cada oferta y usa el umbral de baja anormal del pliego en vez de estimarlo. Las anotas tú: la IA no las toca.</p>
+      <summary>Reglas de puntuación del pliego {hay ? (auto ? "(deducidas del pliego, sin confirmar)" : "(anotadas)") : "(opcional)"}</summary>
+      {auto && <p className="meta" role="status">Deducida automáticamente del pliego{auto.cita ? `: «${auto.cita}»` : ""}. {auto.criterios?.length > 1 ? `El precio se puntúa en ${auto.criterios.length} criterios que se suman; se usa el principal. ` : ""}El simulador ya la usa. Si es correcta pulsa «Guardar reglas» para confirmarla; si no, corrígela.</p>}
+      <p className="meta">Mira en el pliego el apartado de criterios de adjudicación y copia aquí cómo puntúa el precio. Con eso el simulador calcula los puntos de precio de cada oferta y usa el umbral de baja anormal del pliego en vez de estimarlo. Se deducen solas del pliego (el código comprueba la cita); una persona puede confirmarlas o corregirlas, y la que anota una persona nunca la pisa la IA.</p>
       <form className="lic-form" onSubmit={guardar}>
         <div className="lic-campos">
           <label>Fórmula del precio
@@ -414,7 +426,8 @@ function ReglasPrecio({ id, alGuardar }) {
           <label>Nota (dónde lo dice el pliego)<input type="text" value={f.nota} onChange={poner("nota")} maxLength={500} placeholder="Cláusula 12, p. 18" /></label>
         </div>
         <div className="lic-fila">
-          <button className="boton si" type="submit" disabled={trabajando}>Guardar reglas</button>
+          <button className="boton si" type="submit" disabled={trabajando}>{auto ? "Confirmar / guardar reglas" : "Guardar reglas"}</button>
+          <button className="boton" type="button" onClick={deducir} disabled={trabajando}>Deducir del pliego</button>
           {hay && <button className="boton no" type="button" onClick={quitar} disabled={trabajando}>Quitar</button>}
         </div>
         {msg?.error && <p role="alert" className="lic-error">{msg.error}</p>}

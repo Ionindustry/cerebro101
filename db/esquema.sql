@@ -484,6 +484,12 @@ CREATE TABLE IF NOT EXISTS licitaciones_reglas_precio (
   CHECK (puntos_precio > 0 AND puntos_total >= puntos_precio),
   CHECK (formula <> 'lineal_umbral' OR baja_tope_pct > 0)
 );
+-- Origen de la regla: «persona» (la anotó o confirmó alguien) o «automatica» (la dedujo el sistema del pliego, con su cita; una persona la puede corregir y nunca se pisa lo de una persona)
+ALTER TABLE licitaciones_reglas_precio ADD COLUMN IF NOT EXISTS origen text NOT NULL DEFAULT 'persona';
+ALTER TABLE licitaciones_reglas_precio ADD COLUMN IF NOT EXISTS cita text NOT NULL DEFAULT '';
+ALTER TABLE licitaciones_reglas_precio ADD COLUMN IF NOT EXISTS criterios jsonb NOT NULL DEFAULT '[]';
+ALTER TABLE licitaciones_reglas_precio DROP CONSTRAINT IF EXISTS licitaciones_reglas_precio_origen_check;
+ALTER TABLE licitaciones_reglas_precio ADD CONSTRAINT licitaciones_reglas_precio_origen_check CHECK (origen IN ('persona', 'automatica'));
 
 -- Vigilante del motor de licitaciones (api/cerebro/licitaciones/vigilante.py): recuerda si el motor está bien o atascado, para avisar UNA vez al empezar el problema, recordarlo cada cierto tiempo y avisar al arreglarse.
 CREATE TABLE IF NOT EXISTS licitaciones_vigilante (
