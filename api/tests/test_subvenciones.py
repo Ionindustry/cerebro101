@@ -23,6 +23,9 @@ try:
     from cerebro.subvenciones.conectores import cargar
     from cerebro.subvenciones.conectores.base import ErrorConector, ErrorRegistro
     from cerebro.subvenciones.conectores.bdns import ConectorBDNS
+    from cerebro.subvenciones.conectores.boe import ConectorBOE
+    from cerebro.subvenciones.conectores.cido import ConectorCIDO
+    from cerebro.subvenciones.conectores.sedia import ConectorSEDIA
 except ImportError as e:      # pragma: no cover
     raise unittest.SkipTest(str(e))
 
@@ -338,6 +341,299 @@ class TestConectorBDNS(unittest.TestCase):
         self.assertIsNone(cargar(None))
 
 
+# ---- Cataluña (CIDO) y UE (SEDIA): muestras reales del 19/11/2026 ----
+
+FILAS_CIDO = [
+    {"resum": "Subvencions en l'àmbit de la cooperació internacional i l'educació per a la ciutadania global per a projectes que s'iniciïn l'any 2026", "data_pub": "2026-11-18T00:00:00.000",
+     "enlla": {"url": "https://cido.diba.cat/subvencions/21362848"}, "codi_ens": "9806550006", "nom_ens": "Àrea Metropolitana de Barcelona (AMB)", "estat": "Resolt"},
+    {"resum": "Subvencions de l'Àrea de Sostenibilitat Social, Cicle de Vida i Comunitat a favor d'entitats sense finalitat de lucre, any 2027", "data_pub": "2026-11-18T00:00:00.000",
+     "enlla": {"url": "https://cido.diba.cat/subvencions/22512635"}, "nom_ens": "Diputació de Barcelona - Àrea de Sostenibilitat Social, Cicle de Vida i Comunitat", "estat": "Pendent de termini"},
+    {"resum": "Ajuts econòmics, any 2026", "data_pub": "2026-11-18T00:00:00.000", "enlla": {"url": "https://cido.diba.cat/subvencions/22513194"}, "codi_ens": "7004530008",
+     "nom_ens": "Entitat Municipal Descentralitzada de Tredòs", "estat": "Termini obert"},
+]
+
+
+class TestConectorCIDO(unittest.TestCase):
+    def conector(self, cliente=None, **ajustes):
+        return ConectorCIDO({"id": "fc", "source_code": "ES-003", "settings": ajustes}, PARAMS, cliente)
+
+    def test_normaliza_las_filas_reales_y_el_estado_sale_solo_del_campo_estat(self):
+        c = self.conector()
+        o = [c.normalizar(f, HOY) for f in FILAS_CIDO]
+        self.assertEqual([x["_external_id"] for x in o], ["21362848", "22512635", "22513194"])
+        self.assertEqual([x["status"] for x in o], ["CLOSED", "OPENING_SOON", "OPEN"])
+        self.assertTrue(all(x["deadline"] is None and x["total_budget"] is None for x in o))       # la fuente no los trae: no se inventan
+        self.assertEqual((o[2]["issuing_organization"], o[2]["publication_date"], o[2]["official_url"]), ("Entitat Municipal Descentralitzada de Tredòs", date(2026, 11, 18), "https://cido.diba.cat/subvencions/22513194"))
+        self.assertLess(o[0]["_confidence"], 0.5)
+
+    def test_sin_enlace_con_identificador_o_sin_titulo_es_invalido(self):
+        c = self.conector()
+        with self.assertRaises(ErrorRegistro):
+            c.normalizar({"resum": "x", "enlla": {"url": "javascript:alert(1)"}}, HOY)
+        with self.assertRaises(ErrorRegistro):
+            c.normalizar({"resum": "x"}, HOY)
+        with self.assertRaises(ErrorRegistro):
+            c.normalizar({"enlla": {"url": "https://cido.diba.cat/subvencions/5"}}, HOY)
+
+    def test_estado_desconocido_queda_unknown(self):
+        self.assertEqual(self.conector().normalizar({**FILAS_CIDO[2], "estat": "Algo nuevo"}, HOY)["status"], "UNKNOWN")
+
+    def test_pagina_con_offset_y_pide_vivas_y_ultimo_año(self):
+        peticiones = []
+
+        def h(req):
+            peticiones.append(req)
+            off = int(req.url.params["$offset"])
+            return httpx.Response(200, json=FILAS_CIDO[off:off + 2])
+        c = self.conector(httpx.AsyncClient(transport=httpx.MockTransport(h)), tamano_pagina=2)
+        cursores, filas = [], []
+
+        async def todo():
+            async for p in c.paginas({}, HOY):
+                cursores.append(p.cursor)
+                filas.extend(p.registros)
+        ejecutar(todo())
+        self.assertEqual(len(filas), 3)
+        self.assertEqual(cursores, [{"offset": 2}, {}])          # al acabar, la siguiente vez empieza de cero
+        donde = peticiones[0].url.params["$where"]
+        self.assertIn("data_pub >= '2025-", donde)
+        self.assertIn("'Termini obert'", donde)
+        self.assertEqual(peticiones[0].url.params["$order"], ":id")
+
+    def test_tuberia_completa_idempotente(self):
+        a = AlmacenMemoria()
+        mk = lambda: self.conector(httpx.AsyncClient(transport=httpx.MockTransport(lambda r: httpx.Response(200, json=FILAS_CIDO))), tamano_pagina=1000)      # noqa: E731
+        r = ejecutar(S.sincronizar_fuente({"id": "fc", "source_code": "ES-003", "synchronization_frequency": 24}, mk(), a, PARAMS, HOY, "manual"))
+        self.assertEqual((r["estado"], r["inserted"]), ("ok", 3))
+        r = ejecutar(S.sincronizar_fuente({"id": "fc", "source_code": "ES-003", "synchronization_frequency": 24}, mk(), a, PARAMS, HOY))
+        self.assertEqual((r["inserted"], r["unchanged"]), (0, 3))
+        self.assertTrue(all(o["canonical_id"].startswith("ES-003:") for o in a.oportunidades.values()))
+
+    def test_formato_inesperado_es_error_del_conector(self):
+        c = self.conector(httpx.AsyncClient(transport=httpx.MockTransport(lambda r: httpx.Response(200, json={"error": True}))))
+
+        async def todo():
+            async for _ in c.paginas({}, HOY):
+                pass
+        with self.assertRaises(ErrorConector):
+            ejecutar(todo())
+
+
+RESULTADO_UE = {"reference": "13882COMPETITIVE_CALLen", "url": "https://ec.europa.eu/info/funding-tenders/opportunities/portal/screen/opportunities/competitive-calls-cs/46786367", "language": "en",
+                "summary": "Enhancing the Cybersecurity Capabilities of the Domestic SME Sector (SSNS-NCC-HU-FSTP-2026)",
+                "metadata": {"title": ["Deploying The Network of National Coordination Centres with Member States"], "callTitle": ["Enhancing the Cybersecurity Capabilities of the Domestic SME Sector (SSNS-NCC-HU-FSTP-2026)"],
+                             "identifier": ["DIGITAL-ECCC-2024-DEPLOY-NCC-06-MS-COORDINATION"], "type": ["8"], "status": ["31094502"], "startDate": ["2026-03-24T00:00:00.000+0000"],
+                             "deadlineDate": ["2026-06-28T22:59:00.000+0000"], "budget": ["2000000"],
+                             "description": ["<p><strong>WHO CAN SUBMIT A GRANT APPLICATION?</strong></p><p>Micro, small &amp; medium-sized enterprises may apply.</p><script>alert(1)</script>"]}}
+
+
+class TestConectorSEDIA(unittest.TestCase):
+    def conector(self, cliente=None, **ajustes):
+        return ConectorSEDIA({"id": "fe", "source_code": "EU-001", "settings": ajustes}, PARAMS, cliente)
+
+    def test_normaliza_la_respuesta_real(self):
+        o = self.conector().normalizar(RESULTADO_UE, date(2026, 5, 1))
+        self.assertEqual(o["_external_id"], "DIGITAL-ECCC-2024-DEPLOY-NCC-06-MS-COORDINATION")
+        self.assertEqual((o["country"], o["geographic_scope"], o["funding_type"], o["total_budget"]), ("EU", "europeo", "subvencion", Decimal("2000000")))
+        self.assertEqual((o["opening_date"], o["deadline"], o["status"]), (date(2026, 3, 24), date(2026, 6, 28), "OPEN"))
+        self.assertTrue(o["title"].startswith("Deploying The Network"))
+        self.assertTrue(o["program_name"].startswith("Enhancing the Cybersecurity"))
+        self.assertIn("Micro, small & medium-sized enterprises may apply.", o["description"])
+        self.assertNotIn("<", o["description"])
+        self.assertNotIn("alert", o["description"])
+        self.assertTrue(o["official_url"].startswith("https://ec.europa.eu/"))
+
+    def test_si_el_plazo_ya_paso_manda_la_fecha_aunque_la_fuente_diga_abierto(self):
+        self.assertEqual(self.conector().normalizar(RESULTADO_UE, date(2026, 11, 19))["status"], "CLOSED")
+
+    def test_varios_cortes_toma_el_proximo(self):
+        r = {**RESULTADO_UE, "metadata": {**RESULTADO_UE["metadata"], "deadlineDate": ["2026-03-01T00:00:00.000+0000", "2026-09-15T00:00:00.000+0000", "2027-01-15T00:00:00.000+0000"]}}
+        self.assertEqual(self.conector().normalizar(r, date(2026, 6, 1))["deadline"], date(2026, 9, 15))
+
+    def test_sin_fechas_se_usa_el_estado_declarado_y_solo_direcciones_de_la_ue(self):
+        meta = {k: v for k, v in RESULTADO_UE["metadata"].items() if k not in ("startDate", "deadlineDate")}
+        o = self.conector().normalizar({**RESULTADO_UE, "url": "https://evil.example/x", "metadata": {**meta, "status": ["31094501"], "url": ["javascript:1"]}}, HOY)
+        self.assertEqual(o["status"], "OPENING_SOON")
+        self.assertIsNone(o["official_url"])
+
+    def test_sin_identificador_o_titulo_es_invalido(self):
+        with self.assertRaises(ErrorRegistro):
+            self.conector().normalizar({"metadata": {"title": ["x"]}}, HOY)
+        with self.assertRaises(ErrorRegistro):
+            self.conector().normalizar({"metadata": {"identifier": ["X"]}}, HOY)
+
+    def test_envia_formulario_solo_con_tipo_8_y_clave_publica_y_pagina(self):
+        peticiones = []
+
+        def h(req):
+            peticiones.append(req)
+            p = int(req.url.params["pageNumber"])
+            return httpx.Response(200, json={"totalResults": 3, "results": [RESULTADO_UE, RESULTADO_UE][: (2 if p == 1 else 1)]})
+        c = self.conector(httpx.AsyncClient(transport=httpx.MockTransport(h)), tamano_pagina=2)
+        cursores = []
+
+        async def todo():
+            async for p in c.paginas({}, HOY):
+                cursores.append(p.cursor)
+        ejecutar(todo())
+        self.assertEqual(cursores, [{"pagina": 2}, {}])
+        self.assertEqual(peticiones[0].method, "POST")
+        self.assertEqual(peticiones[0].url.params["apiKey"], "SEDIA")
+        cuerpo = peticiones[0].content.decode("utf-8")
+        self.assertIn('"type": ["8"]', cuerpo)
+        self.assertIn("31094501", cuerpo)
+        self.assertNotIn('"1"', cuerpo.split("status")[0])        # los tipos 1 y 2 no están verificados: no se piden
+
+    def test_sin_results_es_error_del_conector(self):
+        c = self.conector(httpx.AsyncClient(transport=httpx.MockTransport(lambda r: httpx.Response(200, json={"algo": 1}))))
+
+        async def todo():
+            async for _ in c.paginas({}, HOY):
+                pass
+        with self.assertRaises(ErrorConector):
+            ejecutar(todo())
+
+    def test_nombres_resuelven(self):
+        self.assertIs(cargar("boe"), ConectorBOE)
+        self.assertIs(cargar("cido"), ConectorCIDO)
+        self.assertIs(cargar("sedia"), ConectorSEDIA)
+
+
+SUMARIO_BOE = {"status": {"code": "200"}, "data": {"sumario": {"metadatos": {"fecha_publicacion": "20261119"}, "diario": [{"seccion": [
+    {"codigo": "1", "departamento": [{"nombre": "MINISTERIO DE ASUNTOS EXTERIORES", "epigrafe": [{"item": [
+        {"identificador": "BOE-A-2026-24187", "titulo": "Real Decreto 1001/2026 por el que se regula la concesión directa de una subvención", "url_xml": "https://www.boe.es/diario_boe/xml.php?id=BOE-A-2026-24187"}]}]}]},
+    {"codigo": "2A", "departamento": [{"nombre": "SANIDAD", "epigrafe": [{"item": [{"identificador": "BOE-A-2026-24194", "titulo": "Resolución por la que se resuelve la convocatoria de libre designación"}]}]}]},
+    {"codigo": "5B", "departamento": [
+        {"nombre": "MINISTERIO DE AGRICULTURA, PESCA Y ALIMENTACIÓN", "epigrafe": [{"item": [
+            {"identificador": "BOE-B-2026-38039", "titulo": "Extracto de la orden de 12 de noviembre de 2026 por la que se convocan las ayudas para la preparacion y aplicación de los planes de producción",
+             "url_pdf": {"texto": "https://www.boe.es/boe/dias/2026/11/19/pdfs/BOE-B-2026-38039.pdf"}, "url_html": "https://www.boe.es/diario_boe/txt.php?id=BOE-B-2026-38039",
+             "url_xml": "https://www.boe.es/diario_boe/xml.php?id=BOE-B-2026-38039"}]}]},
+        {"nombre": "MINISTERIO DE CULTURA", "epigrafe": [{"item": [
+            {"identificador": "BOE-B-2026-38070", "titulo": "Extracto de la Resolución de 13 de noviembre de 2026 por la que se convocan subvenciones, en régimen de concurrencia competitiva",
+             "url_html": "https://www.boe.es/diario_boe/txt.php?id=BOE-B-2026-38070", "url_xml": "https://www.boe.es/diario_boe/xml.php?id=BOE-B-2026-38070"}]},
+            {"item": [{"identificador": "BOE-B-2026-99999", "titulo": "Anuncio de licitación de servicios de limpieza"}]}]}]}]}]}}}
+XML_38039 = '<documento><texto><p codigo="63">Subvenciones (SNPS) BDNS(Identif.):941981 De conformidad con lo previsto en los artículos 17.3.b y 20.8.a de la Ley 38/2003</p></texto></documento>'
+XML_SIN_BDNS = "<documento><texto><p>Sin referencia</p></texto></documento>"
+
+
+def servidor_boe(dia_con_sumario="20261119"):
+    def h(req):
+        ruta = req.url.path
+        if "/sumario/" in ruta:
+            return httpx.Response(200, json=SUMARIO_BOE) if ruta.endswith(dia_con_sumario) else httpx.Response(404, text="no hay sumario")
+        return httpx.Response(200, text=XML_38039 if "38039" in str(req.url) else XML_SIN_BDNS)
+    return httpx.AsyncClient(transport=httpx.MockTransport(h))
+
+
+class TestConectorBOE(unittest.TestCase):
+    def conector(self, cliente=None, **ajustes):
+        return ConectorBOE({"id": "fb", "source_code": "ES-002", "settings": ajustes}, PARAMS, cliente)
+
+    def registros(self, c, hoy=date(2026, 11, 19)):
+        filas = []
+
+        async def todo():
+            async for p in c.paginas({}, hoy):
+                filas.extend(p.registros)
+        ejecutar(todo())
+        return filas
+
+    def test_solo_toma_extractos_de_convocatoria_de_la_seccion_5b_y_lee_el_numero_bdns(self):
+        filas = self.registros(self.conector(servidor_boe()))
+        self.assertEqual([f["item"]["identificador"] for f in filas], ["BOE-B-2026-38039", "BOE-B-2026-38070"])      # ni el Real Decreto (sección 1) ni el anuncio de licitación ni la oposición
+        self.assertEqual([f["bdns"] for f in filas], ["941981", None])
+
+    def test_normaliza_como_registro_solo_enlace_con_referencia_bdns(self):
+        c = self.conector()
+        f = self.registros(self.conector(servidor_boe()))[0]
+        o = c.normalizar(f, HOY)
+        self.assertEqual((o["_external_id"], o["_refs"], o["_solo_enlazar"], o["status"]), ("BOE-B-2026-38039", {"BDNS": "941981"}, True, "UNKNOWN"))
+        self.assertEqual(o["_documents"], [{"title": "Extracto en el BOE", "url": "https://www.boe.es/boe/dias/2026/11/19/pdfs/BOE-B-2026-38039.pdf", "doc_type": "extracto_boe"}])
+        self.assertEqual(o["publication_date"], date(2026, 11, 19))
+
+    def test_un_extracto_sin_numero_bdns_es_invalido_porque_no_se_puede_enlazar(self):
+        f = self.registros(self.conector(servidor_boe()))[1]
+        with self.assertRaises(ErrorRegistro):
+            self.conector().normalizar(f, HOY)
+
+    def test_un_dia_sin_sumario_404_no_es_error(self):
+        self.assertEqual(self.registros(self.conector(servidor_boe(dia_con_sumario="20990101"))), [])
+
+    def test_recorre_la_ventana_de_dias_y_acaba_con_cursor_vacio(self):
+        cursores = []
+
+        async def todo():
+            async for p in self.conector(servidor_boe(), dias_ventana=3).paginas({}, date(2026, 11, 19)):
+                cursores.append(p.cursor)
+        ejecutar(todo())
+        self.assertEqual(cursores, [{"dia": "2026-11-18"}, {"dia": "2026-11-19"}, {}])
+
+    def test_formato_inesperado_es_error_del_conector(self):
+        c = self.conector(httpx.AsyncClient(transport=httpx.MockTransport(lambda r: httpx.Response(200, json=["no", "es", "un", "objeto"]))))
+        with self.assertRaises(ErrorConector):
+            self.registros(c)
+
+    def test_no_se_descargan_xml_fuera_de_boe_es(self):
+        peticiones = []
+        malo = {**SUMARIO_BOE}
+        import copy
+        malo = copy.deepcopy(SUMARIO_BOE)
+        malo["data"]["sumario"]["diario"][0]["seccion"][2]["departamento"][0]["epigrafe"][0]["item"][0]["url_xml"] = "http://169.254.169.254/latest/meta-data"
+
+        def h(req):
+            peticiones.append(str(req.url))
+            return httpx.Response(200, json=malo) if "/sumario/" in req.url.path else httpx.Response(200, text=XML_38039)
+        filas = self.registros(self.conector(httpx.AsyncClient(transport=httpx.MockTransport(h))))
+        self.assertTrue(all(u.startswith("https://www.boe.es/") for u in peticiones))
+        self.assertIsNone(filas[0]["bdns"])
+
+
+class TestEnlaceBOEconBDNS(unittest.TestCase):
+    """El BOE solo enlaza: no crea oportunidades, no pisa el estado ni los datos de la BDNS y no duplica."""
+    BDNS_F = {"id": "fa", "source_code": "ES-001", "synchronization_frequency": 4}
+    BOE_F = {"id": "fb", "source_code": "ES-002", "synchronization_frequency": 12}
+
+    def boe(self, bdns="941981"):
+        c = ConectorBOE(self.BOE_F, PARAMS)
+        return c.normalizar({"item": {"identificador": "BOE-B-2026-38039", "titulo": "Extracto de la orden por la que se convocan ayudas", "url_html": "https://www.boe.es/diario_boe/txt.php?id=BOE-B-2026-38039",
+                                      "url_pdf": {"texto": "https://www.boe.es/boe/dias/2026/11/19/pdfs/BOE-B-2026-38039.pdf"}}, "departamento": "AGRICULTURA", "bdns": bdns, "fecha": "2026-11-19"}, HOY)
+
+    def test_sin_la_convocatoria_en_la_bdns_se_omite_y_no_crea_nada(self):
+        a = AlmacenMemoria()
+        self.assertEqual(ejecutar(S.guardar_registro(a, self.BOE_F, self.boe(), {"n": 1}, AHORA)), "omitido")
+        self.assertEqual(a.oportunidades, {})
+
+    def test_con_la_convocatoria_en_la_bdns_se_enlaza_sin_pisar_estado_ni_datos(self):
+        a = AlmacenMemoria()
+        ejecutar(S.guardar_registro(a, self.BDNS_F, opp("941981", titulo="Ayudas a planes de producción pesqueros", status="OPEN"), {"n": 1}, AHORA))
+        o = next(iter(a.oportunidades.values()))
+        hash_antes = o["normalized_hash"]
+        self.assertEqual(o["canonical_id"], "BDNS:941981")
+        r = ejecutar(S.guardar_registro(a, self.BOE_F, self.boe(), {"n": 2}, AHORA))
+        self.assertIn(r, ("actualizado", "sin_cambios"))
+        self.assertEqual(len(a.oportunidades), 1)
+        self.assertEqual((o["status"], o["title"], o["normalized_hash"]), ("OPEN", "Ayudas a planes de producción pesqueros", hash_antes))
+        self.assertEqual({f for (f, _e) in a.registros}, {"fa", "fb"})                   # ahora figura la procedencia BOE
+        # una nueva lectura del mismo extracto no cambia nada ni toca el estado
+        self.assertEqual(ejecutar(S.guardar_registro(a, self.BOE_F, self.boe(), {"n": 2}, AHORA)), "sin_cambios")
+        self.assertEqual(o["status"], "OPEN")
+
+    def test_el_estado_de_la_bdns_sigue_actualizandose_tras_el_enlace(self):
+        a = AlmacenMemoria()
+        ejecutar(S.guardar_registro(a, self.BDNS_F, opp("941981", status="OPEN"), {"n": 1}, AHORA))
+        ejecutar(S.guardar_registro(a, self.BOE_F, self.boe(), {"n": 2}, AHORA))
+        ejecutar(S.guardar_registro(a, self.BDNS_F, opp("941981", status="OPEN", deadline=date(2027, 2, 1)), {"n": 3}, AHORA))
+        o = next(iter(a.oportunidades.values()))
+        self.assertEqual(o["deadline"], date(2027, 2, 1))
+
+
+
+class TestHtml(unittest.TestCase):
+    def test_texto_de_html_quita_etiquetas_scripts_y_entidades(self):
+        self.assertEqual(N.texto_de_html("<p>A &amp; B</p><script>alert(1)</script><style>x{}</style><b>C</b>"), "A & B C")
+        self.assertIsNone(N.texto_de_html(None))
+
+
 # ---- Catálogo, herramienta y agentes ----
 
 class TestCatalogoYAgentes(unittest.TestCase):
@@ -436,6 +732,31 @@ class TestEnBaseDeDatos(unittest.TestCase):
         self.assertEqual(ejecutar(r.cambiar("ES-001", habilitada=True))["is_enabled"], True)
         rd = ejecutar(self.consulta.radar("ana"))
         self.assertEqual(rd["abiertas"]["total"], 1)
+
+    def test_el_boe_enlaza_con_la_bdns_sin_pisar_estado_ni_duplicar_en_postgres(self):
+        from cerebro.subvenciones.almacen import AlmacenPG
+        r = self.registro
+        ejecutar(r.alta_catalogo())
+        det = {"900001": {**DETALLE, "codigoBDNS": "900001"}}
+        ejecutar(r.sincronizar_una("ES-001", "manual", cliente=servidor([[FILA]], det)))
+        antes = ejecutar(self.consulta.buscar({"texto": "digitalización"}))["resultados"][0]
+        fuente_boe = ejecutar(r._fuente("ES-002"))
+        boe = ConectorBOE(fuente_boe, PARAMS).normalizar({"item": {"identificador": "BOE-B-2026-1", "titulo": "Extracto de la convocatoria de ayudas a la digitalización",
+                                                                    "url_html": "https://www.boe.es/diario_boe/txt.php?id=BOE-B-2026-1", "url_pdf": {"texto": "https://www.boe.es/boe/dias/x.pdf"}},
+                                                         "departamento": "INDUSTRIA", "bdns": "900001", "fecha": "2026-11-19"}, HOY)
+        a = AlmacenPG()
+        self.assertIn(ejecutar(S.guardar_registro(a, fuente_boe, boe, {"n": 1}, AHORA)), ("actualizado", "sin_cambios"))
+        self.assertEqual(ejecutar(S.guardar_registro(a, fuente_boe, boe, {"n": 1}, AHORA)), "sin_cambios")
+        despues = ejecutar(self.consulta.buscar({"texto": "digitalización"}))
+        self.assertEqual(despues["total"], 1)                                     # no se ha duplicado
+        self.assertEqual((despues["resultados"][0]["status"], despues["resultados"][0]["title"]), (antes["status"], antes["title"]))
+        f = ejecutar(self.consulta.ficha(antes["id"]))
+        self.assertEqual({x["source_code"] for x in f["fuentes"]}, {"ES-001", "ES-002"})
+        self.assertIn("Extracto en el BOE", [d["title"] for d in f["documentos"]])
+        # un extracto cuya convocatoria no está en la BDNS no crea nada
+        otro = {**boe, "_refs": {"BDNS": "111"}, "_external_id": "BOE-B-2026-2"}
+        self.assertEqual(ejecutar(S.guardar_registro(a, fuente_boe, otro, {"n": 2}, AHORA)), "omitido")
+        self.assertEqual(ejecutar(self.consulta.buscar({}))["total"], 1)
 
     def test_filtros_validados_y_sin_inyeccion(self):
         with self.assertRaises(self.consulta.ErrorConsulta):

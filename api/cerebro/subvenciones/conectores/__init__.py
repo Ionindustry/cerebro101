@@ -9,4 +9,13 @@ def cargar(nombre: str):
     if nombre == "bdns":
         from .bdns import ConectorBDNS
         return ConectorBDNS
+    if nombre == "boe":
+        from .boe import ConectorBOE
+        return ConectorBOE
+    if nombre == "cido":
+        from .cido import ConectorCIDO
+        return ConectorCIDO
+    if nombre == "sedia":
+        from .sedia import ConectorSEDIA
+        return ConectorSEDIA
     return None

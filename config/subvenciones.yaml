@@ -19,10 +19,12 @@ fuentes:
   - {code: ES-001, name: "Base de Datos Nacional de Subvenciones (BDNS)", country: ES, scope: nacional, priority: critica, access: REST_API, auth: NONE, connector: bdns, frequency_h: 4,
      url: "https://www.infosubvenciones.es/bdnstrans/", api: "https://www.infosubvenciones.es/bdnstrans/api", status: PENDING_VERIFICATION,
      notes: "Búsqueda y detalle comprobados con respuestas reales el 19/11/2026 (scripts/subvenciones_verificar.sh). Falta la sincronización manual completa y la activación por Dirección. Sin Swagger público en las rutas probadas; documentos sin URL de descarga verificada."}
-  - {code: ES-002, name: "Boletín Oficial del Estado (BOE)", country: ES, scope: nacional, priority: alta, access: OPEN_DATA, auth: NONE, url: "https://www.boe.es/", status: PENDING_VERIFICATION,
-     notes: "Datos abiertos en https://www.boe.es/datosabiertos/ (JSON/XML y RSS documentados). Pendiente de conector: extractos, correcciones, anulaciones y ampliaciones de plazo; cruzar con BDNS por identificador común."}
-  - {code: ES-003, name: "Datos abiertos de Cataluña (Transparència)", country: ES, scope: autonomico, priority: alta, access: OPEN_DATA, auth: NONE, url: "https://analisi.transparenciacatalunya.cat/", status: PENDING_VERIFICATION,
-     notes: "Dataset candidato 3gku-b36y (a comprobar: vigencia, esquema, licencia y límites antes de conectarlo)."}
+  - {code: ES-002, name: "Boletín Oficial del Estado (BOE) — extractos de convocatorias", country: ES, scope: nacional, priority: alta, access: OPEN_DATA, auth: NONE, connector: boe, frequency_h: 12,
+     url: "https://www.boe.es/", api: "https://www.boe.es/datosabiertos/api/boe/sumario", status: PENDING_VERIFICATION,
+     notes: "Verificado con datos reales el 19/11/2026: los extractos de convocatoria (sección 5B) citan el número BDNS en su XML. Fuente SOLO-ENLACE: añade la procedencia BOE y el documento a convocatorias que ya están en la BDNS; no crea oportunidades propias ni toca su estado. Pendiente: correcciones, anulaciones y ampliaciones de plazo."}
+  - {code: ES-003, name: "Datos abiertos de Cataluña (Transparència) — convocatorias del CIDO", country: ES, scope: autonomico, priority: alta, access: OPEN_DATA, auth: NONE, connector: cido, frequency_h: 24,
+     url: "https://analisi.transparenciacatalunya.cat/", api: "https://analisi.transparenciacatalunya.cat/resource/3gku-b36y.json", license: "Ver términos de uso (atribución: Consorci AOC / CIDO)", status: PENDING_VERIFICATION,
+     notes: "Verificado con datos reales el 19/11/2026: título, ente, fecha de publicación, enlace y estado. NO trae plazo ni importe: confianza baja; sirve para descubrir convocatorias locales y abrir su ficha oficial. Falta la sincronización manual y la activación por Dirección."}
   - {code: ES-004, name: "CIDO, Diputació de Barcelona", country: ES, scope: local, priority: media, access: PENDING_VERIFICATION, auth: NONE, url: "https://cido.diba.cat/", status: PENDING_VERIFICATION,
      notes: "Buscar un canal de datos reutilizable; no automatizar extracción de HTML sin verificar las condiciones de acceso."}
   - {code: ES-005, name: "Euskadi Open Data", country: ES, scope: autonomico, priority: media, access: OPEN_DATA, auth: NONE, url: "https://opendata.euskadi.eus/", status: PENDING_VERIFICATION,
@@ -58,8 +60,8 @@ fuentes:
      notes: "Ayudas y subvenciones concedidas: solo para análisis histórico, no para generar oportunidades."}
   # ---------------------------------------------------------------- Unión Europea y transfronterizas
   - {code: EU-001, name: "Funding & Tenders Portal (Comisión Europea)", country: EU, scope: europeo, priority: critica, access: REST_API, auth: NONE, frequency_h: 4,
-     url: "https://ec.europa.eu/info/funding-tenders/opportunities/portal/screen/home", api: "https://api.tech.ec.europa.eu/search-api/prod/rest/search", status: PENDING_VERIFICATION,
-     notes: "Verificar documentalmente métodos, payloads, tipos de anuncio, paginación, filtros, detalle, estados y actualizaciones antes de escribir el conector. Diferenciar subvenciones de licitaciones y otros instrumentos."}
+     connector: sedia, url: "https://ec.europa.eu/info/funding-tenders/opportunities/portal/screen/home", api: "https://api.tech.ec.europa.eu/search-api/prod/rest/search", status: PENDING_VERIFICATION,
+     notes: "Búsqueda verificada con una respuesta real el 19/11/2026 (POST con formulario query/languages; clave pública SEDIA). Solo tipo de anuncio 8 (subvenciones); los tipos 1 y 2 no están verificados y no se importan. Falta la sincronización manual y la activación por Dirección."}
   - {code: EU-002, name: "Interreg", country: EU, scope: transfronterizo, priority: media, access: PENDING_VERIFICATION, auth: NONE, url: "https://interreg.eu/", status: PENDING_VERIFICATION, notes: "Cooperación territorial y programas transfronterizos."}
   - {code: EU-003, name: "POCTEFA (España-Francia-Andorra)", country: EU, scope: transfronterizo, priority: alta, access: PENDING_VERIFICATION, auth: NONE, url: "https://www.poctefa.eu/", status: PENDING_VERIFICATION,
      notes: "Cooperación España-Francia-Andorra; verificar elegibilidad empresarial y territorial."}

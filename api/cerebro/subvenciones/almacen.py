@@ -104,9 +104,13 @@ class AlmacenPG:
                     await c.execute("INSERT INTO funding_opportunity_changes (opportunity_id, source_id, changed_at, field, old_value, new_value) VALUES (%s,%s,%s,%s,%s,%s)",
                                     [opp_id, fuente_id, ahora, campo, Jsonb(ch["old"], dumps=_dumps), Jsonb(ch["new"], dumps=_dumps)])
                     await c.execute(f"UPDATE funding_opportunities SET {campo} = %s WHERE id = %s", [f[campo], opp_id])
-                await c.execute("UPDATE funding_opportunities SET status = %s, source_hash = %s, normalized_hash = %s, last_checked_at = %s, updated_at = %s, "
-                                "ingestion_version = ingestion_version + %s WHERE id = %s",
-                                [f["status"], huella_fuente, huella_norm, ahora, ahora, 1 if cambios else 0, opp_id])
+                if rellenar_solo:       # otra fuente: rellena huecos y deja constancia, pero NO pisa el estado ni las huellas de la fuente que la conoce
+                    await c.execute("UPDATE funding_opportunities SET last_checked_at = %s, updated_at = %s, ingestion_version = ingestion_version + %s WHERE id = %s",
+                                    [ahora, ahora, 1 if cambios else 0, opp_id])
+                else:
+                    await c.execute("UPDATE funding_opportunities SET status = %s, source_hash = %s, normalized_hash = %s, last_checked_at = %s, updated_at = %s, "
+                                    "ingestion_version = ingestion_version + %s WHERE id = %s",
+                                    [f["status"], huella_fuente, huella_norm, ahora, ahora, 1 if cambios else 0, opp_id])
                 await self._guardar_registro(c, opp_id, fuente_id, opp, huella_fuente, ahora)
 
     async def tocar(self, opp_id: str, fuente_id: str, externo: str, ahora: datetime, estado: str | None = None) -> None:
@@ -208,8 +212,9 @@ class AlmacenMemoria:
                 self.cambios.append({"opportunity_id": opp_id, "source_id": fuente_id, "changed_at": ahora, **ch})
                 self.oportunidades[opp_id][ch["field"]] = f[ch["field"]]
         o = self.oportunidades[opp_id]
-        o["status"] = f["status"]
-        o["normalized_hash"] = huella_norm
+        if not rellenar_solo:
+            o["status"] = f["status"]
+            o["normalized_hash"] = huella_norm
         o["ingestion_version"] += 1 if cambios else 0
         self._registro(opp_id, fuente_id, opp, huella_fuente, ahora)
 
