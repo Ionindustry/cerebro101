@@ -2,7 +2,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { pedirCerebro } from "../licitaciones/cliente";
 import {
-  AMBITO_ETIQUETA, CATEGORIAS_RADAR, ESTADO_CLASE, ESTADO_ETIQUETA, ESTADO_FUENTE, FILTROS_VACIOS, INSTRUMENTO_ETIQUETA, activableMotivo, ejecucionTexto, fechaCorta, filtrosAQuery,
+  AMBITO_ETIQUETA, CATEGORIAS_RADAR, ESTADO_CLASE, ESTADO_ETIQUETA, ESTADO_FUENTE, FILTROS_VACIOS, GRUPOS_ESTADO, INSTRUMENTO_ETIQUETA, grupoActivo, activableMotivo, ejecucionTexto, fechaCorta, filtrosAQuery,
   importeTexto, mensajeError, novedadEtiqueta, plazoTexto, urlSegura,
 } from "../../lib/subvenciones";
 import { haceTexto } from "../../lib/precios";
@@ -141,10 +141,14 @@ function Buscador({ abrir }) {
   const cambia = (k) => (e) => setF({ ...f, [k]: e.target.type === "checkbox" ? e.target.checked : e.target.value });
   return (
     <>
+      <p className="lic-fila" role="group" aria-label="Estado de la convocatoria">
+        {GRUPOS_ESTADO.map((g) => <button key={g.clave} type="button" className={`boton ${grupoActivo(f.estado) === g.clave ? "si" : "no"}`} aria-pressed={grupoActivo(f.estado) === g.clave}
+          onClick={() => { const n = { ...f, estado: g.estados }; setF(n); setPagina(0); buscar(n, 0); }}>{g.nombre}</button>)}
+        <button type="button" className={`boton ${f.estado.length === 0 ? "si" : "no"}`} onClick={() => { const n = { ...f, estado: "" }; setF(n); setPagina(0); buscar(n, 0); }}>Todas</button>
+      </p>
       <form className="tarjeta" onSubmit={(e) => { e.preventDefault(); setPagina(0); buscar(f, 0); }}>
         <p className="lic-fila">
           <input value={f.texto} onChange={cambia("texto")} placeholder="Palabras (p. ej. digitalización)" aria-label="Texto" />
-          <select value={f.estado} onChange={cambia("estado")} aria-label="Estado"><option value="">Cualquier estado</option>{Object.entries(ESTADO_ETIQUETA).filter(([k]) => !["NEW", "UPDATED"].includes(k)).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</select>
           <select value={f.instrumento} onChange={cambia("instrumento")} aria-label="Instrumento"><option value="">Cualquier instrumento</option>{Object.entries(INSTRUMENTO_ETIQUETA).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</select>
           <input value={f.pais} onChange={cambia("pais")} placeholder="País (ES, AD…)" maxLength={3} aria-label="País" style={{ width: "6rem" }} />
         </p>
