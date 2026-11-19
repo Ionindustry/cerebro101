@@ -72,3 +72,12 @@ Los agentes comerciales y de precios **no** la reciben (mínimo privilegio). `co
 3. La UE (Funding & Tenders) exige estudiar su API (paginación, tipos, estados) antes de escribir el conector; no se ha hecho.
 4. No hay todavía cruce con empresas ni alertas: «relevantes para tu empresa» está vacío a propósito.
 5. Fases siguientes: UE → BOE/autonómicas/Andorra → perfiles de empresa y matching explicable → alertas → análisis de documentos con IA (siempre citando texto oficial y separando lo oficial de lo inferido).
+
+## Análisis de una convocatoria (paso 1)
+
+En la ficha de cada convocatoria, el bloque **Análisis** ordena lo que la fuente oficial ya dijo en tres apartados: **de qué trata**, **a quién va dirigida** y **bases para presentarse** (requisitos, exclusiones,
+gastos subvencionables, importes, calendario, estado, cómo solicitar, bases reguladoras y documentos). No usa IA: no inventa nada. Lo que la fuente no dice aparece como «No consta en la fuente» y en la lista de
+`lagunas`; la **cobertura** (completa / parcial / escasa) avisa de cuánto se ha podido extraer (las fuentes de listado, como Cataluña, traen poco). Los agentes lo consultan con `subvenciones › analisis`
+(solo lectura) y el panel con `GET /subvenciones/oportunidades/{id}/analisis`. No dice si 101.cat cumple los requisitos ni es una valoración jurídica.
+
+Siguientes pasos (aún no hechos): leer el PDF de las bases con descarga segura y citas literales (en borrador hasta que una persona lo confirme) y cruzar los requisitos con el perfil de la empresa.

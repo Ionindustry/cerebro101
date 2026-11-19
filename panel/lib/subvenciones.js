@@ -97,3 +97,19 @@ export function mensajeError(e) {
   if (e.status === 403) return e.detalle || "Solo Dirección puede hacer esto.";
   return e.detalle || "No se ha podido completar la operación.";
 }
+
+const ETIQUETA_CALENDARIO = { publicacion: "publicación", apertura: "apertura", fin_de_plazo: "fin de plazo" };
+const ETIQUETA_IMPORTE = { presupuesto_total: "presupuesto total", minimo: "mínimo", maximo: "máximo", porcentaje: "porcentaje", moneda: "moneda" };
+
+/** Un dato del análisis como texto para mostrar: «No consta en la fuente» si falta (nunca se rellena). Los enlaces y documentos se muestran aparte. */
+export function datoAnalisisTexto(d) {
+  if (!d || !d.consta) return "No consta en la fuente";
+  const v = d.valor;
+  if (Array.isArray(v)) return v.map((x) => (typeof x === "string" ? x : x?.titulo || "")).filter(Boolean).join(", ") || "No consta en la fuente";
+  if (v && typeof v === "object") return Object.entries(v).map(([k, x]) => `${ETIQUETA_CALENDARIO[k] || ETIQUETA_IMPORTE[k] || k}: ${x}`).join(" · ");
+  if (v === true) return "Sí";
+  if (v === false) return "No";
+  return String(v);
+}
+
+export const COBERTURA_ETIQUETA = { completa: "Datos completos", parcial: "Datos parciales", escasa: "Datos escasos" };

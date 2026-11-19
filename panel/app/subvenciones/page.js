@@ -2,7 +2,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { pedirCerebro } from "../licitaciones/cliente";
 import {
-  AMBITO_ETIQUETA, CATEGORIAS_RADAR, ESTADO_CLASE, ESTADO_ETIQUETA, ESTADO_FUENTE, FILTROS_VACIOS, GRUPOS_ESTADO, INSTRUMENTO_ETIQUETA, grupoActivo, activableMotivo, ejecucionTexto, fechaCorta, filtrosAQuery,
+  AMBITO_ETIQUETA, CATEGORIAS_RADAR, COBERTURA_ETIQUETA, datoAnalisisTexto, ESTADO_CLASE, ESTADO_ETIQUETA, ESTADO_FUENTE, FILTROS_VACIOS, GRUPOS_ESTADO, INSTRUMENTO_ETIQUETA, grupoActivo, activableMotivo, ejecucionTexto, fechaCorta, filtrosAQuery,
   importeTexto, mensajeError, novedadEtiqueta, plazoTexto, urlSegura,
 } from "../../lib/subvenciones";
 import { haceTexto } from "../../lib/precios";
@@ -24,6 +24,39 @@ function Fila({ o, onAbrir, novedad }) {
       </span>
       <span className="meta">{o.issuing_organization || "Organismo no indicado"} · presupuesto {importeTexto(o.total_budget, o.currency)} · plazo {fechaCorta(o.deadline)} ({plazoTexto(o.deadline)})</span>
     </li>
+  );
+}
+
+function Analisis({ id }) {
+  const [a, setA] = useState(undefined);
+  const [error, setError] = useState(null);
+  useEffect(() => { pedirCerebro(`subvenciones/oportunidades/${id}/analisis`).then(setA).catch((e) => { setError(e); setA(null); }); }, [id]);
+  if (a === undefined) return <p className="meta">Preparando el análisis…</p>;
+  if (!a) return <p className="aviso" role="alert">{mensajeError(error)}</p>;
+  const bloque = (titulo, filas) => (
+    <div>
+      <h4>{titulo}</h4>
+      <dl className="lic-ficha">{filas.map(([k, d]) => <div key={k}><dt>{k}</dt><dd style={{ whiteSpace: "pre-line" }} className={d?.consta ? "" : "meta"}>{datoAnalisisTexto(d)}</dd></div>)}</dl>
+    </div>
+  );
+  const t = a.de_que_trata, q = a.a_quien_va_dirigida, b = a.bases_para_presentarse;
+  const docs = b.documentos?.valor || [];
+  const solicitud = urlSegura(b.como_solicitar?.valor);
+  const reguladoras = urlSegura(b.bases_reguladoras?.valor);
+  return (
+    <section aria-label="Análisis de la convocatoria">
+      <h3>Análisis <span className="lic-etiqueta">{COBERTURA_ETIQUETA[a.cobertura] || a.cobertura}</span></h3>
+      {a.aviso && <p className="aviso" role="status">{a.aviso}</p>}
+      {bloque("De qué trata", [["Resumen", t.descripcion], ["Programa", t.programa], ["Organismo", t.organismo], ["Instrumento", t.instrumento], ["Ámbito", t.ambito]])}
+      {bloque("A quién va dirigida", [["Beneficiarios", q.beneficiarios], ["Tamaño de empresa", q.tamanos_de_empresa], ["Sectores", q.sectores]])}
+      {bloque("Bases para presentarse", [["Requisitos", b.requisitos], ["Exclusiones", b.exclusiones], ["Gastos subvencionables", b.gastos_subvencionables], ["Importes", b.importes], ["Calendario", b.calendario], ["Estado", { consta: b.estado?.consta, valor: ESTADO_ETIQUETA[b.estado?.valor] || b.estado?.valor }]])}
+      <p className="lic-fila">
+        {solicitud && <a className="boton no" href={solicitud} target="_blank" rel="noopener noreferrer">Cómo solicitar</a>}
+        {reguladoras && <a className="boton no" href={reguladoras} target="_blank" rel="noopener noreferrer">Bases reguladoras</a>}
+        {docs.filter((x) => urlSegura(x.url)).map((x, i) => <a key={i} className="boton no" href={urlSegura(x.url)} target="_blank" rel="noopener noreferrer">{x.titulo}</a>)}
+      </p>
+      <p className="meta">{a.nota}</p>
+    </section>
   );
 }
 
@@ -71,6 +104,7 @@ function Ficha({ id, onCerrar, onCambio }) {
           ["Última comprobación", haceTexto(d.last_checked_at)]].filter(([, v]) => v && v !== "—").map(([k, v]) => <div key={k}><dt>{k}</dt><dd style={{ whiteSpace: "pre-line" }}>{String(v)}</dd></div>)}
       </dl>
       {d.description && <p style={{ whiteSpace: "pre-line" }}>{d.description}</p>}
+      <Analisis id={id} />
       <p className="meta">Los datos vienen de la fuente oficial y se muestran tal cual: compruébalos en la convocatoria antes de decidir. No se ha evaluado si encaja con tu empresa.</p>
       <p className="lic-fila">
         {enlace && <a className="boton no" href={enlace} target="_blank" rel="noopener noreferrer">Ver en la fuente oficial</a>}

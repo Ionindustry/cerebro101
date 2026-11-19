@@ -540,6 +540,47 @@ def servidor_boe(dia_con_sumario="20261119"):
     return httpx.AsyncClient(transport=httpx.MockTransport(h))
 
 
+class TestAnalisisConvocatoria(unittest.TestCase):
+    COMPLETA = {"id": "x1", "title": "Ayudas a la digitalización de pymes", "description": "Apoya proyectos de digitalización.", "program_name": "Kit Digital", "issuing_organization": "Red.es",
+                "funding_type": "subvencion", "geographic_scope": "nacional", "country": "ES", "eligible_beneficiaries": ["PYME", "Autónomos"], "company_sizes": ["pequeña"], "sector": ["TIC"],
+                "eligibility_requirements": "Estar al corriente con Hacienda.", "exclusions": "Empresas en crisis.", "eligible_expenses": "Software y consultoría.", "total_budget": Decimal("1000000"),
+                "maximum_amount": Decimal("12000"), "currency": "EUR", "opening_date": date(2026, 11, 1), "deadline": date(2026, 12, 31), "official_url": "https://www.red.es/x",
+                "application_url": "javascript:alert(1)", "legal_basis_url": "https://www.boe.es/bases",
+                "documentos": [{"title": "Bases", "url": "https://www.boe.es/b.pdf", "doc_type": "bases"}, {"title": "Malo", "url": "javascript:1"}], "fuentes": [{"source_code": "ES-001", "external_id": "941981"}]}
+
+    def test_ordena_lo_que_dice_la_fuente_en_tres_bloques_sin_inventar(self):
+        from cerebro.subvenciones import analisis as A
+        a = A.construir(self.COMPLETA, date(2026, 11, 19))
+        self.assertEqual(a["cobertura"], "completa")
+        self.assertEqual(a["lagunas"], [])
+        self.assertEqual(a["a_quien_va_dirigida"]["beneficiarios"]["valor"], ["PYME", "Autónomos"])
+        b = a["bases_para_presentarse"]
+        self.assertEqual(b["requisitos"]["valor"], "Estar al corriente con Hacienda.")
+        self.assertEqual(b["calendario"]["valor"], {"apertura": "2026-11-01", "fin_de_plazo": "2026-12-31"})
+        self.assertEqual(b["estado"]["valor"], "OPEN")
+        self.assertEqual(b["importes"]["valor"]["maximo"], "12000")
+        self.assertEqual(b["como_solicitar"]["valor"], "https://www.red.es/x")           # la «application_url» peligrosa se descarta y se usa la oficial
+        self.assertEqual([d["url"] for d in b["documentos"]["valor"]], ["https://www.boe.es/b.pdf"])
+        self.assertEqual(a["procedencia"], [{"fuente": "ES-001", "identificador": "941981"}])
+
+    def test_lo_que_no_consta_se_dice_y_no_se_rellena(self):
+        from cerebro.subvenciones import analisis as A
+        a = A.construir({"id": "x2", "title": "Ajuts econòmics, any 2026", "status": "OPENING_SOON", "official_url": "https://cido.diba.cat/subvencions/22512635"}, date(2026, 11, 19))
+        self.assertEqual(a["cobertura"], "escasa")
+        for falta in ("descripcion", "beneficiarios", "requisitos", "gastos_subvencionables", "importes", "calendario", "bases_reguladoras"):
+            self.assertIn(falta, a["lagunas"])
+        self.assertNotIn("como_solicitar", a["lagunas"])
+        self.assertFalse(a["a_quien_va_dirigida"]["beneficiarios"]["consta"])
+        self.assertEqual(a["bases_para_presentarse"]["estado"]["valor"], "OPENING_SOON")       # sin fechas se usa el estado declarado
+        self.assertIn("Faltan datos", a["aviso"])
+
+    def test_el_plazo_pasado_manda_sobre_el_estado_declarado_y_el_texto_va_recortado(self):
+        from cerebro.subvenciones import analisis as A
+        a = A.construir({**self.COMPLETA, "status": "OPEN", "deadline": date(2026, 5, 1), "opening_date": date(2026, 3, 1), "description": "x" * 9000}, date(2026, 11, 19))
+        self.assertEqual(a["bases_para_presentarse"]["estado"]["valor"], "CLOSED")
+        self.assertLessEqual(len(a["de_que_trata"]["descripcion"]["valor"]), 4001)
+
+
 class TestConectorBOE(unittest.TestCase):
     def conector(self, cliente=None, **ajustes):
         return ConectorBOE({"id": "fb", "source_code": "ES-002", "settings": ajustes}, PARAMS, cliente)
@@ -691,7 +732,7 @@ class TestCatalogoYAgentes(unittest.TestCase):
         from cerebro.herramientas import base
         from cerebro.registro import registro
         h = base._REGISTRO["subvenciones"]
-        self.assertEqual(set(h.operaciones), {"buscar", "ficha", "radar", "estado_fuentes"})
+        self.assertEqual(set(h.operaciones), {"buscar", "ficha", "analisis", "radar", "estado_fuentes"})
         reg = registro()
         con = {n for n, f in reg.fichas.items() if "subvenciones" in f.herramientas}
         self.assertTrue({"ayudas", "estratega", "tesorero", "analista-noticias"} <= con, con)
