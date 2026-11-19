@@ -35,7 +35,7 @@ async def _resolver(almacen, codigo: str, opp: dict, externo: str) -> str | None
 
 
 async def guardar_registro(almacen, fuente: dict, opp: dict, crudo: dict, ahora: datetime) -> str:
-    """Guarda UN registro normalizado: devuelve «nuevo», «actualizado» o «sin_cambios»."""
+    """Guarda UN registro normalizado: devuelve «nuevo», «actualizado», «sin_cambios» u «omitido» (registro solo-enlace sin oportunidad a la que enlazar)."""
     fid, codigo = str(fuente["id"]), fuente["source_code"]
     externo = opp["_external_id"]
     opp = {**opp, "_raw": crudo}
@@ -44,10 +44,12 @@ async def guardar_registro(almacen, fuente: dict, opp: dict, crudo: dict, ahora:
     reg = await almacen.buscar_registro(fid, externo)
     opp_id = reg["opportunity_id"] if reg else await _resolver(almacen, codigo, opp, externo)
     if opp_id is None:
+        if opp.get("_solo_enlazar"):        # p. ej. un extracto del BOE cuya convocatoria aún no está en la BDNS: no crea nada propio (evita duplicados); se enlazará cuando exista
+            return "omitido"
         await almacen.crear(D.id_canonico(codigo, opp, externo), opp, fid, h_fuente, h_norm, ahora)
         return "nuevo"
     if reg and reg["source_hash"] == h_fuente:
-        await almacen.tocar(opp_id, fid, externo, ahora, opp["status"])
+        await almacen.tocar(opp_id, fid, externo, ahora, None if opp.get("_solo_enlazar") else opp["status"])
         return "sin_cambios"
     actual = await almacen.obtener(opp_id)
     conocida_por = await almacen.fuentes_de(opp_id)
@@ -79,7 +81,7 @@ async def sincronizar_fuente(fuente: dict, conector, almacen, params: dict, hoy:
                     stats["invalid"] += 1
                     log.info("%s: registro no válido (%s)", fuente["source_code"], e)
                     continue
-                stats[{"nuevo": "inserted", "actualizado": "updated", "sin_cambios": "unchanged"}[resultado]] += 1
+                stats[{"nuevo": "inserted", "actualizado": "updated", "sin_cambios": "unchanged", "omitido": "unchanged"}[resultado]] += 1
             await almacen.guardar_cursor(fid, pagina.cursor)        # punto de reanudación: solo cuando la página entera está guardada
             ultimo_cursor = pagina.cursor
         if stats["invalid"] and stats["invalid"] >= max(stats["fetched"] // 2, 1):

@@ -23,6 +23,7 @@ try:
     from cerebro.subvenciones.conectores import cargar
     from cerebro.subvenciones.conectores.base import ErrorConector, ErrorRegistro
     from cerebro.subvenciones.conectores.bdns import ConectorBDNS
+    from cerebro.subvenciones.conectores.boe import ConectorBOE
     from cerebro.subvenciones.conectores.cido import ConectorCIDO
     from cerebro.subvenciones.conectores.sedia import ConectorSEDIA
 except ImportError as e:      # pragma: no cover
@@ -493,8 +494,138 @@ class TestConectorSEDIA(unittest.TestCase):
             ejecutar(todo())
 
     def test_nombres_resuelven(self):
+        self.assertIs(cargar("boe"), ConectorBOE)
         self.assertIs(cargar("cido"), ConectorCIDO)
         self.assertIs(cargar("sedia"), ConectorSEDIA)
+
+
+SUMARIO_BOE = {"status": {"code": "200"}, "data": {"sumario": {"metadatos": {"fecha_publicacion": "20261119"}, "diario": [{"seccion": [
+    {"codigo": "1", "departamento": [{"nombre": "MINISTERIO DE ASUNTOS EXTERIORES", "epigrafe": [{"item": [
+        {"identificador": "BOE-A-2026-24187", "titulo": "Real Decreto 1001/2026 por el que se regula la concesión directa de una subvención", "url_xml": "https://www.boe.es/diario_boe/xml.php?id=BOE-A-2026-24187"}]}]}]},
+    {"codigo": "2A", "departamento": [{"nombre": "SANIDAD", "epigrafe": [{"item": [{"identificador": "BOE-A-2026-24194", "titulo": "Resolución por la que se resuelve la convocatoria de libre designación"}]}]}]},
+    {"codigo": "5B", "departamento": [
+        {"nombre": "MINISTERIO DE AGRICULTURA, PESCA Y ALIMENTACIÓN", "epigrafe": [{"item": [
+            {"identificador": "BOE-B-2026-38039", "titulo": "Extracto de la orden de 12 de noviembre de 2026 por la que se convocan las ayudas para la preparacion y aplicación de los planes de producción",
+             "url_pdf": {"texto": "https://www.boe.es/boe/dias/2026/11/19/pdfs/BOE-B-2026-38039.pdf"}, "url_html": "https://www.boe.es/diario_boe/txt.php?id=BOE-B-2026-38039",
+             "url_xml": "https://www.boe.es/diario_boe/xml.php?id=BOE-B-2026-38039"}]}]},
+        {"nombre": "MINISTERIO DE CULTURA", "epigrafe": [{"item": [
+            {"identificador": "BOE-B-2026-38070", "titulo": "Extracto de la Resolución de 13 de noviembre de 2026 por la que se convocan subvenciones, en régimen de concurrencia competitiva",
+             "url_html": "https://www.boe.es/diario_boe/txt.php?id=BOE-B-2026-38070", "url_xml": "https://www.boe.es/diario_boe/xml.php?id=BOE-B-2026-38070"}]},
+            {"item": [{"identificador": "BOE-B-2026-99999", "titulo": "Anuncio de licitación de servicios de limpieza"}]}]}]}]}]}}}
+XML_38039 = '<documento><texto><p codigo="63">Subvenciones (SNPS) BDNS(Identif.):941981 De conformidad con lo previsto en los artículos 17.3.b y 20.8.a de la Ley 38/2003</p></texto></documento>'
+XML_SIN_BDNS = "<documento><texto><p>Sin referencia</p></texto></documento>"
+
+
+def servidor_boe(dia_con_sumario="20261119"):
+    def h(req):
+        ruta = req.url.path
+        if "/sumario/" in ruta:
+            return httpx.Response(200, json=SUMARIO_BOE) if ruta.endswith(dia_con_sumario) else httpx.Response(404, text="no hay sumario")
+        return httpx.Response(200, text=XML_38039 if "38039" in str(req.url) else XML_SIN_BDNS)
+    return httpx.AsyncClient(transport=httpx.MockTransport(h))
+
+
+class TestConectorBOE(unittest.TestCase):
+    def conector(self, cliente=None, **ajustes):
+        return ConectorBOE({"id": "fb", "source_code": "ES-002", "settings": ajustes}, PARAMS, cliente)
+
+    def registros(self, c, hoy=date(2026, 11, 19)):
+        filas = []
+
+        async def todo():
+            async for p in c.paginas({}, hoy):
+                filas.extend(p.registros)
+        ejecutar(todo())
+        return filas
+
+    def test_solo_toma_extractos_de_convocatoria_de_la_seccion_5b_y_lee_el_numero_bdns(self):
+        filas = self.registros(self.conector(servidor_boe()))
+        self.assertEqual([f["item"]["identificador"] for f in filas], ["BOE-B-2026-38039", "BOE-B-2026-38070"])      # ni el Real Decreto (sección 1) ni el anuncio de licitación ni la oposición
+        self.assertEqual([f["bdns"] for f in filas], ["941981", None])
+
+    def test_normaliza_como_registro_solo_enlace_con_referencia_bdns(self):
+        c = self.conector()
+        f = self.registros(self.conector(servidor_boe()))[0]
+        o = c.normalizar(f, HOY)
+        self.assertEqual((o["_external_id"], o["_refs"], o["_solo_enlazar"], o["status"]), ("BOE-B-2026-38039", {"BDNS": "941981"}, True, "UNKNOWN"))
+        self.assertEqual(o["_documents"], [{"title": "Extracto en el BOE", "url": "https://www.boe.es/boe/dias/2026/11/19/pdfs/BOE-B-2026-38039.pdf", "doc_type": "extracto_boe"}])
+        self.assertEqual(o["publication_date"], date(2026, 11, 19))
+
+    def test_un_extracto_sin_numero_bdns_es_invalido_porque_no_se_puede_enlazar(self):
+        f = self.registros(self.conector(servidor_boe()))[1]
+        with self.assertRaises(ErrorRegistro):
+            self.conector().normalizar(f, HOY)
+
+    def test_un_dia_sin_sumario_404_no_es_error(self):
+        self.assertEqual(self.registros(self.conector(servidor_boe(dia_con_sumario="20990101"))), [])
+
+    def test_recorre_la_ventana_de_dias_y_acaba_con_cursor_vacio(self):
+        cursores = []
+
+        async def todo():
+            async for p in self.conector(servidor_boe(), dias_ventana=3).paginas({}, date(2026, 11, 19)):
+                cursores.append(p.cursor)
+        ejecutar(todo())
+        self.assertEqual(cursores, [{"dia": "2026-11-18"}, {"dia": "2026-11-19"}, {}])
+
+    def test_formato_inesperado_es_error_del_conector(self):
+        c = self.conector(httpx.AsyncClient(transport=httpx.MockTransport(lambda r: httpx.Response(200, json=["no", "es", "un", "objeto"]))))
+        with self.assertRaises(ErrorConector):
+            self.registros(c)
+
+    def test_no_se_descargan_xml_fuera_de_boe_es(self):
+        peticiones = []
+        malo = {**SUMARIO_BOE}
+        import copy
+        malo = copy.deepcopy(SUMARIO_BOE)
+        malo["data"]["sumario"]["diario"][0]["seccion"][2]["departamento"][0]["epigrafe"][0]["item"][0]["url_xml"] = "http://169.254.169.254/latest/meta-data"
+
+        def h(req):
+            peticiones.append(str(req.url))
+            return httpx.Response(200, json=malo) if "/sumario/" in req.url.path else httpx.Response(200, text=XML_38039)
+        filas = self.registros(self.conector(httpx.AsyncClient(transport=httpx.MockTransport(h))))
+        self.assertTrue(all(u.startswith("https://www.boe.es/") for u in peticiones))
+        self.assertIsNone(filas[0]["bdns"])
+
+
+class TestEnlaceBOEconBDNS(unittest.TestCase):
+    """El BOE solo enlaza: no crea oportunidades, no pisa el estado ni los datos de la BDNS y no duplica."""
+    BDNS_F = {"id": "fa", "source_code": "ES-001", "synchronization_frequency": 4}
+    BOE_F = {"id": "fb", "source_code": "ES-002", "synchronization_frequency": 12}
+
+    def boe(self, bdns="941981"):
+        c = ConectorBOE(self.BOE_F, PARAMS)
+        return c.normalizar({"item": {"identificador": "BOE-B-2026-38039", "titulo": "Extracto de la orden por la que se convocan ayudas", "url_html": "https://www.boe.es/diario_boe/txt.php?id=BOE-B-2026-38039",
+                                      "url_pdf": {"texto": "https://www.boe.es/boe/dias/2026/11/19/pdfs/BOE-B-2026-38039.pdf"}}, "departamento": "AGRICULTURA", "bdns": bdns, "fecha": "2026-11-19"}, HOY)
+
+    def test_sin_la_convocatoria_en_la_bdns_se_omite_y_no_crea_nada(self):
+        a = AlmacenMemoria()
+        self.assertEqual(ejecutar(S.guardar_registro(a, self.BOE_F, self.boe(), {"n": 1}, AHORA)), "omitido")
+        self.assertEqual(a.oportunidades, {})
+
+    def test_con_la_convocatoria_en_la_bdns_se_enlaza_sin_pisar_estado_ni_datos(self):
+        a = AlmacenMemoria()
+        ejecutar(S.guardar_registro(a, self.BDNS_F, opp("941981", titulo="Ayudas a planes de producción pesqueros", status="OPEN"), {"n": 1}, AHORA))
+        o = next(iter(a.oportunidades.values()))
+        hash_antes = o["normalized_hash"]
+        self.assertEqual(o["canonical_id"], "BDNS:941981")
+        r = ejecutar(S.guardar_registro(a, self.BOE_F, self.boe(), {"n": 2}, AHORA))
+        self.assertIn(r, ("actualizado", "sin_cambios"))
+        self.assertEqual(len(a.oportunidades), 1)
+        self.assertEqual((o["status"], o["title"], o["normalized_hash"]), ("OPEN", "Ayudas a planes de producción pesqueros", hash_antes))
+        self.assertEqual({f for (f, _e) in a.registros}, {"fa", "fb"})                   # ahora figura la procedencia BOE
+        # una nueva lectura del mismo extracto no cambia nada ni toca el estado
+        self.assertEqual(ejecutar(S.guardar_registro(a, self.BOE_F, self.boe(), {"n": 2}, AHORA)), "sin_cambios")
+        self.assertEqual(o["status"], "OPEN")
+
+    def test_el_estado_de_la_bdns_sigue_actualizandose_tras_el_enlace(self):
+        a = AlmacenMemoria()
+        ejecutar(S.guardar_registro(a, self.BDNS_F, opp("941981", status="OPEN"), {"n": 1}, AHORA))
+        ejecutar(S.guardar_registro(a, self.BOE_F, self.boe(), {"n": 2}, AHORA))
+        ejecutar(S.guardar_registro(a, self.BDNS_F, opp("941981", status="OPEN", deadline=date(2027, 2, 1)), {"n": 3}, AHORA))
+        o = next(iter(a.oportunidades.values()))
+        self.assertEqual(o["deadline"], date(2027, 2, 1))
+
 
 
 class TestHtml(unittest.TestCase):
@@ -601,6 +732,31 @@ class TestEnBaseDeDatos(unittest.TestCase):
         self.assertEqual(ejecutar(r.cambiar("ES-001", habilitada=True))["is_enabled"], True)
         rd = ejecutar(self.consulta.radar("ana"))
         self.assertEqual(rd["abiertas"]["total"], 1)
+
+    def test_el_boe_enlaza_con_la_bdns_sin_pisar_estado_ni_duplicar_en_postgres(self):
+        from cerebro.subvenciones.almacen import AlmacenPG
+        r = self.registro
+        ejecutar(r.alta_catalogo())
+        det = {"900001": {**DETALLE, "codigoBDNS": "900001"}}
+        ejecutar(r.sincronizar_una("ES-001", "manual", cliente=servidor([[FILA]], det)))
+        antes = ejecutar(self.consulta.buscar({"texto": "digitalización"}))["resultados"][0]
+        fuente_boe = ejecutar(r._fuente("ES-002"))
+        boe = ConectorBOE(fuente_boe, PARAMS).normalizar({"item": {"identificador": "BOE-B-2026-1", "titulo": "Extracto de la convocatoria de ayudas a la digitalización",
+                                                                    "url_html": "https://www.boe.es/diario_boe/txt.php?id=BOE-B-2026-1", "url_pdf": {"texto": "https://www.boe.es/boe/dias/x.pdf"}},
+                                                         "departamento": "INDUSTRIA", "bdns": "900001", "fecha": "2026-11-19"}, HOY)
+        a = AlmacenPG()
+        self.assertIn(ejecutar(S.guardar_registro(a, fuente_boe, boe, {"n": 1}, AHORA)), ("actualizado", "sin_cambios"))
+        self.assertEqual(ejecutar(S.guardar_registro(a, fuente_boe, boe, {"n": 1}, AHORA)), "sin_cambios")
+        despues = ejecutar(self.consulta.buscar({"texto": "digitalización"}))
+        self.assertEqual(despues["total"], 1)                                     # no se ha duplicado
+        self.assertEqual((despues["resultados"][0]["status"], despues["resultados"][0]["title"]), (antes["status"], antes["title"]))
+        f = ejecutar(self.consulta.ficha(antes["id"]))
+        self.assertEqual({x["source_code"] for x in f["fuentes"]}, {"ES-001", "ES-002"})
+        self.assertIn("Extracto en el BOE", [d["title"] for d in f["documentos"]])
+        # un extracto cuya convocatoria no está en la BDNS no crea nada
+        otro = {**boe, "_refs": {"BDNS": "111"}, "_external_id": "BOE-B-2026-2"}
+        self.assertEqual(ejecutar(S.guardar_registro(a, fuente_boe, otro, {"n": 2}, AHORA)), "omitido")
+        self.assertEqual(ejecutar(self.consulta.buscar({}))["total"], 1)
 
     def test_filtros_validados_y_sin_inyeccion(self):
         with self.assertRaises(self.consulta.ErrorConsulta):
