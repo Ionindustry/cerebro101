@@ -42,7 +42,9 @@ app.conf.task_routes = {"cerebro.tareas.celery_app.ejecutar_programada": {"queue
                         "cerebro.tareas.celery_app.descubrir_opciones": {"queue": "cortas"},
                         "cerebro.tareas.celery_app.cargar_fichas_marca": {"queue": "cortas"},
                         "cerebro.tareas.celery_app.cargar_fichas": {"queue": "cortas"},
-                        "cerebro.tareas.celery_app.releer_pliegos": {"queue": "cortas"}}
+                        "cerebro.tareas.celery_app.releer_pliegos": {"queue": "cortas"},
+                        "cerebro.tareas.celery_app.sincronizar_subvenciones": {"queue": "lote"},
+                        "cerebro.tareas.celery_app.sincronizar_subvencion": {"queue": "lote"}}
 
 
 def _calendario() -> dict:
@@ -90,7 +92,8 @@ app.conf.beat_schedule = {"vigilar-ejecuciones": {"task": "cerebro.tareas.celery
                           "tarifas-proveedores": {"task": "cerebro.tareas.celery_app.actualizar_tarifas", "schedule": crontab(minute="40", hour="6")},
                           "purgar-subidas": {"task": "cerebro.tareas.celery_app.purgar_subidas", "schedule": crontab(minute="17", hour="3")},
                           "vectorizar-tarifas": {"task": "cerebro.tareas.celery_app.vectorizar_tarifas", "schedule": 600.0},
-                          "constancia-pendiente": {"task": "cerebro.tareas.celery_app.volcar_constancia", "schedule": 300.0}}
+                          "constancia-pendiente": {"task": "cerebro.tareas.celery_app.volcar_constancia", "schedule": 300.0},
+                          "subvenciones": {"task": "cerebro.tareas.celery_app.sincronizar_subvenciones", "schedule": 3600.0}}
 
 
 async def _ejecutar(agente_id: str, peticion: str | None = None) -> dict:
@@ -329,6 +332,28 @@ def actualizar_cambio(self) -> dict:
         if self.request.retries < self.max_retries:
             raise self.retry(countdown=600)
         return {"estado": "error", "motivo": str(e)}
+
+
+@app.task(name="cerebro.tareas.celery_app.sincronizar_subvenciones")
+def sincronizar_subvenciones() -> dict:
+    """Cada hora: da de alta las fuentes del catálogo (idempotente) y sincroniza las que toca (habilitadas, activas, con conector y con la próxima sincronización vencida; la frecuencia de cada una
+    la fija el catálogo: BDNS cada 4 horas). Cada fuente va aislada: un fallo no para a las demás. Sin IA (cerebro/subvenciones/). Nada se activa solo: las fuentes nacen pendientes de verificar."""
+    from ..subvenciones import registro
+
+    async def _todo() -> dict:
+        altas = await registro.alta_catalogo()
+        return {"fuentes_en_catalogo": altas, "ejecuciones": await registro.sincronizar_vencidas()}
+    return asyncio.run(_todo())
+
+
+@app.task(name="cerebro.tareas.celery_app.sincronizar_subvencion")
+def sincronizar_subvencion(codigo: str) -> dict:
+    """Una sincronización pedida a mano desde el panel (Dirección) para una fuente: es la forma de verificarla con datos reales antes de activarla."""
+    from ..subvenciones import registro
+    try:
+        return asyncio.run(registro.sincronizar_una(codigo, "manual"))
+    except registro.ErrorFuentes as e:
+        return {"fuente": codigo, "estado": "error", "error": str(e)}
 
 
 @app.task(name="cerebro.tareas.celery_app.avisar_plazos")

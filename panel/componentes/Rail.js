@@ -11,6 +11,7 @@ const SECCIONES = [
   { ruta: "/licitaciones", nombre: "Licitaciones" },
   { ruta: "/aprobaciones", nombre: "Aprobaciones" },
   { ruta: "/precios", nombre: "Precios" },
+  { ruta: "/subvenciones", nombre: "Subvenciones" },
   { ruta: "/cotizaciones", nombre: "Cotizaciones" },
   { ruta: "/ventas", nombre: "Ventas" },
   { ruta: "/agentes", nombre: "Agentes" },

@@ -929,3 +929,171 @@ CREATE TABLE IF NOT EXISTS lecciones_agentes (
   embedding  real[],                               -- RAG: se recuperan solo las lecciones parecidas a la tarea (BGE-M3 local, 1024 números), puede ser nulo. real[] y no vector: son pocas filas y así la tabla no exige la extensión
   UNIQUE (agente, patron)
 );
+
+-- ============================================================================================================================================
+-- Subvenciones y financiación (ARES Funding Intelligence; api/cerebro/subvenciones/): radar de convocatorias de ayudas de España, Andorra y la Unión Europea.
+-- Registro de fuentes → conectores → oportunidades unificadas (con procedencia, historial de cambios y registro de cada sincronización). Idempotente.
+-- ============================================================================================================================================
+CREATE TABLE IF NOT EXISTS funding_sources (
+  id                        uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  source_code               text NOT NULL UNIQUE,                       -- ES-001, EU-001, AD-001…
+  source_name               text NOT NULL,
+  country                   text NOT NULL,                              -- ES, AD, EU, FR, PT…
+  geographic_scope          text NOT NULL DEFAULT '',
+  official_url              text NOT NULL DEFAULT '',
+  api_base_url              text NOT NULL DEFAULT '',
+  access_type               text NOT NULL DEFAULT 'PENDING_VERIFICATION',
+  authentication_type       text NOT NULL DEFAULT 'NONE',
+  license                   text NOT NULL DEFAULT '',
+  source_priority           text NOT NULL DEFAULT 'media',
+  connector                 text,                                       -- nombre del conector que la sincroniza (null = aún no hay conector)
+  is_enabled                boolean NOT NULL DEFAULT false,             -- solo las fuentes habilitadas Y activas se sincronizan solas
+  integration_status        text NOT NULL DEFAULT 'PENDING_VERIFICATION',
+  synchronization_frequency integer NOT NULL DEFAULT 24,                -- horas entre sincronizaciones
+  settings                  jsonb NOT NULL DEFAULT '{}'::jsonb,         -- parámetros del conector, ajustables sin tocar el código
+  sync_cursor               jsonb NOT NULL DEFAULT '{}'::jsonb,         -- marca de sincronización incremental
+  last_sync_at              timestamptz,
+  last_success_at           timestamptz,
+  next_sync_at              timestamptz,
+  last_error                text,
+  notes                     text NOT NULL DEFAULT '',
+  created_at                timestamptz NOT NULL DEFAULT now(),
+  updated_at                timestamptz NOT NULL DEFAULT now(),
+  CHECK (access_type IN ('REST_API', 'OPEN_DATA', 'RSS', 'XML', 'CSV', 'JSON', 'AUTHORIZED_WEB', 'MANUAL', 'PENDING_VERIFICATION')),
+  CHECK (integration_status IN ('ACTIVE', 'DISABLED', 'PENDING_ACCESS', 'PENDING_VERIFICATION', 'ERROR', 'MAINTENANCE')),
+  CHECK (synchronization_frequency BETWEEN 1 AND 720)
+);
+
+CREATE TABLE IF NOT EXISTS funding_opportunities (
+  id                      uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  canonical_id            text NOT NULL UNIQUE,                        -- BDNS:123456, EU:HORIZON-…, o FP:huella cuando la fuente no da un identificador oficial
+  title                   text NOT NULL,
+  description             text,
+  program_name            text,
+  issuing_organization    text,
+  official_url            text,
+  application_url         text,
+  country                 text,
+  region                  text,
+  province                text,
+  municipality            text,
+  geographic_scope        text,                                        -- nacional | autonomico | local | europeo | transfronterizo | otro
+  eligible_beneficiaries  text[] NOT NULL DEFAULT '{}',
+  company_sizes           text[] NOT NULL DEFAULT '{}',
+  economic_activities     text[] NOT NULL DEFAULT '{}',
+  sector                  text[] NOT NULL DEFAULT '{}',
+  keywords                text[] NOT NULL DEFAULT '{}',
+  funding_objectives      text,
+  funding_type            text,                                        -- subvencion | prestamo | prestamo_participativo | garantia | aval | incentivo_fiscal | bonificacion | mixta | premio | otro | null (desconocido)
+  total_budget            numeric,
+  minimum_amount          numeric,
+  maximum_amount          numeric,
+  funding_percentage      numeric,
+  currency                text NOT NULL DEFAULT 'EUR',
+  cofinancing_required    boolean,
+  publication_date        date,
+  opening_date            date,
+  deadline                date,
+  last_official_update    timestamptz,
+  detected_at             timestamptz NOT NULL DEFAULT now(),
+  last_checked_at         timestamptz NOT NULL DEFAULT now(),
+  status                  text NOT NULL DEFAULT 'UNKNOWN',
+  legal_basis_url         text,
+  eligibility_requirements text,
+  exclusions              text,
+  eligible_expenses       text,
+  source_hash             text,
+  normalized_hash         text,
+  ingestion_version       integer NOT NULL DEFAULT 1,
+  confidence_score        numeric,
+  created_at              timestamptz NOT NULL DEFAULT now(),
+  updated_at              timestamptz NOT NULL DEFAULT now(),
+  tsv                     tsvector GENERATED ALWAYS AS (to_tsvector('spanish', coalesce(title, '') || ' ' || coalesce(description, '') || ' ' || coalesce(issuing_organization, '') || ' ' || coalesce(program_name, ''))) STORED,
+  CHECK (status IN ('NEW', 'UPDATED', 'OPENING_SOON', 'OPEN', 'CLOSING_SOON', 'CLOSED', 'CANCELLED', 'UNKNOWN')),
+  CHECK (confidence_score IS NULL OR confidence_score BETWEEN 0 AND 1)
+);
+CREATE INDEX IF NOT EXISTS funding_opp_tsv ON funding_opportunities USING gin (tsv);
+CREATE INDEX IF NOT EXISTS funding_opp_status ON funding_opportunities (status, deadline);
+CREATE INDEX IF NOT EXISTS funding_opp_country ON funding_opportunities (country, region, province);
+CREATE INDEX IF NOT EXISTS funding_opp_org ON funding_opportunities (issuing_organization);
+CREATE INDEX IF NOT EXISTS funding_opp_deadline ON funding_opportunities (deadline);
+CREATE INDEX IF NOT EXISTS funding_opp_detected ON funding_opportunities (detected_at DESC);
+CREATE INDEX IF NOT EXISTS funding_opp_sector ON funding_opportunities USING gin (sector);
+CREATE INDEX IF NOT EXISTS funding_opp_benef ON funding_opportunities USING gin (eligible_beneficiaries);
+
+-- Procedencia: cada fuente que habla de una misma oportunidad, con su registro original (varias fuentes → una oportunidad canónica)
+CREATE TABLE IF NOT EXISTS funding_source_records (
+  id              bigserial PRIMARY KEY,
+  opportunity_id  uuid NOT NULL REFERENCES funding_opportunities (id) ON DELETE CASCADE,
+  source_id       uuid NOT NULL REFERENCES funding_sources (id) ON DELETE CASCADE,
+  external_id     text NOT NULL,
+  source_url      text,
+  raw             jsonb,                                               -- el registro tal y como lo dio la fuente
+  source_hash     text,
+  refs            jsonb NOT NULL DEFAULT '{}'::jsonb,                  -- identificadores de otras fuentes que aparecen en este registro (p. ej. {"BDNS": "123456"})
+  first_seen      timestamptz NOT NULL DEFAULT now(),
+  last_seen       timestamptz NOT NULL DEFAULT now(),
+  UNIQUE (source_id, external_id)
+);
+CREATE INDEX IF NOT EXISTS funding_rec_opp ON funding_source_records (opportunity_id);
+
+CREATE TABLE IF NOT EXISTS funding_documents (
+  id              bigserial PRIMARY KEY,
+  opportunity_id  uuid NOT NULL REFERENCES funding_opportunities (id) ON DELETE CASCADE,
+  source_id       uuid REFERENCES funding_sources (id) ON DELETE SET NULL,
+  title           text,
+  url             text NOT NULL,
+  doc_type        text,
+  detected_at     timestamptz NOT NULL DEFAULT now(),
+  UNIQUE (opportunity_id, url)
+);
+
+-- Historial: qué cambió, cuándo, en qué fuente y con qué valores antes y después
+CREATE TABLE IF NOT EXISTS funding_opportunity_changes (
+  id              bigserial PRIMARY KEY,
+  opportunity_id  uuid NOT NULL REFERENCES funding_opportunities (id) ON DELETE CASCADE,
+  source_id       uuid REFERENCES funding_sources (id) ON DELETE SET NULL,
+  changed_at      timestamptz NOT NULL DEFAULT now(),
+  field           text NOT NULL,
+  old_value       jsonb,
+  new_value       jsonb
+);
+CREATE INDEX IF NOT EXISTS funding_chg_opp ON funding_opportunity_changes (opportunity_id, changed_at DESC);
+CREATE INDEX IF NOT EXISTS funding_chg_fecha ON funding_opportunity_changes (changed_at DESC);
+
+-- Cada ejecución de un conector: qué trajo, qué creó, cuánto tardó y cómo acabó
+CREATE TABLE IF NOT EXISTS funding_sync_runs (
+  id              bigserial PRIMARY KEY,
+  source_id       uuid NOT NULL REFERENCES funding_sources (id) ON DELETE CASCADE,
+  started_at      timestamptz NOT NULL DEFAULT now(),
+  finished_at     timestamptz,
+  status          text NOT NULL DEFAULT 'running',                     -- running | ok | partial | error
+  trigger         text NOT NULL DEFAULT 'schedule',                    -- schedule | manual
+  fetched         integer NOT NULL DEFAULT 0,
+  inserted        integer NOT NULL DEFAULT 0,
+  updated         integer NOT NULL DEFAULT 0,
+  unchanged       integer NOT NULL DEFAULT 0,
+  invalid         integer NOT NULL DEFAULT 0,
+  duration_ms     integer,
+  error_detail    text,
+  cursor_before   jsonb,
+  cursor_after    jsonb,
+  CHECK (status IN ('running', 'ok', 'partial', 'error'))
+);
+CREATE INDEX IF NOT EXISTS funding_run_source ON funding_sync_runs (source_id, started_at DESC);
+
+-- Mis oportunidades: lo que una persona guarda, sigue, vincula a una empresa o proyecto, anota o descarta
+CREATE TABLE IF NOT EXISTS funding_saved_opportunities (
+  id              bigserial PRIMARY KEY,
+  usuario         text NOT NULL,
+  opportunity_id  uuid NOT NULL REFERENCES funding_opportunities (id) ON DELETE CASCADE,
+  estado          text NOT NULL DEFAULT 'seguida',                     -- seguida | descartada
+  empresa         text,                                                -- sociedad/empresa de ARES a la que se vincula (texto libre en esta fase)
+  proyecto        text,
+  nota            text NOT NULL DEFAULT '',
+  creada          timestamptz NOT NULL DEFAULT now(),
+  actualizada     timestamptz NOT NULL DEFAULT now(),
+  UNIQUE (usuario, opportunity_id),
+  CHECK (estado IN ('seguida', 'descartada'))
+);
+-- Fin subvenciones

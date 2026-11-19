@@ -1,4 +1,4 @@
 """Importar este paquete registra todas las herramientas disponibles."""
 from . import (agent_reach, calculo, calendario, catalogo, conocimiento, contratacion, correo, cuaderno, decision,  # noqa: F401
-               documentos_subidos, eet, erpnext, ficheros, grok, licitaciones, listas_precios, mayorista, ofertas, plantillas, pliegos, scrapegraph, web)
+               documentos_subidos, eet, erpnext, ficheros, grok, licitaciones, listas_precios, mayorista, ofertas, plantillas, pliegos, scrapegraph, subvenciones, web)
 from .base import Herramienta, OperacionRequiereAprobacion, disponibles_para, es_confidencial, es_externa, usar, validar_llamada, vista_previa  # noqa: F401

@@ -32,11 +32,13 @@ agentes:
 - id: tesorero
   nombre: Tesorero
   subarea: Tesorería
-  tareas: Previsión de caja a 30/60/90 días, alertas de liquidez y calendario de pagos
+  tareas: Previsión de caja a 30/60/90 días, alertas de liquidez y calendario de pagos; financiación pública (préstamos, avales,
+    ayudas) que mejora la liquidez
   modelo: principal
   herramientas:
   - conocimiento
   - erpnext
+  - subvenciones
   aprobacion: libre
   horario: 0 7 * * 1
   sensibilidad: alta
