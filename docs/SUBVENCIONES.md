@@ -7,7 +7,7 @@ Radar de ayudas, subvenciones y financiación pública integrado en ARES. Códig
 | Pieza | Estado |
 |---|---|
 | Núcleo (modelo, normalización, deduplicación, historial, sincronización idempotente, estados, búsqueda, radar, seguimiento personal) | **Hecho y probado** (unitarias, tubería en memoria y Postgres real). |
-| Conector **BDNS (ES-001)** | **Escrito, NO verificado contra el servicio real.** Las direcciones y los nombres de campo son supuestos (`conectores/bdns.py`, `CAMPOS_POR_DEFECTO`). Desde el entorno de desarrollo no se pudo alcanzar `infosubvenciones.es`. Probado solo con respuestas simuladas. |
+| Conector **BDNS (ES-001)** | **Verificado parcialmente el 19/11/2026 con respuestas reales** desde el servidor de 101.cat: `GET /convocatorias/busqueda` (paginación estándar con `content`, `last`, `totalElements`) y `GET /convocatorias?numConv=` responden JSON y los campos usados existen (`numeroConvocatoria`, `organo`, `presupuestoTotal`, `sectores`, `regiones`, `instrumentos`, `urlBasesReguladoras`, `abierto`…). Ajustes hechos con esos datos: `abierto=false` no se traduce en «cerrada» (sin fechas queda UNKNOWN); la región «ES431 - Badajoz» (NUTS) se guarda como provincia; los documentos de la BDNS no traen dirección de descarga y no se importan. **Pendiente**: una sincronización manual completa desde el panel y la decisión de Dirección de activarla; no hay Swagger público en las rutas probadas. |
 | Resto de fuentes (UE, BOE, autonómicas, Andorra…) | **Catalogadas como pendientes de verificar. Sin conector.** Nada se da por conectado. |
 | Cruce con empresas (matching), alertas, análisis de documentos con IA | **No hechos** (Fases 2–4). El radar muestra «relevantes para tu empresa» vacío con su aviso. |
 
@@ -63,7 +63,7 @@ Los agentes comerciales y de precios **no** la reciben (mínimo privilegio). `co
 
 ## Riesgos y pendientes
 
-1. Nombres de campo y endpoints de BDNS sin verificar (ver arriba): el primer paso es el script de verificación.
+1. BDNS: falta la sincronización manual completa y revisar datos reales antes de activarla. Primera carga: cientos de convocatorias en la última semana, con una petición de detalle cada una (pausa de cortesía): tarda; se reparte en ejecuciones de hasta 40 páginas con punto de reanudación. El aviso legal de la BDNS restringe la reutilización y permite limitar accesos abusivos: no se sube el ritmo de peticiones.
 2. Cuotas o bloqueos del servicio oficial: hay tope de páginas, pausas y reintentos; si falla, la fuente queda con su error anotado y no se activa.
 3. La UE (Funding & Tenders) exige estudiar su API (paginación, tipos, estados) antes de escribir el conector; no se ha hecho.
 4. No hay todavía cruce con empresas ni alertas: «relevantes para tu empresa» está vacío a propósito.

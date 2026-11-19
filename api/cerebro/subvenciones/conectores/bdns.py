@@ -44,7 +44,7 @@ CAMPOS_POR_DEFECTO = {
     "sectores": ["detalle.sectores"],
     "regiones": ["detalle.regiones"],
     "instrumentos": ["detalle.instrumentos"],
-    "objetivo": ["detalle.finalidad.descripcion", "detalle.finalidad"],
+    "objetivo": ["detalle.descripcionFinalidad", "detalle.finalidad.descripcion", "detalle.finalidad"],
     "documentos": ["detalle.documentos"],
     "ultima_modificacion": ["detalle.fechaModificacion"],
 }
@@ -76,6 +76,22 @@ def _descripciones(v) -> list[str]:
         if t and t not in out:
             out.append(t)
     return out
+
+
+def _territorio(regiones: list[str], ambito: str | None, nivel2: str | None) -> tuple[str | None, str | None]:
+    """(región, provincia). La BDNS da los territorios como «ES431 - Badajoz» (código NUTS: 4 caracteres = región, 5 = provincia). Si hay uno solo se usa;
+    si hay varios no se elige ninguno. En una convocatoria autonómica, el órgano de nivel 2 es la comunidad. Nada que no figure se inventa."""
+    region = provincia = None
+    if len(regiones) == 1:
+        codigo, _, nombre = regiones[0].partition(" - ")
+        nombre = N.limpiar(nombre or regiones[0], 120)
+        if len(codigo.strip()) == 5:
+            provincia = nombre
+        elif len(codigo.strip()) == 4:
+            region = nombre
+    if region is None and ambito == "autonomico" and nivel2:
+        region = N.limpiar(nivel2, 120).title()
+    return region, provincia
 
 
 class ConectorBDNS(Conector):
@@ -163,7 +179,7 @@ class ConectorBDNS(Conector):
         if not titulo:
             raise ErrorRegistro(f"la convocatoria {externo} no trae título")
         n1, n2, n3 = (N.limpiar(v(k), 300) for k in ("nivel1", "nivel2", "nivel3"))
-        regiones = _descripciones(v("regiones"))
+        region, provincia = _territorio(_descripciones(v("regiones")), AMBITO.get(N.plano(n1)), n2)
         instrumentos = _descripciones(v("instrumentos"))
         detalle = crudo.get("detalle")
         apertura, limite = N.fecha(v("opening_date")), N.fecha(v("deadline"))
@@ -176,8 +192,8 @@ class ConectorBDNS(Conector):
             "official_url": (self.ajustes.get("ficha_url") or "").format(numero=externo) or PORTAL,
             "application_url": N.limpiar(v("application_url"), 1000),
             "country": "ES",
-            "region": regiones[0] if len(regiones) == 1 else None,
-            "province": None, "municipality": None,
+            "region": region,
+            "province": provincia, "municipality": None,
             "geographic_scope": AMBITO.get(N.plano(n1)),
             "eligible_beneficiaries": _descripciones(v("beneficiarios")),
             "company_sizes": [], "economic_activities": [],
@@ -192,7 +208,7 @@ class ConectorBDNS(Conector):
             "last_official_update": None,
             "legal_basis_url": N.limpiar(v("legal_basis_url"), 1000),
             "eligibility_requirements": None, "exclusions": None, "eligible_expenses": None,
-            "status": N.estado(apertura, limite, hoy, abierta_declarada=abierto if isinstance(abierto, bool) else None),
+            "status": N.estado(apertura, limite, hoy, abierta_declarada=True if abierto is True else None),
             # Con solo el resumen (sin detalle) se sabe poco: confianza baja, y se completa cuando llegue el detalle
             "_confidence": 0.9 if detalle else 0.4,
             "_external_id": externo, "_refs": {}, "_source_url": PORTAL,
