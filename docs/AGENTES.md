@@ -9,7 +9,7 @@
 | **Director General** | Coordinación | rapido | libre | 0 7 * * 1-5 | Recibe todas las peticiones, las enruta al departamento correcto, prioriza conflictos entre áreas y genera el resumen diario |
 | Asistente general | Coordinación | principal | libre | bajo petición | Responde cualquier duda general o de actualidad con la fecha y hora actuales y consultando internet (buscador propio y lectura de páginas públicas); también lo del sector (precios de mercado, productos de fabricantes, competidores, noticias), citando las fuentes; nunca con datos de clientes ni de personas, y lo que necesita datos internos o hacer algo lo redirige al departamento que corresponde |
 | Secretaría de Dirección | Coordinación | principal | simple | bajo petición | Agenda de dirección, actas de reuniones y seguimiento de acuerdos y fechas límite |
-| Estratega | Estrategia | principal | libre | 0 8 * * 1 | Objetivos trimestrales, análisis de escenarios y alertas de desviación |
+| Estratega | Estrategia | principal | libre | 0 8 * * 1 | Objetivos trimestrales, análisis de escenarios y alertas de desviación; ayudas y financiación pública que encajan con los objetivos |
 | Analista BI | Inteligencia de negocio | principal | libre | 30 6 * * * | Consolida los KPI de todos los departamentos en el panel diario y semanal |
 | Previsión de Demanda | Anticipación y lanzamiento | principal | libre | 0 5 * * 1 | Prevé la demanda por área de servicio con histórico, tendencias, licitaciones, ayudas y estacionalidad |
 | Paquetizador de Servicios | Anticipación y lanzamiento | principal | simple | bajo petición | Convierte cada servicio en un paquete estándar con precio cerrado, kit de material, horas tipo y plantilla |
@@ -22,7 +22,7 @@
 | --- | --- | --- | --- | --- | --- |
 | **Contable** | Contabilidad | principal | doble | 0 4 1 * * | Asientos en borrador, conciliación bancaria, cierre mensual y cuenta de resultados explicada |
 | Control de Gastos | Contabilidad | principal | simple | bajo petición | Lee las facturas de proveedor que llegan por correo (PDF, escaneos y fotos, con OCR), las deja en borrador en el ERP para su validación, clasifica tickets y controla el presupuesto por departamento |
-| Tesorero | Tesorería | principal | libre | 0 7 * * 1 | Previsión de caja a 30/60/90 días, alertas de liquidez y calendario de pagos |
+| Tesorero | Tesorería | principal | libre | 0 7 * * 1 | Previsión de caja a 30/60/90 días, alertas de liquidez y calendario de pagos; financiación pública (préstamos, avales, ayudas) que mejora la liquidez |
 | Facturación | Facturación y cobros | principal | doble | bajo petición | Prepara facturas en borrador según la normativa vigente para su validación |
 | Cobros | Facturación y cobros | principal | simple | 0 9 * * 1-5 | Detecta impagados y redacta recordatorios graduados según el historial del cliente |
 | Fiscal | Fiscalidad | principal | doble | 0 8 1 * * | Calendario de modelos fiscales y documentación para la gestoría |
@@ -174,10 +174,10 @@
 | Especialista Redes | Conectividad e infraestructuras | principal | libre | bajo petición | Cableado estructurado, wifi, fibra interior y certificación |
 | Especialista Televisión e ICT | Conectividad e infraestructuras | principal | libre | bajo petición | Antenas e ICT en edificios, proyectos y boletines |
 | Especialista Localización | Conectividad e infraestructuras | principal | libre | bajo petición | Seguimiento de flotas y activos con SIM M2M de Telecom |
-| Especialista Renovables | Energía y hogar | principal | libre | bajo petición | Autoconsumo, baterías y recarga; cálculo del ahorro |
+| Especialista Renovables | Energía y hogar | principal | libre | bajo petición | Autoconsumo, baterías y recarga; cálculo del ahorro y ayudas del sector (IDAE, comunidades autónomas) |
 | Especialista Domótica | Energía y hogar | principal | libre | bajo petición | Hogar y edificio conectado, eficiencia e integración |
 | Especialista Construcción | Obra | principal | libre | bajo petición | Obra civil asociada: canalizaciones, zanjas y pequeñas reformas |
 | Coordinación de Obra y Prevención | Obra | principal | simple | bajo petición | Plan de seguridad y salud, coordinación con instaladores y documentación de subcontratación |
 | Mantenimientos Programados | Servicios recurrentes y tramitación | rapido | simple | 0 6 * * * | Contratos de mantenimiento, calendario de visitas, actas e ingresos recurrentes |
 | Tramitación y Legalizaciones | Servicios recurrentes y tramitación | principal | doble | bajo petición | Legalizaciones eléctricas y fotovoltaicas, boletines, ICT y licencias |
-| Ayudas y Subvenciones | Servicios recurrentes y tramitación | principal | simple | 0 3 * * 2 | Detecta ayudas aplicables a cada cliente y prepara la solicitud |
+| Ayudas y Subvenciones | Servicios recurrentes y tramitación | principal | simple | 0 3 * * 2 | Detecta ayudas, subvenciones y financiación pública (España, Andorra y UE) aplicables a cada cliente con el radar de subvenciones, vigila plazos y novedades y prepara la solicitud |

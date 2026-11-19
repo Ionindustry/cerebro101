@@ -99,6 +99,7 @@ agentes:
   - scrapegraph
   - agent_reach
   - jev
+  - subvenciones
   - cuaderno
   aprobacion: libre
   horario: 0 2 * * *

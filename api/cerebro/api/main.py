@@ -11,7 +11,7 @@ import uuid
 from contextlib import asynccontextmanager
 
 import psycopg
-from fastapi import Depends, FastAPI, HTTPException
+from fastapi import Depends, FastAPI, HTTPException, Query
 from fastapi.responses import JSONResponse, Response
 from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
 from langgraph.types import Command
@@ -55,6 +55,8 @@ from ..licitaciones import reglas as reglas_licitaciones
 from ..licitaciones import simulador as simulador_licitaciones
 from ..licitaciones import embudo as embudo_licitaciones
 from ..licitaciones import resumen as resumen_licitaciones
+from ..subvenciones import consulta as subvenciones_consulta
+from ..subvenciones import registro as subvenciones_registro
 from ..cotizador import Solicitud, calcular
 from ..grafo import construir, nodos
 from ..llm import ErrorModelo, circuito, estado_modelos
@@ -681,6 +683,118 @@ async def releer_pliegos_de_la_licitacion(motor_id: str, usuario: Usuario = Depe
         raise HTTPException(503, "No se ha podido encolar la relectura: inténtalo de nuevo") from None
     log.info("pliegos: %s pide volver a leer los pliegos de %s", usuario.id, motor_id)
     return {"licitacion": motor_id, "encolado": True}
+
+
+
+# ---- Subvenciones y financiación (cerebro/subvenciones/): radar de ayudas de España, Andorra y la UE. Ver y buscar: cualquier persona con sesión (son datos públicos de fuentes oficiales);
+#      guardar/seguir: cada persona lo suyo; conectores (habilitar, sincronizar a mano): solo Dirección ----
+
+class FuenteCambio(BaseModel):
+    habilitada: bool | None = None
+    estado: str | None = None
+    ajustes: dict | None = None
+
+
+class OportunidadGuardada(BaseModel):
+    estado: str = "seguida"
+    empresa: str | None = Field(default=None, max_length=200)
+    proyecto: str | None = Field(default=None, max_length=200)
+    nota: str = Field(default="", max_length=2000)
+
+
+def _exige_direccion_subvenciones(usuario: Usuario) -> None:
+    if "direccion" not in usuario.roles:
+        raise HTTPException(403, "Los conectores del radar de subvenciones los administra Dirección")
+
+
+def _error_subvenciones(e: Exception) -> HTTPException:
+    return HTTPException(422, str(e))
+
+
+@app.get("/subvenciones/radar")
+async def radar_de_subvenciones(usuario: Usuario = Depends(usuario_actual)):
+    """Nuevas, abiertas, próximas a abrir, próximas a cerrar y modificadas, con su número y las primeras de cada categoría."""
+    return await subvenciones_consulta.radar(usuario.id)
+
+
+@app.get("/subvenciones/oportunidades")
+async def buscar_subvenciones(texto: str | None = None, pais: list[str] | None = Query(default=None), region: list[str] | None = Query(default=None),
+                              provincia: list[str] | None = Query(default=None), sector: list[str] | None = Query(default=None), beneficiario: list[str] | None = Query(default=None),
+                              organismo: str | None = None, programa: str | None = None, instrumento: list[str] | None = Query(default=None), estado: list[str] | None = Query(default=None),
+                              fuente: list[str] | None = Query(default=None), importe_min: float | None = None, importe_max: float | None = None, plazo_desde: str | None = None,
+                              plazo_hasta: str | None = None, solo_nuevas: bool = False, orden: str | None = None, limite: int = 25, pagina: int = 0,
+                              usuario: Usuario = Depends(usuario_actual)):
+    try:
+        return await subvenciones_consulta.buscar({"texto": texto, "pais": pais, "region": region, "provincia": provincia, "sector": sector, "beneficiario": beneficiario,
+                                                   "organismo": organismo, "programa": programa, "instrumento": instrumento, "estado": estado, "fuente": fuente,
+                                                   "importe_min": importe_min, "importe_max": importe_max, "plazo_desde": plazo_desde, "plazo_hasta": plazo_hasta,
+                                                   "solo_nuevas": solo_nuevas, "orden": orden, "limite": limite, "pagina": pagina})
+    except subvenciones_consulta.ErrorConsulta as e:
+        raise _error_subvenciones(e) from None
+
+
+@app.get("/subvenciones/oportunidades/{oportunidad_id}")
+async def ficha_de_subvencion(oportunidad_id: str, usuario: Usuario = Depends(usuario_actual)):
+    try:
+        return await subvenciones_consulta.ficha(oportunidad_id, usuario.id)
+    except subvenciones_consulta.ErrorConsulta as e:
+        raise HTTPException(404 if "No existe" in str(e) else 422, str(e)) from None
+
+
+@app.get("/subvenciones/mis-oportunidades")
+async def mis_subvenciones(estado: str | None = None, usuario: Usuario = Depends(usuario_actual)):
+    return await subvenciones_consulta.guardadas(usuario.id, estado)
+
+
+@app.put("/subvenciones/oportunidades/{oportunidad_id}/guardada")
+async def guardar_subvencion(oportunidad_id: str, entrada: OportunidadGuardada, usuario: Usuario = Depends(usuario_actual)):
+    """Guardar, seguir, vincular a una empresa o proyecto, anotar o descartar una oportunidad: lo guarda cada persona para sí."""
+    try:
+        return await subvenciones_consulta.guardar(usuario.id, oportunidad_id, entrada.estado, entrada.empresa, entrada.proyecto, entrada.nota)
+    except subvenciones_consulta.ErrorConsulta as e:
+        raise _error_subvenciones(e) from None
+
+
+@app.delete("/subvenciones/oportunidades/{oportunidad_id}/guardada")
+async def quitar_subvencion(oportunidad_id: str, usuario: Usuario = Depends(usuario_actual)):
+    try:
+        return {"quitada": await subvenciones_consulta.quitar(usuario.id, oportunidad_id)}
+    except subvenciones_consulta.ErrorConsulta as e:
+        raise _error_subvenciones(e) from None
+
+
+@app.get("/subvenciones/fuentes")
+async def fuentes_de_subvenciones(usuario: Usuario = Depends(usuario_actual)):
+    """Conectores: habilitado, estado, última sincronización, registros importados, nuevos, modificados, errores y próxima ejecución. Para Dirección."""
+    _exige_direccion_subvenciones(usuario)
+    await subvenciones_registro.alta_catalogo()
+    return await subvenciones_registro.listar()
+
+
+@app.patch("/subvenciones/fuentes/{codigo}")
+async def cambiar_fuente_de_subvenciones(codigo: str, entrada: FuenteCambio, usuario: Usuario = Depends(usuario_actual)):
+    """Habilitar o pausar una fuente (no se puede activar sin conector ni sin una sincronización manual correcta previa) o ajustar sus parámetros."""
+    _exige_direccion_subvenciones(usuario)
+    try:
+        f = await subvenciones_registro.cambiar(codigo, entrada.habilitada, entrada.estado, entrada.ajustes)
+    except subvenciones_registro.ErrorFuentes as e:
+        raise _error_subvenciones(e) from None
+    log.info("subvenciones: %s cambia la fuente %s (habilitada=%s, estado=%s)", usuario.id, codigo, entrada.habilitada, entrada.estado)
+    return {k: (v.isoformat() if hasattr(v, "isoformat") else v) for k, v in f.items() if k != "sync_cursor"}
+
+
+@app.post("/subvenciones/fuentes/{codigo}/sincronizar", status_code=202)
+async def sincronizar_fuente_de_subvenciones(codigo: str, usuario: Usuario = Depends(usuario_actual)):
+    """Lanza una sincronización a mano (la forma de verificar una fuente con datos reales antes de activarla). Tarda: corre en el worker."""
+    _exige_direccion_subvenciones(usuario)
+    try:
+        from ..tareas.celery_app import app as celery
+        celery.send_task("cerebro.tareas.celery_app.sincronizar_subvencion", args=[codigo.strip().upper()], queue="lote")
+    except Exception as e:      # noqa: BLE001
+        log.warning("subvenciones: no se ha podido encolar la sincronización de %s: %s", codigo, type(e).__name__)
+        raise HTTPException(503, "No se ha podido encolar la sincronización: inténtalo de nuevo") from None
+    log.info("subvenciones: %s pide sincronizar %s", usuario.id, codigo)
+    return {"fuente": codigo.strip().upper(), "encolado": True}
 
 
 @app.post("/licitaciones/pliegos/{motor_id}/descargar")

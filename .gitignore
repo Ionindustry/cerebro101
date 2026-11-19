@@ -10,3 +10,4 @@ servicios/voz/voces/*.onnx*
 copias/
 evidencias/
 .acceso-externo.json
+subvenciones_muestras/

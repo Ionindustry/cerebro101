@@ -48,11 +48,13 @@ agentes:
 - id: estratega
   nombre: Estratega
   subarea: Estrategia
-  tareas: Objetivos trimestrales, análisis de escenarios y alertas de desviación
+  tareas: Objetivos trimestrales, análisis de escenarios y alertas de desviación; ayudas y financiación pública que encajan
+    con los objetivos
   modelo: principal
   herramientas:
   - conocimiento
   - erpnext
+  - subvenciones
   aprobacion: libre
   horario: 0 8 * * 1
   sensibilidad: media
@@ -79,6 +81,7 @@ agentes:
   herramientas:
   - conocimiento
   - erpnext
+  - subvenciones
   aprobacion: libre
   horario: 0 5 * * 1
   sensibilidad: media

@@ -1,0 +1,75 @@
+# Catálogo de fuentes del radar de subvenciones (ARES Funding Intelligence, api/cerebro/subvenciones/).
+# REGLA: nada se da por conectado sin comprobarlo. Una fuente nace en PENDING_VERIFICATION (o PENDING_ACCESS si se sabe que no hay acceso automatizado permitido)
+# y solo pasa a ACTIVE cuando una persona de Dirección la habilita en el panel tras comprobar con datos reales que el conector funciona.
+# No se inventan direcciones de API: si no hay un servicio oficial confirmado, api_base_url queda vacío. No se extrae contenido de páginas web contra sus condiciones de uso.
+# Los parámetros del conector (settings) se ajustan aquí o en el panel sin tocar el código. Este fichero solo ALTA fuentes nuevas y actualiza sus datos descriptivos; el
+# estado, si está habilitada y la marca de sincronización los lleva la base de datos (no se pisan al reiniciar).
+
+sincronizacion:
+  paginas_maximas_por_ejecucion: 40        # tope de páginas por ejecución (cuota); el resto se trae en la siguiente, desde la marca guardada
+  tamano_pagina: 50
+  pausa_entre_peticiones_s: 0.5            # cortesía hacia el servicio oficial
+  timeout_s: 30
+  reintentos: 3
+  dias_proximo_cierre: 15                  # CLOSING_SOON: faltan estos días o menos para el plazo
+  dias_novedad: 7                          # una oportunidad detectada hace menos de estos días se marca como nueva
+
+fuentes:
+  # ---------------------------------------------------------------- España
+  - {code: ES-001, name: "Base de Datos Nacional de Subvenciones (BDNS)", country: ES, scope: nacional, priority: critica, access: REST_API, auth: NONE, connector: bdns, frequency_h: 4,
+     url: "https://www.infosubvenciones.es/bdnstrans/", api: "https://www.infosubvenciones.es/bdnstrans/api", status: PENDING_VERIFICATION,
+     notes: "Endpoints y campos por comprobar contra el Swagger/OpenAPI oficial y respuestas reales (scripts/subvenciones_verificar.sh). Mientras tanto, el conector usa los nombres supuestos de api/cerebro/subvenciones/conectores/bdns.py."}
+  - {code: ES-002, name: "Boletín Oficial del Estado (BOE)", country: ES, scope: nacional, priority: alta, access: OPEN_DATA, auth: NONE, url: "https://www.boe.es/", status: PENDING_VERIFICATION,
+     notes: "Datos abiertos en https://www.boe.es/datosabiertos/ (JSON/XML y RSS documentados). Pendiente de conector: extractos, correcciones, anulaciones y ampliaciones de plazo; cruzar con BDNS por identificador común."}
+  - {code: ES-003, name: "Datos abiertos de Cataluña (Transparència)", country: ES, scope: autonomico, priority: alta, access: OPEN_DATA, auth: NONE, url: "https://analisi.transparenciacatalunya.cat/", status: PENDING_VERIFICATION,
+     notes: "Dataset candidato 3gku-b36y (a comprobar: vigencia, esquema, licencia y límites antes de conectarlo)."}
+  - {code: ES-004, name: "CIDO, Diputació de Barcelona", country: ES, scope: local, priority: media, access: PENDING_VERIFICATION, auth: NONE, url: "https://cido.diba.cat/", status: PENDING_VERIFICATION,
+     notes: "Buscar un canal de datos reutilizable; no automatizar extracción de HTML sin verificar las condiciones de acceso."}
+  - {code: ES-005, name: "Euskadi Open Data", country: ES, scope: autonomico, priority: media, access: OPEN_DATA, auth: NONE, url: "https://opendata.euskadi.eus/", status: PENDING_VERIFICATION,
+     notes: "Descubrir datasets de ayudas, subvenciones y becas."}
+  - {code: ES-006, name: "Junta de Castilla y León, datos abiertos", country: ES, scope: autonomico, priority: media, access: OPEN_DATA, auth: NONE, url: "https://datosabiertos.jcyl.es/", status: PENDING_VERIFICATION,
+     notes: "Identificar datasets de ayudas y subvenciones; comprobar esquema, licencia y frecuencia."}
+  - {code: ES-007, name: "Aragón Open Data", country: ES, scope: autonomico, priority: media, access: OPEN_DATA, auth: NONE, url: "https://opendata.aragon.es/", status: PENDING_VERIFICATION,
+     notes: "Convocatorias en los recursos oficiales disponibles."}
+  - {code: ES-008, name: "Plataforma PYME", country: ES, scope: nacional, priority: media, access: PENDING_VERIFICATION, auth: NONE, url: "https://plataformapyme.es/", status: PENDING_ACCESS,
+     notes: "Sin API ni descarga reutilizable confirmada: PENDING_ACCESS hasta documentar una vía autorizada."}
+  - {code: ES-009, name: "CDTI Innovación", country: ES, scope: nacional, priority: media, access: PENDING_VERIFICATION, auth: NONE, url: "https://www.cdti.es/", status: PENDING_VERIFICATION,
+     notes: "I+D+i, proyectos industriales, NEOTEC, cooperación tecnológica, startups; convocatorias anunciadas aún no abiertas."}
+  - {code: ES-010, name: "IDAE", country: ES, scope: nacional, priority: media, access: PENDING_VERIFICATION, auth: NONE, url: "https://www.idae.es/", status: PENDING_VERIFICATION,
+     notes: "Eficiencia energética, renovables, descarbonización, movilidad sostenible, autoconsumo y almacenamiento."}
+  - {code: ES-011, name: "ICEX", country: ES, scope: nacional, priority: media, access: PENDING_VERIFICATION, auth: NONE, url: "https://www.icex.es/", status: PENDING_VERIFICATION,
+     notes: "Internacionalización, exportación, expansión y promoción exterior."}
+  - {code: ES-012, name: "Red.es", country: ES, scope: nacional, priority: media, access: PENDING_VERIFICATION, auth: NONE, url: "https://www.red.es/", status: PENDING_VERIFICATION,
+     notes: "Digitalización, inteligencia artificial, ciberseguridad y modernización empresarial."}
+  - {code: ES-013, name: "ENISA", country: ES, scope: nacional, priority: media, access: PENDING_VERIFICATION, auth: NONE, url: "https://www.enisa.es/", status: PENDING_VERIFICATION,
+     notes: "Líneas de financiación para startups y empresas. Los préstamos participativos NO son subvenciones a fondo perdido (funding_type = prestamo_participativo)."}
+  - {code: ES-014, name: "Resto de comunidades autónomas y entidades locales", country: ES, scope: autonomico, priority: media, access: PENDING_VERIFICATION, auth: NONE, status: PENDING_VERIFICATION,
+     notes: "Andalucía, Madrid, C. Valenciana, Galicia, Asturias, Cantabria, La Rioja, Navarra, Castilla-La Mancha, Extremadura, Murcia, Baleares, Canarias, Ceuta y Melilla. BDNS es la referencia; las autonómicas complementan o anticipan. Sin endpoints inventados: se da de alta cada una cuando se verifique."}
+  # ---------------------------------------------------------------- Andorra
+  - {code: AD-001, name: "Govern d'Andorra", country: AD, scope: nacional, priority: media, access: PENDING_VERIFICATION, auth: NONE, url: "https://www.govern.ad/", status: PENDING_VERIFICATION,
+     notes: "Ayudas a empresas, innovación, energía, sostenibilidad, investigación, transformación digital y emprendimiento."}
+  - {code: AD-002, name: "Butlletí Oficial del Principat d'Andorra (BOPA)", country: AD, scope: nacional, priority: media, access: PENDING_VERIFICATION, auth: NONE, url: "https://www.bopa.ad/", status: PENDING_ACCESS,
+     notes: "No se asume API pública: verificar mecanismo de acceso y condiciones de reutilización antes de automatizar."}
+  - {code: AD-003, name: "e-Tràmits", country: AD, scope: nacional, priority: media, access: PENDING_VERIFICATION, auth: NONE, url: "https://www.e-tramits.ad/", status: PENDING_ACCESS,
+     notes: "Distinguir trámite disponible de convocatoria abierta con plazo efectivo."}
+  - {code: AD-004, name: "Andorra Business", country: AD, scope: nacional, priority: media, access: PENDING_VERIFICATION, auth: NONE, url: "https://www.andorrabusiness.com/", status: PENDING_VERIFICATION,
+     notes: "Programas de innovación, internacionalización, competitividad y emprendimiento."}
+  - {code: AD-005, name: "Portal de Transparencia de Andorra", country: AD, scope: nacional, priority: baja, access: PENDING_VERIFICATION, auth: NONE, status: PENDING_VERIFICATION,
+     notes: "Ayudas y subvenciones concedidas: solo para análisis histórico, no para generar oportunidades."}
+  # ---------------------------------------------------------------- Unión Europea y transfronterizas
+  - {code: EU-001, name: "Funding & Tenders Portal (Comisión Europea)", country: EU, scope: europeo, priority: critica, access: REST_API, auth: NONE, frequency_h: 4,
+     url: "https://ec.europa.eu/info/funding-tenders/opportunities/portal/screen/home", api: "https://api.tech.ec.europa.eu/search-api/prod/rest/search", status: PENDING_VERIFICATION,
+     notes: "Verificar documentalmente métodos, payloads, tipos de anuncio, paginación, filtros, detalle, estados y actualizaciones antes de escribir el conector. Diferenciar subvenciones de licitaciones y otros instrumentos."}
+  - {code: EU-002, name: "Interreg", country: EU, scope: transfronterizo, priority: media, access: PENDING_VERIFICATION, auth: NONE, url: "https://interreg.eu/", status: PENDING_VERIFICATION, notes: "Cooperación territorial y programas transfronterizos."}
+  - {code: EU-003, name: "POCTEFA (España-Francia-Andorra)", country: EU, scope: transfronterizo, priority: alta, access: PENDING_VERIFICATION, auth: NONE, url: "https://www.poctefa.eu/", status: PENDING_VERIFICATION,
+     notes: "Cooperación España-Francia-Andorra; verificar elegibilidad empresarial y territorial."}
+  - {code: EU-004, name: "European Institute of Innovation and Technology (EIT)", country: EU, scope: europeo, priority: media, access: PENDING_VERIFICATION, auth: NONE, url: "https://eit.europa.eu/", status: PENDING_VERIFICATION,
+     notes: "Programas de innovación, aceleración y apoyo a empresas."}
+  - {code: EU-005, name: "European Innovation Council (EIC)", country: EU, scope: europeo, priority: media, access: PENDING_VERIFICATION, auth: NONE, url: "https://eic.ec.europa.eu/", status: PENDING_VERIFICATION,
+     notes: "Startups y pymes innovadoras; cruzar identificadores con Funding & Tenders para no duplicar."}
+  - {code: EU-006, name: "Portal Europeo de Datos", country: EU, scope: europeo, priority: baja, access: PENDING_VERIFICATION, auth: NONE, url: "https://data.europa.eu/", status: PENDING_VERIFICATION,
+     notes: "Para descubrir fuentes nuevas. Los datos de concesiones históricas no son convocatorias abiertas."}
+  - {code: EU-007, name: "Francia: aides-entreprises", country: FR, scope: nacional, priority: media, access: PENDING_VERIFICATION, auth: NONE, url: "https://data.aides-entreprises.fr/", status: PENDING_VERIFICATION,
+     notes: "Comprobar archivos, formatos, API, licencias y posibles requisitos de autenticación."}
+  - {code: EU-008, name: "Portugal 2030", country: PT, scope: nacional, priority: media, access: PENDING_VERIFICATION, auth: NONE, url: "https://portugal2030.pt/", status: PENDING_VERIFICATION,
+     notes: "Avisos y convocatorias empresariales por mecanismos oficiales comprobados."}

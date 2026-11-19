@@ -99,12 +99,13 @@ agentes:
 - id: esp-renovables
   nombre: Especialista Renovables
   subarea: Energía y hogar
-  tareas: Autoconsumo, baterías y recarga; cálculo del ahorro
+  tareas: Autoconsumo, baterías y recarga; cálculo del ahorro y ayudas del sector (IDAE, comunidades autónomas)
   modelo: principal
   herramientas:
   - conocimiento
   - erpnext
   - cotizador
+  - subvenciones
   aprobacion: libre
   horario: null
   sensibilidad: media
@@ -181,10 +182,12 @@ agentes:
 - id: ayudas
   nombre: Ayudas y Subvenciones
   subarea: Servicios recurrentes y tramitación
-  tareas: Detecta ayudas aplicables a cada cliente y prepara la solicitud
+  tareas: Detecta ayudas, subvenciones y financiación pública (España, Andorra y UE) aplicables a cada cliente con el radar
+    de subvenciones, vigila plazos y novedades y prepara la solicitud
   modelo: principal
   herramientas:
   - conocimiento
+  - subvenciones
   - scrapegraph
   - agent_reach
   aprobacion: simple
