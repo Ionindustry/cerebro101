@@ -21,6 +21,14 @@ def plano(t) -> str:
     return " ".join(sin_acentos(t).lower().split())
 
 
+def texto_de_html(t, maximo: int = 6000) -> str | None:
+    """El texto visible de un fragmento HTML de una fuente (sin etiquetas ni entidades). Es TEXTO DE TERCEROS: nunca se vuelve a pintar como HTML."""
+    import html
+    sin = re.sub(r"<(script|style)[^>]*>.*?</\1>", " ", str(t or ""), flags=re.S | re.I)
+    sin = re.sub(r"<[^>]+>", " ", sin)
+    return limpiar(html.unescape(sin), maximo)
+
+
 def limpiar(t, maximo: int = 4000) -> str | None:
     t = " ".join(str(t or "").split())
     return t[:maximo] or None
