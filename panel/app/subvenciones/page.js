@@ -206,7 +206,7 @@ function Conectores() {
   useEffect(() => { cargar(); }, [cargar]);
   const hacer = async (fn, ok) => {
     setTrabajando(true); setError(null); setAviso(null);
-    try { await fn(); if (ok) setAviso(ok); await cargar(); } catch (e) { setError(e); } finally { setTrabajando(false); }
+    try { await fn(); if (ok) setAviso(ok); await cargar(); } catch (e) { setError(e); } finally { setTrabajando(false); if (typeof window !== "undefined") window.scrollTo({ top: 0, behavior: "smooth" }); }   // el aviso o el error salen arriba: se sube para que se vean
   };
   if (lista === undefined) return <p>Cargando…</p>;
   if (lista === null) return <p className="aviso" role="alert">{mensajeError(error)}</p>;
