@@ -4,6 +4,7 @@ VERIFICADO con una respuesta real el 19/11/2026: POST a /search-api/prod/rest/se
 que usa el propio portal (no es un secreto de la empresa). Cada resultado trae `metadata` con listas de valores: identifier, title, callTitle, type, status, startDate, deadlineDate, budget, description (HTML).
 Solo se importan los anuncios de TIPO 8 (los «topics» de subvención que se ven en la respuesta verificada). Los tipos 1 y 2 NO están verificados (podrían ser licitaciones): no se importan salvo que Dirección los
 añada en `tipos` de los ajustes tras comprobarlos. Estados de la consulta: 31094501 = próximamente, 31094502 = abierto (31094503 = cerrado: no se importa).
+Se consulta en inglés (idioma original de los anuncios) y se descartan las copias por idioma (campo `reference` acaba en el código de idioma), que antes se leían varias veces y se marcaban como modificadas.
 Si la fuente declara «abierto» pero el plazo ya pasó, manda la fecha (el estado se calcula con el calendario, igual que en la BDNS).
 """
 from __future__ import annotations
@@ -56,13 +57,14 @@ class ConectorSEDIA(Conector):
     def _formulario(self) -> dict:
         consulta = {"bool": {"must": [{"terms": {"type": [str(t) for t in self.ajustes.get("tipos", ["8"])]}},
                                       {"terms": {"status": [str(e) for e in self.ajustes.get("estados", ["31094501", "31094502"])]}}]}}
-        return {"query": (None, json.dumps(consulta), "application/json"), "languages": (None, json.dumps(self.ajustes.get("idiomas", ["es", "en"])), "application/json")}
+        return {"query": (None, json.dumps(consulta), "application/json"), "languages": (None, json.dumps(self.ajustes.get("idiomas", ["en"])), "application/json")}
 
     async def paginas(self, cursor: dict, hoy: date) -> AsyncIterator[Pagina]:
         tam = int(self.ajustes.get("tamano_pagina", 50))
         maximo = int(self.params.get("paginas_maximas_por_ejecucion", 40))
         pausa = float(self.params.get("pausa_entre_peticiones_s", 0.5))
         pagina = max(1, int((cursor or {}).get("pagina") or 1))
+        vistos: set[str] = set()                        # la UE devuelve una copia por idioma del mismo anuncio: solo se toma la primera de cada identificador
         propio = self.cliente is None
         cliente = self.cliente or httpx.AsyncClient()
         try:
@@ -75,7 +77,16 @@ class ConectorSEDIA(Conector):
                 total = int(datos.get("totalResults") or 0)
                 ultima = len(filas) < tam or pagina * tam >= total
                 pagina += 1
-                yield Pagina([f for f in filas if isinstance(f, dict)], {} if ultima else {"pagina": pagina})
+                utiles = []
+                for f in filas:
+                    if not isinstance(f, dict):
+                        continue
+                    ident = str(_uno(f.get("metadata") or {}, "identifier") or f.get("reference") or "")
+                    if ident and ident in vistos:
+                        continue
+                    vistos.add(ident)
+                    utiles.append(f)
+                yield Pagina(utiles, {} if ultima else {"pagina": pagina})
                 if ultima:
                     return
                 await asyncio.sleep(pausa)

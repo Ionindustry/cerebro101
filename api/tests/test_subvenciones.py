@@ -443,6 +443,21 @@ class TestConectorSEDIA(unittest.TestCase):
         self.assertNotIn("alert", o["description"])
         self.assertTrue(o["official_url"].startswith("https://ec.europa.eu/"))
 
+    def test_las_copias_por_idioma_del_mismo_anuncio_se_leen_una_sola_vez(self):
+        es = {**RESULTADO_UE, "reference": "13882COMPETITIVE_CALLes", "language": "es"}
+        otro = {**RESULTADO_UE, "reference": "99999COMPETITIVE_CALLen", "metadata": {**RESULTADO_UE["metadata"], "identifier": ["OTRO-TOPIC-1"]}}
+
+        def h(req):
+            return httpx.Response(200, json={"totalResults": 3, "results": [RESULTADO_UE, es, otro]})
+        c = self.conector(httpx.AsyncClient(transport=httpx.MockTransport(h)), tamano_pagina=50)
+        filas = []
+
+        async def todo():
+            async for p in c.paginas({}, HOY):
+                filas.extend(p.registros)
+        ejecutar(todo())
+        self.assertEqual([f["reference"] for f in filas], ["13882COMPETITIVE_CALLen", "99999COMPETITIVE_CALLen"])
+
     def test_si_el_plazo_ya_paso_manda_la_fecha_aunque_la_fuente_diga_abierto(self):
         self.assertEqual(self.conector().normalizar(RESULTADO_UE, date(2026, 11, 19))["status"], "CLOSED")
 
