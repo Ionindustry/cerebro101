@@ -237,6 +237,27 @@ class TestConectorBDNS(unittest.TestCase):
         self.assertIsNone(o["deadline"])
         self.assertEqual(o["status"], "UNKNOWN")
 
+    def test_respuesta_real_de_la_bdns_verificada_el_19_11_2026(self):
+        # Muestra real (datos públicos) devuelta por infosubvenciones.es: abierto=false sin fechas NO significa «cerrada» (el plazo era relativo a una publicación), y el territorio
+        # viene como «ES431 - Badajoz» (NUTS3 = provincia).
+        resumen = {"id": 1144687, "numeroConvocatoria": "943126", "descripcion": "AYUDAS PARA LA ADQUISICIÓN DE MATERIAL ESCOLAR CURSO 2026-2027", "descripcionLeng": None,
+                   "fechaRecepcion": "2026-11-18", "nivel1": "LOCAL", "nivel2": "LLERENA", "nivel3": "AYUNTAMIENTO DE LLERENA"}
+        detalle = {"organo": {"nivel1": "LOCAL", "nivel2": "LLERENA", "nivel3": "AYUNTAMIENTO DE LLERENA"}, "sedeElectronica": None, "codigoBDNS": "943126", "fechaRecepcion": "2026-11-18",
+                   "instrumentos": [{"descripcion": "SUBVENCIÓN Y ENTREGA DINERARIA SIN CONTRAPRESTACIÓN "}], "presupuestoTotal": 5000,
+                   "tiposBeneficiarios": [{"descripcion": "PERSONAS JURÍDICAS QUE NO DESARROLLAN ACTIVIDAD ECONÓMICA"}],
+                   "sectores": [{"descripcion": "EDUCACIÓN", "codigo": "Q"}], "regiones": [{"descripcion": "ES431 - Badajoz"}], "descripcionFinalidad": "Educación",
+                   "urlBasesReguladoras": "https://sede.llerena.es/", "abierto": False, "fechaInicioSolicitud": None, "fechaFinSolicitud": None,
+                   "documentos": [{"id": 1558594, "descripcion": "Documento de la convocatoria", "nombreFic": "x.pdf", "long": 368206}]}
+        o = self.conector(None).normalizar({"resumen": resumen, "detalle": detalle}, HOY)
+        self.assertEqual((o["_external_id"], o["geographic_scope"], o["funding_type"], o["total_budget"]), ("943126", "local", "subvencion", Decimal("5000")))
+        self.assertEqual((o["province"], o["region"], o["status"]), ("Badajoz", None, "UNKNOWN"))
+        self.assertEqual(o["issuing_organization"], "LLERENA · AYUNTAMIENTO DE LLERENA")
+        self.assertEqual(o["legal_basis_url"], "https://sede.llerena.es/")
+        self.assertEqual(o["_documents"], [])               # los documentos de la BDNS no traen dirección de descarga: no se inventa
+        a = self.conector(None).normalizar({"resumen": {**resumen, "nivel1": "AUTONOMICA", "nivel2": "PAÍS VASCO"}, "detalle": {**detalle, "regiones": [], "abierto": True,
+                                                         "organo": {"nivel1": "AUTONOMICA", "nivel2": "PAÍS VASCO", "nivel3": "X"}}}, HOY)
+        self.assertEqual((a["region"], a["status"]), ("País Vasco", "OPEN"))
+
     def test_registro_sin_id_o_titulo_es_invalido(self):
         c = self.conector(None)
         with self.assertRaises(ErrorRegistro):

@@ -56,9 +56,10 @@ def tiene(o, ruta):
         if not isinstance(o, dict) or p not in o: return False
         o = o[p]
     return o not in (None, "", [])
-try:
-    sys.path.insert(0, "api")
-    from cerebro.subvenciones.conectores.bdns import CAMPOS_POR_DEFECTO as C
+try:        # se lee la lista del código fuente sin importarlo (el Python del servidor no tiene las dependencias de la API)
+    import ast
+    arbol = ast.parse(Path("api/cerebro/subvenciones/conectores/bdns.py").read_text(encoding="utf-8"))
+    C = next(ast.literal_eval(n.value) for n in arbol.body if isinstance(n, ast.Assign) and getattr(n.targets[0], "id", "") == "CAMPOS_POR_DEFECTO")
 except Exception as e:
     print("  (no se pudo leer la lista de campos del conector:", e, ")"); sys.exit(0)
 crudo = {"resumen": fila, "detalle": det}
