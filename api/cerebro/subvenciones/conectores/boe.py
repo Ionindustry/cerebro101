@@ -28,16 +28,25 @@ def _https_boe(u) -> str | None:
     return u if u.startswith("https://www.boe.es/") else None
 
 
+def _lista(x) -> list:
+    """El JSON del BOE (convertido desde XML) da un objeto suelto cuando solo hay uno y una lista cuando hay varios."""
+    if x is None:
+        return []
+    return [e for e in (x if isinstance(x, list) else [x]) if isinstance(e, dict)]
+
+
 def _items(sumario: dict) -> list[tuple[str, str, dict]]:
     """[(sección, departamento, ítem)] del sumario del día."""
     salida = []
-    for dia in ((sumario.get("data") or {}).get("sumario") or {}).get("diario") or []:
-        for sec in dia.get("seccion") or []:
-            for dep in sec.get("departamento") or []:
-                for epi in dep.get("epigrafe") or [{"item": dep.get("item")}]:
-                    its = epi.get("item") or []
-                    for it in its if isinstance(its, list) else [its]:
-                        if isinstance(it, dict) and it.get("identificador") and it.get("titulo"):
+    data = sumario.get("data") if isinstance(sumario.get("data"), dict) else {}
+    cuerpo = data.get("sumario") if isinstance(data.get("sumario"), dict) else {}
+    for dia in _lista(cuerpo.get("diario")):
+        for sec in _lista(dia.get("seccion")):
+            for dep in _lista(sec.get("departamento")):
+                epigrafes = _lista(dep.get("epigrafe")) or [{"item": dep.get("item")}]
+                for epi in epigrafes:
+                    for it in _lista(epi.get("item")):
+                        if it.get("identificador") and it.get("titulo"):
                             salida.append((str(sec.get("codigo") or ""), str(dep.get("nombre") or ""), it))
     return salida
 
@@ -95,7 +104,8 @@ class ConectorBOE(Conector):
         if not crudo.get("bdns"):
             raise ErrorRegistro(f"el extracto {externo} no cita un número de la BDNS: no se puede enlazar sin duplicar")
         html = _https_boe(it.get("url_html"))
-        pdf = _https_boe((it.get("url_pdf") or {}).get("texto"))
+        bruto_pdf = it.get("url_pdf")
+        pdf = _https_boe(bruto_pdf.get("texto") if isinstance(bruto_pdf, dict) else bruto_pdf)
         return {
             "title": titulo, "description": None, "program_name": None, "issuing_organization": N.limpiar(crudo.get("departamento"), 300), "official_url": html, "application_url": None,
             "country": "ES", "region": None, "province": None, "municipality": None, "geographic_scope": None, "eligible_beneficiaries": [], "company_sizes": [], "economic_activities": [],
