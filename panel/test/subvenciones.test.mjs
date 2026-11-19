@@ -66,3 +66,13 @@ test("los tres botones de estado envían sus estados y se reconocen", () => {
   assert.equal(grupoActivo(""), "");
   assert.equal(filtrosAQuery({ ...FILTROS_VACIOS, estado: "" }), "");
 });
+
+test("la pasarela /cerebro reenvía todos los métodos que usa la página (Activar usa PATCH; Seguir, PUT; Dejar de seguir, DELETE)", async () => {
+  const { readFileSync } = await import("node:fs");
+  const ruta = readFileSync(new URL("../app/cerebro/[...ruta]/route.js", import.meta.url), "utf8");
+  const pagina = readFileSync(new URL("../app/subvenciones/page.js", import.meta.url), "utf8");
+  const usados = new Set([...pagina.matchAll(/enviar\("(PATCH|PUT|POST|DELETE)"/g)].map((m) => m[1]));
+  if (/method: "DELETE"/.test(pagina)) usados.add("DELETE");
+  assert.ok(usados.has("PATCH") && usados.has("PUT") && usados.has("DELETE"));
+  for (const m of usados) assert.match(ruta, new RegExp(`reenviar as ${m}\\b`), `falta exportar ${m} en la pasarela`);
+});

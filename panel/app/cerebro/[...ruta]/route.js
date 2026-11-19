@@ -29,4 +29,4 @@ async function reenviar(req, { params }) {
   return new Response(r.texto, { status: r.status, headers: { "Content-Type": "application/json" } });
 }
 
-export { reenviar as GET, reenviar as POST };
+export { reenviar as GET, reenviar as POST, reenviar as PUT, reenviar as PATCH, reenviar as DELETE };
