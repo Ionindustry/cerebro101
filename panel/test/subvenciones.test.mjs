@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { activableMotivo, ejecucionTexto, fechaCorta, filtrosAQuery, importeTexto, mensajeError, plazoTexto, urlSegura, FILTROS_VACIOS, GRUPOS_ESTADO, grupoActivo } from "../lib/subvenciones.js";
+import { datoAnalisisTexto, activableMotivo, ejecucionTexto, fechaCorta, filtrosAQuery, importeTexto, mensajeError, plazoTexto, urlSegura, FILTROS_VACIOS, GRUPOS_ESTADO, grupoActivo } from "../lib/subvenciones.js";
 
 test("solo se enlazan direcciones http(s)", () => {
   assert.equal(urlSegura("https://www.infosubvenciones.es/x"), "https://www.infosubvenciones.es/x");
@@ -75,4 +75,13 @@ test("la pasarela /cerebro reenvía todos los métodos que usa la página (Activ
   if (/method: "DELETE"/.test(pagina)) usados.add("DELETE");
   assert.ok(usados.has("PATCH") && usados.has("PUT") && usados.has("DELETE"));
   for (const m of usados) assert.match(ruta, new RegExp(`reenviar as ${m}\\b`), `falta exportar ${m} en la pasarela`);
+});
+
+test("el análisis dice «No consta» cuando falta un dato y formatea listas, calendarios e importes", () => {
+  assert.equal(datoAnalisisTexto({ consta: false, valor: null }), "No consta en la fuente");
+  assert.equal(datoAnalisisTexto(undefined), "No consta en la fuente");
+  assert.equal(datoAnalisisTexto({ consta: true, valor: ["PYME", "Autónomos"] }), "PYME, Autónomos");
+  assert.equal(datoAnalisisTexto({ consta: true, valor: { apertura: "2026-11-01", fin_de_plazo: "2026-12-31" } }), "apertura: 2026-11-01 · fin de plazo: 2026-12-31");
+  assert.equal(datoAnalisisTexto({ consta: true, valor: { maximo: "12000", moneda: "EUR" } }), "máximo: 12000 · moneda: EUR");
+  assert.equal(datoAnalisisTexto({ consta: true, valor: true }), "Sí");
 });

@@ -166,6 +166,12 @@ async def ficha(opp_id: str, usuario: str | None = None) -> dict:
     return _json({**o, "fuentes": fuentes, "documentos": docs, "historial": historial, "guardada": guardada})
 
 
+async def analisis(opp_id: str) -> dict:
+    """De qué trata, a quién va dirigida y bases para presentarse (ver `analisis.construir`)."""
+    from . import analisis as A
+    return A.construir(await ficha(opp_id))
+
+
 async def radar(usuario: str | None = None, limite: int = 10) -> dict:
     """Las categorías del radar: nuevas, abiertas, próximas a abrir, próximas a cerrar y modificadas, con su número y las primeras de cada una."""
     limite = max(1, min(int(limite), 50))

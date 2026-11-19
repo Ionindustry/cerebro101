@@ -741,6 +741,15 @@ async def ficha_de_subvencion(oportunidad_id: str, usuario: Usuario = Depends(us
         raise HTTPException(404 if "No existe" in str(e) else 422, str(e)) from None
 
 
+@app.get("/subvenciones/oportunidades/{oportunidad_id}/analisis")
+async def analisis_de_subvencion(oportunidad_id: str, usuario: Usuario = Depends(usuario_actual)):
+    """De qué trata la convocatoria, a quién va dirigida y qué bases hay que cumplir para presentarse, con lo que NO consta."""
+    try:
+        return await subvenciones_consulta.analisis(oportunidad_id)
+    except subvenciones_consulta.ErrorConsulta as e:
+        raise HTTPException(404 if "No existe" in str(e) else 422, str(e)) from None
+
+
 @app.get("/subvenciones/mis-oportunidades")
 async def mis_subvenciones(estado: str | None = None, usuario: Usuario = Depends(usuario_actual)):
     return await subvenciones_consulta.guardadas(usuario.id, estado)
