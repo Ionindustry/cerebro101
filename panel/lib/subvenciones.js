@@ -12,6 +12,17 @@ export const AMBITO_ETIQUETA = { nacional: "Nacional", autonomico: "Autonómico"
 export const CATEGORIAS_RADAR = [
   ["nuevas", "Nuevas"], ["abiertas", "Abiertas"], ["proximas_a_abrir", "Próximas a abrir"], ["proximas_a_cerrar", "Próximas a cerrar"], ["modificadas", "Modificadas"],
 ];
+/** Los tres botones del buscador y los estados del ciclo de vida que agrupa cada uno. «Abiertas» incluye las que cierran pronto; «Cerradas», las anuladas. */
+export const GRUPOS_ESTADO = [
+  { clave: "abiertas", nombre: "Abiertas", estados: ["OPEN", "CLOSING_SOON"] },
+  { clave: "cerradas", nombre: "Cerradas", estados: ["CLOSED", "CANCELLED"] },
+  { clave: "por_abrir", nombre: "Por abrir", estados: ["OPENING_SOON"] },
+];
+export function grupoActivo(estado) {
+  const e = [].concat(estado || []).sort().join(",");
+  return GRUPOS_ESTADO.find((g) => [...g.estados].sort().join(",") === e)?.clave || "";
+}
+
 export const FILTROS_VACIOS = { texto: "", pais: "", estado: "", instrumento: "", fuente: "", importeMin: "", importeMax: "", plazoDesde: "", plazoHasta: "", soloNuevas: false, orden: "" };
 export const ESTADO_FUENTE = { PENDING_VERIFICATION: "Pendiente de verificar", VERIFIED: "Verificada", ACTIVE: "Activa", PAUSED: "En pausa", ERROR: "Con error", PLANNED: "Planificada" };
 
@@ -53,10 +64,11 @@ export function plazoTexto(deadline, ahora = Date.now()) {
 export function filtrosAQuery(f, pagina = 0) {
   const p = new URLSearchParams();
   const pon = (k, v) => { if (v !== "" && v !== null && v !== undefined && v !== false) p.set(k, String(v).trim()); };
-  pon("texto", f.texto); pon("pais", f.pais); pon("estado", f.estado); pon("instrumento", f.instrumento); pon("fuente", f.fuente);
+  pon("texto", f.texto); pon("pais", f.pais); pon("instrumento", f.instrumento); pon("fuente", f.fuente);
   pon("importe_min", f.importeMin); pon("importe_max", f.importeMax); pon("plazo_desde", f.plazoDesde); pon("plazo_hasta", f.plazoHasta);
   if (f.soloNuevas) p.set("solo_nuevas", "true");
   pon("orden", f.orden);
+  for (const e of [].concat(f.estado || [])) if (e) p.append("estado", e);
   if (pagina > 0) p.set("pagina", String(pagina));
   const s = p.toString();
   return s ? `?${s}` : "";

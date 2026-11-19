@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { activableMotivo, ejecucionTexto, fechaCorta, filtrosAQuery, importeTexto, mensajeError, plazoTexto, urlSegura, FILTROS_VACIOS } from "../lib/subvenciones.js";
+import { activableMotivo, ejecucionTexto, fechaCorta, filtrosAQuery, importeTexto, mensajeError, plazoTexto, urlSegura, FILTROS_VACIOS, GRUPOS_ESTADO, grupoActivo } from "../lib/subvenciones.js";
 
 test("solo se enlazan direcciones http(s)", () => {
   assert.equal(urlSegura("https://www.infosubvenciones.es/x"), "https://www.infosubvenciones.es/x");
@@ -53,4 +53,16 @@ test("ejecución y errores", () => {
   assert.match(ejecucionTexto({ run_status: "ok", fetched: 10, inserted: 3, updated: 1, unchanged: 6, invalid: 2 }), /Correcta: 10 leídos · 3 nuevos · 1 modificados · 6 sin cambios · 2 inválidos/);
   assert.match(mensajeError({ status: 403 }), /Dirección/);
   assert.equal(mensajeError({ status: 422, detalle: "x" }), "x");
+});
+
+test("los tres botones de estado envían sus estados y se reconocen", () => {
+  const por = (k) => GRUPOS_ESTADO.find((g) => g.clave === k).estados;
+  assert.deepEqual(por("abiertas"), ["OPEN", "CLOSING_SOON"]);
+  assert.deepEqual(por("por_abrir"), ["OPENING_SOON"]);
+  const q = new URLSearchParams(filtrosAQuery({ ...FILTROS_VACIOS, estado: por("abiertas") }).slice(1));
+  assert.deepEqual(q.getAll("estado"), ["OPEN", "CLOSING_SOON"]);
+  assert.equal(grupoActivo(["CLOSING_SOON", "OPEN"]), "abiertas");
+  assert.equal(grupoActivo(por("cerradas")), "cerradas");
+  assert.equal(grupoActivo(""), "");
+  assert.equal(filtrosAQuery({ ...FILTROS_VACIOS, estado: "" }), "");
 });
