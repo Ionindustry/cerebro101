@@ -556,6 +556,23 @@ class TestConectorBOE(unittest.TestCase):
         with self.assertRaises(ErrorRegistro):
             self.conector().normalizar(f, HOY)
 
+    def test_acepta_objetos_sueltos_donde_solo_hay_un_elemento(self):
+        """El JSON del BOE (convertido de XML) da un objeto en vez de una lista cuando solo hay uno: antes fallaba con «'str' object has no attribute 'get'»."""
+        import copy
+        s = copy.deepcopy(SUMARIO_BOE)
+        dia = s["data"]["sumario"]["diario"][0]
+        sec = dia["seccion"][2]
+        sec["departamento"] = sec["departamento"][0]
+        sec["departamento"]["epigrafe"] = sec["departamento"]["epigrafe"][0]
+        sec["departamento"]["epigrafe"]["item"] = sec["departamento"]["epigrafe"]["item"][0]
+        dia["seccion"] = sec
+        s["data"]["sumario"]["diario"] = dia
+
+        def h(req):
+            return httpx.Response(200, json=s) if "/sumario/" in req.url.path else httpx.Response(200, text=XML_38039)
+        filas = self.registros(self.conector(httpx.AsyncClient(transport=httpx.MockTransport(h)), dias_ventana=1))
+        self.assertEqual([(f["item"]["identificador"], f["bdns"]) for f in filas], [("BOE-B-2026-38039", "941981")])
+
     def test_un_dia_sin_sumario_404_no_es_error(self):
         self.assertEqual(self.registros(self.conector(servidor_boe(dia_con_sumario="20990101"))), [])
 
