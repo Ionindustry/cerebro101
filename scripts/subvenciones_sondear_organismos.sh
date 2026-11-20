@@ -29,7 +29,23 @@ def get(nombre, url, accept="*/*", maximo=400_000):
     return codigo, tipo, datos.decode("utf-8", "replace")
 
 def corto(t, n=300):
-    return re.sub(r"\s+", " ", t)[:n]
+    return re.sub(r"\s+", " ", str(t))[:n]
+
+def texto(v):
+    """Un valor de la respuesta de datos.gob.es como texto: puede ser cadena, {_value: ...}, {value: ...}, {_about: ...} o una lista de esas cosas (se prefiere el castellano)."""
+    if v is None:
+        return ""
+    if isinstance(v, str):
+        return v
+    if isinstance(v, list):
+        elegidos = [x for x in v if isinstance(x, dict) and x.get("_lang") == "es"] or v
+        return texto(elegidos[0]) if elegidos else ""
+    if isinstance(v, dict):
+        for k in ("_value", "value", "_about", "label", "name", "title"):
+            if v.get(k):
+                return texto(v[k])
+        return ""
+    return str(v)
 
 print("=== 1. Catálogo nacional datos.gob.es: conjuntos de datos de subvenciones/ayudas/convocatorias ===")
 for termino in ("subvenciones", "convocatorias", "ayudas"):
@@ -39,14 +55,17 @@ for termino in ("subvenciones", "convocatorias", "ayudas"):
         items = json.loads(cuerpo)["result"]["items"]
     except Exception:                           # noqa: BLE001
         print("   (sin lista interpretable)", corto(cuerpo, 200)); continue
+    if items:
+        print("   (estructura del primer elemento:", corto(json.dumps(items[0], ensure_ascii=False), 700), ")")
     for it in items[:30]:
-        titulo = it.get("title") or []
-        titulo = (titulo[0].get("_value") if titulo and isinstance(titulo[0], dict) else titulo) or ""
-        dist = it.get("distribution") or []
-        dist = dist if isinstance(dist, list) else [dist]
-        formatos = sorted({str((d.get("format") or {}).get("value", "")) for d in dist if isinstance(d, dict)})
-        url = next((d.get("accessURL") for d in dist if isinstance(d, dict) and d.get("accessURL")), "")
-        print(f"   · {corto(str(titulo), 90)} | {','.join(formatos)} | {url}")
+        try:
+            dist = it.get("distribution") if isinstance(it, dict) else None
+            dist = dist if isinstance(dist, list) else ([dist] if dist else [])
+            formatos = sorted({texto(d.get("format")) for d in dist if isinstance(d, dict) and d.get("format")} - {""})
+            url = next((texto(d.get("accessURL")) for d in dist if isinstance(d, dict) and d.get("accessURL")), "") or next((d for d in dist if isinstance(d, str)), "")
+            print(f"   · {corto(texto(it.get('title')), 90)} | {','.join(formatos)} | {url} | {corto(texto(it.get('publisher')), 40)}")
+        except Exception as e:          # noqa: BLE001
+            print("   · (elemento no interpretable)", type(e).__name__, corto(json.dumps(it, ensure_ascii=False)[:160]))
 
 print()
 print("=== 2. Webs de organismos: título, canales RSS/API y enlaces de convocatorias ===")
