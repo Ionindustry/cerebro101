@@ -1096,4 +1096,49 @@ CREATE TABLE IF NOT EXISTS funding_saved_opportunities (
   UNIQUE (usuario, opportunity_id),
   CHECK (estado IN ('seguida', 'descartada'))
 );
+-- Lectura de las BASES de una convocatoria (documentos enlazados: bases reguladoras, convocatoria, extractos). El documento se descarga solo de las plataformas de la lista, pasa por el antivirus
+-- y se lee en un proceso aparte; aquí solo queda su texto por páginas. Los requisitos nacen en «borrador» con su CITA LITERAL (el sistema comprueba que la frase está en esa página).
+CREATE TABLE IF NOT EXISTS funding_document_text (
+  document_id  bigint PRIMARY KEY REFERENCES funding_documents (id) ON DELETE CASCADE,
+  sha256       text,
+  format       text,
+  bytes        integer,
+  state        text NOT NULL,                  -- leido | infectado | no_analizable | con_macros | no_admitido | error
+  reason       text,
+  pages        integer NOT NULL DEFAULT 0,
+  unit         text,
+  read_at      timestamptz NOT NULL DEFAULT now()
+);
+CREATE TABLE IF NOT EXISTS funding_document_pages (
+  document_id  bigint NOT NULL REFERENCES funding_documents (id) ON DELETE CASCADE,
+  page         integer NOT NULL,
+  text         text NOT NULL,
+  PRIMARY KEY (document_id, page)
+);
+CREATE TABLE IF NOT EXISTS funding_requirements (
+  id             bigserial PRIMARY KEY,
+  opportunity_id uuid NOT NULL REFERENCES funding_opportunities (id) ON DELETE CASCADE,
+  document_id    bigint NOT NULL REFERENCES funding_documents (id) ON DELETE CASCADE,
+  page           integer NOT NULL,
+  kind           text NOT NULL,                -- beneficiario | requisito | gasto_subvencionable | exclusion | importe | plazo | documentacion | criterio_valoracion | forma_de_solicitud | otro
+  summary        text NOT NULL,
+  quote          text NOT NULL,                -- la frase tal cual del documento
+  status         text NOT NULL DEFAULT 'borrador',
+  created_at     timestamptz NOT NULL DEFAULT now(),
+  reviewed_by    text,
+  reviewed_at    timestamptz,
+  CHECK (status IN ('borrador', 'confirmado', 'rechazado'))
+);
+CREATE UNIQUE INDEX IF NOT EXISTS funding_req_unico ON funding_requirements (document_id, page, md5(quote));
+CREATE INDEX IF NOT EXISTS funding_req_opp ON funding_requirements (opportunity_id);
+-- Una fila por convocatoria: el estado de la última lectura de sus bases (el panel la enseña y permite repetirla)
+CREATE TABLE IF NOT EXISTS funding_reading_runs (
+  opportunity_id uuid PRIMARY KEY REFERENCES funding_opportunities (id) ON DELETE CASCADE,
+  state          text NOT NULL,                -- en_cola | en_curso | ok | error
+  reason         text,
+  requested_by   text,
+  started_at     timestamptz NOT NULL DEFAULT now(),
+  finished_at    timestamptz,
+  stats          jsonb NOT NULL DEFAULT '{}'
+);
 -- Fin subvenciones

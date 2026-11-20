@@ -80,4 +80,18 @@ gastos subvencionables, importes, calendario, estado, cómo solicitar, bases reg
 `lagunas`; la **cobertura** (completa / parcial / escasa) avisa de cuánto se ha podido extraer (las fuentes de listado, como Cataluña, traen poco). Los agentes lo consultan con `subvenciones › analisis`
 (solo lectura) y el panel con `GET /subvenciones/oportunidades/{id}/analisis`. No dice si 101.cat cumple los requisitos ni es una valoración jurídica.
 
-Siguientes pasos (aún no hechos): leer el PDF de las bases con descarga segura y citas literales (en borrador hasta que una persona lo confirme) y cruzar los requisitos con el perfil de la empresa.
+Siguiente paso (aún no hecho): cruzar los requisitos confirmados con el perfil de la empresa.
+
+## Lectura de las bases (paso 4)
+
+En la ficha, el botón **«Leer las bases»** (`POST /subvenciones/oportunidades/{id}/bases/leer`, tarea `leer_bases_subvencion` en la cola `lote`) lee los documentos enlazados de la convocatoria
+(bases reguladoras, convocatoria, extractos) y propone los **requisitos para presentarse** (beneficiarios, requisitos, gastos subvencionables, exclusiones, importes, plazos, documentación, criterios de valoración
+y forma de solicitud), cada uno con su **cita literal** y su página. Reglas que cumple el código (`api/cerebro/subvenciones/bases.py`):
+
+- **Bajo demanda y por id**: solo documentos de la propia convocatoria; solo se descarga de `config/subvenciones.yaml › documentos.hosts` (https, direcciones públicas, cada redirección revalidada).
+- **Seguridad del documento**: tipo según el contenido (PDF, Word, Excel, OpenDocument; una página web o un ZIP no se leen), **antivirus clamd que falla cerrado**, tamaño máximo, lectura del texto en un proceso aparte sin
+  secretos. El binario no se guarda: solo su huella SHA-256 y el texto por páginas (`funding_document_text`, `funding_document_pages`).
+- **El modelo no se fía**: el texto es de terceros (datos, nunca instrucciones). Un requisito se guarda **solo si su cita está literalmente en esa página** (si el modelo se equivoca de página se corrige; si la frase no
+  está, se descarta). Nacen en **borrador** (`funding_requirements`): una persona los **confirma o rechaza** (`PATCH /subvenciones/requisitos/{id}`). Nada decide ni presenta una solicitud.
+- Acotado: `max_documentos`, `max_paginas` y `max_llamadas_modelo` por convocatoria. Si el modelo no está disponible, la tarea reintenta con espera y, si no, queda «error» con su motivo (lo ya leído se conserva;
+  se puede repetir). Repetir no duplica requisitos ni vuelve a descargar lo ya leído. El estado de la última lectura está en `funding_reading_runs`.

@@ -14,6 +14,16 @@ sincronizacion:
   dias_proximo_cierre: 15                  # CLOSING_SOON: faltan estos días o menos para el plazo
   dias_novedad: 7                          # una oportunidad detectada hace menos de estos días se marca como nueva
 
+# Lectura de las bases (documentos enlazados a una convocatoria). Solo se descarga de estas plataformas (https, direcciones públicas; cada redirección se revalida), con antivirus
+# (si clamd no responde, el documento no se lee) y bajo demanda: nada se baja sin que una persona pulse «Leer las bases».
+documentos:
+  hosts: [boe.es, infosubvenciones.es, europa.eu]
+  max_mb: 40
+  max_documentos: 3                        # por convocatoria (los que por su nombre parecen bases o convocatoria van primero)
+  max_paginas: 60                          # por documento
+  max_llamadas_modelo: 25                  # tope de llamadas al modelo por convocatoria
+  caracteres_por_trozo: 6000
+
 fuentes:
   # ---------------------------------------------------------------- España
   - {code: ES-001, name: "Base de Datos Nacional de Subvenciones (BDNS)", country: ES, scope: nacional, priority: critica, access: REST_API, auth: NONE, connector: bdns, frequency_h: 4,

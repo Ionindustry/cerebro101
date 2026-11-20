@@ -56,6 +56,7 @@ from ..licitaciones import simulador as simulador_licitaciones
 from ..licitaciones import embudo as embudo_licitaciones
 from ..licitaciones import resumen as resumen_licitaciones
 from ..subvenciones import consulta as subvenciones_consulta
+from ..subvenciones import bases as subvenciones_bases
 from ..subvenciones import registro as subvenciones_registro
 from ..cotizador import Solicitud, calcular
 from ..grafo import construir, nodos
@@ -695,6 +696,10 @@ class FuenteCambio(BaseModel):
     ajustes: dict | None = None
 
 
+class RevisionRequisito(BaseModel):
+    estado: str
+
+
 class OportunidadGuardada(BaseModel):
     estado: str = "seguida"
     empresa: str | None = Field(default=None, max_length=200)
@@ -705,6 +710,15 @@ class OportunidadGuardada(BaseModel):
 def _exige_direccion_subvenciones(usuario: Usuario) -> None:
     if "direccion" not in usuario.roles:
         raise HTTPException(403, "Los conectores del radar de subvenciones los administra Dirección")
+
+
+def _id_subvencion(valor: str) -> str:
+    """El id de una convocatoria es un UUID: cualquier otra cosa es un 422 antes de tocar la base."""
+    import uuid
+    try:
+        return str(uuid.UUID(str(valor)))
+    except ValueError:
+        raise HTTPException(422, "Identificador de convocatoria no válido") from None
 
 
 def _error_subvenciones(e: Exception) -> HTTPException:
@@ -748,6 +762,46 @@ async def analisis_de_subvencion(oportunidad_id: str, usuario: Usuario = Depends
         return await subvenciones_consulta.analisis(oportunidad_id)
     except subvenciones_consulta.ErrorConsulta as e:
         raise HTTPException(404 if "No existe" in str(e) else 422, str(e)) from None
+
+
+@app.post("/subvenciones/oportunidades/{oportunidad_id}/bases/leer", status_code=202)
+async def leer_bases_de_subvencion(oportunidad_id: str, usuario: Usuario = Depends(usuario_actual)):
+    """«Leer las bases»: descarga (con antivirus) los documentos enlazados de la convocatoria y propone sus requisitos con cita literal, en borrador. Tarda: corre en el worker."""
+    oid = _id_subvencion(oportunidad_id)
+    try:
+        r = await subvenciones_bases.encolar(oid, usuario.id)
+    except subvenciones_bases.ErrorBases as e:
+        raise HTTPException(404 if "No existe" in str(e) else 422, str(e)) from None
+    if not r["ya_en_marcha"]:
+        try:
+            from ..tareas.celery_app import app as celery
+            celery.send_task("cerebro.tareas.celery_app.leer_bases_subvencion", args=[oid, usuario.id], queue="lote")
+        except Exception as e:      # noqa: BLE001
+            log.warning("subvenciones: no se ha podido encolar la lectura de bases de %s: %s", oid, type(e).__name__)
+            await subvenciones_bases._estado(oid, "error", "No se ha podido encolar la lectura: inténtalo de nuevo", usuario.id)      # noqa: SLF001
+            raise HTTPException(503, "No se ha podido encolar la lectura: inténtalo de nuevo") from None
+    log.info("subvenciones: %s pide leer las bases de %s", usuario.id, oid)
+    return r
+
+
+@app.get("/subvenciones/oportunidades/{oportunidad_id}/bases")
+async def bases_de_subvencion(oportunidad_id: str, usuario: Usuario = Depends(usuario_actual)):
+    """Estado de la lectura de las bases, documentos y requisitos propuestos (con su cita y su estado de revisión)."""
+    try:
+        return await subvenciones_bases.lectura(_id_subvencion(oportunidad_id))
+    except subvenciones_bases.ErrorBases as e:
+        raise HTTPException(404 if "No existe" in str(e) else 422, str(e)) from None
+
+
+@app.patch("/subvenciones/requisitos/{requisito_id}")
+async def revisar_requisito_de_subvencion(requisito_id: int, entrada: RevisionRequisito, usuario: Usuario = Depends(usuario_actual)):
+    """Una persona confirma o rechaza un requisito propuesto por el modelo."""
+    try:
+        r = await subvenciones_bases.revisar(requisito_id, entrada.estado, usuario.id)
+    except subvenciones_bases.ErrorBases as e:
+        raise HTTPException(404 if "No existe" in str(e) else 422, str(e)) from None
+    log.info("subvenciones: %s marca el requisito %s como %s", usuario.id, requisito_id, entrada.estado)
+    return r
 
 
 @app.get("/subvenciones/mis-oportunidades")
