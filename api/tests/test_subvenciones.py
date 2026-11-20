@@ -580,6 +580,7 @@ class TestBasesPuro(unittest.TestCase):
         self.assertEqual(B.configuracion({})["hosts"], ["boe.es", "infosubvenciones.es", "europa.eu"])
 
 
+@unittest.skipUnless(URL, "sin CEREBRO_TEST_PG")
 class TestBasesEnBaseDeDatos(unittest.TestCase):
     CITA = "Podrán solicitar la ayuda las pequeñas y medianas empresas con domicilio fiscal en España."
 
