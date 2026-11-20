@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { datoAnalisisTexto, activableMotivo, ejecucionTexto, fechaCorta, filtrosAQuery, importeTexto, mensajeError, plazoTexto, urlSegura, FILTROS_VACIOS, GRUPOS_ESTADO, grupoActivo } from "../lib/subvenciones.js";
+import { agruparRequisitos, lecturaEnMarcha, lecturaTexto, datoAnalisisTexto, activableMotivo, ejecucionTexto, fechaCorta, filtrosAQuery, importeTexto, mensajeError, plazoTexto, urlSegura, FILTROS_VACIOS, GRUPOS_ESTADO, grupoActivo } from "../lib/subvenciones.js";
 
 test("solo se enlazan direcciones http(s)", () => {
   assert.equal(urlSegura("https://www.infosubvenciones.es/x"), "https://www.infosubvenciones.es/x");
@@ -84,4 +84,16 @@ test("el análisis dice «No consta» cuando falta un dato y formatea listas, ca
   assert.equal(datoAnalisisTexto({ consta: true, valor: { apertura: "2026-11-01", fin_de_plazo: "2026-12-31" } }), "apertura: 2026-11-01 · fin de plazo: 2026-12-31");
   assert.equal(datoAnalisisTexto({ consta: true, valor: { maximo: "12000", moneda: "EUR" } }), "máximo: 12000 · moneda: EUR");
   assert.equal(datoAnalisisTexto({ consta: true, valor: true }), "Sí");
+});
+
+test("la lectura de bases: estados, texto y requisitos agrupados por tipo con los rechazados al final", () => {
+  assert.equal(lecturaEnMarcha({ state: "en_cola" }), true);
+  assert.equal(lecturaEnMarcha({ state: "ok" }), false);
+  assert.equal(lecturaEnMarcha(null), false);
+  assert.match(lecturaTexto(null), /Todavía no/);
+  assert.match(lecturaTexto({ state: "error", reason: "modelo caído" }), /modelo caído/);
+  assert.match(lecturaTexto({ state: "ok", stats: { documentos: 2, leidos: 1, requisitos: 5 } }), /1 de 2 documentos leídos, 5 requisitos nuevos/);
+  const g = agruparRequisitos([{ id: 1, tipo: "plazo", estado: "rechazado" }, { id: 2, tipo: "plazo", estado: "borrador" }, { id: 3, tipo: "beneficiario", estado: "borrador" }, { id: 4, tipo: "raro", estado: "borrador" }]);
+  assert.deepEqual(g.map(([t]) => t), ["beneficiario", "plazo", "otro"]);
+  assert.deepEqual(g[1][1].map((r) => r.id), [2, 1]);
 });

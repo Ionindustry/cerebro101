@@ -113,3 +113,33 @@ export function datoAnalisisTexto(d) {
 }
 
 export const COBERTURA_ETIQUETA = { completa: "Datos completos", parcial: "Datos parciales", escasa: "Datos escasos" };
+
+export const TIPO_REQUISITO_ETIQUETA = {
+  beneficiario: "Beneficiario", requisito: "Requisito", gasto_subvencionable: "Gasto subvencionable", exclusion: "Exclusión", importe: "Importe", plazo: "Plazo",
+  documentacion: "Documentación", criterio_valoracion: "Criterio de valoración", forma_de_solicitud: "Cómo solicitar", otro: "Otro",
+};
+export const ESTADO_DOCUMENTO_ETIQUETA = { leido: "Leído", sin_leer: "Sin leer", infectado: "Bloqueado por el antivirus", no_analizable: "No analizable", con_macros: "Con macros", no_admitido: "No admitido", error: "Error" };
+export const ESTADO_REQUISITO_ETIQUETA = { borrador: "Borrador", confirmado: "Confirmado", rechazado: "Rechazado" };
+
+/** ¿Hay una lectura de bases en marcha? (la página sigue consultando hasta que acabe). */
+export function lecturaEnMarcha(l) {
+  return !!l && (l.state === "en_cola" || l.state === "en_curso");
+}
+
+/** Texto del estado de la última lectura de bases. */
+export function lecturaTexto(l) {
+  if (!l) return "Todavía no se han leído las bases";
+  if (l.state === "en_cola") return "En cola: empezará en unos instantes";
+  if (l.state === "en_curso") return "Leyendo las bases…";
+  if (l.state === "error") return `No se pudo completar: ${l.reason || "error desconocido"}`;
+  const s = l.stats || {};
+  return `Lectura terminada: ${s.leidos ?? 0} de ${s.documentos ?? 0} documentos leídos, ${s.requisitos ?? 0} requisitos nuevos${l.reason ? ` · ${l.reason}` : ""}`;
+}
+
+/** Requisitos agrupados por tipo en el orden de TIPO_REQUISITO_ETIQUETA (los rechazados al final de su grupo). */
+export function agruparRequisitos(lista) {
+  const orden = Object.keys(TIPO_REQUISITO_ETIQUETA);
+  const grupos = new Map(orden.map((t) => [t, []]));
+  for (const r of lista || []) (grupos.get(r.tipo) || grupos.get("otro")).push(r);
+  return orden.map((t) => [t, grupos.get(t).sort((a, b) => (a.estado === "rechazado") - (b.estado === "rechazado"))]).filter(([, v]) => v.length);
+}

@@ -44,7 +44,8 @@ app.conf.task_routes = {"cerebro.tareas.celery_app.ejecutar_programada": {"queue
                         "cerebro.tareas.celery_app.cargar_fichas": {"queue": "cortas"},
                         "cerebro.tareas.celery_app.releer_pliegos": {"queue": "cortas"},
                         "cerebro.tareas.celery_app.sincronizar_subvenciones": {"queue": "lote"},
-                        "cerebro.tareas.celery_app.sincronizar_subvencion": {"queue": "lote"}}
+                        "cerebro.tareas.celery_app.sincronizar_subvencion": {"queue": "lote"},
+                        "cerebro.tareas.celery_app.leer_bases_subvencion": {"queue": "lote"}}
 
 
 def _calendario() -> dict:
@@ -354,6 +355,17 @@ def sincronizar_subvencion(codigo: str) -> dict:
         return asyncio.run(registro.sincronizar_una(codigo, "manual"))
     except registro.ErrorFuentes as e:
         return {"fuente": codigo, "estado": "error", "error": str(e)}
+
+
+@app.task(name="cerebro.tareas.celery_app.leer_bases_subvencion", bind=True, max_retries=2)
+def leer_bases_subvencion(self, opp_id: str, usuario: str | None = None) -> dict:
+    """Lee las bases de una convocatoria (pedido a mano desde su ficha): descarga con antivirus, extrae el texto y el modelo propone requisitos con cita literal, en BORRADOR
+    (cerebro/subvenciones/bases.py). Si el modelo no está disponible se reintenta con espera; al agotar los reintentos queda «error» con su motivo y se puede repetir a mano."""
+    from ..subvenciones import bases
+    try:
+        return asyncio.run(bases.analizar(opp_id, usuario))
+    except bases.FALLOS_DEL_MODELO as e:
+        raise self.retry(exc=e, countdown=120 * (self.request.retries + 1)) from None
 
 
 @app.task(name="cerebro.tareas.celery_app.avisar_plazos")

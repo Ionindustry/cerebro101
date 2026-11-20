@@ -2,7 +2,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { pedirCerebro } from "../licitaciones/cliente";
 import {
-  AMBITO_ETIQUETA, CATEGORIAS_RADAR, COBERTURA_ETIQUETA, datoAnalisisTexto, ESTADO_CLASE, ESTADO_ETIQUETA, ESTADO_FUENTE, FILTROS_VACIOS, GRUPOS_ESTADO, INSTRUMENTO_ETIQUETA, grupoActivo, activableMotivo, ejecucionTexto, fechaCorta, filtrosAQuery,
+  AMBITO_ETIQUETA, CATEGORIAS_RADAR, COBERTURA_ETIQUETA, datoAnalisisTexto, ESTADO_DOCUMENTO_ETIQUETA, ESTADO_REQUISITO_ETIQUETA, TIPO_REQUISITO_ETIQUETA, agruparRequisitos, lecturaEnMarcha, lecturaTexto, ESTADO_CLASE, ESTADO_ETIQUETA, ESTADO_FUENTE, FILTROS_VACIOS, GRUPOS_ESTADO, INSTRUMENTO_ETIQUETA, grupoActivo, activableMotivo, ejecucionTexto, fechaCorta, filtrosAQuery,
   importeTexto, mensajeError, novedadEtiqueta, plazoTexto, urlSegura,
 } from "../../lib/subvenciones";
 import { haceTexto } from "../../lib/precios";
@@ -60,6 +60,66 @@ function Analisis({ id }) {
   );
 }
 
+function Bases({ id }) {
+  const [b, setB] = useState(undefined);
+  const [error, setError] = useState(null);
+  const [aviso, setAviso] = useState(null);
+  const cargar = useCallback(async () => {
+    try { setB(await pedirCerebro(`subvenciones/oportunidades/${id}/bases`)); setError(null); }
+    catch (e) { setError(e); setB((x) => x ?? null); }
+  }, [id]);
+  useEffect(() => { cargar(); }, [cargar]);
+  const enMarcha = lecturaEnMarcha(b?.lectura);
+  useEffect(() => {
+    if (!enMarcha) return undefined;
+    const t = setInterval(cargar, 5000);
+    return () => clearInterval(t);
+  }, [enMarcha, cargar]);
+  const leer = async () => {
+    setError(null); setAviso(null);
+    try { await pedirCerebro(`subvenciones/oportunidades/${id}/bases/leer`, enviar("POST")); setAviso("Lectura lanzada: puede tardar unos minutos."); await cargar(); }
+    catch (e) { setError(e); }
+  };
+  const revisar = async (rid, estado) => {
+    setError(null);
+    try { await pedirCerebro(`subvenciones/requisitos/${rid}`, enviar("PATCH", { estado })); await cargar(); }
+    catch (e) { setError(e); }
+  };
+  if (b === undefined) return <p className="meta">Cargando las bases…</p>;
+  const docs = b?.documentos || [];
+  return (
+    <section aria-label="Lectura de las bases">
+      <h3>Bases leídas del documento oficial</h3>
+      <p className="meta">{lecturaTexto(b?.lectura)}</p>
+      {error && <p className="aviso" role="alert">{mensajeError(error)}</p>}
+      {aviso && <p className="aviso" role="status">{aviso}</p>}
+      {docs.length > 0
+        ? <p className="lic-fila"><button className="boton si" disabled={enMarcha} onClick={leer}>{b?.lectura ? "Volver a leer las bases" : "Leer las bases"}</button></p>
+        : <p className="meta">Esta convocatoria no tiene documentos enlazados que leer.</p>}
+      {docs.length > 0 && <ul className="lic-lista">{docs.map((d) => (
+        <li key={d.id} className="meta">{urlSegura(d.url) ? <a href={urlSegura(d.url)} target="_blank" rel="noopener noreferrer">{d.titulo || "Documento"}</a> : (d.titulo || "Documento")} · {ESTADO_DOCUMENTO_ETIQUETA[d.estado] || d.estado}{d.paginas ? ` · ${d.paginas} págs.` : ""}{d.motivo ? ` · ${d.motivo}` : ""}</li>
+      ))}</ul>}
+      {agruparRequisitos(b?.requisitos).map(([tipo, lista]) => (
+        <div key={tipo}>
+          <h4>{TIPO_REQUISITO_ETIQUETA[tipo]}</h4>
+          <ul className="lic-lista">{lista.map((r) => (
+            <li key={r.id} className="tarjeta lic-item" style={r.estado === "rechazado" ? { opacity: 0.55 } : undefined}>
+              <span className="lic-fila"><strong>{r.resumen}</strong><span className={`lic-etiqueta ${r.estado === "confirmado" ? "ok" : ""}`}>{ESTADO_REQUISITO_ETIQUETA[r.estado] || r.estado}</span></span>
+              <blockquote style={{ margin: "0.25rem 0", whiteSpace: "pre-line" }}>«{r.cita}»</blockquote>
+              <span className="meta">{r.documento || "Documento"} · página {r.pagina}{r.revisado_por ? ` · revisado por ${r.revisado_por}` : ""}</span>
+              <span className="lic-fila">
+                <button className="boton si" disabled={r.estado === "confirmado"} onClick={() => revisar(r.id, "confirmado")}>Confirmar</button>
+                <button className="boton no" disabled={r.estado === "rechazado"} onClick={() => revisar(r.id, "rechazado")}>Rechazar</button>
+              </span>
+            </li>
+          ))}</ul>
+        </div>
+      ))}
+      {b?.requisitos?.length > 0 && <p className="meta">{b.aviso}</p>}
+    </section>
+  );
+}
+
 function Ficha({ id, onCerrar, onCambio }) {
   const [d, setD] = useState(null);
   const [error, setError] = useState(null);
@@ -105,6 +165,7 @@ function Ficha({ id, onCerrar, onCambio }) {
       </dl>
       {d.description && <p style={{ whiteSpace: "pre-line" }}>{d.description}</p>}
       <Analisis id={id} />
+      <Bases id={id} />
       <p className="meta">Los datos vienen de la fuente oficial y se muestran tal cual: compruébalos en la convocatoria antes de decidir. No se ha evaluado si encaja con tu empresa.</p>
       <p className="lic-fila">
         {enlace && <a className="boton no" href={enlace} target="_blank" rel="noopener noreferrer">Ver en la fuente oficial</a>}
