@@ -499,6 +499,9 @@ CREATE TABLE IF NOT EXISTS licitaciones_vigilante (
   avisado_en  timestamptz,                          -- último aviso enviado de este estado
   detalle     text NOT NULL DEFAULT ''
 );
+-- Histéresis: pasadas malas seguidas (antes de avisar) y buenas seguidas (antes de dar el problema por arreglado), para no avisar de un corte breve
+ALTER TABLE licitaciones_vigilante ADD COLUMN IF NOT EXISTS malas  integer NOT NULL DEFAULT 0;
+ALTER TABLE licitaciones_vigilante ADD COLUMN IF NOT EXISTS buenas integer NOT NULL DEFAULT 0;
 
 -- Ofertas de licitación (api/cerebro/licitaciones/ofertas.py): el borrador de la oferta de cada licitación, en sus tres sobres (administrativo, técnico, económico), dividido en secciones.
 -- Los agentes (Redactor de Memoria, Arquitecto de Solución, Administrativo, Costes, Precio…) solo escriben BORRADORES de las secciones; revisar, aprobar y fijar el precio lo hace una PERSONA.

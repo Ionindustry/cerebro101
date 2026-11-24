@@ -127,6 +127,8 @@ vigilante:
   hora_control_hoy: 22        # en día laborable, pasada esta hora (local), si no ha entrado NINGUNA licitación nueva ni actualizada hoy, se avisa. La plataforma de contratación publica UNA tanda
                               # al día, hacia las 20:15: lo de hoy no existe antes; con 22 hay margen para que la ingesta (cada 15 min) lo recoja
   repetir_cada_horas: 24      # mientras siga atascado, recordarlo cada tanto
+  pasadas_para_avisar: 2      # un problema solo se avisa si se repite en tantas pasadas seguidas (cada 15 min): un corte breve, p. ej. el motor reiniciándose al actualizar, no manda correo
+  pasadas_para_recuperar: 2   # y solo se da por arreglado (correo «vuelve a funcionar») tras tantas pasadas buenas seguidas
   destinatarios: [soporte@101.cat]   # FALLOS DEL SISTEMA (motor atascado, nada de hoy…): a soporte@. Los avisos de licitaciones salen aparte, con copia a concursos@ y notificaciones@ (config/buzones.yaml → avisos.copia). Direcciones de la empresa (dominios de config/buzones.yaml → avisos); vacío = sin correo
 
 # Aviso de plazos urgentes: cada hora se miran las licitaciones EN ESTUDIO y, cuando a una le quedan los días indicados para presentar, se avisa UNA vez por umbral por correo a concursos@

@@ -70,6 +70,49 @@ class TestDecidir(unittest.TestCase):
         self.assertEqual(V.decidir({"estado": "atascado", "desde": AHORA, "avisado_en": None}, True, AHORA, 24), ("atascado", "problema"))
 
 
+class TestHisteresis(unittest.TestCase):
+    ATASCADO = {"estado": "atascado", "desde": AHORA - timedelta(hours=3), "avisado_en": AHORA - timedelta(hours=3), "malas": 0, "buenas": 0}
+
+    def test_un_corte_breve_no_avisa_ni_de_que_se_para_ni_de_que_vuelve(self):
+        e, a, m, b = V.decidir_con_racha(None, True, AHORA, 24, 2, 2)
+        self.assertEqual((e, a, m), ("ok", None, 1))                                              # primera pasada mala: aún no
+        e, a, m, b = V.decidir_con_racha({"estado": "ok", "desde": AHORA, "avisado_en": None, "malas": 1, "buenas": 0}, False, AHORA, 24, 2, 2)
+        self.assertEqual((e, a, m), ("ok", None, 0))                                              # se arregló sola: no se avisó de nada
+
+    def test_un_problema_que_dura_avisa_a_la_segunda_pasada_y_recuerda_igual_que_antes(self):
+        e, a, m, b = V.decidir_con_racha({"estado": "ok", "desde": AHORA, "avisado_en": None, "malas": 1, "buenas": 0}, True, AHORA, 24, 2, 2)
+        self.assertEqual((e, a), ("atascado", "problema"))
+        self.assertEqual(V.decidir_con_racha(self.ATASCADO, True, AHORA, 24, 2, 2)[:2], ("atascado", None))
+        self.assertEqual(V.decidir_con_racha(self.ATASCADO, True, AHORA + timedelta(hours=22), 24, 2, 2)[:2], ("atascado", "recordatorio"))
+
+    def test_para_dar_el_problema_por_arreglado_hacen_falta_pasadas_buenas_seguidas(self):
+        e, a, m, b = V.decidir_con_racha(self.ATASCADO, False, AHORA, 24, 2, 2)
+        self.assertEqual((e, a, b), ("atascado", None, 1))
+        e, a, m, b = V.decidir_con_racha({**self.ATASCADO, "buenas": 1}, False, AHORA, 24, 2, 2)
+        self.assertEqual((e, a), ("ok", "recuperado"))
+        e, a, m, b = V.decidir_con_racha({**self.ATASCADO, "buenas": 1}, True, AHORA, 24, 2, 2)      # una pasada mala en medio reinicia la cuenta de buenas
+        self.assertEqual((e, a, b), ("atascado", None, 0))
+
+    def test_con_una_pasada_se_comporta_como_antes(self):
+        self.assertEqual(V.decidir_con_racha(None, True, AHORA, 24, 1, 1)[:2], ("atascado", "problema"))
+        self.assertEqual(V.decidir_con_racha(self.ATASCADO, False, AHORA, 24, 1, 1)[:2], ("ok", "recuperado"))
+
+    def test_lo_de_hoy_cerrado_por_el_reloj_no_es_una_recuperacion(self):
+        hoy = {"estado": "atascado", "detalle": "Hoy no ha entrado ninguna licitación nueva ni actualizada (son las 22:10…)."}
+        self.assertTrue(V.solo_por_el_reloj(hoy, False, 0))
+        self.assertTrue(V.solo_por_el_reloj(hoy, False, None))
+        self.assertFalse(V.solo_por_el_reloj(hoy, False, 4))                                      # entró algo: recuperación de verdad
+        self.assertFalse(V.solo_por_el_reloj(hoy, True, 0))
+        self.assertFalse(V.solo_por_el_reloj({"estado": "atascado", "detalle": "La fuente x lleva 7.0 horas sin ingesta correcta."}, False, 0))
+        self.assertFalse(V.solo_por_el_reloj({"estado": "atascado", "detalle": "Hoy no ha entrado nada\nLa fuente x no ha completado ninguna ingesta."}, False, 0))
+        self.assertFalse(V.solo_por_el_reloj(None, False, 0))
+
+    def test_configuracion_de_pasadas_acotada(self):
+        c = V.configuracion({"vigilante": {"pasadas_para_avisar": 0, "pasadas_para_recuperar": 99}})
+        self.assertEqual((c["pasadas_para_avisar"], c["pasadas_para_recuperar"]), (1, 12))
+        self.assertEqual(V.configuracion({})["pasadas_para_avisar"], 2)
+
+
 class TestRedactar(unittest.TestCase):
     def test_textos(self):
         a, c = V.redactar("problema", ["La fuente x lleva 7.0 horas sin ingesta correcta (límite: 6)."], AHORA - timedelta(hours=7), AHORA)
@@ -125,8 +168,9 @@ class TestFlujo(unittest.TestCase):
             raise OSError("smtp caído")
         self.enviados.append((mensaje["To"], mensaje["Subject"]))
 
-    def paso(self, horas=0, destinatarios=("tec@101.cat",)):
-        cfg = {"vigilante": {"destinatarios": list(destinatarios), "horas_sin_ingesta": 6, "repetir_cada_horas": 24, "hora_control_hoy": 11}}
+    def paso(self, horas=0, destinatarios=("tec@101.cat",), pasadas=1):
+        cfg = {"vigilante": {"destinatarios": list(destinatarios), "horas_sin_ingesta": 6, "repetir_cada_horas": 24, "hora_control_hoy": 11,
+                             "pasadas_para_avisar": pasadas, "pasadas_para_recuperar": pasadas}}
         return ejecutar(V.vigilar(self.consulta, self.enviar, AHORA + timedelta(hours=horas), cfg))
 
     def test_sin_nada_de_hoy_en_dia_laborable_avisa_aunque_la_ingesta_figure_al_dia(self):
@@ -153,6 +197,27 @@ class TestFlujo(unittest.TestCase):
         self.assertEqual((r["aviso"], r["estado"]), ("recuperado", "ok"))
         self.assertEqual(self.paso(28)["aviso"], None)
         self.assertEqual([a for _, a in self.enviados], ["Licitaciones: la ingesta lleva atascada", "Licitaciones: la ingesta lleva atascada (recordatorio)", "Licitaciones: el motor vuelve a funcionar"])
+
+    def test_un_reinicio_breve_del_motor_no_manda_ningun_correo(self):
+        self.estado = None                                                                    # el motor no responde (p. ej. se está actualizando el servidor)
+        self.assertEqual(self.paso(0, pasadas=2)["aviso"], None)
+        self.estado = estado(1)                                                               # a la siguiente pasada ya responde
+        self.assertEqual(self.paso(0.25, pasadas=2)["aviso"], None)
+        self.assertEqual(self.enviados, [])
+        self.estado = None                                                                    # y si en cambio sigue caído dos pasadas seguidas, sí se avisa
+        self.assertEqual(self.paso(0.5, pasadas=2)["aviso"], None)
+        self.assertEqual(self.paso(0.75, pasadas=2)["aviso"], "problema")
+        self.estado = estado(1)
+        self.assertEqual(self.paso(1, pasadas=2)["aviso"], None)                              # una pasada buena no basta
+        self.assertEqual(self.paso(1.25, pasadas=2)["aviso"], "recuperado")
+
+    def test_lo_de_hoy_que_se_cierra_por_el_reloj_no_manda_el_correo_de_recuperado(self):
+        self.novedades_hoy = 0
+        self.assertEqual(self.paso()["aviso"], "problema")                                    # 12:00 UTC = 13:00 Madrid, pasada la hora de control (11)
+        antes = len(self.enviados)
+        r = self.paso(11)                                                                     # a medianoche (hora local < control): ya no es problema, pero no ha entrado nada
+        self.assertEqual((r["aviso"], r["estado"]), (None, "ok"))
+        self.assertEqual(len(self.enviados), antes)
 
     def test_si_el_correo_falla_se_reintenta(self):
         self.estado, self.falla = estado(8), True
