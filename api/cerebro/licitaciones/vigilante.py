@@ -8,6 +8,10 @@ solo si alguien lo mira. Este vigilante lo mira cada 15 minutos con `/ops/status
   - un recordatorio cada `repetir_cada_horas` mientras siga;
   - una vez cuando se arregla.
 
+Para no mandar un correo de «se ha parado» y otro de «vuelve a funcionar» por un corte breve (p. ej. el motor reiniciándose al actualizar el servidor), un problema solo se avisa si se repite en
+`pasadas_para_avisar` pasadas seguidas (por defecto 2: unos 30 minutos) y solo se da por arreglado tras `pasadas_para_recuperar` pasadas buenas seguidas (por defecto 2). Y un problema de «hoy no ha entrado
+nada» que desaparece solo por el cambio de reloj (medianoche, fin de semana) sin que haya entrado nada NO se anuncia como «vuelve a funcionar»: se cierra en silencio.
+
 El correo es interno y automático (buzón de notificaciones, solo a direcciones de la empresa) y no lleva datos de licitaciones. Sin destinatarios configurados, solo queda en el registro.
 """
 from __future__ import annotations
@@ -28,7 +32,8 @@ from . import resumen as resumen_mod
 
 log = logging.getLogger("cerebro.licitaciones.vigilante")
 CLAVE = "motor"
-DEFECTO = {"horas_sin_ingesta": 6, "repetir_cada_horas": 24, "destinatarios": [], "hora_control_hoy": 22}
+DEFECTO = {"horas_sin_ingesta": 6, "repetir_cada_horas": 24, "destinatarios": [], "hora_control_hoy": 22, "pasadas_para_avisar": 2, "pasadas_para_recuperar": 2}
+PREFIJO_HOY = "Hoy no ha entrado"
 
 
 def configuracion(cfg: dict | None = None) -> dict:
@@ -37,6 +42,8 @@ def configuracion(cfg: dict | None = None) -> dict:
     c["repetir_cada_horas"] = min(max(float(c["repetir_cada_horas"]), 1), 168)
     c["destinatarios"] = [d for d in (c.get("destinatarios") or []) if isinstance(d, str)]
     c["hora_control_hoy"] = min(max(int(c["hora_control_hoy"]), 6), 23)
+    c["pasadas_para_avisar"] = min(max(int(c["pasadas_para_avisar"]), 1), 12)
+    c["pasadas_para_recuperar"] = min(max(int(c["pasadas_para_recuperar"]), 1), 12)
     return c
 
 
@@ -82,6 +89,32 @@ def decidir(previo: dict | None, hay_problemas: bool, ahora: datetime, repetir_h
     return "ok", None
 
 
+def decidir_con_racha(previo: dict | None, hay_problemas: bool, ahora: datetime, repetir_h: float, para_avisar: int = 1, para_recuperar: int = 1) -> tuple[str, str | None, int, int]:
+    """Como `decidir`, pero con histéresis: (estado nuevo, qué avisar, pasadas malas seguidas, pasadas buenas seguidas). Un problema solo se avisa tras `para_avisar` pasadas malas seguidas y solo se
+    da por arreglado tras `para_recuperar` pasadas buenas seguidas, para no mandar «se para» y «vuelve» por un corte breve. Pura."""
+    malas, buenas = int((previo or {}).get("malas") or 0), int((previo or {}).get("buenas") or 0)
+    atascado = previo is not None and previo["estado"] == "atascado"
+    if hay_problemas:
+        if atascado:
+            nuevo, aviso = decidir(previo, True, ahora, repetir_h)
+            return nuevo, aviso, 0, 0
+        malas += 1
+        return ("atascado", "problema", malas, 0) if malas >= para_avisar else ("ok", None, malas, 0)
+    if atascado:
+        buenas += 1
+        return ("ok", "recuperado", 0, buenas) if buenas >= para_recuperar else ("atascado", None, 0, buenas)
+    return "ok", None, 0, 0
+
+
+def solo_por_el_reloj(previo: dict | None, hay_problemas: bool, novedades: int | None) -> bool:
+    """¿Se ha cerrado el problema solo por el cambio de reloj? Era únicamente «hoy no ha entrado nada» y ahora no hay problema, pero sigue sin entrar nada (medianoche, fin de semana): no es una
+    recuperación y no se anuncia. Pura."""
+    if previo is None or previo["estado"] != "atascado" or hay_problemas or (novedades or 0) > 0:
+        return False
+    lineas = [l for l in str(previo.get("detalle") or "").split("\n") if l.strip()]
+    return bool(lineas) and all(l.startswith(PREFIJO_HOY) for l in lineas)
+
+
 def redactar(aviso: str, lista: list[str], desde: datetime, ahora: datetime, zona: str = "Europe/Madrid") -> tuple[str, str]:
     from zoneinfo import ZoneInfo
     z = ZoneInfo(zona)
@@ -105,19 +138,19 @@ def _conectar():
 
 async def _leer() -> dict | None:
     async with await _conectar() as conn:
-        cur = await conn.execute("SELECT estado, desde, avisado_en, detalle FROM licitaciones_vigilante WHERE clave = %s", [CLAVE])
+        cur = await conn.execute("SELECT estado, desde, avisado_en, detalle, malas, buenas FROM licitaciones_vigilante WHERE clave = %s", [CLAVE])
         return await cur.fetchone()
 
 
-async def _guardar(estado: str, previo: dict | None, ahora: datetime, avisado: bool, detalle: str) -> None:
+async def _guardar(estado: str, previo: dict | None, ahora: datetime, avisado: bool, detalle: str, malas: int = 0, buenas: int = 0) -> None:
     igual = previo is not None and previo["estado"] == estado
     desde = previo["desde"] if igual else ahora
     ultimo = ahora if avisado else (previo["avisado_en"] if igual else None)
     async with await _conectar() as conn:
         await conn.execute(
-            """INSERT INTO licitaciones_vigilante (clave, estado, desde, avisado_en, detalle) VALUES (%s,%s,%s,%s,%s)
-               ON CONFLICT (clave) DO UPDATE SET estado = EXCLUDED.estado, desde = EXCLUDED.desde, avisado_en = EXCLUDED.avisado_en, detalle = EXCLUDED.detalle""",
-            [CLAVE, estado, desde, ultimo, detalle[:500]])
+            """INSERT INTO licitaciones_vigilante (clave, estado, desde, avisado_en, detalle, malas, buenas) VALUES (%s,%s,%s,%s,%s,%s,%s)
+               ON CONFLICT (clave) DO UPDATE SET estado = EXCLUDED.estado, desde = EXCLUDED.desde, avisado_en = EXCLUDED.avisado_en, detalle = EXCLUDED.detalle, malas = EXCLUDED.malas, buenas = EXCLUDED.buenas""",
+            [CLAVE, estado, desde, ultimo, detalle[:500], int(malas), int(buenas)])
 
 
 def _enviar_a(destinatarios: list[str], asunto: str, cuerpo: str, enviar) -> tuple[int, int]:
@@ -152,7 +185,7 @@ async def vigilar(consulta=None, enviar=None, ahora: datetime | None = None, cfg
         estado = await consulta("/ops/status", None)
     except (motor.MotorNoDisponible, ValueError):
         estado = None
-    hoy = None
+    hoy, novedades = None, None
     if estado is not None:
         from zoneinfo import ZoneInfo
         local = ahora.astimezone(ZoneInfo(ajustes.zona_horaria))
@@ -164,7 +197,10 @@ async def vigilar(consulta=None, enviar=None, ahora: datetime | None = None, cfg
         hoy = sin_novedades_hoy(local, novedades, c["hora_control_hoy"])
     lista = problemas(estado, c["horas_sin_ingesta"], hoy)
     previo = await _leer()
-    nuevo, aviso = decidir(previo, bool(lista), ahora, c["repetir_cada_horas"])
+    if solo_por_el_reloj(previo, bool(lista), novedades):
+        await _guardar("ok", previo, ahora, False, "")                  # se cierra en silencio: no ha vuelto nada, solo ha cambiado el reloj
+        return {"estado": "ok", "aviso": None, "problemas": [], "enviados": 0, "fallidos": 0}
+    nuevo, aviso, malas, buenas = decidir_con_racha(previo, bool(lista), ahora, c["repetir_cada_horas"], c["pasadas_para_avisar"], c["pasadas_para_recuperar"])
     res = {"estado": nuevo, "aviso": aviso, "problemas": lista, "enviados": 0, "fallidos": 0}
     avisado = False
     if aviso:
@@ -178,5 +214,5 @@ async def vigilar(consulta=None, enviar=None, ahora: datetime | None = None, cfg
             avisado = True
     if aviso == "recuperado" and not avisado:
         return res                      # el aviso de recuperación no salió: se deja «atascado» para reintentarlo en la siguiente pasada
-    await _guardar(nuevo, previo, ahora, avisado, "\n".join(lista))
+    await _guardar(nuevo, previo, ahora, avisado, "\n".join(lista) if lista or nuevo == "atascado" else "", malas, buenas)
     return res
